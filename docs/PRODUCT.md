@@ -1,105 +1,43 @@
-# rotom team 产品与实现方案
+# rotom team 产品合同
 
-## 产品合同
+共享会话历史，不共享模型账号。谁提交执行，使用谁的个人模型与额度；查看、评论不发起模型推理。当前仍是 `0.1.0-alpha.1` 私有候选，不宣称正式版完成。
 
-一个部署服务一个可信团队。成员共享会话历史，而不是共享模型账号。谁提交一段执行，谁的模型和额度被使用；查看与评论不调用模型。默认在部署机器执行，个人执行节点留到下一阶段。本轮不配置 Tailscale、隧道或公网入口。
+## 信任与部署
 
-首版选择：原生 macOS、专用系统用户、可信成员。**与安全多租户产品不同：拥有代码执行权的人也拥有服务系统用户的文件权限。** 个人凭据按成员分开路由与持久化，只是应用正确性隔离，不是 OS 安全隔离。
+原生 macOS、专用系统用户、完全可信成员。模型路由、私有文件及应用权限不是 OS 沙箱：执行代码的人具有服务系统用户的文件权限。默认只监听 loopback；未选择 Tailscale、隧道或公网方案。远程网络、TLS 和目标备用 MacBook 尚未实测。
 
-## 当前实现与代码位置
+## 已实现
 
-```text
-Browser / Pocket 协作 UI
-  → HTTP 认证和会话权限
-  → Commands：按成员与会话串行准入，检查幂等请求
-  → TeamExecution：持久执行归属、Provider session → conversation 索引
-  → Pi Durable：历史、输入、任务、工具状态
-  → TeamAccounts：成员 + 账号修订号 + Provider 的独立模型路由
-  → 私人的 pi-ai Models / FileCredentials
-  → ChatGPT / Qoder
+- `team-accounts.ts`：每人成员/账号修订号/Provider 路由，独立凭据与模型缓存，无环境凭据回退。个人模型失效时要求重新选择，不自动借用其他已连接模型。
+- `openai-chatgpt.ts`：SIWC OAuth 使用官方账号 `/v1/models` 与 `/v1/responses`；缓存绑定 client ID **和授权 refresh 摘要**，不是仅绑定工具注册。保留 API-key 静态目录。拒绝将 Codex 凭据重命名为 SIWC。
+- `credential-store.ts`：串行、原子 `0600` 存储、取消检查。复制的验证凭据不能刷新；原生 OpenAI 与 Qoder 刷新在请求前记录一次性尝试，unknown 不重放。
+- `team-execution.ts`：持久执行归属、Provider session 索引和实际分派检查；busy 付费人不变。Durable observer 会吞异常，不能承担授权门禁。
+- `team-profiles.ts`：个人配置档、项目规则和完整技能树快照（含 references/scripts），显式激活版本，重启/接力/fork 保留；8 MiB 上限，拒绝碰撞、服务数据导入、非普通文件及 symlink；读取/分派验证 SHA-256。哈希是检查点检测，不防同一 OS 用户并发修改。
+- `team-projects.ts`：项目 view/continue/fork 独立授权，fork 不扩张范围；撤权关闭订阅并中止未授权执行。原生代码执行仍不是项目目录沙箱。
+- `team-usage.ts` 与 Durable usage patch：响应和实际账号用量原子归属，重启补记不根据最新评论者认领；补记有独立持久去重。
+- 分别可撤销的浏览器登录：同一成员至多 32 个额外 bearer 登录，存储 hash；撤销关闭既有流。这不是远程执行节点。
+- `scripts/data.mjs`：离线私有备份、逐文件摘要、拒绝活跃 writer；只恢复到原 canonical 路径且不覆盖。备份包含秘密，恢复故意不恢复 `people/*/auth.json`，避免复活旧刷新凭据。项目工作区另备份。
 
-工具 → NodeExecutionEnv → 原生服务器目录或 worktree
-```
+## 协作与上下文
 
-- `team-accounts.ts`：独立 Models、无环境凭据、模型选择、账号路由与跨账号历史投影。
-- `credential-store.ts`：串行、原子落盘、尊重取消的凭据存储；不进入聊天或日志。
-- `team-execution.ts`：会话准入、持久归属、分派授权、接力和压缩边界。
-- `providers.ts`：个人 OAuth 交互；提示仅发送到登录发起者的页面。
-- `commands.ts`：共享会话、接力、fork、重发、压缩调用方。
-- `vendor/qoder/`：固定的 rotom Qoder Provider 源码；未引入整个传统 AgentSession 扩展层。
-- `bin/rotom-team.js`：在加载 Pi 前隔离部署的资源目录；不发现维护者的 ~/.pi。
+同一会话准入串行。忙时其他成员只能评论、等待、停止后接力或 fork；不跨账号排队。失败执行仍有未处理输入时，不能交给新账号自动执行。幂等重试返回原 receipt，不改付费人。
 
-### 为什么使用命名空间模型路由
+同账号历史保留原始字段；跨账号只发送公开文本与配对工具历史，移除 thinking/signature/response ID 等私有状态，原记录不变。这不是对协作者隐藏原始 thinking 的访问控制。
 
-不重写 Pocket 的整个会话树。每个账号路由由 `member-id / credential-generation / provider` 标识，Durable 中保存这个明确的路由。它不是凭据；外部模型请求只在分派时进入该成员的私有 Models。
+已替换 alpha 的跨账号压缩拒绝：hash-bound Durable patch 在转成 user 文本前排除 thinking，当前发起者使用自己的账号压缩。已有持久子 Agent 不自动获得新付费人权限；需要新建子 Agent。
 
-Provider 的会话 affinity 由 Durable session ID 与账号路由组合派生。换人或重新登录后不能沿用另一个账号的 Provider identity。原始会话记录保持不变。
+## 用量与限额
 
-**重要：Durable 的 observer hooks 会报告并吞掉异常，不是授权拦截器。** 因此个人 Provider 的 stream 分派必须反查已提交的 Durable 身份并检查成员、模型、权限、执行所有者及根会话归属。不能只依赖 `beforeRequest` 抛异常。
+Token、API 成本估计、订阅额度和财务账单不同。美元零占位不代表免费；ChatGPT 全账号额度与 Qoder credits 不构成完整账本，缺失保持 unknown。美元预算不硬限制订阅 credits，最终额度由 Provider 执行。
 
-### 接力与并发
+SIWC 的 4096 `maxTokens` 是本地预算提示，不是服务端输出硬上限；该计划路由不接受 `max_output_tokens`。目录最多 256 条；模型目录/推理档位超出可解析合同需更新 adapter，不猜测映射。只映射 Pi 原生支持的 reasoning levels，未支持的 ultra 不伪装支持。
 
-- 同一会话的提交和配置变更串行；个人登录变更与提交准入也串行。
-- 正在运行的会话不切换付费人。其他成员得到 409，选择评论、等待、停止后接力或 fork。
-- 上一次执行失败但仍有队列输入时，不把它们交给新账号自动执行，须先撤回/停止。
-- 在变更账号前持久撤销旧账号路由。登录成功、失败、取消均协调新目录，不借用别人的凭据。
-- 有子任务或压缩仍运行时，不切换该执行账号。
-- 接力后以前的持久子 Agent 不自动换账号：再次派给它会失败，必须创建新的子 Agent。分派层保证不调用上一位成员的账号。
-- 幂等重试先找原提交；即使另一位成员已接力，也不因重试改变归属或再次执行。
-- 成员被删除或改成只读，下一次模型分派停止。已经向 Provider 发出的请求不能撤销已发生的费用。
+个人账号定时任务、自动 Goal 和付费标题生成保持关闭。个人执行节点、SSO、多租户隔离、跨机器 live SQLite、自动账号降级不是已交付能力。
 
-### 上下文与压缩
+## 运行时与服务商
 
-同账号同修订号的历史保留原始 Provider 字段。跨账号投影只保留可见文本和工具调用，移除推理/signature/response ID 等私有 Provider 状态；工具结果保持配对，具体 API 的工具 ID 转换由 Pi 原生 adapter 完成。
+Pi npm `1.0.2`，通过 `scripts/prepare-runtime.mjs` 和 `vendor/pi-durable/patches.json` 校验 stock/patched 摘要与包身份：公共压缩、原子归属及 OpenAI SDK `maxRetries:0`。不修改存活 rotom 的安装。保留上游许可/归属。
 
-这不是逐字无损迁移。原始历史仍保存在共享存储中，可访问会话的人仍可能看到原来的 thinking；此规则控制发给另一模型账号的内容，不是对协作者隐藏数据的访问控制。
+Qoder 是非官方代码快照，动态目录只开放实测白名单交集；凭据和额度成功不证明上游许可。SIWC 使用 Pi 的原生客户端注册/登录，当前注册显示名沿用 Pi；remote-host session transfer 与客户端品牌审查尚未交付，远端 localhost 回调不能假装到达部署主机。
 
-**首版禁用含跨账号历史的压缩。** Durable 会先将 assistant thinking 序列化为 user 文本，普通流入口已经无法可靠识别其来源；因此 `beforeCompact` 必须明确返回 decline，所有检查错误也返回 decline。长会话需要显式公共交接说明 + 新上下文；后续再实现经投影、用量可归属的 Durable summarization task。
-
-### 用量
-
-Token / Provider-reported usage 与账单分开。执行者持久绑定在 `rotom-team.execution`；Spend 从该绑定归属，而不是从最后写了 note/shell/message 的人推断。已有 Pocket 的用量聚合保留，仅用作估计；历史恢复补记等仍不构成财务结算账本。
-
-Qoder credits 与 ChatGPT 订阅额度目前不提供完整账本。界面不把个人订阅的 $0 占位宣称为免费；缺失保持 unknown。定时任务与自动 Goal 暂不用于个人账号，避免尚未实现的长期授权和额度变化语义。
-
-## 配置与技能的目标合同（下一阶段）
-
-项目仓库管理公共 AGENTS.md 和项目 skills。个人有独立配置档；创建会话时显式选择，将实际内容/摘要和版本固定到会话。接力默认保留会话配置，fork 可以明确更换配置。
-
-- 不随当前发言人自动加载不同的 AGENTS.md。
-- 不拼接全体成员的私人规则，不上传整个 HOME。
-- 个人技能只显式导入；脚本、路径和依赖需要检查服务器是否具备。
-- 同名技能冲突必须选择，不静默覆盖。
-- 激活到共享会话的配置必须按会话可见内容处理，不能承诺私人内容不会被协作者看到。
-- 项目指令不是权限边界。安全策略必须由程序或执行隔离落实。
-
-本 alpha 当前只交付部署专用 Pi 资源目录、原生项目规则/skills 和共享会话 Instructions；个人配置档导入、编辑和不可变快照尚未交付。
-
-## 发布路线与验收门
-
-### A. 当前可信团队 alpha
-
-- 已实现：个人模型路由、OAuth UI、共享历史、接力、fork、worktree、原生执行、离线回归、启动入口。
-- 尚需真实验收：每人 ChatGPT/Qoder 登录、刷新、实扣额度、跨 Provider 历史、实际长任务崩溃恢复。
-- 真实外部写入与模型使用必须经明确授权。fixture 的 PASS 不能替代账号/设备/费用验证。
-
-### B. 配置和协作产品收口
-
-- 个人配置档与 skills 导入、项目默认配置、会话配置快照和差异。
-- 项目级成员权限；单会话 view / continue / fork 分开的授权；fork 不扩张共享范围。
-- 持久 execution/run 历史与可见的付费人、模型、工作区、配置版本。
-- 安全的跨账号压缩；更清晰的中断、unknown、重新授权和恢复界面。
-- 真正的账号用量面板，不把订阅用量折算成不可靠美元值。
-
-### C. 供其他团队稳定部署
-
-- 可重复安装/升级、迁移版本、停止后备份与恢复演练、回滚说明。
-- 独立的执行与控制目录、受限容器/VM worker、最小权限与私有凭据服务。
-- HTTPS / 组织认证接入及部署文档（具体网络方式单独选择）。
-- 上游订阅接入支持/许可、产品许可证、敏感数据及依赖审计。
-
-### D. 个人执行节点
-
-显式配对、本人默认可用、授权项目目录、离线暂停、不自动改派。可复用 pi-env，但必须同时覆盖 shell、文件浏览、Git/worktree 与浏览器的执行位置。第一版不迁移正在执行的任务，也不在多台机器间同步活跃 SQLite。
-
-暂不做多租户 SaaS、Kubernetes、自动借用团队账号或跨账号失败降级。
+验收证据见 [VERIFICATION.md](VERIFICATION.md)，部署和恢复见 [DEPLOYMENT.md](DEPLOYMENT.md)，未完成项见 [DELIVERY-CHECKLIST.md](DELIVERY-CHECKLIST.md)。正式版须补齐真实 Qoder 独立登录/刷新、真实跨账号压缩/中断恢复、目标设备部署及服务商支持边界。不得把局部通过写成全目标完成。

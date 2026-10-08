@@ -1,0 +1,43 @@
+{
+  "version": "1.0.2",
+  "source": "@earendil-works/pi-durable@1.0.2 and pi-ai@1.0.2 (MIT; upstream copyright retained)",
+  "files": [
+    {
+      "path": "dist/harness/compaction.js",
+      "sourceSha256": "de7eed72f40ca9f571d03374020f1b4f47dc609aae374f13388831ccdbd8c88d",
+      "patchedSha256": "ac999624d275dc21d82e27b6f790b7634cdf31dda3b07265b260fcbbf7a2e7c1",
+      "edits": [
+        {
+          "oldText": "            const thinking = message.content.flatMap((content) => (content.type === \"thinking\" ? [content.thinking] : []));\n",
+          "newText": "            // Team summaries only include public history; reasoning must not cross account boundaries.\n"
+        },
+        {
+          "oldText": "            if (thinking.length > 0)\n                parts.push(`[Assistant thinking]: ${thinking.join(\"\\n\")}`);\n",
+          "newText": ""
+        }
+      ]
+    },
+    {
+      "path": "dist/harness/usage.js",
+      "sourceSha256": "59a74f112c8912ec8786b3f625f888824c6498e593ad65e5fcf80da021d826bf",
+      "patchedSha256": "cc301a51e2501a1f067295763b0b20f6139882220401ad17d5827789d350be01",
+      "edits": [
+        {
+          "oldText": "export const UsageDoc = defineDoc({",
+          "newText": "export const TeamUsageDoc = defineDoc({\n    kind: \"rotom-team.usage-ledger\", version: 1, scope: \"conversation\", history: \"latest\", fork: \"initial\",\n    initial: () => ({ people: {} }), checkpointWhen: () => true,\n});\nconst TeamRunDoc = defineDoc({\n    kind: \"rotom-team.execution\", version: 1, scope: \"conversation\", history: \"latest\", fork: \"current\", initial: () => ({}),\n});\nexport const UsageDoc = defineDoc({"
+        },
+        {
+          "oldText": "    const totals = (await tx.doc(UsageDoc, conversationId))[bucket];",
+          "newText": "    // Attribution is committed atomically with the response, not inferred from the latest author after a crash.\n    const owner = key.startsWith(\"team:\") ? key.split(\":\")[1] : bucket === \"tools\" ? (await tx.doc(TeamRunDoc, conversationId)).owner : undefined;\n    if (owner !== undefined) {\n        const ledger = await tx.doc(TeamUsageDoc, conversationId);\n        const person = copyJson(ledger.people[owner] ?? { models: {}, tools: {} });\n        const prior = Object.hasOwn(person[bucket], key) ? person[bucket][key] : undefined;\n        if (prior === undefined) person[bucket] = { ...person[bucket], [key]: copyJson(usage, { omitUndefinedProperties: true }) };\n        else addUsage(prior, usage);\n        ledger.people[owner] = person;\n    }\n    const totals = (await tx.doc(UsageDoc, conversationId))[bucket];"
+        }
+      ]
+    },
+    {
+      "package": "@earendil-works/pi-ai",
+      "path": "dist/api/openai-responses.js",
+      "sourceSha256": "8de25051531f131c4ae3d730f371fa0e15559ed7f865765a744c64d5edd2e067",
+      "patchedSha256": "167d3d6b2ed12ffdf52f7152e915fd6dec49ec7f955a1f8a320417c38463de24",
+      "edits": [{ "oldText": "        dangerouslyAllowBrowser: true,", "newText": "        dangerouslyAllowBrowser: true,\n        maxRetries: 0," }]
+    }
+  ]
+}

@@ -36,6 +36,25 @@ export async function conversationRoutes(
     const method = request.method ?? "GET";
     const [, , third, fourth] = parts;
 
+    if (third === "configuration" && method === "GET") {
+        return json(response, 200, app.profiles.snapshot(id) ?? null);
+    }
+
+    if (third === "configuration" && method === "POST") {
+        const body = await readJson<{ activate?: string }>(request);
+
+        if (body.activate !== "mine") {
+            throw new HttpError(
+                400,
+                "Explicitly choose activate: mine to change this shared session's configuration.",
+            );
+        }
+
+        await app.commands.applyProfile(id, user);
+
+        return json(response, 200, app.profiles.snapshot(id));
+    }
+
     if (third === "submit" && method === "POST") {
         const body = await readJson<SubmitRequest>(request);
 

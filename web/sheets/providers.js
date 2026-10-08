@@ -58,6 +58,7 @@ export function ProvidersSheet() {
                     <div class="muted small">
                         ${provider.configured ? `signed in${provider.label ? ` · ${provider.label}` : provider.source ? ` · ${provider.source}` : ""}` : "not configured"} · ${provider.models} models
                     </div>
+                    ${provider.catalogError && html`<p role="alert">Account model catalog unavailable. No static catalog or other account is substituted. Check the service or reconnect independently.</p>`}
                 </div>
                 ${
                     owner &&

@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { type ChildProcess, spawn } from "node:child_process";
 import { once } from "node:events";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -31,7 +31,7 @@ async function freePort(): Promise<number> {
 function server(
     name: string,
     port: number,
-): { proc: ChildProcess; data: string; output: () => string } {
+): { proc: ChildProcess; data: string; output: () => string; handlersReady: () => boolean } {
     const data = join(root, name, "data");
     const proc = spawn(
         process.execPath,
@@ -44,15 +44,22 @@ function server(
                 PI_POCKET_LAUNCHER: "",
                 PI_POCKET_SUPERVISED: "",
             },
-            stdio: ["ignore", "pipe", "pipe"],
+            stdio: ["ignore", "pipe", "pipe", "ipc"],
         },
     );
     let text = "";
+    let ready = false;
+
+    proc.on("message", (message: { type?: string }) => {
+        if (message.type === "signals-ready") {
+            ready = true;
+        }
+    });
 
     proc.stdout!.on("data", (chunk) => (text += chunk));
     proc.stderr!.on("data", (chunk) => (text += chunk));
 
-    return { proc, data, output: () => text };
+    return { proc, data, output: () => text, handlersReady: () => ready };
 }
 
 async function exit(
@@ -97,37 +104,13 @@ test("a taken port stops the server before it opens the database", async () => {
     }
 });
 
-/**
- * Whether a process handles SIGUSR2 (signal 12) by now, from its caught-signal mask in Linux's /proc; undefined where
- * that cannot be read. Node takes a while to start on a busy machine: until then, the signal's default would end it.
- */
-function catchesRestart(pid: number): boolean | undefined {
-    try {
-        const mask = /^SigCgt:\s*([0-9a-f]+)$/m.exec(
-            readFileSync(`/proc/${pid}/status`, "utf8"),
-        )?.[1];
-
-        return mask === undefined ? undefined : (BigInt(`0x${mask}`) & (1n << 11n)) !== 0n;
-    } catch {
-        return undefined;
-    }
-}
-
 test(
     "a restart asked for while starting waits for the start, then restarts",
     { skip: posix },
     async () => {
-        const { proc, data } = server("early", await freePort());
-        // As soon as the server listens for it, which is before it starts loading the app; elsewhere, a moment in.
-        const until = Date.now() + 5000;
+        const { proc, data, handlersReady } = server("early", await freePort());
 
-        while (catchesRestart(proc.pid!) === false && Date.now() < until) {
-            await new Promise((resolve) => setTimeout(resolve, 10));
-        }
-
-        if (catchesRestart(proc.pid!) === undefined) {
-            await new Promise((resolve) => setTimeout(resolve, 300));
-        }
+        await until(handlersReady, "signal handlers to be registered");
 
         proc.kill("SIGUSR2");
         assert.deepEqual(await exit(proc), { code: 75, signal: null });
@@ -146,7 +129,7 @@ test(
         const port = await freePort();
         const { proc, data, output } = server("hup", port);
 
-        await until(() => output().includes("Pi Pocket is running."), "the server to start");
+        await until(() => output().includes("rotom team is running."), "the server to start");
         assert.equal((await fetch(`http://127.0.0.1:${port}/`)).status, 200);
         proc.kill("SIGHUP");
         assert.deepEqual(await exit(proc), { code: 0, signal: null });

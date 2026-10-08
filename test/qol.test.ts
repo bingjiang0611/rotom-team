@@ -156,7 +156,11 @@ test("a command that is stopped says so and keeps what it printed; a retried req
     const stopped = (await entries(id)).filter((entry) => entry.kind === "shell");
 
     assert.equal(stopped.length, 1);
-    assert.equal(stopped[0]?.kind === "shell" && stopped[0].output, "before\n");
+    // Bash may append its own SIGKILL diagnostic; preserve it rather than silently discarding stderr.
+    assert.match(
+        String(stopped[0]?.kind === "shell" && stopped[0].output),
+        /^before\n(?:\/bin\/bash: line \d+:\s*\d+ Killed: 9\s+sleep 30\n)?$/,
+    );
     const { user: viewer } = app.config.addUser("Watcher", "viewer");
 
     try {

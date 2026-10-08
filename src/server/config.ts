@@ -56,6 +56,7 @@ interface PocketConfig {
     /** Printed in the login URL at every start. Keep this file private. */
     ownerToken: string;
     users: User[];
+    devices?: { id: string; userId: string; tokenHash: string; createdAt: number }[];
     /** Invites not yet used: kept here so one that lasts a day or a week outlives a restart. */
     invites?: StoredInvite[];
     lastModel?: ModelChoice;
@@ -201,7 +202,44 @@ export class ConfigStore {
     userByToken(token: string): User | undefined {
         const hash = hashToken(token);
 
-        return this.#config.users.find((user) => sameHash(user.tokenHash, hash));
+        const primary = this.#config.users.find((user) => sameHash(user.tokenHash, hash));
+        const device = this.#config.devices?.find((device) => sameHash(device.tokenHash, hash));
+
+        return primary ?? (device ? this.userById(device.userId) : undefined);
+    }
+
+    addDevice(userId: string): { token: string; id: string } {
+        if (!this.userById(userId)) {
+            throw new Error("No such member.");
+        }
+
+        const devices = this.#config.devices ?? [];
+
+        if (devices.filter((device) => device.userId === userId).length >= 32) {
+            throw new Error("Revoke an old device before adding more (32 devices per member).");
+        }
+
+        const token = newToken(),
+            id = randomUUID();
+
+        this.#config.devices = [
+            ...devices,
+            { id, userId, tokenHash: hashToken(token), createdAt: Date.now() },
+        ];
+        this.save();
+
+        return { token, id };
+    }
+    devices(userId: string) {
+        return (this.#config.devices ?? [])
+            .filter((device) => device.userId === userId)
+            .map(({ id, createdAt }) => ({ id, createdAt }));
+    }
+    revokeDevice(userId: string, id: string): void {
+        this.#config.devices = (this.#config.devices ?? []).filter(
+            (device) => device.userId !== userId || device.id !== id,
+        );
+        this.save();
     }
 
     userById(id: string): User | undefined {
@@ -268,6 +306,7 @@ export class ConfigStore {
         );
 
         if (!this.#config.users.some((user) => user.id === id)) {
+            this.#config.devices = this.#config.devices?.filter((device) => device.userId !== id);
             this.#config.invites = this.#config.invites?.filter(
                 (invite) => invite.createdBy !== id,
             );
@@ -335,6 +374,9 @@ export class ConfigStore {
 
         if (owner !== undefined) {
             owner.tokenHash = hashToken(token);
+            this.#config.devices = this.#config.devices?.filter(
+                (device) => device.userId !== owner.id,
+            );
         }
 
         if (this.#config.invites !== undefined) {

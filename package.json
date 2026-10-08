@@ -13,12 +13,16 @@
         "node": ">=24"
     },
     "scripts": {
+        "postinstall": "node scripts/prepare-runtime.mjs",
+        "prepare:runtime": "node scripts/prepare-runtime.mjs",
+        "pretest": "node scripts/prepare-runtime.mjs",
+        "pretest:team": "node scripts/prepare-runtime.mjs",
         "start": "node bin/rotom-team.js",
         "dev": "node bin/rotom-team.js --cwd .",
         "demo": "node test/team-serve.ts",
         "test:team": "node --test test/team.test.ts",
         "check": "tsc --noEmit -p .",
-        "test": "node --test test/*.test.ts",
+        "test": "node --test --test-concurrency=2 test/*.test.ts",
         "format": "eslint --fix . && prettier --write .",
         "format:check": "prettier --check . && eslint .",
         "lint": "eslint ."

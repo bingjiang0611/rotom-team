@@ -25,6 +25,7 @@ import type {
 } from "@earendil-works/pi-durable";
 import type { PocketApp } from "./app.ts";
 import { TeamRunDoc } from "./team-execution.ts";
+import { ConfigurationDoc } from "./team-profiles.ts";
 import type { User } from "./config.ts";
 import {
     AuthorsDoc,
@@ -160,6 +161,9 @@ export class Commands {
             optionalText(request.cwd, "cwd") ?? app.defaultCwd,
         );
 
+        const project = app.projects.forFolder(folder);
+
+        app.projects.require(user, project?.id, "continue");
         await app.accounts.forUser(user);
         const initial = this.#defaultModel(user);
         const now = Date.now();
@@ -180,10 +184,16 @@ export class Commands {
                                 : { thinkingLevel: initial.thinkingLevel }),
                         },
                         init: async (tx, id) => {
+                            (await tx.doc(ConfigurationDoc, id)).snapshot = app.profiles.capture(
+                                user,
+                                cwd,
+                                app.settings.getSkillPaths(),
+                            );
                             const sessions = await tx.doc(SessionsDoc);
 
                             sessions.items[String(id)] = {
                                 cwd,
+                                ...(project ? { projectId: project.id } : {}),
                                 createdAt: now,
                                 updatedAt: now,
                                 createdBy: user.id,
@@ -752,6 +762,16 @@ export class Commands {
         const cwd =
             request.cwd === undefined ? undefined : app.workspace.checkDirectory(request.cwd);
 
+        if (cwd !== undefined) {
+            const project = app.projects.forFolder(cwd);
+
+            app.projects.require(user, project?.id, "continue");
+
+            if (project?.id !== app.sessionMeta(app.rootOf(id))?.projectId) {
+                throw new HttpError(409, "Create a new session to move between projects.");
+            }
+        }
+
         await conversation.configure(
             {
                 ...(request.model === undefined
@@ -810,6 +830,33 @@ export class Commands {
         if (changes.length > 0) {
             await app.collab.activity(id, user, changes.join(" and "));
         }
+    }
+
+    async applyProfile(id: ConversationId, user: User): Promise<void> {
+        const app = this.#app;
+
+        await app.accounts.exclusive(user, () =>
+            app.execution.exclusive(id, async () => {
+                app.requireSee(user, id);
+                await app.requireDriver(id, user);
+                await app.execution.idle(id);
+                const snapshot = app.profiles.capture(
+                    user,
+                    app.cwdOf(id),
+                    app.settings.getSkillPaths(),
+                );
+
+                await app.harness.commit(async (tx) => {
+                    (await tx.doc(ConfigurationDoc, id)).snapshot = snapshot;
+                }, context);
+                await app.collab.activity(
+                    id,
+                    user,
+                    `explicitly activated configuration ${snapshot.name} (${snapshot.digest.slice(0, 12)}); shared participants can read its contents`,
+                    false,
+                );
+            }),
+        );
     }
 
     /** Start a new context: Pi no longer sees what came before, though everyone still can. An optional note carries over. */
@@ -1221,6 +1268,7 @@ export class Commands {
 
         app.requireSee(user, id);
         app.requireSteer(user);
+        app.projects.require(user, app.sessionMeta(app.rootOf(id))?.projectId, "fork");
 
         if (user.sessions !== undefined) {
             throw new HttpError(403, "You were invited to one session and cannot start new ones.");
@@ -1276,6 +1324,7 @@ export class Commands {
         const app = this.#app;
         const source = await app.agentState(id);
         const { at, title, place } = fork;
+        const meta = app.sessionMeta(app.rootOf(id))!;
 
         await app.accounts.forUser(user);
         const selected = fork.agent?.model ?? app.accounts.choice(user);
@@ -1300,6 +1349,7 @@ export class Commands {
             const sessions = await tx.doc(SessionsDoc);
 
             sessions.items[String(forked)] = {
+                ...(meta.projectId ? { projectId: meta.projectId } : {}),
                 cwd: place.cwd,
                 title,
                 createdAt: now,

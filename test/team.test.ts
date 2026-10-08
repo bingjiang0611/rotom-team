@@ -110,11 +110,12 @@ test("two personal accounts: same shared history, own model/quota route, fork an
             requestId: crypto.randomUUID(),
         });
 
-        assert.equal(
-            (await (await app.harness.submission(again.submissionId, context))!.wait(context))
-                .status,
-            "done",
-        );
+        const afterRestart = await (await app.harness.submission(
+            again.submissionId,
+            context,
+        ))!.wait(context);
+
+        assert.equal(afterRestart.status, "done", JSON.stringify(afterRestart));
         assert.equal(calls.at(-1)!.user, b.id);
     } finally {
         await app.close();
@@ -333,17 +334,12 @@ test("retry after another person's handoff returns the original receipt without 
         await app.harness.waitForIdle(context);
         assert.equal(
             calls.length,
-            before,
-            "cross-account compaction must decline before serializing foreign thinking",
+            before + 1,
+            "cross-account compaction must call the current member's account",
         );
-        assert.ok(
-            tab.events.some(
-                (event) =>
-                    event.event === "notice" &&
-                    String(event.data.message).includes("Cross-account compaction"),
-            ),
-            "the selected compaction range actually reached the boundary check",
-        );
+        assert.equal(calls.at(-1)!.user, b.id);
+        assert.match(calls.at(-1)!.text, /<conversation>/);
+        assert.doesNotMatch(calls.at(-1)!.text, /Assistant thinking/);
         app.detach(tab.client);
     } finally {
         await app.close();

@@ -25,4 +25,7 @@ if (!args.includes("--help") && !args.includes("-h")) {
     mkdirSync(process.env.PI_CODING_AGENT_DIR, { recursive: true, mode: 0o700 });
 }
 
+const { prepareRuntime } = await import("../scripts/prepare-runtime.mjs");
+
+prepareRuntime();
 await import("../src/server/main.ts");

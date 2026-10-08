@@ -13,6 +13,9 @@ import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { getAgentDir, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { TeamAccounts, type Runtime } from "./team-accounts.ts";
 import { TeamExecution, TeamRunDoc } from "./team-execution.ts";
+import { ConfigurationDoc, TeamProfiles } from "./team-profiles.ts";
+import { TeamUsageDoc, type TeamUsage } from "./team-usage.ts";
+import { TeamProjects } from "./team-projects.ts";
 import {
     AgentDoc,
     type AgentState,
@@ -129,6 +132,8 @@ export class PocketApp {
     harness!: Harness;
     models!: Runtime;
     readonly accounts: TeamAccounts;
+    readonly profiles: TeamProfiles;
+    readonly projects: TeamProjects;
     readonly execution = new TeamExecution(this);
     settings!: SettingsManager;
     loader!: ExtensionLoader;
@@ -179,6 +184,8 @@ export class PocketApp {
         this.defaultCwd = options.defaultCwd;
         this.supervised = options.supervised;
         this.config = new ConfigStore(options.dataDir);
+        this.profiles = new TeamProfiles(options.dataDir);
+        this.projects = new TeamProjects(options.dataDir);
         this.accounts = new TeamAccounts(
             this.config,
             options.dataDir,
@@ -326,6 +333,12 @@ export class PocketApp {
                     if (binding) {
                         Object.assign(run, binding);
                     }
+
+                    const configuration = await tx.doc(ConfigurationDoc, conversation.id);
+
+                    if (parent !== undefined) {
+                        Object.assign(configuration, await tx.doc(ConfigurationDoc, parent));
+                    }
                 },
                 onReport: (error) => this.notice("warning", describe(error)),
             },
@@ -411,6 +424,10 @@ export class PocketApp {
                     this.#agents.set(id, agent as AgentState);
                 }
 
+                this.profiles.note(
+                    id,
+                    (await this.harness.snapshot(ConfigurationDoc, id, context)) ?? null,
+                );
                 this.#noteChat(id, (await this.harness.snapshot(ChatDoc, id, context))?.messages);
                 const missing = await this.attribution.recover(
                     storage,
@@ -448,11 +465,28 @@ export class PocketApp {
                 change.record.kind === UsageDoc.definition.kind &&
                 change.conversationId !== undefined
             ) {
-                this.spend.usageChanged(change.conversationId, change.value as UsageState | null);
+                this.spend.usageChanged(
+                    change.conversationId,
+                    change.value as UsageState | null,
+                    publication.changes.some(
+                        (each) =>
+                            each.type === "document" &&
+                            each.conversationId === change.conversationId &&
+                            each.record.kind === TeamUsageDoc.definition.kind,
+                    ),
+                );
             }
         }
 
         for (const change of publication.changes) {
+            if (
+                change.type === "document" &&
+                change.record.kind === TeamUsageDoc.definition.kind &&
+                change.conversationId !== undefined
+            ) {
+                this.spend.ledgerChanged(change.conversationId, change.value as TeamUsage | null);
+            }
+
             if (change.type === "document") {
                 if (this.#documentCommitted(change)) {
                     sessionsChanged = true;
@@ -473,7 +507,9 @@ export class PocketApp {
         const id = change.conversationId;
         let sessionsChanged = false;
 
-        if (kind === "pi.provider" && id !== undefined) {
+        if (kind === ConfigurationDoc.definition.kind && id !== undefined) {
+            this.profiles.note(id, change.value as Parameters<TeamProfiles["note"]>[1]);
+        } else if (kind === "pi.provider" && id !== undefined) {
             this.execution.noteSession(id, change.value as { sessionId: string } | null);
         } else if (kind === TeamRunDoc.definition.kind && id !== undefined) {
             this.execution.noteOwner(id, change.value as { owner?: string } | null);
@@ -989,7 +1025,10 @@ export class PocketApp {
 
     /** People invited to one session see only that session and its subagents. */
     canSee(user: User, id: ConversationId): boolean {
-        return user.sessions === undefined || user.sessions.includes(String(this.rootOf(id)));
+        return (
+            (user.sessions === undefined || user.sessions.includes(String(this.rootOf(id)))) &&
+            this.projects.allowed(user, this.sessionMeta(this.rootOf(id))?.projectId, "view")
+        );
     }
 
     requireSee(user: User, id: ConversationId): void {
@@ -1011,6 +1050,7 @@ export class PocketApp {
     /** While take turns is on, only the driver sends to Pi or changes its settings. */
     async requireDriver(id: ConversationId, user: User): Promise<void> {
         this.requireSteer(user);
+        this.projects.require(user, this.sessionMeta(this.rootOf(id))?.projectId, "continue");
         const turns = await this.harness.snapshot(TurnsDoc, this.rootOf(id), context);
 
         if (turns?.on !== true || turns.driver === user.id) {
@@ -1025,6 +1065,43 @@ export class PocketApp {
                 ? "Take turns is on: take the wheel first."
                 : `${driver.name} is driving. Ask to drive first.`,
         );
+    }
+
+    async projectsChanged(): Promise<void> {
+        for (const client of [...this.#clients]) {
+            if (
+                client.conversationId !== undefined &&
+                !this.canSee(client.user, client.conversationId)
+            ) {
+                this.#evict(client, "Project access was revoked.");
+            }
+
+            for (const id of client.peeks ?? []) {
+                if (!this.canSee(client.user, id)) {
+                    client.peeks?.delete(id);
+                    this.#unpeek(client, id);
+                }
+            }
+
+            client.send("sessions", this.sessions(client.user));
+        }
+
+        for (const id of this.busyConversations()) {
+            const owner = this.execution.owner(id);
+            const user = owner ? this.config.userById(owner) : undefined;
+
+            if (
+                user &&
+                (!this.canSee(user, id) ||
+                    !this.projects.allowed(
+                        user,
+                        this.sessionMeta(this.rootOf(id))?.projectId,
+                        "continue",
+                    ))
+            ) {
+                await (await this.conversation(id)).abort(context);
+            }
+        }
     }
 
     #noteChat(id: ConversationId, messages: readonly ChatMessage[] | undefined): boolean {
@@ -1102,6 +1179,7 @@ export class PocketApp {
             models: modelList(this.models).filter((model) =>
                 this.accounts.owns(user, model.provider),
             ),
+            projects: this.projects.all(user),
             executionMode: "native-trusted-team",
             accountPolicy:
                 "Personal model accounts; native tools share this machine's OS permissions.",
@@ -1141,13 +1219,11 @@ export class PocketApp {
             const all = this.sessions();
 
             for (const client of this.#clients) {
-                const scope = client.user.sessions;
-
                 client.send(
                     "sessions",
-                    scope === undefined
-                        ? all
-                        : all.filter((session) => scope.includes(String(session.id))),
+                    all.filter((session) =>
+                        this.canSee(client.user, Number(session.id) as unknown as ConversationId),
+                    ),
                 );
             }
         }, 400);
@@ -1173,7 +1249,11 @@ export class PocketApp {
         }
 
         return Object.entries(this.#sessions)
-            .filter(([id]) => user?.sessions === undefined || user.sessions.includes(id))
+            .filter(
+                ([id]) =>
+                    user === undefined ||
+                    this.canSee(user, Number(id) as unknown as ConversationId),
+            )
             .map(([id, meta]) => {
                 const model = this.#agents.get(Number(id) as unknown as ConversationId)?.model;
                 const busy = this.#busy.has(Number(id) as unknown as ConversationId);
@@ -1531,6 +1611,12 @@ export class PocketApp {
 
     /** Pi's skills in a conversation's folder, to run as `/skill:name`. */
     skillCommands(id: ConversationId): SkillCommand[] {
+        const snapshot = this.profiles.snapshot(id);
+
+        if (snapshot) {
+            return snapshot.skills;
+        }
+
         let paths: string[] = [];
 
         try {

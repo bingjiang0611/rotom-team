@@ -15,6 +15,7 @@ import {
 } from "@earendil-works/pi-durable";
 import type { PocketApp } from "./app.ts";
 import type { User } from "./config.ts";
+import { ConfigurationDoc } from "./team-profiles.ts";
 import { HttpError } from "./errors.ts";
 
 const context = BACKGROUND_CONTEXT;
@@ -216,12 +217,16 @@ export class TeamExecution {
             throw new Error("No authorized personal execution owner.");
         }
 
+        app.projects.require(user, app.sessionMeta(app.rootOf(id))?.projectId, "continue");
         app.accounts.assertModel(user, agent.model);
+        const configuration = await app.harness.snapshot(ConfigurationDoc, id, context);
+
+        if (configuration?.snapshot) {
+            app.profiles.verify(configuration.snapshot);
+        }
     }
 
     extension() {
-        const app = this.#app;
-
         const check = async (api: HookApi) => {
             const agent = await api.snapshot(AgentDoc, api.conversationId, context);
 
@@ -240,25 +245,8 @@ export class TeamExecution {
                         // Hook exceptions are swallowed upstream: every failure must explicitly decline this lossy boundary.
                         try {
                             await check(api);
-                            const agent = await api.snapshot(AgentDoc, api.conversationId, context);
 
-                            if (
-                                agent?.model?.provider.startsWith("team:") &&
-                                request.messages.some(
-                                    (message) =>
-                                        message.role === "assistant" &&
-                                        message.provider !== agent.model!.provider,
-                                )
-                            ) {
-                                app.notice(
-                                    "warning",
-                                    "Cross-account compaction is not supported yet. Start a new context with an explicit public handoff note.",
-                                    api.conversationId,
-                                );
-
-                                return { decline: true };
-                            }
-
+                            // The hash-bound Durable patch serializes only public text/tool history, before it becomes user text.
                             return undefined;
                         } catch {
                             return { decline: true };

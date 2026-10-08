@@ -42,12 +42,17 @@ export class Providers {
                 configured: status.configured,
                 source: status.source ?? null,
                 label: status.label ?? null,
+                catalogError: status.catalogError ?? null,
                 apiKey: auth?.apiKey !== undefined,
                 oauth:
                     auth?.oauth === undefined
                         ? null
                         : (auth.oauth.loginLabel ?? auth.oauth.name ?? "Subscription"),
-                models: models.getModels(provider.id).length,
+                models: status.configured
+                    ? models
+                          .getAvailableSnapshot()
+                          .filter((model) => model.provider === provider.id).length
+                    : models.getModels(provider.id).length,
             };
         });
     }

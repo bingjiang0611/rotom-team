@@ -16,6 +16,7 @@ import type { Repeat } from "./when.ts";
 import type { Worktree } from "./worktrees.ts";
 
 export type SessionMeta = {
+    projectId?: string;
     title?: string;
     cwd: string;
     createdAt: number;

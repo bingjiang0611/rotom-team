@@ -666,6 +666,20 @@ export class BrowserPage {
         try {
             await this.#startCast();
 
+            // Static/background pages may not repaint when a cast starts. Bootstrap the first requested frame from a real snapshot.
+            if (this.#frame === undefined && !this.closed) {
+                aborted(signal);
+                const shot = await this.screenshot();
+
+                aborted(signal);
+                this.#frame ??= {
+                    seq: ++frameCount,
+                    data: Buffer.from(shot.data, "base64"),
+                    width: Math.round(shot.width * shot.scale),
+                    height: Math.round(shot.height * shot.scale),
+                };
+            }
+
             if (this.#frame !== undefined && this.#frame.seq > after) {
                 return this.#frame;
             }
@@ -871,6 +885,9 @@ export class BrowserPage {
         options: { wait?: boolean; timeoutMs?: number; signal?: AbortSignal } = {},
     ): Promise<{ error?: string; status?: number; slow?: boolean }> {
         this.usedAt = Date.now();
+        // A navigation may replace the renderer (including an error-page renderer). Its old cast cannot be reused.
+        await this.#stopCast();
+        this.#frame = undefined;
         const mark = this.#mark();
         const budget = options.wait === false ? 3000 : (options.timeoutMs ?? 30_000);
         // The browser answers once the page starts to arrive: a server that never responds keeps it waiting, while the

@@ -14,6 +14,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { defineExtension, type PromptInput, section } from "@earendil-works/pi-durable";
 import { APP_ROOT } from "../config.ts";
+import { ConfigurationDoc } from "../team-profiles.ts";
 import type { PocketHost } from "../host.ts";
 
 const PREAMBLE = `You are rotom team, a coding agent in a durable, shared team workspace built on Pi Durable and Pi Pocket. People share conversation history but execute using their own model accounts. Each message starts with [from: Name] when multiple people use this server. Never read, copy, export, or modify the service's account credentials or another member's private configuration as part of an ordinary project task. This instruction is not an OS sandbox: native tools have the server user's permissions.
@@ -102,8 +103,44 @@ export default function createPrompt(host: PocketHost) {
             section("preamble", () => PREAMBLE, { tag: false }),
             section("guidelines", () => GUIDELINES),
             section("pocket_docs", () => docs(host.dataDir)),
-            section("project_context", (input) => load(cwdOf(input)).context),
-            section("skills", (input) => load(cwdOf(input)).skills, { tag: false }),
+            section("project_context", async (input, context) => {
+                const configuration = await input.read.snapshot(
+                    ConfigurationDoc,
+                    input.conversationId,
+                    context,
+                );
+
+                return configuration?.snapshot
+                    ? configuration.snapshot.context
+                    : load(cwdOf(input)).context;
+            }),
+            section(
+                "skills",
+                async (input, context) => {
+                    const configuration = await input.read.snapshot(
+                        ConfigurationDoc,
+                        input.conversationId,
+                        context,
+                    );
+
+                    return configuration?.snapshot
+                        ? formatSkillsForPrompt(
+                              configuration.snapshot.skills.map((skill) => ({
+                                  ...skill,
+                                  filePath: skill.path,
+                                  sourceInfo: {
+                                      path: skill.path,
+                                      source: "snapshot",
+                                      scope: "project",
+                                      origin: "top-level",
+                                  },
+                              })),
+                              "read",
+                          )
+                        : load(cwdOf(input)).skills;
+                },
+                { tag: false },
+            ),
             section("environment", (input) => {
                 // The date only, so the prompt stays cache-friendly through the day.
                 const today = new Date().toISOString().slice(0, 10);

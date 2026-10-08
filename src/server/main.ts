@@ -58,7 +58,7 @@ function parseArgs(argv: string[]) {
             options.rotateToken = true;
         } else if (arg === "--help" || arg === "-h") {
             console.log(
-                "pi-pocket [--host 127.0.0.1] [--port 8787] [--cwd DIR] [--data DIR] [--rotate-token]",
+                "rotom-team [--host 127.0.0.1] [--port 8787] [--cwd DIR] [--data DIR] [--rotate-token]",
             );
             process.exit(0);
         } else {
@@ -127,6 +127,7 @@ process.on("SIGTERM", () => void stop(0));
 // The terminal closed.
 process.on("SIGHUP", () => void stop(0));
 process.on("SIGUSR2", () => void stop(RESTART_CODE));
+process.send?.({ type: "signals-ready" });
 process.on("unhandledRejection", (error) => console.error("Unhandled rejection:", error));
 
 if (launcher) {
@@ -241,7 +242,7 @@ if (launcher) {
         }
     }
 
-    console.log("\nPi Pocket is running.");
+    console.log("\nrotom team is running.");
     console.log(`  data:     ${options.data}`);
     console.log(`  sessions: new sessions start in ${options.cwd}`);
     console.log(

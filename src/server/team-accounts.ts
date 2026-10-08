@@ -6,13 +6,17 @@ import {
     lstatSync,
     mkdirSync,
     readFileSync,
+    realpathSync,
     renameSync,
     writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
 import * as ai from "@earendil-works/pi-ai";
 import { createModels } from "@earendil-works/pi-ai/models";
-import { openaiProvider } from "@earendil-works/pi-ai/providers/openai";
+import { chatGPTProvider } from "./openai-chatgpt.ts";
+// Pinned Pi 1.0.2 private storage seam; clean-install validation covers this exact path.
+import { FileModelsStore } from "../../node_modules/@earendil-works/pi-coding-agent/dist/core/models-store.js";
+import { openaiCodexProvider } from "@earendil-works/pi-ai/providers/openai-codex";
 import { clampMaxTokensToContext } from "@earendil-works/pi-ai/api/simple-options";
 import { FileCredentials } from "./credential-store.ts";
 import type { ModelRef } from "@earendil-works/pi-durable";
@@ -20,6 +24,40 @@ import { createQoderProvider } from "../../vendor/qoder/provider.mjs";
 import { createRefreshGuard } from "../../vendor/qoder/refresh-guard.mjs";
 import type { ConfigStore, ModelChoice, User } from "./config.ts";
 import { HttpError } from "./errors.ts";
+
+export function protectImportedRefresh(
+    provider: ai.Provider,
+    claimRefresh?: (refresh: string) => Promise<void>,
+): ai.Provider {
+    const oauth = provider.auth?.oauth;
+
+    if (!oauth) {
+        return provider;
+    }
+
+    return {
+        ...provider,
+        auth: {
+            ...provider.auth,
+            oauth: {
+                ...oauth,
+                async refresh(credential, signal) {
+                    if (credential.rotomTeamReadOnlyImport === true) {
+                        throw new Error(
+                            "Imported login is read-only: sign in independently before refreshing. The original rotom login was not modified.",
+                        );
+                    }
+
+                    signal.throwIfAborted();
+                    await claimRefresh?.(credential.refresh);
+                    signal.throwIfAborted();
+
+                    return oauth.refresh(credential, signal);
+                },
+            },
+        },
+    };
+}
 
 const noAmbient: ai.AuthContext = { env: async () => undefined, fileExists: async () => false };
 
@@ -32,18 +70,51 @@ export type Runtime = ai.MutableModels & {
         configured: boolean;
         source?: string;
         label?: string;
+        catalogError?: "unavailable";
     };
 };
 
-export function createRuntime(credentials?: ai.CredentialStore): Runtime {
-    const models = createModels({ credentials, authContext: noAmbient });
+export function createRuntime(
+    credentials?: ai.CredentialStore,
+    modelsStore?: ai.ModelsStore,
+): Runtime {
+    const models = createModels({ credentials, modelsStore, authContext: noAmbient });
+    const authStatus = new Map<string, ai.AuthCheck>();
+    const catalogErrors = new Set<string>();
+    const refresh = models.refresh.bind(models);
     let available: readonly ai.Model<ai.Api>[] = [];
     const getAvailable = models.getAvailable.bind(models);
 
     return Object.assign(models, {
         registerNativeProvider: (provider: ai.Provider) => models.setProvider(provider),
+        async refresh(options?: ai.ModelsRefreshOptions) {
+            const result = await refresh(options);
+
+            for (const provider of options?.providers ??
+                models.getProviders().map((provider) => provider.id)) {
+                if (result.errors.has(provider)) {
+                    catalogErrors.add(provider);
+                } else {
+                    catalogErrors.delete(provider);
+                }
+            }
+
+            return result;
+        },
         async getAvailable(provider?: string, options?: ai.AuthOperationOptions) {
             const result = await getAvailable(provider, options);
+
+            for (const entry of models
+                .getProviders()
+                .filter((entry) => provider === undefined || entry.id === provider)) {
+                const status = await models.checkAuth(entry.id, options);
+
+                if (status) {
+                    authStatus.set(entry.id, status);
+                } else {
+                    authStatus.delete(entry.id);
+                }
+            }
 
             available =
                 provider === undefined
@@ -53,9 +124,11 @@ export function createRuntime(credentials?: ai.CredentialStore): Runtime {
             return result;
         },
         getAvailableSnapshot: () => available,
-        hasConfiguredAuth: (provider: string) => available.some((m) => m.provider === provider),
+        hasConfiguredAuth: (provider: string) => authStatus.has(provider),
         getProviderAuthStatus: (provider: string) => ({
-            configured: available.some((m) => m.provider === provider),
+            configured: authStatus.has(provider),
+            source: authStatus.get(provider)?.source,
+            catalogError: catalogErrors.has(provider) ? ("unavailable" as const) : undefined,
         }),
     });
 }
@@ -228,6 +301,8 @@ export class TeamAccounts {
             folder,
             join(folder, "auth.json"),
             join(folder, "profile.json"),
+            join(folder, "models-store.json"),
+            join(folder, "oauth-refresh"),
         ]) {
             if (existsSync(path) && lstatSync(path).isSymbolicLink()) {
                 throw new Error("Personal account paths must not be symlinks");
@@ -239,16 +314,32 @@ export class TeamAccounts {
         const profile: Profile = existsSync(path)
             ? JSON.parse(readFileSync(path, "utf8"))
             : { generations: {} };
-        const runtime = createRuntime(new FileCredentials(join(folder, "auth.json")));
+        const runtime = createRuntime(
+            new FileCredentials(join(folder, "auth.json")),
+            new FileModelsStore(join(folder, "models-store.json")),
+        );
 
-        runtime.setProvider({ ...openaiProvider(), name: "ChatGPT / OpenAI" });
+        const refreshFolder = join(folder, "oauth-refresh");
+
+        mkdirSync(refreshFolder, { recursive: true, mode: 0o700 });
+        const claimRefresh = createRefreshGuard(realpathSync(refreshFolder));
+
+        runtime.setProvider(protectImportedRefresh(chatGPTProvider(), claimRefresh));
         runtime.setProvider(
-            await createQoderProvider({
-                piAI: ai,
-                clampMaxTokens: clampMaxTokensToContext,
-                authMode: "browser",
-                oauthOptions: { claimRefresh: createRefreshGuard(folder) },
-            }),
+            protectImportedRefresh(
+                { ...openaiCodexProvider(), name: "ChatGPT / Codex" },
+                claimRefresh,
+            ),
+        );
+        runtime.setProvider(
+            protectImportedRefresh(
+                await createQoderProvider({
+                    piAI: ai,
+                    clampMaxTokens: clampMaxTokensToContext,
+                    authMode: "browser",
+                    oauthOptions: { claimRefresh: createRefreshGuard(folder) },
+                }),
+            ),
         );
         this.#configure?.(runtime, user);
         const account = { runtime, profile, folder, aliases: new Set<string>() };
@@ -276,15 +367,19 @@ export class TeamAccounts {
 
         if (rotateProvider === "qoder") {
             account.runtime.setProvider(
-                await createQoderProvider({
-                    piAI: ai,
-                    clampMaxTokens: clampMaxTokensToContext,
-                    authMode: "browser",
-                    oauthOptions: { claimRefresh: createRefreshGuard(account.folder) },
-                }),
+                protectImportedRefresh(
+                    await createQoderProvider({
+                        piAI: ai,
+                        clampMaxTokens: clampMaxTokensToContext,
+                        authMode: "browser",
+                        oauthOptions: { claimRefresh: createRefreshGuard(account.folder) },
+                    }),
+                ),
             );
         }
 
+        // OAuth model choices are account-specific. Catalog failure never exposes the static API-key directory.
+        await account.runtime.refresh({ providers: ["openai"] });
         await account.runtime.getAvailable();
 
         for (const alias of account.aliases) {
@@ -441,14 +536,20 @@ export class TeamAccounts {
     choice(user: User): ModelChoice | undefined {
         const last = this.#accounts.get(user.id)?.profile.model;
         const all = this.available(user);
-        const model =
-            all.find((m) => m.provider === last?.provider && m.id === last.modelId) ?? all[0];
+        // A removed personal selection must be explicitly replaced, not silently charged to another connected provider.
+        const model = last
+            ? all.find((m) => m.provider === last.provider && m.id === last.modelId)
+            : all[0];
 
         return (
             model && {
                 provider: model.provider,
                 modelId: model.id,
-                thinkingLevel: last?.thinkingLevel ?? "off",
+                thinkingLevel: ai
+                    .getSupportedThinkingLevels(model)
+                    .includes((last?.thinkingLevel ?? "off") as ai.ModelThinkingLevel)
+                    ? (last?.thinkingLevel ?? "off")
+                    : ai.getSupportedThinkingLevels(model)[0],
             }
         );
     }

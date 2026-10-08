@@ -241,7 +241,12 @@ export class Workspace {
     conversationFile(user: User, id: ConversationId, path: string): string {
         const file = this.conversationPath(id, path);
 
-        if (user.role !== "viewer" && user.sessions === undefined) {
+        if (
+            user.role === "owner" ||
+            (user.role !== "viewer" &&
+                user.sessions === undefined &&
+                this.#app.sessionMeta(this.#app.rootOf(id))?.projectId === undefined)
+        ) {
             return file;
         }
 
@@ -261,7 +266,10 @@ export class Workspace {
         const uploads = this.#lineage(id).map((each) =>
             join(this.#app.dataDir, "uploads", String(each)),
         );
-        const roots = [cwd, ...uploads]
+        const snapshotRoots = this.#lineage(id).flatMap(
+            (each) => this.#app.profiles.snapshot(each)?.skills.map((skill) => skill.baseDir) ?? [],
+        );
+        const roots = [cwd, ...uploads, ...snapshotRoots]
             .map(real)
             .filter((root): root is string => root !== undefined);
 
@@ -301,7 +309,14 @@ export class Workspace {
 
         if (
             inside(real(getAgentDir())) ||
-            (inside(data) && !inside(join(data, "uploads")) && !inside(join(data, "worktrees")))
+            (inside(data) &&
+                !inside(join(data, "uploads")) &&
+                !inside(join(data, "worktrees")) &&
+                !this.#lineage(id).some((each) =>
+                    this.#app.profiles
+                        .snapshot(each)
+                        ?.skills.some((skill) => inside(real(skill.baseDir))),
+                ))
         ) {
             throw new HttpError(404, "Not found");
         }

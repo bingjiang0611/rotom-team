@@ -12,7 +12,7 @@ import {
 } from "./helpers.ts";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
 import { branchesIn, gitDirOf, headOf } from "../src/server/branches.ts";
@@ -88,11 +88,11 @@ test("branches are listed with their remote branches, worktrees, and uncommitted
         assert.equal(main?.subject, "local work");
         assert.equal(
             branches.local.find((branch) => branch.name === "in-a-worktree")?.worktree,
-            join(root, "elsewhere"),
+            realpathSync(join(root, "elsewhere")),
         );
         assert.equal(
             branches.local.find((branch) => branch.name === "odd-worktree")?.worktree,
-            join(root, "odd\nfolder"),
+            realpathSync(join(root, "odd\nfolder")),
             "a newline in a worktree's folder is part of it",
         );
         assert.equal(branches.local.find((branch) => branch.name === "old-idea")?.current, false);

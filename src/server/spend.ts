@@ -11,6 +11,7 @@ import type { User } from "./config.ts";
 import { SessionsDoc, SpendDoc } from "./docs.ts";
 import { describe, HttpError } from "./errors.ts";
 import { usageCost } from "./projection.ts";
+import { TeamUsageDoc, TeamCountedDoc, type TeamUsage } from "./team-usage.ts";
 
 const context = BACKGROUND_CONTEXT;
 
@@ -31,6 +32,7 @@ export class Spend {
     readonly #app: PocketApp;
     /** Each conversation's spend so far. */
     readonly #costs = new Map<ConversationId, number>();
+    readonly #ledgerCosts = new Map<ConversationId, Record<string, number>>();
     /** Spend added to people but not stored yet, per conversation and person. */
     readonly #owed = new Map<ConversationId, Map<string, number>>();
     /** What `SpendDoc` says each person spent, as of the last count. */
@@ -71,10 +73,30 @@ export class Spend {
         this.#people = { ...stored?.people };
 
         for (const id of ids) {
+            const ledger = await harness.snapshot(TeamUsageDoc, id, context);
+
+            if (ledger) {
+                const counted = await harness.snapshot(TeamCountedDoc, id, context);
+
+                this.#ledgerCosts.set(id, { ...counted?.people });
+                this.ledgerChanged(id, ledger);
+                continue;
+            }
+
             const added = (this.#costs.get(id) ?? 0) - (stored?.counted[String(id)] ?? 0);
 
             if (added > 0) {
-                this.#owe(id, this.#payer(id), added);
+                const agent = await this.#app.agentState(id);
+
+                if (agent?.model?.provider.startsWith("team:")) {
+                    this.#app.notice(
+                        "warning",
+                        "Legacy usage has no atomic account attribution; it is not charged to the latest member.",
+                        id,
+                    );
+                } else {
+                    this.#owe(id, this.#payer(id), added);
+                }
             }
         }
 
@@ -93,13 +115,36 @@ export class Spend {
      * A conversation's usage changed: called from the commit listener, when whom Pi works for is who asked for this
      * work. Storing it waits for a moment.
      */
-    usageChanged(id: ConversationId, usage: UsageState | null): void {
+    ledgerChanged(id: ConversationId, ledger: TeamUsage | null): void {
+        const previous = this.#ledgerCosts.get(id) ?? {};
+        const current: Record<string, number> = {};
+
+        for (const [owner, usage] of Object.entries(ledger?.people ?? {})) {
+            const total = usageCost(usage);
+
+            current[owner] = total;
+
+            if (total > (previous[owner] ?? 0)) {
+                this.#owe(id, owner, total - (previous[owner] ?? 0));
+            }
+        }
+
+        this.#ledgerCosts.set(id, current);
+        this.#timer ??= setTimeout(() => {
+            this.#timer = undefined;
+            void this.#count().catch((error) =>
+                this.#app.log(`spend not counted: ${describe(error)}`),
+            );
+        }, COUNT_AFTER_MS);
+    }
+
+    usageChanged(id: ConversationId, usage: UsageState | null, atomicallyAttributed = false): void {
         const cost = usageCost(usage ?? undefined);
         const added = cost - (this.#costs.get(id) ?? 0);
 
         this.#costs.set(id, cost);
 
-        if (added > 0) {
+        if (added > 0 && !atomicallyAttributed) {
             this.#owe(id, this.#payer(id), added);
         }
 
@@ -138,7 +183,15 @@ export class Spend {
                 const doc = await tx.doc(SpendDoc);
 
                 for (const [id, payers] of owed) {
+                    const ledger = this.#ledgerCosts.has(id)
+                        ? await tx.doc(TeamCountedDoc, id)
+                        : undefined;
+
                     for (const [payer, added] of payers) {
+                        if (ledger) {
+                            ledger.people[payer] = (ledger.people[payer] ?? 0) + added;
+                        }
+
                         doc.counted[String(id)] = (doc.counted[String(id)] ?? 0) + added;
                         doc.people[payer] = (doc.people[payer] ?? 0) + added;
                     }

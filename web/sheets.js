@@ -14,6 +14,8 @@ import { MessageSheet } from "./sheets/message.js";
 import { ModelPicker } from "./sheets/model.js";
 import { InviteSheet, PeopleSheet } from "./sheets/people.js";
 import { AuthDialog, ProvidersSheet } from "./sheets/providers.js";
+import { ProfileSheet } from "./sheets/profile.js";
+import { ProjectsSheet } from "./sheets/projects.js";
 import { RunningSheet } from "./sheets/running.js";
 import { SchedulesSheet } from "./sheets/schedules.js";
 import { ShortcutsSheet } from "./sheets/shortcuts.js";
@@ -126,6 +128,12 @@ function sheetBody(sheet) {
             body = view.conversation
                 ? html`<${ArtifactViewer} id=${sheet.id} version=${sheet.version} />`
                 : null;
+            break;
+        case "projects":
+            body = html`<${ProjectsSheet} />`;
+            break;
+        case "profile":
+            body = html`<${ProfileSheet} />`;
             break;
         case "providers":
             body = html`<${ProvidersSheet} />`;

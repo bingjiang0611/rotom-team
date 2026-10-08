@@ -151,6 +151,58 @@ export function createApi(options: HttpOptions, auth: Auth) {
             return json(response, 200, await app.hello(user));
         }
 
+        if (first === "projects" && method === "GET") {
+            return json(response, 200, app.projects.all(user));
+        }
+
+        if (first === "projects" && method === "POST") {
+            requireOwner(user);
+            const project = app.projects.save(
+                user,
+                await readJson(request),
+                (id) => app.config.userById(id) !== undefined,
+            );
+
+            await app.projectsChanged();
+
+            return json(response, 200, project);
+        }
+
+        if (first === "devices" && third === undefined) {
+            if (method === "GET" && second === undefined) {
+                return json(response, 200, app.config.devices(user.id));
+            }
+
+            if (method === "POST" && second === undefined) {
+                return json(response, 200, app.config.addDevice(user.id));
+            }
+
+            if (method === "DELETE" && second !== undefined) {
+                app.config.revokeDevice(user.id, second);
+
+                // Close this member's established streams so revoked bearer credentials must authenticate again.
+                for (const client of app.clients) {
+                    if (client.user.id === user.id) {
+                        client.send("closing", {});
+                        app.detach(client);
+                        client.close?.();
+                    }
+                }
+
+                return json(response, 200, { ok: true });
+            }
+        }
+
+        if (first === "profile" && method === "GET") {
+            return json(response, 200, app.profiles.get(user));
+        }
+
+        if (first === "profile" && method === "POST") {
+            app.requireSteer(user);
+
+            return json(response, 200, app.profiles.save(user, await readJson(request)));
+        }
+
         if (first === "me" && method === "POST") {
             const body = await readJson<{ name?: string }>(request);
             const name = String(body.name ?? "")

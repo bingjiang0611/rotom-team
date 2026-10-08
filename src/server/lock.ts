@@ -6,7 +6,7 @@ import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
  * (and Android) a live process must also be Node; where that cannot be read, a live process counts.
  */
 function lockHolder(pid: number): boolean {
-    if (!Number.isInteger(pid) || pid <= 0 || pid === process.pid) {
+    if (!Number.isInteger(pid) || pid <= 0) {
         return false;
     }
 
