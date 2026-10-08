@@ -1,15 +1,21 @@
 /** Opt-in localhost-only independent OAuth verification. Never imports original provider credentials. */
-import { mkdirSync, mkdtempSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, realpathSync } from "node:fs";
 import { createServer } from "node:http";
 import { homedir } from "node:os";
 import { join } from "node:path";
 const parent = join(homedir(), "Library", "Application Support", "rotom-team-validation");
 
 mkdirSync(parent, { recursive: true, mode: 0o700 });
-const data = mkdtempSync(join(parent, "independent-auth-"));
+const resume = process.argv[2];
+const data = resume ? realpathSync(resume) : mkdtempSync(join(parent, "independent-auth-"));
+
+if (resume && !existsSync(join(data, "config.json"))) {
+    throw new Error("An existing independent fixture is required.");
+}
+
 const workspace = join(data, "workspace");
 
-mkdirSync(workspace, { mode: 0o700 });
+mkdirSync(workspace, { recursive: true, mode: 0o700 });
 process.umask(0o077);
 process.env.PI_CODING_AGENT_DIR = join(data, "agent");
 process.env.PI_POCKET_GUARD = "off";
@@ -25,7 +31,10 @@ const app = await PocketApp.open({
 const owner = app.config.users.find((user) => user.role === "owner")!;
 
 app.config.updateUser(owner.id, { name: "Alice · independent ChatGPT" });
-const bob = app.config.addUser("Bob · independent Qoder", "guest");
+const existing = app.config.users.find((user) => user.name === "Bob · independent Qoder");
+const bob = existing
+    ? { user: existing, token: app.config.addDevice(existing.id).token }
+    : app.config.addUser("Bob · independent Qoder", "guest");
 const handler = createHandler({ app, listen: { host: "127.0.0.1", port: 0 }, restart: () => {} });
 const unused = new Set(["/validation-alice", "/validation-bob"]);
 const server = createServer((request, response) => {
