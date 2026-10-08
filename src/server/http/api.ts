@@ -425,7 +425,7 @@ export function createApi(options: HttpOptions, auth: Auth) {
         }
 
         if (first === "providers" && second === undefined && method === "GET") {
-            return json(response, 200, app.providers.list());
+            return json(response, 200, await app.providers.list(user));
         }
 
         if (
@@ -434,11 +434,11 @@ export function createApi(options: HttpOptions, auth: Auth) {
             third === "login" &&
             method === "POST"
         ) {
-            requireOwner(user);
+            app.requireSteer(user);
             const body = await readJson<{ type?: string }>(request);
 
             return json(response, 200, {
-                flowId: app.providers.startLogin(
+                flowId: await app.providers.startLogin(
                     user,
                     second,
                     body.type === "oauth" ? "oauth" : "api_key",
@@ -452,8 +452,8 @@ export function createApi(options: HttpOptions, auth: Auth) {
             third === "logout" &&
             method === "POST"
         ) {
-            requireOwner(user);
-            await app.providers.logout(second);
+            app.requireSteer(user);
+            await app.providers.logout(user, second);
 
             return json(response, 200, { ok: true });
         }

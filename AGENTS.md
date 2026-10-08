@@ -1,4 +1,6 @@
-# Working on Pi Pocket
+# Working on rotom team
+
+Read [docs/PRODUCT.md](docs/PRODUCT.md) and [docs/VERIFICATION.md](docs/VERIFICATION.md) for this fork's contracts. Preserve personal credential routing, unknown outcomes and the trusted-native boundary. Never use real model accounts in tests without explicit authorization. `vendor/qoder/` is a hash-recorded source snapshot: update provenance when changing it; do not format it mechanically. The inherited Pocket implementation notes below describe upstream mechanics, not enabled team capabilities.
 
 Pi Pocket is often edited from inside itself, while it runs. [docs/map.md](docs/map.md) says where things are, and [docs/architecture.md](docs/architecture.md) what they rely on. [docs/self-editing.md](docs/self-editing.md) has the whole of what follows, including how to check a change on a throwaway copy (`node test/serve.ts`); [docs/index.md](docs/index.md) lists every guide. Keep editing safe:
 

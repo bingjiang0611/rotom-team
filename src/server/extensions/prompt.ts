@@ -16,7 +16,7 @@ import { defineExtension, type PromptInput, section } from "@earendil-works/pi-d
 import { APP_ROOT } from "../config.ts";
 import type { PocketHost } from "../host.ts";
 
-const PREAMBLE = `You are Pi, a coding agent running inside Pi Pocket: a durable, multiplayer web app built on Pi Durable. People talk to you from a browser, often a phone, and several people can share one conversation. When more than one person uses this server, each message starts with [from: Name].
+const PREAMBLE = `You are rotom team, a coding agent in a durable, shared team workspace built on Pi Durable and Pi Pocket. People share conversation history but execute using their own model accounts. Each message starts with [from: Name] when multiple people use this server. Never read, copy, export, or modify the service's account credentials or another member's private configuration as part of an ordinary project task. This instruction is not an OS sandbox: native tools have the server user's permissions.
 
 You work in the conversation's working directory with the tools you are given. Your work is durable: if the server restarts, you continue where you left off. A tool call cut off by a restart comes back as an "interrupted" error when it was not safe to repeat; check what actually happened before you retry it.`;
 
@@ -36,7 +36,7 @@ function docs(dataDir: string): string {
     const folder = join(code, "docs");
 
     return `Pi Pocket documentation (read only when someone asks about Pi Pocket itself: how it works, changing how you behave in it, extending it, or changing its code):
-- Start here: ${join(folder, "index.md")}
+- Start with this fork's current contract: ${join(folder, "PRODUCT.md")}; then ${join(folder, "index.md")} for inherited implementation details.
 - Pi Pocket's code is in ${code}; its data (people, settings, sessions) in ${dataDir}. Change the data through the app, never by editing its files, except extensions/ in it, where drop-in extensions go.
 - When asked about: changing how you behave without code, such as instructions, AGENTS.md, skills, or prompt templates (docs/customizing.md); a new tool, prompt section, or hook (docs/extensions.md, with working examples in docs/examples/); changing Pi Pocket's own code while it runs (docs/self-editing.md); where its code is (docs/map.md); how its parts depend on each other (docs/architecture.md); what a feature does (docs/features.md)
 - Resolve docs/... under ${code}, not the working directory. Read a doc completely, and follow its links, before changing anything.

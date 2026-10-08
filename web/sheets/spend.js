@@ -60,10 +60,10 @@ export function SpendSheet() {
         ${data === null && html`<${Loader} label="Adding it up" />`}
         ${
             data?.total !== undefined &&
-            html`<p>Pi spent <strong>${money(data.total)}</strong> on this server so far.</p>`
+            html`<p>Recorded API-cost estimate: <strong>${money(data.total)}</strong>.</p>`
         }
         <p class="muted small">
-            Spend goes to whoever asked for the work. Past a limit, Pi takes no new messages there, and a run that crosses it stops.
+            Estimates belong to the execution account, not the last person who commented. Zero may mean missing billing data, not free use. ChatGPT quota and Qoder credits are provider-reported or unknown; these dollar limits do not enforce subscription quotas.
         </p>
         ${
             data &&

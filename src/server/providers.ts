@@ -25,8 +25,8 @@ export class Providers {
         this.#app = app;
     }
 
-    list() {
-        const models = this.#app.models;
+    async list(user: User) {
+        const { runtime: models } = await this.#app.accounts.forUser(user);
 
         return models.getProviders().map((provider) => {
             const status = models.getProviderAuthStatus(provider.id);
@@ -52,8 +52,25 @@ export class Providers {
         });
     }
 
-    startLogin(user: User, providerId: string, type: "api_key" | "oauth"): string {
+    async startLogin(user: User, providerId: string, type: "api_key" | "oauth"): Promise<string> {
+        return this.#app.accounts.exclusive(user, () => this.#startLogin(user, providerId, type));
+    }
+
+    async #startLogin(user: User, providerId: string, type: "api_key" | "oauth"): Promise<string> {
         const app = this.#app;
+
+        app.requireSteer(user);
+        const { runtime } = await app.accounts.forUser(user);
+
+        if (!runtime.getProvider(providerId)) {
+            throw new HttpError(404, "No such provider");
+        }
+
+        if (this.#flows.size && [...this.#flows.values()].some((flow) => flow.userId === user.id)) {
+            throw new HttpError(409, "Finish or cancel your current login first.");
+        }
+
+        await app.execution.accountIdle(user);
         const flow: AuthFlow = {
             id: randomUUID(),
             userId: user.id,
@@ -61,6 +78,7 @@ export class Providers {
             abort: new AbortController(),
         };
 
+        app.accounts.beginChange(user, providerId);
         this.#flows.set(flow.id, flow);
 
         const send = (data: Record<string, unknown>) => {
@@ -90,18 +108,33 @@ export class Providers {
             notify: (event: unknown) => send({ step: "event", event }),
         };
 
-        void app.models
-            // Sign-ins that identify the installation (ChatGPT) get the ID Pi keeps for it, the same as Pi's own login.
-            .login(providerId, type, interaction, {
-                getDeviceId: () => app.settings.getOrCreateDeviceId(),
-            })
-            .then(
-                async () => {
-                    await app.models.getAvailable().catch(() => []);
-                    send({ step: "done", ok: true });
-                    this.#sendModels();
-                },
-                (error: unknown) => send({ step: "done", ok: false, error: describe(error) }),
+        void (async () => {
+            let result: { ok: boolean; error?: string };
+
+            try {
+                await runtime.login(providerId, type, interaction, { getDeviceId: () => user.id });
+                result = { ok: true };
+            } catch (error) {
+                result = { ok: false, error: describe(error) };
+            }
+
+            try {
+                // Reconcile even after cancellation: the old credential remains, but its old route was revoked.
+                await app.accounts.refresh(user, result.ok ? providerId : undefined);
+            } finally {
+                app.accounts.endChange(user);
+            }
+
+            await app.models.getAvailable();
+            this.#sendModels(user);
+            send({ step: "done", ...result });
+        })()
+            .catch(() =>
+                send({
+                    step: "done",
+                    ok: false,
+                    error: "Account synchronization failed. Reconnect your account before executing.",
+                }),
             )
             .finally(() => this.#flows.delete(flow.id));
 
@@ -147,18 +180,40 @@ export class Providers {
         flow.abort.abort();
     }
 
-    async logout(providerId: string): Promise<void> {
-        await this.#app.models.logout(providerId);
-        await this.#app.models.getAvailable().catch(() => []);
-        this.#sendModels();
+    async logout(user: User, providerId: string): Promise<void> {
+        return this.#app.accounts.exclusive(user, () => this.#logout(user, providerId));
+    }
+
+    async #logout(user: User, providerId: string): Promise<void> {
+        const app = this.#app;
+
+        app.requireSteer(user);
+        const { runtime } = await app.accounts.forUser(user);
+
+        await app.execution.accountIdle(user);
+        app.accounts.beginChange(user, providerId);
+
+        try {
+            await runtime.logout(providerId);
+            await app.accounts.refresh(user);
+        } finally {
+            app.accounts.endChange(user);
+        }
+
+        await app.models.getAvailable();
+        this.#sendModels(user);
     }
 
     /** Every tab gets the models available now. */
-    #sendModels(): void {
-        const models = modelList(this.#app.models);
+    #sendModels(user: User): void {
+        const models = modelList(this.#app.models).filter((model) =>
+            this.#app.accounts.owns(user, model.provider),
+        );
 
         for (const client of this.#app.clients) {
-            client.send("models", models);
+            if (client.user.id === user.id) {
+                client.send("models", models);
+            }
         }
     }
 

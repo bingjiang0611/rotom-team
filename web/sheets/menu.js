@@ -254,7 +254,7 @@ export function MenuSheet() {
             ${collab() && item("Notifications", () => openSheet({ type: "notifications" }), "Pi finished, approvals, chat")}
             ${item("Running now", () => openSheet({ type: "running" }), "everything Pi is doing")}
             ${item("Spend", () => openSheet({ type: "spend" }), me?.role === "owner" ? "by person and session, limits" : "yours")}
-            ${item("Providers", () => openSheet({ type: "providers" }))}
+            ${item("My model accounts", () => openSheet({ type: "providers" }), "your ChatGPT / Qoder quota")}
             ${item("Extensions", () => openSheet({ type: "extensions" }), store.state.guard?.enabled ? "Lancet Guard on" : store.state.guard?.available ? "Lancet Guard off" : "")}
             ${
                 me?.role === "owner" &&

@@ -1,7 +1,7 @@
 {
-    "name": "Pi Pocket",
-    "short_name": "Pi Pocket",
-    "description": "Durable, multiplayer Pi agents in your browser",
+    "name": "rotom team",
+    "short_name": "rotom team",
+    "description": "Shared agent sessions, personal model accounts",
     "start_url": "/",
     "scope": "/",
     "display": "standalone",

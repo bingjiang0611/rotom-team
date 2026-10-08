@@ -659,7 +659,7 @@ export function SessionList({ compact = false }) {
 
     return html`<div class=${`sessions ${compact ? "compact" : ""}`}>
         <div class="sessions-head">
-            <span class="brand">π <span>Pocket</span></span>
+            <span class="brand">r <span>rotom team</span></span>
             <button
                 class="icon-button"
                 title="Launcher"
@@ -809,7 +809,7 @@ export function SessionList({ compact = false }) {
                         title="Model providers"
                         onClick=${() => openSheet({ type: "providers" })}
                     >
-                        <${Icon} name="key" size=${16} /> Providers
+                        <${Icon} name="key" size=${16} /> My accounts
                     </button>
                     ${
                         collab()

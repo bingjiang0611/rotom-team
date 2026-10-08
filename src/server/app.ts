@@ -10,7 +10,9 @@ import { rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { getAgentDir, ModelRuntime, SettingsManager } from "@earendil-works/pi-coding-agent";
+import { getAgentDir, SettingsManager } from "@earendil-works/pi-coding-agent";
+import { TeamAccounts, type Runtime } from "./team-accounts.ts";
+import { TeamExecution, TeamRunDoc } from "./team-execution.ts";
 import {
     AgentDoc,
     type AgentState,
@@ -104,7 +106,8 @@ export interface OpenOptions {
     supervised: boolean;
     log?: (line: string) => void;
     /** Tests register scripted providers here. */
-    configureModels?: (models: ModelRuntime) => void;
+    configureModels?: (models: Runtime) => void;
+    configureUserModels?: (models: Runtime, user: User) => void;
     /** The clock durable work runs by, such as scheduled messages. Tests move it ahead. */
     now?: () => number;
     /** The browser to run for the Browser panel and tool; null for none. Undefined finds one on this machine. */
@@ -124,7 +127,9 @@ export class PocketApp {
     /** Set by the launcher over IPC; undefined when the server runs on its own. */
     access: AccessInfo | undefined;
     harness!: Harness;
-    models!: ModelRuntime;
+    models!: Runtime;
+    readonly accounts: TeamAccounts;
+    readonly execution = new TeamExecution(this);
     settings!: SettingsManager;
     loader!: ExtensionLoader;
     readonly commands = new Commands(this);
@@ -163,7 +168,7 @@ export class PocketApp {
     #lockFile: string;
     #closing: Promise<void> | undefined;
     readonly #log: (line: string) => void;
-    readonly #configureModels: ((models: ModelRuntime) => void) | undefined;
+    readonly #configureModels: ((models: Runtime) => void) | undefined;
     /** The clock durable work runs by. */
     readonly now: () => number;
 
@@ -174,6 +179,12 @@ export class PocketApp {
         this.defaultCwd = options.defaultCwd;
         this.supervised = options.supervised;
         this.config = new ConfigStore(options.dataDir);
+        this.accounts = new TeamAccounts(
+            this.config,
+            options.dataDir,
+            (provider, sessionId) => this.execution.authorize(provider, sessionId),
+            options.configureUserModels,
+        );
         this.#lockFile = join(options.dataDir, "harness.lock");
         this.#log = options.log ?? ((line) => console.log(line));
         this.browsers = new Browsers({
@@ -244,7 +255,8 @@ export class PocketApp {
             this.#log(`HTTP setup failed, using Node defaults: ${describe(error)}`);
         }
 
-        this.models = await ModelRuntime.create();
+        await this.accounts.open();
+        this.models = this.accounts.models;
         this.#configureModels?.(this.models);
         await this.models.getAvailable().catch(() => []);
 
@@ -289,6 +301,7 @@ export class PocketApp {
             (file) => this.config.extensionChoice(file),
         );
         await this.loader.loadAll();
+        registry.install(this.execution.extension());
 
         const storage = await openNodeSqliteStorage(join(this.dataDir, "pocket.sqlite"));
 
@@ -305,6 +318,14 @@ export class PocketApp {
                     await tx.doc(AuthorsDoc, conversation.id);
                     await tx.doc(ArtifactsDoc, conversation.id);
                     await tx.doc(SubagentsDoc, conversation.id);
+                    const parent = conversation.owner?.conversationId;
+                    const binding =
+                        parent === undefined ? undefined : await tx.doc(TeamRunDoc, parent);
+                    const run = await tx.doc(TeamRunDoc, conversation.id);
+
+                    if (binding) {
+                        Object.assign(run, binding);
+                    }
                 },
                 onReport: (error) => this.notice("warning", describe(error)),
             },
@@ -313,6 +334,7 @@ export class PocketApp {
 
         const conversations = await this.#recover(storage);
 
+        await this.execution.recover(conversations);
         await this.spend.load(conversations);
 
         this.#unsubscribeCommits = this.harness.subscribeCommits((publication) =>
@@ -451,7 +473,11 @@ export class PocketApp {
         const id = change.conversationId;
         let sessionsChanged = false;
 
-        if (kind === "pi.live" && id !== undefined) {
+        if (kind === "pi.provider" && id !== undefined) {
+            this.execution.noteSession(id, change.value as { sessionId: string } | null);
+        } else if (kind === TeamRunDoc.definition.kind && id !== undefined) {
+            this.execution.noteOwner(id, change.value as { owner?: string } | null);
+        } else if (kind === "pi.live" && id !== undefined) {
             const busy = (change.value as LiveState | null)?.run !== undefined;
 
             if (busy !== this.#busy.has(id)) {
@@ -1063,6 +1089,8 @@ export class PocketApp {
     }
 
     async hello(user: User) {
+        await this.accounts.forUser(user);
+
         return {
             user: {
                 id: user.id,
@@ -1071,7 +1099,12 @@ export class PocketApp {
                 ...(user.sessions === undefined ? {} : { sessions: user.sessions.map(Number) }),
             },
             users: this.people(user),
-            models: modelList(this.models),
+            models: modelList(this.models).filter((model) =>
+                this.accounts.owns(user, model.provider),
+            ),
+            executionMode: "native-trusted-team",
+            accountPolicy:
+                "Personal model accounts; native tools share this machine's OS permissions.",
             guard: await this.guardStatus(),
             server: {
                 supervised: this.supervised,

@@ -1,0 +1,18 @@
+{
+  "source": "bingjiang0611/rotom: rotom/extensions/qoder",
+  "license": "UNLICENSED",
+  "sha256": {
+    "auth.mjs": "42c67859cd4a88bf815ea8d7aa958d529e4b3bc761163fd2d6076cf3e9e9da84",
+    "catalog.mjs": "11310fc198f678823693a3b80bc2a169536450b463789e96499258321a20c2e6",
+    "catalog-auth.mjs": "5052ce7ea0d2f8fce56654dd56ac0a3d878766711dd900fe7f44ae572fd22b1d",
+    "credits.mjs": "b2c15561935aefa02311e30304ae67fbeb39e7b902a05b05204d94403e9325ec",
+    "legacy.mjs": "49eadc0be9f0883eb664a2420323b1add2260da1a8f58c4cc079e00136876999",
+    "messages.mjs": "d8aeb2500484c6c4f53a2dcb28ccb1e11f60b5e825ecc041a988f5cc9cf57fe1",
+    "oauth.mjs": "62a7f570e1d4cb3712d0a4b7f4e13a5705d715b7f74c93eed535098e2353b40e",
+    "provider.mjs": "99c4deb3dac865f09bbddbb17b6264a2593dfc9f3fd71e685c57838548ddff2d",
+    "refresh-guard.mjs": "fcc3e02771917c90f7760b598b6c360ca5d3257adfd9a732a6b98dc1dab751e3",
+    "translate.mjs": "ac2ccea9ef9ce2d260a3bbbac1cf1bfc4c3f4a4ba685818046aef421b3050e12",
+    "transport.mjs": "3483d6b9f8150d912f3ded2ce950897cb56e023b9be88630995f3ef781cdff95"
+  },
+  "sourceCommit": "f6d83d86d3f21df740b03da414eaded20ac914eb"
+}

@@ -1,31 +1,24 @@
 {
-    "name": "pi-pocket",
-    "version": "0.11.0",
-    "description": "A durable, multiplayer, mobile-first web app for Pi agents, built on Pi Durable",
+    "name": "rotom-team",
+    "version": "0.1.0-alpha.1",
+    "description": "Self-hosted shared agent sessions with personal ChatGPT and Qoder accounts",
     "private": true,
     "type": "module",
-    "license": "MIT",
+    "license": "UNLICENSED",
     "author": "Tanner Middleton",
-    "repository": {
-        "type": "git",
-        "url": "git+https://github.com/TannerMidd/pi-pocket.git"
-    },
-    "homepage": "https://tannermidd.github.io/pi-pocket/",
-    "bugs": {
-        "url": "https://github.com/TannerMidd/pi-pocket/issues"
-    },
     "bin": {
-        "pi-pocket": "bin/pi-pocket.js"
+        "rotom-team": "bin/rotom-team.js"
     },
     "engines": {
-        "node": ">=22.19"
+        "node": ">=24"
     },
     "scripts": {
-        "start": "node bin/pi-pocket.js",
-        "dev": "node bin/pi-pocket.js --cwd .",
+        "start": "node bin/rotom-team.js",
+        "dev": "node bin/rotom-team.js --cwd .",
+        "demo": "node test/team-serve.ts",
+        "test:team": "node --test test/team.test.ts",
         "check": "tsc --noEmit -p .",
         "test": "node --test test/*.test.ts",
-        "site:publish": "git subtree push --prefix site origin gh-pages",
         "format": "eslint --fix . && prettier --write .",
         "format:check": "prettier --check . && eslint .",
         "lint": "eslint ."

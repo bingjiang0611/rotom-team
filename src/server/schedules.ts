@@ -220,6 +220,14 @@ export class Schedules {
     /** Set up a message to Pi. Throws an HttpError a person can act on when the time or the message will not do. */
     async add(conversationId: ConversationId, request: ScheduleRequest): Promise<Schedule> {
         const app = this.#app;
+        const model = (await app.agentState(conversationId))?.model;
+
+        if (model?.provider.startsWith("team:")) {
+            throw new HttpError(
+                409,
+                "Personal-account scheduling is not enabled in this alpha; submit interactively.",
+            );
+        }
 
         if (!this.running) {
             throw new HttpError(409, "Schedules are turned off in Extensions.");

@@ -119,7 +119,7 @@ export function ModelPicker() {
             <header class="pop-menu-head">
                 <span>Model</span>
                 <button class="pop-menu-link" onClick=${() => openSheet({ type: "providers" })}>
-                    <${Icon} name="key" size=${13} /> Providers
+                    <${Icon} name="key" size=${13} /> My accounts
                 </button>
             </header>
             ${
@@ -141,7 +141,7 @@ export function ModelPicker() {
                 ${
                     models.length === 0 &&
                     html`<p class="muted pop-menu-note">
-                        No models are available. Add a provider first.
+                        Connect your own ChatGPT or Qoder account to run tasks.
                     </p>`
                 }
                 ${
@@ -155,13 +155,13 @@ export function ModelPicker() {
                         class=${`pop-menu-row ${index === active ? "on" : ""}`}
                         role="option"
                         aria-selected=${isCurrent(model)}
-                        title=${`${model.provider}/${model.id} · ${formatTokens(model.contextWindow)} context${model.images ? " · images" : ""}`}
+                        title=${`${model.providerName ?? model.provider}/${model.id} · ${formatTokens(model.contextWindow)} context${model.images ? " · images" : ""}`}
                         onMouseMove=${() => index !== active && setPicked(index)}
                         onClick=${() => pick(model)}
                     >
                         <span class="pop-menu-row-text">
                             <span class="pop-menu-row-name">${model.name}</span>
-                            <span class="pop-menu-row-sub">${model.provider}</span>
+                            <span class="pop-menu-row-sub">${model.providerName ?? model.provider}</span>
                         </span>
                         ${isCurrent(model) && html`<${Icon} name="check" size=${14} />`}
                     </button>`,

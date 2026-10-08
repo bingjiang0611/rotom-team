@@ -12,12 +12,12 @@ export function ProvidersSheet() {
     useEffect(() => {
         load();
     }, [store.state.models]);
-    const owner = me?.role === "owner";
+    const owner = me?.role !== "viewer";
     const login = (provider, type) =>
         attempt(() => api(`providers/${encodeURIComponent(provider.id)}/login`, { type }));
     const logout = (provider) =>
         confirm(
-            `Log out of ${provider.name}? Pi uses the same sign-in, so it is signed out too.`,
+            `Disconnect your ${provider.name} account? Other members' accounts are not changed.`,
         ) &&
         attempt(async () => {
             await api(`providers/${encodeURIComponent(provider.id)}/logout`, {});
@@ -33,9 +33,12 @@ export function ProvidersSheet() {
             (a, b) => Number(b.configured) - Number(a.configured) || a.name.localeCompare(b.name),
         );
 
-    return html`<${Sheet} title="Providers" onClose=${closeSheet}>
+    return html`<${Sheet} title="My model accounts" onClose=${closeSheet}>
         <p class="muted small">
-            Pi Pocket shares Pi's sign-ins (<span class="mono">~/.pi/agent/auth.json</span>). ${owner ? "" : "Only the owner can change them."}
+            Signed in as ${me?.name}. Tasks you start use your own model account and quota. Viewing a shared session does not use a model. ${owner ? "" : "Your membership is view-only."}
+        </p>
+        <p class="muted small">
+            Trusted-team alpha: credentials are stored on this server. Native tools share its operating-system permissions. Qoder is an unofficial integration; real subscription usage is not a dollar bill.
         </p>
         <label class="search">
             <${Icon} name="search" size=${16} />
@@ -79,7 +82,6 @@ export function ProvidersSheet() {
                         }
                         ${
                             provider.configured &&
-                            provider.source === "stored" &&
                             html`<button
                                 class="button small ghost"
                                 onClick=${() => logout(provider)}

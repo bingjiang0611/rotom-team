@@ -1,12 +1,13 @@
 /** Models as browsers see them: the ones available, the one a conversation runs with, and finding one by name. */
 import { type Api, getSupportedThinkingLevels, type Model } from "@earendil-works/pi-ai";
-import type { ModelRuntime } from "@earendil-works/pi-coding-agent";
+import type { Runtime as ModelRuntime } from "./team-accounts.ts";
 import type { AgentState, ModelRef } from "@earendil-works/pi-durable";
 
 type ModelSummary = {
     provider: string;
     id: string;
     name: string;
+    providerName: string;
     contextWindow: number;
     reasoning: boolean;
     images: boolean;
@@ -28,6 +29,7 @@ export function modelList(models: ModelRuntime): ModelSummary[] {
         provider: model.provider,
         id: model.id,
         name: model.name,
+        providerName: models.getProvider(model.provider)?.name ?? model.provider,
         contextWindow: model.contextWindow,
         ...capabilities(model),
     }));
@@ -65,6 +67,8 @@ export function agentInfo(models: ModelRuntime, agent: AgentState, defaultCwd: s
 
     return {
         model: agent.model ?? null,
+        accountName: agent.model ? models.getProvider(agent.model.provider)?.name : undefined,
+        personalAccount: agent.model?.provider.startsWith("team:") ?? false,
         thinkingLevel: agent.thinkingLevel ?? "off",
         cwd: agent.cwd ?? defaultCwd,
         ...(agent.instructions === undefined ? {} : { instructions: agent.instructions }),

@@ -94,7 +94,8 @@ export async function writeTitle(
                 ? undefined
                 : app.models.getModel(agent.model.provider, agent.model.modelId);
 
-        if (current === undefined) {
+        // Personal accounts must not incur an unrequested, non-durable title-generation call.
+        if (current === undefined || current.provider.startsWith("team:")) {
             return;
         }
 

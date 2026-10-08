@@ -63,7 +63,7 @@ export function Splash() {
             <pre class="fetch-logo" aria-hidden="true">${LOGO}</pre>
             <div class="fetch-info">
                 <div class="fetch-title" style=${`--i:${line++}`}>
-                    <b>${(me?.name ?? "you").toLowerCase().replace(/\s+/g, "-")}</b>@<b>pi-pocket</b>
+                    <b>${(me?.name ?? "you").toLowerCase().replace(/\s+/g, "-")}</b>@<b>rotom-team</b>
                 </div>
                 <div class="fetch-rule" style=${`--i:${line++}`}>${"─".repeat(30)}</div>
                 ${rows.map(

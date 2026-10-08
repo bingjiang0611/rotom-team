@@ -216,7 +216,7 @@ function actionItems() {
             run: () => openSheet({ type: "running" }),
         },
         {
-            label: "Providers",
+            label: "My model accounts",
             detail: "sign in to model providers",
             icon: "key",
             run: () => openSheet({ type: "providers" }),

@@ -24,6 +24,7 @@ import type {
     SubmissionId,
 } from "@earendil-works/pi-durable";
 import type { PocketApp } from "./app.ts";
+import { TeamRunDoc } from "./team-execution.ts";
 import type { User } from "./config.ts";
 import {
     AuthorsDoc,
@@ -158,7 +159,9 @@ export class Commands {
         const folder = app.workspace.checkDirectory(
             optionalText(request.cwd, "cwd") ?? app.defaultCwd,
         );
-        const initial = this.#defaultModel();
+
+        await app.accounts.forUser(user);
+        const initial = this.#defaultModel(user);
         const now = Date.now();
 
         return this.#inPlace(
@@ -292,14 +295,14 @@ export class Commands {
     }
 
     /** The model a new session starts with: the one last chosen here, else Pi's default, else any available one. */
-    #defaultModel(): { model?: ModelRef; thinkingLevel?: ModelThinkingLevel } {
-        const { models, config, settings } = this.#app;
-        const available = models.getAvailableSnapshot();
+    #defaultModel(user: User): { model?: ModelRef; thinkingLevel?: ModelThinkingLevel } {
+        const { accounts, settings } = this.#app;
+        const available = accounts.available(user);
         const pick = (provider: string | undefined, id: string | undefined) =>
             provider === undefined || id === undefined
                 ? undefined
                 : available.find((model) => model.provider === provider && model.id === id);
-        const last = config.lastModel;
+        const last = accounts.choice(user);
         const model =
             pick(last?.provider, last?.modelId) ??
             pick(settings.getDefaultProvider(), settings.getDefaultModel()) ??
@@ -376,11 +379,31 @@ export class Commands {
         user: User,
         request: SubmitRequest,
     ): Promise<{ submissionId: SubmissionId }> {
+        return this.#app.accounts.exclusive(user, () =>
+            this.#app.execution.exclusive(id, () => this.#submit(id, user, request)),
+        );
+    }
+
+    async #submit(
+        id: ConversationId,
+        user: User,
+        request: SubmitRequest,
+    ): Promise<{ submissionId: SubmissionId }> {
         const app = this.#app;
 
         app.requireSee(user, id);
         await app.requireDriver(id, user);
         const conversation = await app.conversation(id);
+        const requestId = ownRequest(user.id, clientKey(request.requestId));
+        const existing = await app.harness.commit(
+            (tx) => tx.submissionByRequest(id, requestId),
+            context,
+        );
+
+        if (existing) {
+            return { submissionId: existing.id };
+        }
+
         const typed = request.text.trim();
         // `/skill:name request` sends the skill with the request; `/name arguments`, Pi's prompt template of that name.
         const text = typed.startsWith("/skill:")
@@ -394,6 +417,7 @@ export class Commands {
             throw new HttpError(400, "Nothing to send");
         }
 
+        await app.execution.admit(id, user);
         const agent = await app.agentState(id);
         const model =
             agent?.model === undefined
@@ -437,7 +461,6 @@ export class Commands {
         }
 
         const content = parts.length === 1 ? body : parts;
-        const requestId = ownRequest(user.id, clientKey(request.requestId));
         const submission = await conversation.submit(
             {
                 type: "input",
@@ -666,13 +689,33 @@ export class Commands {
             cwd?: string;
         },
     ): Promise<void> {
+        return this.#app.accounts.exclusive(user, () =>
+            this.#app.execution.exclusive(id, () => this.#configure(id, user, request)),
+        );
+    }
+
+    async #configure(
+        id: ConversationId,
+        user: User,
+        request: {
+            model?: { provider: string; modelId: string };
+            thinkingLevel?: string;
+            cwd?: string;
+        },
+    ): Promise<void> {
         const app = this.#app;
 
         app.requireSee(user, id);
         await app.requireDriver(id, user);
+        await app.accounts.forUser(user);
+        await app.execution.idle(id);
         const asked = request.model as { provider?: unknown; modelId?: unknown } | undefined;
 
         checkModel(asked);
+
+        if (request.model) {
+            app.accounts.assertModel(user, request.model);
+        }
 
         if (
             optionalText(request.thinkingLevel, "thinkingLevel") !== undefined &&
@@ -687,7 +730,11 @@ export class Commands {
         optionalText(request.cwd, "cwd");
         const conversation = await app.conversation(id);
         const current = await app.agentState(id);
-        const ref = request.model ?? current?.model;
+        const ref =
+            request.model ??
+            (current?.model && app.accounts.owns(user, current.model.provider)
+                ? current.model
+                : app.accounts.choice(user));
         const model =
             ref === undefined ? undefined : app.models.getModel(ref.provider, ref.modelId);
 
@@ -732,7 +779,11 @@ export class Commands {
         }
 
         if (ref !== undefined) {
-            app.config.lastModel = { provider: ref.provider, modelId: ref.modelId, thinkingLevel };
+            app.accounts.choose(user, {
+                provider: ref.provider,
+                modelId: ref.modelId,
+                thinkingLevel,
+            });
         }
 
         const changes: string[] = [];
@@ -1036,6 +1087,26 @@ export class Commands {
         request: { entryId?: unknown; text?: unknown; model?: unknown; worktree?: unknown },
     ): Promise<{ id: ConversationId }> {
         const app = this.#app;
+        const { forked, content, requestId, line } = await app.accounts.exclusive(user, () =>
+            this.#prepareResend(id, user, request),
+        );
+        // The fork and its recovery task are already durable. A stalled HTTP-side nudge must not hold account admission.
+        const submission = await (
+            await app.conversation(forked)
+        ).submit({ type: "input", content, requestId }, context);
+
+        await app.collab.activity(forked, user, line, false);
+        this.#reportUnanswered(forked, submission.wait(context));
+
+        return { id: forked };
+    }
+
+    async #prepareResend(
+        id: ConversationId,
+        user: User,
+        request: { entryId?: unknown; text?: unknown; model?: unknown; worktree?: unknown },
+    ) {
+        const app = this.#app;
 
         this.#requireForkable(id, user);
         const entryId = entryIdOf(request.entryId);
@@ -1052,9 +1123,13 @@ export class Commands {
 
         app.spend.check(user, id);
         const source = await app.agentState(id);
+
+        await app.accounts.forUser(user);
         const ref =
             asked === undefined
-                ? source?.model
+                ? source?.model && app.accounts.owns(user, source.model.provider)
+                    ? source.model
+                    : app.accounts.choice(user)
                 : { provider: asked.provider as string, modelId: asked.modelId as string };
         const model =
             ref === undefined ? undefined : app.models.getModel(ref.provider, ref.modelId);
@@ -1068,6 +1143,7 @@ export class Commands {
             );
         }
 
+        app.accounts.assertModel(user, ref);
         const original = userContent(entry.model?.[0]);
         const [written = "", files] = original.text.split(ATTACHMENTS_HEADING);
         // An edit that changes nothing is the same as sending the message again.
@@ -1120,16 +1196,6 @@ export class Commands {
             worktree: request.worktree === true,
             resend,
         });
-        const submission = await (
-            await app.conversation(forked)
-        ).submit(
-            {
-                type: "input",
-                content: resendContent(text, images),
-                requestId: resendRequest(resend),
-            },
-            context,
-        );
         const whose =
             author === user.id
                 ? "a message"
@@ -1141,10 +1207,12 @@ export class Commands {
                   ? `sent ${whose} again to ${model.name}`
                   : `sent ${whose} again`;
 
-        await app.collab.activity(forked, user, line, false);
-        this.#reportUnanswered(forked, submission.wait(context));
-
-        return { id: forked };
+        return {
+            forked,
+            content: resendContent(text, images),
+            requestId: resendRequest(resend),
+            line,
+        };
     }
 
     /** Forks are new sessions: who may start one may fork, from a session they can see. */
@@ -1208,8 +1276,17 @@ export class Commands {
         const app = this.#app;
         const source = await app.agentState(id);
         const { at, title, place } = fork;
+
+        await app.accounts.forUser(user);
+        const selected = fork.agent?.model ?? app.accounts.choice(user);
+
+        if (selected) {
+            app.accounts.assertModel(user, selected);
+        }
+
         const agent: AgentChange = {
             ...fork.agent,
+            model: selected ?? null,
             ...(place.worktree === undefined ? {} : { cwd: place.cwd }),
         };
         const now = Date.now();
@@ -1231,6 +1308,12 @@ export class Commands {
                 forkedFrom: { id: Number(id), ...(at === undefined ? {} : { entryId: at }) },
                 ...(place.worktree === undefined ? {} : { worktree: place.worktree }),
             };
+
+            Object.assign(await tx.doc(TeamRunDoc, forked), {
+                owner: user.id,
+                ...(selected ? { provider: selected.provider, modelId: selected.modelId } : {}),
+                startedAt: now,
+            });
 
             if (fork.resend !== undefined) {
                 await tx.createTask(ResendTask, fork.resend, {
@@ -1318,10 +1401,22 @@ export class Commands {
     }
 
     async compact(id: ConversationId, user: User, instructions: string | undefined): Promise<void> {
+        return this.#app.accounts.exclusive(user, () =>
+            this.#app.execution.exclusive(id, () => this.#compact(id, user, instructions)),
+        );
+    }
+
+    async #compact(
+        id: ConversationId,
+        user: User,
+        instructions: string | undefined,
+    ): Promise<void> {
         const app = this.#app;
 
         app.requireSee(user, id);
         await app.requireDriver(id, user);
+        await app.execution.idle(id);
+        await app.execution.admit(id, user);
         // Compacting asks the model for a summary, which costs like any other request.
         app.spend.check(user, id);
         const conversation = await app.conversation(id);

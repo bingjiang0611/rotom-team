@@ -44,6 +44,15 @@ export class Goals {
      */
     async set(id: ConversationId, by: string, command: string): Promise<Goal> {
         const app = this.#app;
+        const model = (await app.agentState(id))?.model;
+
+        if (!model || model.provider.startsWith("team:")) {
+            throw new HttpError(
+                409,
+                "Automatic goal spending is not enabled for personal accounts in this alpha.",
+            );
+        }
+
         const check = command.trim();
 
         if (check === "") {

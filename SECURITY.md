@@ -1,5 +1,13 @@
 # Security
 
+## rotom team alpha boundary
+
+This local fork is **native trusted-team software, not a multi-tenant security sandbox**. Per-member model credentials are separately stored and routed, but tools run with the server OS user's permissions. A steering member can potentially read all files that OS user can read, including account storage. Deploy under a dedicated OS account and invite only fully trusted people. The server administrator is trusted with credentials. Do not expose this preview directly to the public internet.
+
+The production launcher isolates Pi resources under the chosen rotom-team data directory; provider resolution does not use ambient API keys or personal Pi auth files. Credentials never belong in shared transcripts, exported sessions or diagnostic logs. Changing these boundaries requires targeted regression tests. OAuth/provider behavior and billing have not been validated with real accounts in this implementation task.
+
+This fork has no published security-reporting destination yet. Do not report its private account details to the upstream Pocket project; arrange a private report with the deployment maintainer. The following sections describe upstream Pocket's remaining trust assumptions.
+
 ## Reporting a problem
 
 Please report security problems privately through GitHub: on this repository, open **Security → Report a vulnerability**. Do not open a public issue. Include what you found, how to reproduce it, and what an attacker gains.

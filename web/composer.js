@@ -1217,12 +1217,22 @@ function StatusLine() {
     const spend = view.conversation?.spend;
     const spent = spend?.spent ?? stats.cost ?? 0;
 
-    parts.push(
-        html`<span class=${spend?.budget !== undefined && spent >= spend.budget ? "warn" : ""}>
-            $${spent.toFixed(2)}
-            ${spend?.budget !== undefined ? `/$${spend.budget.toFixed(2)}` : ""}
-        </span>`,
-    );
+    if (view.agent?.personalAccount) {
+        parts.push(
+            html`<span title="Provider subscription quota is not a USD bill. Missing usage is unknown.">quota: provider-reported / unknown</span>`,
+        );
+        parts.push(
+            html`<span title="Current session model; not a shared credential.">session: ${view.agent.accountName}</span>`,
+            html`<span title="Submitting a task uses your personal account and model choice.">you run as: ${store.state.me?.name ?? "you"}</span>`,
+        );
+    } else {
+        parts.push(
+            html`<span class=${spend?.budget !== undefined && spent >= spend.budget ? "warn" : ""}>
+                $${spent.toFixed(2)}
+                ${spend?.budget !== undefined ? `/$${spend.budget.toFixed(2)}` : ""}
+            </span>`,
+        );
+    }
 
     // On but not loaded: the guard blocks bash, write, and edit until it loads or is turned off.
     if (guard?.enabled && guard.available === false) {

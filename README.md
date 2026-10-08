@@ -1,154 +1,93 @@
-<div align="center">
+# rotom team
 
-# Pi Pocket
+共享 Agent 会话，使用自己的模型账号。基于 Pi Pocket 和 Pi Durable 的自托管团队工作台。
 
-**Your Pi coding agent, in your pocket.**
+**状态：`0.1.0-alpha.1`，原生 macOS / 可信团队预览。不是已完成的企业级产品，也不是安全沙箱。**
 
-A durable, multiplayer, mobile-first web app for Pi agents, built on [Pi Durable](https://earendil.com/posts/pi-durable/).<br>
-Runs on your own machine or directly on your phone. No cloud VM.
+## 启动
 
-[![Release](https://img.shields.io/github/v/release/TannerMidd/pi-pocket?color=7aa2f7)](https://github.com/TannerMidd/pi-pocket/releases)
-[![Node.js 22.19+](https://img.shields.io/badge/node-%E2%89%A5%2022.19-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org)
-[![MIT license](https://img.shields.io/badge/license-MIT-ff9e64)](LICENSE)
+需要 Node.js 24+。从仓库目录执行：
 
-[Website](https://tannermidd.github.io/pi-pocket/) · [Quick start](#quick-start) · [Features](#features) · [Remote access](#remote-access)
-
-<img src="docs/showcase.png" alt="Pi Pocket in the Tokyo Night theme, on a desktop and a phone. On the desktop, the sidebar lists sessions by day while Pi fixes a sign-in redirect loop in tiled windows: a diff, 48 passing tests, and a teammate asking for the branch. On the phone, the same session waits for approval before git push." width="100%">
-
-</div>
-
-## Quick start
-
-Requires Node.js 22.19 or newer. Runs on Linux, macOS, Windows, and Android (Termux); Linux is the most tested. Sign in to a provider with Pi first (`pi`, then `/login`), or later from the app's Providers sheet.
-
-```bash
-git clone https://github.com/TannerMidd/pi-pocket.git
-cd pi-pocket
-npm install
-npm start
+```sh
+npm ci --ignore-scripts
+npm start -- --cwd /absolute/path/to/project
 ```
 
-The launcher asks how your devices should connect, then prints the address, a sign-in link, and a QR code. Open the link once per browser; the cookie lasts a year. The link is the owner's key, so keep it private. `--rotate-token` replaces it and signs out every device that used the old link; people you invited stay signed in until you remove them under Menu → People.
+默认监听 `127.0.0.1:8787`，数据在 `~/.rotom-team`。终端打印的一次登录入口等同于管理员钥匙，不要发送给同事；登录后使用应用的邀请功能。
 
-While it runs: **q** quit · **r** restart server · **a** change access · **o** open in browser · **s** show QR code.
+```sh
+# 指定独立数据目录和端口
+npm start -- --data /absolute/path/to/team-data --port 8787 --cwd /absolute/path/to/project
 
-## Features
-
-- **Durable.** Every model call, tool call, and subagent is stored as it happens. Restart the server mid-run and the work continues; a cut-off tool call reruns only if that is safe.
-- **Multiplayer.** Share a live session: presence, a side chat Pi does not see, @mentions, pins, reactions, shared notes, and take turns.
-- **Steer or queue.** Redirect Pi while it works, queue follow-ups, or stop it.
-- **Forks.** Fork from any reply, edit a message and send it again, or retry it with another model. Each fork is a session of its own, optionally in a git worktree of its own.
-- **Works while you're away.** Schedule messages to Pi (`/schedule every weekday 8:00 summarize CI`), and `/until npm test` keeps Pi going until the check passes.
-- **Plan mode.** Pi reads and proposes a plan; nothing changes until someone approves it.
-- **Any provider, any model.** Uses Pi's own model runtime and sign-ins, skills, and prompt templates, with the model and thinking level chosen per session.
-- **Omarchy themes.** Every Omarchy theme, or follow your desktop's live; tiled Hyprland-style windows, a Walker-style launcher (Ctrl/⌘+K) with live theme previews, and Hyprland's motion.
-- **Peek tiles.** One click (or Alt+P) shows your other sessions working beside the one you are in: approve their calls from there, and swap between them with a click. Only the tiles on screen stay live, so a long list scrolls cheaply.
-- **Built for phones.** Streaming answers, tool cards with diffs and live output, push notifications you can allow or deny from, sharing into Pi from other apps, and a home-screen app.
-- **Files and review.** The Files tile (Alt+E) shows the session's folder beside the conversation, and Changes reviews every uncommitted change: word-level diffs, split or unified, and files you mark viewed. Code in Pi's replies is colored, and an HTML block previews inline, running on a tap in a sandbox.
-- **Branches.** The git branch shows under the message box and follows any switch; tap it to switch to another branch, follow a remote one, or make a new one.
-- **A built-in browser.** Pi opens, reads, clicks through, and screenshots pages in a real Chromium on the server, and you watch and use the same page in the Browser panel, from a phone too: your dev server on `localhost` included.
-- **Artifacts and subagents.** Sandboxed HTML, Markdown, and SVG artifacts, and background subagents you can open and talk to.
-- **Codemode.** On by default: Pi writes short scripts that call its tools, and every call still goes through the same checks.
-- **Lancet Guard.** Off by default; turn it on in Menu → Extensions. With the [specpi-lancet-guard](https://github.com/TannerMidd/SpecPi) Pi package installed and on, risky bash, write, and edit calls wait for someone in the session to approve.
-- **Roles, invites, and limits.** Steer or view-only access, to every session or just one, through one-time links and QR codes, with spend limits per person and per session.
-- **Live-editable.** No build step: edit the web app or an extension and it reloads in place. Add your own extensions in `~/.pi-pocket/extensions/`.
-
-The full tour is in [docs/features.md](docs/features.md).
-
-## Remote access
-
-Choose a mode in the launcher, or pass `--access`:
-
-| Mode         | Who can connect      | Notes                                                                                                                                                                                                       |
-| ------------ | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `local`      | This machine         | Listens on `127.0.0.1`                                                                                                                                                                                      |
-| `lan`        | Your local network   | All addresses, plain http                                                                                                                                                                                   |
-| `cloudflare` | Anyone with the link | Free quick tunnel with https, no account needed (Cloudflare offers quick tunnels for testing and development). The address changes each time the launcher starts but stays the same across server restarts. |
-| `tailscale`  | Your tailnet         | Tailscale address only, encrypted by the tailnet                                                                                                                                                            |
-
-Cloudflare mode needs `cloudflared`. On Linux the launcher can download the official release into `~/.pi-pocket/bin`. To use another tunnel (ngrok, `tailscale serve`), choose `local` and point the tunnel at port 8787.
-
-> [!WARNING]
-> Anyone with steering rights can make the agent run commands on this machine, as you. That reaches everything you can: your files, Pi Pocket's own settings and sign-in tokens, and its code. A single-session invite limits what someone sees in the app, not what Pi can reach, and Lancet Guard approvals can come from anyone who can steer, including the person who asked. People who can steer every session can also invite others. Invite only people you would trust at your keyboard. View-only users cannot make Pi act.
-
-## Android (Termux)
-
-```bash
-pkg update && pkg upgrade
-pkg install nodejs git
-npm install -g --ignore-scripts @earendil-works/pi-coding-agent
-pi                      # /login, then quit
-# copy or clone pi-pocket to the phone, then:
-cd pi-pocket && npm install --ignore-scripts && npm start
+# 无账号、无真实模型请求、无推理费用的双人演示
+npm run demo
 ```
 
-Open the link in Chrome and choose **Add to Home screen**. Run `termux-wake-lock` so Android does not stop Termux.
+演示默认在 `127.0.0.1:8790`，打印两位演示成员的登录入口；用两个独立浏览器 profile 测试。退出会删除演示数据。演示不能证明真实 Provider 端的 OAuth、计费或恢复。
 
-Lancet Guard needs ONNX Runtime, which may not load on Android. If the guard is on but cannot load, Pi Pocket blocks bash, write, and edit calls (the status line shows "guard failed"). Turn it off in the app (Menu → Extensions), in `~/.pi/lancet-guard.json`, or by starting with `PI_POCKET_GUARD=off`.
+当前不配置隧道、Tailscale 或公网代理。需要其他设备访问时再明确部署入口；不要直接把可信原生模式暴露给不信任的人。`--host` 由部署者显式配置，远程部署应另行配置 HTTPS 和访问控制。
 
-## Configuration
+## 使用
 
-| Option            | Default        | Purpose                                                           |
-| ----------------- | -------------- | ----------------------------------------------------------------- |
-| `--access <mode>` | last choice    | Skip the access menu                                              |
-| `-y`              |                | Reuse the last access choice                                      |
-| `--port`          | `8787`         | Port to listen on                                                 |
-| `--cwd`           | current folder | Default folder for new sessions                                   |
-| `--data`          | `~/.pi-pocket` | Database, settings, uploads, and push keys                        |
-| `--host`          |                | Listen on a specific address instead of choosing access           |
-| `--rotate-token`  |                | Issue a new owner link and sign out devices that used the old one |
+1. 管理员启动服务并邀请成员。
+2. 每个成员打开 **My model accounts**，自行连接 ChatGPT 或 Qoder。
+3. 创建会话、选择自己的模型、提交任务。项目文件和命令在服务器执行。
+4. 其他成员可以查看和评论；会话空闲后直接发送任务即接力，使用接力者自己的模型账号。
+5. 需要并行探索时 fork，推荐勾选独立 Git worktree。
 
-Environment variables: `PI_POCKET_ACCESS`, `PI_POCKET_DIR`, `PI_POCKET_HOST`, `PI_POCKET_PORT`, `PI_POCKET_GUARD=off`, `PI_POCKET_BROWSER` (the browser to run, when Chromium or Chrome is not found by itself), and `PI_POCKET_BROWSER_ARGS` (extra flags for it, such as `--no-sandbox` where sandboxes are unavailable). Without a terminal (under systemd, for example), the launcher uses `--access` or the last choice.
+### 当前实现
 
-## Architecture
+- 每位成员独立的凭据文件、模型目录、账号修订号及默认模型。
+- ChatGPT OAuth、Qoder 浏览器登录接入；不会读取原来的 `~/.pi/agent/auth.json`，也不会借用服务端 `OPENAI_API_KEY`。
+- Durable 共享历史、断线重连、个人执行归属、原生文件/命令工具。
+- 只展示本人可用模型；拒绝在 API 中指定其他成员的模型路由。
+- 运行中不能换付费人；其他成员应评论、等待、停止后接力或 fork。当前不支持跨账号排队。
+- 接力时保留可见文本及工具历史；跨账号不传递 Provider 私有推理签名、response ID。原始历史不改写。此投影有意非逐字无损。
+- fork 使用发起人的模型账号；重启恢复不回退管理员账号；重复提交按请求 ID 去重。
+- 提供原生项目规则、项目 skills 和会话共享 Instructions。配置不会因为另一个人查看会话而自动切换。
 
-| Path                                                                                           | Role                                                                                                                                        |
-| ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `bin/pi-pocket.js`                                                                             | Entry point: checks the Node version, starts the launcher                                                                                   |
-| `src/launcher/`                                                                                | Access menu, server supervisor, Cloudflare tunnel, keys, QR code                                                                            |
-| `src/server/app.ts`                                                                            | The core: the durable harness over `pocket.sqlite`, the coordinator every commit goes through, connected tabs, access, and the session list |
-| `src/server/attribution.ts`, `workspace.ts`, `transcripts.ts`                                  | Who Pi works for; a conversation's folder and its stored history, as people reach them                                                      |
-| `src/server/room.ts`                                                                           | One conversation's shared live view, sent to every tab watching it                                                                          |
-| `src/server/commands.ts`                                                                       | What people ask of Pi: messages, forks, models, plan mode, goals, schedules, worktrees                                                      |
-| `src/server/collab.ts`                                                                         | The people's side: chat, activity lines, reactions, pins, notes, take turns                                                                 |
-| `src/server/http.ts`, `http/`                                                                  | Web files, JSON API, server-sent events, uploads, artifacts, invites, the Browser panel's frames and input                                  |
-| `src/server/browser.ts`, `browser/`                                                            | The built-in browser: one headless Chromium over the DevTools protocol, a page per conversation                                             |
-| `src/server/projection.ts`                                                                     | Turns committed conversation state into compact JSON for browsers                                                                           |
-| `src/server/docs.ts`                                                                           | Durable documents: sessions, chat, pins, notes, artifacts, subagents, schedules, goals, spend                                               |
-| `src/server/schedules.ts`, `goals.ts`, `spend.ts`, `changes.ts`, `branches.ts`, `worktrees.ts` | One feature each, with its durable tasks or git calls                                                                                       |
-| `src/server/push.ts`, `alerts.ts`                                                              | Dependency-free Web Push (RFC 8291 and RFC 8292), and who gets which notification                                                           |
-| `src/server/extensions/`                                                                       | Live-reloaded extensions: system prompt, artifacts, browser, subagents, schedules, goals, plan mode, Lancet Guard, codemode                 |
-| `web/`                                                                                         | The app: Preact and htm as plain ES modules                                                                                                 |
+### 明确限制
 
-Browsers render only committed state. Each session's Pi Durable view is coalesced and sent as small updates over server-sent events, so a device that reconnects or joins late sees exactly what everyone else sees. The [engineering page](https://tannermidd.github.io/pi-pocket/engineering.html) explains the design; [docs/map.md](docs/map.md) is a short map of the code.
+- **可信团队而非隔离：** 原生工具以服务系统用户运行，可能读取该用户可访问的所有文件，包括凭据。文件分开和 `0700/0600` 权限不是成员之间的 OS 隔离。只能部署在专用账号下，邀请完全可信的人。
+- **个人 skills / AGENTS.md 配置档及不可变配置快照尚未完成。** 不导入成员私人 HOME；目前用仓库规则、项目 skills、显式会话 Instructions。详见 [产品方案](docs/PRODUCT.md)。
+- 当前没有项目级 RBAC、SSO、个人电脑执行节点或生产级备份/升级迁移工具。
+- 含跨账号历史的压缩会明确拒绝；长会话须先写公共交接说明并重置上下文。接力后旧子 Agent 不能继续消耗旧成员账号，需要新建子 Agent。
+- Pocket 的原生“仅某个会话”邀请仍不能 fork；允许接力的普通成员可以 fork。细粒度 fork 授权待实现。
+- 个人账号的定时派发、自动 Goal 续跑暂不启用；不额外调用模型生成标题。保留上游实现用于回归，不把它们宣称为本产品能力。
+- Qoder 当前使用已验证基础目录 `lite` / `performance`；动态账号目录、credits 面板和 rotom 的完整 Goal/Browser/Computer Use 合同尚未迁移。
+- ChatGPT 订阅和 Qoder credits 不是美元账单。缺失额度保持 unknown；上游 Spend 页仅是已报告模型成本的估计，不用于结算或订阅额度硬限制。
+- ChatGPT 账号资格、OAuth 远端回调以及 Qoder 真实登录/推理需要真实环境验证。Qoder 是非官方接入，不代表获得上游支持、许可或团队托管批准。
+- worktree 从当前代码状态创建；从旧消息 fork 不代表代码也回到那一刻。
+- 原 Pocket 数据不做自动迁移。请使用新的独立数据目录，不指向在用的 Pocket / rotom 数据。
 
-## Development
+## 数据与维护
 
-```bash
-npm run check   # type-check
-npm test        # server tests with a scripted model
-npm run format  # ESLint's layout fixes, then Prettier
-npm run lint    # check the layout rules
+```text
+~/.rotom-team/
+  config.json                 团队成员、邀请、配置
+  pocket.sqlite               Durable 历史、任务与执行归属
+  people/<member-id>/
+    auth.json                 该成员的凭据（不进入会话）
+    profile.json              非敏感模型选择与账号修订号
+  agent/                      部署专用的 Pi 资源目录
+  worktrees/                  隔离代码分支（不是安全沙箱）
 ```
 
-Changes to `web/` reload every open browser. Changes to `src/server/extensions/` are reinstalled into the running server. Other server changes need **Restart server** from the menu, and running work resumes afterward. [AGENTS.md](AGENTS.md) covers editing Pi Pocket safely from inside itself, and `node test/serve.ts` runs a throwaway copy, with its own data and a scripted model, to check a change on.
+备份应在服务停止后复制**整个数据目录及项目工作区**到私有位置；不要只复制一个运行中的 SQLite 主文件。凭据包含在备份中，应按秘密管理。升级前备份，不在存活任务中直接替换依赖或数据库。
 
-Pi knows where Pi Pocket's own documentation is: [docs/index.md](docs/index.md) starts it, for agents and people who change how Pi works without code ([customizing](docs/customizing.md)), write extensions ([extensions](docs/extensions.md), with [tested examples](docs/examples/)), or change Pi Pocket itself while it runs ([self-editing](docs/self-editing.md)).
+## 验证
 
-## Limitations
+```sh
+npm run check
+npm run lint
+npm run test:team
+npm test
+```
 
-- Pi Durable is experimental, and its API can change between releases. Versions are pinned in `package.json`.
-- Only one server process can use the database at a time.
-- Forks are separate sessions; there is no branch tree to switch between inside one session.
-- Pi's own extensions are not supported: Pi Pocket runs its own extensions on Pi Durable, and drop-ins from `~/.pi-pocket/extensions/`. Pi's prompt templates work as slash commands.
-- A git worktree keeps a session's files apart; it is not a sandbox. Pi can still reach everything you can.
-- Artifacts run in an opaque-origin sandbox, so `localStorage` and cookies are unavailable inside them.
-- The browser needs Chromium, Chrome, Brave, or Edge on the server. Its pages live in memory: a restart opens each one again at its last address, but not what was typed into it. Each session's cookies are its own and last until the page closes. A browser installed as a snap (Ubuntu's Chromium) is used only when there is no other; it cannot open files outside your home folder. The list of servers running on the machine is Linux-only. Tested on Linux and macOS; not yet on Windows.
+验证范围和已知问题见 [VERIFICATION.md](docs/VERIFICATION.md)。完整架构与后续路线见 [PRODUCT.md](docs/PRODUCT.md)。
 
-## Credits
+## 来源和授权
 
-Inspired by [Mario Zechner's demo](https://x.com/badlogicgames/status/2106452296087302173) of his own Pi app. Pi Pocket is an independent project, not affiliated with Earendil. JetBrains Mono is bundled under the [SIL Open Font License](web/fonts/OFL.txt).
+Pi Pocket 基线：`edafa0b39f96af38c85830c7cda996c839b32012`；保留其 MIT `LICENSE`、源码归属和原始文档。Pi 运行时固定为 npm `1.0.2`，不代表 rotom 的 fork runtime 已迁移。
 
-## License
-
-[MIT](LICENSE). To report a security problem, see [SECURITY.md](SECURITY.md).
+Qoder 实现来自 rotom，源文件摘要见 `vendor/qoder/SOURCE.json`，未复制账号或凭据。**本组合项目为 UNLICENSED，private 包，不进行 npm 发布。** 开源和对外分发前需要单独确定新增代码及 Qoder 部分的授权；原 Pocket MIT 权利不受影响。当前只建立本地仓库，没有公开 origin。

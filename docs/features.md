@@ -1,4 +1,6 @@
-# Pi Pocket features
+# Pi Pocket features — upstream reference
+
+For the rotom team alpha's actual scope and limitations, see [README](../README.md) and [PRODUCT.md](PRODUCT.md). Personal accounts replace shared provider credentials; cross-account queueing/compaction, scheduling and automatic goals are not enabled. This inherited tour is not a claim that all upstream features are supported by this fork.
 
 The full tour. For setup, see the [README](../README.md).
 

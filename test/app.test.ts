@@ -178,40 +178,43 @@ test("each conversation sends its own provider session id, the same on every req
     assert.equal(sent("session id four"), sent("session id one"));
 });
 
-test("a sign-in that needs this installation's id gets Pi's, the same every time", async () => {
+test("personal sign-in has a stable member-scoped device identity, not the host Pi identity", async () => {
     const calls: unknown[][] = [];
-    const login = app.models.login;
+    const { runtime } = await app.accounts.forUser(owner());
+    const login = runtime.login;
+    const tab = fakeTab(undefined, owner());
 
-    app.models.login = (async (...args: unknown[]) => {
+    await app.attach(tab.client);
+    runtime.login = (async (...args: unknown[]) => {
         calls.push(args);
 
         return {} as never;
     }) as typeof login;
 
     try {
-        app.providers.startLogin(owner(), "openai-chatgpt", "oauth");
-        app.providers.startLogin(owner(), "openai-chatgpt", "oauth");
-        await until(() => calls.length === 2, "both sign-ins to start");
-        const ids = calls.map((args) =>
-            (args[3] as { getDeviceId?: () => string } | undefined)?.getDeviceId?.(),
-        );
+        for (let index = 0; index < 2; index++) {
+            const flow = await app.providers.startLogin(owner(), "openai", "oauth");
 
-        assert.match(
-            ids[0] ?? "",
-            /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
-        );
+            await until(
+                () =>
+                    tab.events.some(
+                        (event) =>
+                            event.event === "auth" &&
+                            event.data.flowId === flow &&
+                            event.data.step === "done",
+                    ),
+                "sign-in synchronization",
+            );
+        }
+
+        const ids = calls.map((args) => (args[3] as { getDeviceId: () => string }).getDeviceId());
+
+        assert.equal(ids.length, 2);
+        assert.equal(ids[0], owner().id);
         assert.equal(ids[1], ids[0]);
-        const { readFileSync } = await import("node:fs");
-
-        assert.equal(
-            JSON.parse(
-                readFileSync(join(process.env.PI_CODING_AGENT_DIR!, "settings.json"), "utf8"),
-            ).deviceId,
-            ids[0],
-            "kept in Pi's settings",
-        );
     } finally {
-        app.models.login = login;
+        runtime.login = login;
+        app.detach(tab.client);
     }
 });
 
