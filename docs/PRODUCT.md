@@ -40,4 +40,4 @@ Pi npm `1.0.2`，通过 `scripts/prepare-runtime.mjs` 和 `vendor/pi-durable/pat
 
 Qoder 是非官方代码快照，动态目录只开放实测白名单交集；凭据和额度成功不证明上游许可。SIWC 使用 Pi 的原生客户端注册/登录，当前注册显示名沿用 Pi；remote-host session transfer 与客户端品牌审查尚未交付，远端 localhost 回调不能假装到达部署主机。
 
-验收证据见 [VERIFICATION.md](VERIFICATION.md)，部署和恢复见 [DEPLOYMENT.md](DEPLOYMENT.md)，未完成项见 [DELIVERY-CHECKLIST.md](DELIVERY-CHECKLIST.md)。正式版须补齐真实 Qoder 独立登录/刷新、真实跨账号压缩/中断恢复、目标设备部署及服务商支持边界。不得把局部通过写成全目标完成。
+验收证据见 [VERIFICATION.md](VERIFICATION.md)，部署和恢复见 [DEPLOYMENT.md](DEPLOYMENT.md)，未完成项见 [DELIVERY-CHECKLIST.md](DELIVERY-CHECKLIST.md)。独立 Qoder 登录及隔离本地到期后的刷新已实测；正式版仍须补齐自然到期/撤销/限额、真实跨账号压缩/中断恢复、目标设备部署及服务商支持边界，并收口本次冷环境浏览器回归失败。不得把局部通过写成全目标完成。

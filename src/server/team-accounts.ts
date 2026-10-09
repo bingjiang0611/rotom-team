@@ -379,7 +379,7 @@ export class TeamAccounts {
         }
 
         // OAuth model choices are account-specific. Catalog failure never exposes the static API-key directory.
-        await account.runtime.refresh({ providers: ["openai"] });
+        await account.runtime.refresh({ providers: ["openai", "qoder"] });
         await account.runtime.getAvailable();
 
         for (const alias of account.aliases) {

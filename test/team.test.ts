@@ -122,6 +122,42 @@ test("two personal accounts: same shared history, own model/quota route, fork an
     }
 });
 
+test("personal refresh checks Qoder's account catalog, not only its offline baseline", async () => {
+    let networkCatalogChecks = 0;
+    const app = await PocketApp.open({
+        dataDir: join(root, "qoder-catalog-refresh"),
+        defaultCwd: work,
+        supervised: false,
+        browser: null,
+        log: () => {},
+        configureUserModels(models) {
+            models.registerNativeProvider({
+                ...models.getProvider("qoder")!,
+                auth: {
+                    apiKey: {
+                        name: "fixture",
+                        resolve: async () => ({ auth: { apiKey: "fixture-only" }, source: "test" }),
+                    },
+                },
+                async refreshModels(context) {
+                    if (context.allowNetwork) {
+                        networkCatalogChecks++;
+                    }
+                },
+            });
+        },
+    });
+
+    try {
+        const before = networkCatalogChecks;
+
+        await app.accounts.refresh(owner(app));
+        assert.equal(networkCatalogChecks, before + 1);
+    } finally {
+        await app.close();
+    }
+});
+
 test("missing personal credentials never inherit the owner's or ambient OpenAI key", async () => {
     const previous = process.env.OPENAI_API_KEY;
 

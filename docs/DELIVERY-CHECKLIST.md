@@ -11,16 +11,18 @@
 - [x] 公共历史压缩 serialization 修复（本地回归）
 - [x] 同成员 browser device 登录/撤销（本地回归，不是执行节点）
 - [x] 离线摘要备份/原路径恢复，拒绝活跃 writer，恢复排除旧 auth
-- [x] 当前完整测试 263/263，修复 macOS/browser/并发旧故障
-- [x] 独立 HOME/PATH/空 npmrc 冷安装、runtime 门禁、typecheck、focused 22/22 与冷依赖完整 263/263
+- [x] 当前主工作区完整测试 264/264，包含 Qoder 账号目录刷新回归
+- [x] 独立 HOME/PATH/空 npmrc 冷安装、runtime 门禁、typecheck、focused 22/22（此前冷依赖完整 263/263）
+- [ ] 本次冷依赖完整回归 263/264：browser screencast 宽度 1265/1280 不一致，仍需收口
 - [x] ChatGPT/Codex + Qoder 导入账号的真实协作/工具/fork 和私有录像，明确逻辑成员/恢复与换行差异
 - [x] 独立 SIWC grant、账号目录、官方 API 真实 read、刷新轮换；原 auth 字节前后相同
+- [x] 独立 Qoder grant、隔离本地到期后的真实轮换、同一 SIWC 会话真实 read 接力；目录刷新修复和当前账号目录核验
 - [x] unknown OAuth 刷新不重放和 OpenAI SDK 无 429/503 自动重试回归
 - [x] 官方政策资料检索与未获批准边界说明
 
 ## 正式版仍需完成
 
-- [ ] Qoder 独立新授权、真实刷新/过期/限额和 unknown 路径
+- [ ] Qoder 自然到期、服务商撤销/限额和 unknown 刷新真实路径（已验证独立授权及隔离本地到期）
 - [ ] 实际远端 OAuth host/session、客户端注册品牌与资格
 - [ ] 指定备用 MacBook、专用 OS 用户、实际 launchd/升级/恢复
 - [ ] 真实跨账号压缩、长任务中断、关键外部副作用恢复与完整权限撤销/设备协作录像
