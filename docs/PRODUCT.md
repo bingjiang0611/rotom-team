@@ -2,7 +2,7 @@
 
 共享会话历史，不共享模型账号。谁提交执行，使用谁的个人模型与额度；查看、评论不发起模型推理。当前仍是 `0.1.0-alpha.1` 私有候选，不宣称正式版完成。
 
-已开始 [rotom 执行内核迁移](ROTOM-KERNEL.md)：第一阶段已验证独立固定产品的 RPC/真实工具链路，**网页和已部署版本尚未切换**。以下已启用能力仍指原 Pi Durable 后端，不把原后端验证自动算给新内核。
+已开始 [rotom 执行内核迁移](ROTOM-KERNEL.md)：第二阶段已验证独立固定产品的 RPC/真实工具链路、持久 receipt 和原生分派门禁，**网页和已部署版本尚未切换**。以下已启用能力仍指原 Pi Durable 后端，不把原后端验证自动算给新内核。
 
 ## 信任与部署
 
@@ -18,7 +18,7 @@
 - `team-projects.ts`：项目 view/continue/fork 独立授权，fork 不扩张范围；撤权关闭订阅并中止未授权执行。原生代码执行仍不是项目目录沙箱。
 - `team-usage.ts` 与 Durable usage patch：响应和实际账号用量原子归属，重启补记不根据最新评论者认领；补记有独立持久去重。
 - 分别可撤销的浏览器登录：同一成员至多 32 个额外 bearer 登录，存储 hash；撤销关闭既有流。这不是远程执行节点。
-- `scripts/data.mjs`：离线私有备份、逐文件摘要、拒绝活跃 writer；只恢复到原 canonical 路径且不覆盖。备份包含秘密，恢复故意不恢复 `people/*/auth.json`，避免复活旧刷新凭据。项目工作区另备份。
+- `scripts/data.mjs`：离线私有备份、逐文件摘要、拒绝活跃 writer；只恢复到原 canonical 路径且不覆盖。备份包含秘密，恢复故意不恢复 `people/*/auth.json` 和新内核 `kernel-homes/*/.pi/agent/auth.json`，避免复活旧刷新凭据；新内核 writer/未核清 lease 同样阻止备份。项目工作区另备份。
 
 ## 协作与上下文
 

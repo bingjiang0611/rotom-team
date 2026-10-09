@@ -16,7 +16,7 @@ import { basename, dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { takeLock } from "../src/server/lock.ts";
 const digest = (bytes) => createHash("sha256").update(bytes).digest("hex");
-const ignored = new Set(["harness.lock", "extensions/node_modules"]);
+const ignored = new Set(["harness.lock", "kernel.lock", "kernel-gates", "extensions/node_modules"]);
 const safe = (name) =>
     name &&
     !name.startsWith("/") &&
@@ -78,6 +78,12 @@ export function backup(data, destination) {
     takeLock(lock);
 
     try {
+        if (existsSync(join(source, "kernel.lock"))) {
+            throw new Error(
+                "Kernel writer or unreconciled kernel lease exists; stop and reconcile it before backup.",
+            );
+        }
+
         const files = copy(source, join(staging, "data"));
 
         writeFileSync(
@@ -153,7 +159,12 @@ export function restore(archive, destination) {
             }
 
             // A snapshot is not refresh-token ownership. Independently sign in again after restore.
-            if (/^people\/[^/]+\/auth\.json$/.test(record.path)) {
+            if (
+                /^people\/[^/]+\/auth\.json$/.test(record.path) ||
+                /^kernel-homes\/[^/]+\/\.pi\/agent\/auth\.json$/.test(record.path) ||
+                record.path === "kernel.lock" ||
+                record.path.startsWith("kernel-gates/")
+            ) {
                 continue;
             }
 

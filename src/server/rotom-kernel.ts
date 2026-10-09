@@ -1,5 +1,5 @@
 /** Experimental pinned rotom product boundary. Not yet connected to Pocket's Durable execution backend. */
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { accessSync, constants, lstatSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -76,6 +76,8 @@ export async function startRotomKernel(options: {
     workspace: string;
     provider: string;
     model: string;
+    sessionFile?: string;
+    gateFile?: string;
 }): Promise<RotomRpc> {
     const { executable } = verifyRotomKernel();
     const home = canonical(options.home, "directory"),
@@ -83,6 +85,22 @@ export async function startRotomKernel(options: {
 
     if (lstatSync(home).mode & 0o077) {
         throw new Error("Kernel HOME must be private (0700)");
+    }
+
+    if (options.sessionFile) {
+        canonical(options.sessionFile, "file");
+
+        if (!options.sessionFile.startsWith(join(home, ".pi/agent/sessions") + "/")) {
+            throw new Error("Native session must belong to this kernel HOME");
+        }
+    }
+
+    if (options.gateFile) {
+        canonical(options.gateFile, "file");
+
+        if (lstatSync(options.gateFile).mode & 0o077) {
+            throw new Error("Kernel gate file must be private");
+        }
     }
 
     const node = realpathSync(process.execPath);
@@ -98,6 +116,10 @@ export async function startRotomKernel(options: {
             "--tools",
             "read,write,edit,bash",
             "--no-mcp",
+            ...(options.sessionFile ? ["--session", options.sessionFile] : []),
+            ...(options.gateFile
+                ? ["--extension", fileURLToPath(new URL("./rotom-policy.mjs", import.meta.url))]
+                : []),
         ],
         {
             cwd: workspace,
@@ -108,6 +130,7 @@ export async function startRotomKernel(options: {
                 PI_CODING_AGENT_DIR: join(home, ".pi/agent"),
                 ROTOM_OBSERVABILITY: "0",
                 LANG: "en_US.UTF-8",
+                ...(options.gateFile ? { ROTOM_TEAM_KERNEL_GATE: options.gateFile } : {}),
             },
         },
     );
@@ -124,6 +147,48 @@ export async function startRotomKernel(options: {
             state.isStreaming !== false
         ) {
             throw new Error("Kernel startup model/state mismatch; no fallback allowed");
+        }
+
+        if (options.gateFile) {
+            const nonce = randomUUID();
+            let installed = false;
+            const detach = client.onEvent((event) => {
+                if (
+                    event.type !== "extension_ui_request" ||
+                    event.method !== "notify" ||
+                    typeof event.message !== "string"
+                ) {
+                    return;
+                }
+
+                let value;
+
+                try {
+                    value = JSON.parse(event.message);
+                } catch {
+                    return;
+                }
+
+                if (
+                    value?.kind === "team-kernel-policy-v1" &&
+                    value.nonce === nonce &&
+                    value.ready === true
+                ) {
+                    installed = true;
+                }
+            });
+
+            try {
+                const disposition = await client.prompt(`/team-kernel-probe ${nonce}`);
+
+                if (disposition !== "handled" || !installed) {
+                    throw new Error(
+                        "Kernel dispatch policy did not initialize; no inference admitted",
+                    );
+                }
+            } finally {
+                detach();
+            }
         }
 
         await client.request({ type: "set_auto_retry", enabled: false });

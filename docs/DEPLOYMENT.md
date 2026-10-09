@@ -58,7 +58,7 @@ Do not auto-open or publish login URLs. Logs may contain the startup owner link;
 
 ## Upgrade and offline backup
 
-1. Stop launchd/the existing process and wait for `harness.lock` to disappear. Investigate a remaining lock; never delete a live writer's lock.
+1. Stop launchd/the existing process and wait for `harness.lock` to disappear. Investigate a remaining lock; never delete a live writer's lock. Experimental kernel executions additionally hold `kernel.lock`: even a dead recorded parent PID is not proof that its tools stopped. Backup refuses this lease; reconcile owned processes and unknown effects before any explicit recovery.
 2. Create the destination parent privately first. Back up to a new directory outside the canonical data tree (ancestor symlink aliases cannot bypass this check):
 
     ```sh
@@ -79,6 +79,6 @@ Backups contain provider credentials, login tokens and conversation data. Keep t
 node scripts/data.mjs restore /absolute/backups/team-data-before-upgrade /absolute/team-data
 ```
 
-Restore verifies the manifest and every copied file. It refuses an existing destination or a different canonical absolute data path; macOS `/var`↔`/private/var` aliases are equivalent. Relocating durable tool intents is unsupported. Restore deliberately **does not restore `people/*/auth.json`**: reviving old rotated refresh credentials could break an account. Members must log in independently again. Account routes without credentials fail closed; reconcile pending executions before continuing. Restoring history/configuration is not proof of inference, valid credentials, safe replay or a complete host migration.
+Restore verifies the manifest and every copied file. It refuses an existing destination or a different canonical absolute data path; macOS `/var`↔`/private/var` aliases are equivalent. Relocating durable tool intents is unsupported. Restore deliberately **does not restore `people/*/auth.json` or `kernel-homes/*/.pi/agent/auth.json`**, and skips temporary kernel gate capabilities: reviving old rotated refresh credentials could break an account. Members must log in independently again. Account routes without credentials fail closed; reconcile pending executions before continuing. Restoring history/configuration is not proof of inference, valid credentials, safe replay or a complete host migration.
 
 Configuration snapshots contain copied instructions/skill assets, not symlinks to personal drafts. Content is checked when read and at personal-provider dispatch; changed assets are refused until a verified backup or explicit new configuration is activated. This detects changes at the check point, not concurrent hostile filesystem changes; the service OS user still controls every file.
