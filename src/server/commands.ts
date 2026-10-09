@@ -146,7 +146,7 @@ export class Commands {
     /** Start a session in a folder; with `worktree`, in a git worktree of its own made from that folder. */
     async createSession(
         user: User,
-        request: { cwd?: string; title?: string; worktree?: unknown },
+        request: { cwd?: string; title?: string; worktree?: unknown; backend?: unknown },
     ): Promise<{ id: ConversationId }> {
         const app = this.#app;
 
@@ -154,6 +154,20 @@ export class Commands {
 
         if (user.sessions !== undefined) {
             throw new HttpError(403, "You were invited to one session and cannot start new ones.");
+        }
+
+        if (
+            request.backend !== undefined &&
+            request.backend !== "durable" &&
+            request.backend !== "rotom"
+        ) {
+            throw new HttpError(400, "Unknown execution backend.");
+        }
+
+        const native = request.backend === "rotom";
+
+        if (native && !app.kernel) {
+            throw new HttpError(409, "The rotom backend is not enabled on this server.");
         }
 
         const title = optionalText(request.title, "title")?.trim().slice(0, MAX_TITLE) || undefined;
@@ -166,6 +180,15 @@ export class Commands {
         app.projects.require(user, project?.id, "continue");
         await app.accounts.forUser(user);
         const initial = this.#defaultModel(user);
+
+        if (native) {
+            if (!initial.model) {
+                throw new HttpError(409, "Connect and select your own model account first.");
+            }
+
+            app.accounts.kernelModel(user, initial.model);
+        }
+
         const now = Date.now();
 
         return this.#inPlace(
@@ -184,15 +207,30 @@ export class Commands {
                                 : { thinkingLevel: initial.thinkingLevel }),
                         },
                         init: async (tx, id) => {
-                            (await tx.doc(ConfigurationDoc, id)).snapshot = app.profiles.capture(
+                            const snapshot = app.profiles.capture(
                                 user,
                                 cwd,
                                 app.settings.getSkillPaths(),
                             );
+
+                            (await tx.doc(ConfigurationDoc, id)).snapshot = snapshot;
+
+                            if (native) {
+                                app.kernel!.bind(
+                                    id,
+                                    user,
+                                    cwd,
+                                    snapshot,
+                                    initial.model!,
+                                    initial.thinkingLevel ?? "off",
+                                );
+                            }
+
                             const sessions = await tx.doc(SessionsDoc);
 
                             sessions.items[String(id)] = {
                                 cwd,
+                                ...(native ? { backend: "rotom" as const } : {}),
                                 ...(project ? { projectId: project.id } : {}),
                                 createdAt: now,
                                 updatedAt: now,
@@ -1265,6 +1303,13 @@ export class Commands {
     /** Forks are new sessions: who may start one may fork, from a session they can see. */
     #requireForkable(id: ConversationId, user: User): void {
         const app = this.#app;
+
+        if (app.sessionMeta(app.rootOf(id))?.backend === "rotom") {
+            throw new HttpError(
+                409,
+                "Native history fork is not implemented; no Durable fallback is allowed.",
+            );
+        }
 
         app.requireSee(user, id);
         app.requireSteer(user);

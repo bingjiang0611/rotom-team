@@ -334,6 +334,7 @@ export class Spend {
                 meta.budget = amount;
             }
         }, context);
+        await this.#app.kernel?.revoke();
         await this.#app.collab.activity(
             id,
             user,
@@ -359,6 +360,11 @@ export class Spend {
         const amount = budgetOf(budget);
 
         this.#app.config.updateUser(userId, { budget: amount });
+        void this.#app.kernel
+            ?.revoke()
+            .catch(() =>
+                this.#app.notice("warning", "Native stop outcome unknown; do not replay."),
+            );
     }
 
     /** Spend as this person may see it: the owner sees everything, others their own sessions and themselves. */

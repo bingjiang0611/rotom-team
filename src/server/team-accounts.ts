@@ -500,6 +500,54 @@ export class TeamAccounts {
         return createHash("sha256").update(`${alias}\n${session}`).digest("hex");
     }
 
+    kernelModel(user: User, ref: ModelRef): ai.Model<ai.Api> {
+        this.assertModel(user, ref);
+        const account = this.#accounts.get(user.id)!;
+        const provider = account.runtime
+            .getProviders()
+            .find(
+                (p) =>
+                    ref.provider === `team:${user.id}:${account.profile.generations[p.id]}:${p.id}`,
+            );
+
+        if (!provider) {
+            throw new HttpError(
+                403,
+                "Kernel execution requires your current personal account route.",
+            );
+        }
+
+        const model = account.runtime.getModel(provider.id, ref.modelId);
+
+        if (
+            !model ||
+            !["openai-completions", "openai-responses", "openai-codex-responses"].includes(
+                model.api,
+            )
+        ) {
+            throw new HttpError(
+                409,
+                "This provider route is not enabled for the rotom backend yet.",
+            );
+        }
+
+        return model;
+    }
+
+    async kernelAuth(user: User, ref: ModelRef, signal?: AbortSignal): Promise<ai.ModelAuth> {
+        const model = this.kernelModel(user, ref);
+        const auth = await this.#accounts.get(user.id)!.runtime.getAuth(model, { signal });
+
+        // Login/role changes during refresh invalidate admission. The original store remains the sole refresh writer.
+        this.kernelModel(user, ref);
+
+        if (!auth || (auth.env && Object.keys(auth.env).length)) {
+            throw new HttpError(409, "No supported personal request credential.");
+        }
+
+        return auth.auth;
+    }
+
     beginChange(user: User, provider: string): void {
         if (this.#changing.has(user.id)) {
             throw new HttpError(409, "An account change is already in progress.");

@@ -1,5 +1,6 @@
 /** Official SIWC account catalog: subscription credentials must not expose the static API-key catalog. */
 import { createHash } from "node:crypto";
+import { chatGPTPayload } from "./openai-chatgpt-payload.ts";
 import { openaiProvider } from "@earendil-works/pi-ai/providers/openai";
 import type {
     Credential,
@@ -83,43 +84,7 @@ export function parseChatGPTCatalog(value: unknown): Model<"openai-responses">[]
         });
 }
 
-export function chatGPTPayload(value: unknown): unknown {
-    const payload = value as {
-        tools?: { type: string; name?: string; description?: string; tools?: unknown[] }[];
-    };
-
-    if (!payload.tools?.length) {
-        return value;
-    }
-
-    const flat = payload.tools.filter((tool) => tool.type === "function" || tool.type === "custom");
-    const groups = payload.tools.filter((tool) => tool.type === "namespace");
-
-    if (flat.length + groups.length !== payload.tools.length) {
-        throw new Error("This ChatGPT plan route does not support hosted tools or tool_search.");
-    }
-
-    if (!flat.length) {
-        return value;
-    }
-
-    const functions = groups.find((group) => group.name === "functions");
-
-    return {
-        ...payload,
-        tools: [
-            ...groups.filter((group) => group !== functions),
-            {
-                ...functions,
-                type: "namespace",
-                name: "functions",
-                description:
-                    functions?.description ?? "Local tools executed by the self-hosted app.",
-                tools: [...(functions?.tools ?? []), ...flat],
-            },
-        ],
-    };
-}
+export { chatGPTPayload } from "./openai-chatgpt-payload.ts";
 
 export function chatGPTProvider(fetchImpl: typeof fetch = fetch): Provider {
     const native: Provider = openaiProvider();

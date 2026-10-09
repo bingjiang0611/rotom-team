@@ -1,5 +1,6 @@
 /** One Pi Pocket process per data directory: a lock file in it holds the process id of the one running there. */
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 
 /**
  * Whether a lock file's process is still running Pi Pocket. A process id can be reused after a crash, so on Linux
@@ -29,6 +30,14 @@ function lockHolder(pid: number): boolean {
  * over; created with `wx`, so of two processes starting at once only one gets it.
  */
 export function takeLock(lockFile: string): void {
+    const kernelLock = join(dirname(lockFile), "kernel.lock");
+
+    if (existsSync(kernelLock)) {
+        throw new Error(
+            "Kernel writer lease remains. Reconcile it; a dead parent PID does not prove tools stopped.",
+        );
+    }
+
     if (existsSync(lockFile)) {
         const pid = Number(readFileSync(lockFile, "utf8").trim());
 
@@ -43,6 +52,13 @@ export function takeLock(lockFile: string): void {
 
     try {
         writeFileSync(lockFile, `${process.pid}\n`, { flag: "wx" });
+
+        // Pair with the kernel's post-acquisition harness check to close the two-writer startup race.
+        if (existsSync(kernelLock)) {
+            rmSync(lockFile);
+
+            throw new Error("A kernel writer acquired this directory concurrently.");
+        }
     } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
             throw error;

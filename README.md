@@ -27,7 +27,9 @@ npm run demo
 
 当前不配置隧道、Tailscale 或公网代理。需要其他设备访问时再明确部署入口；不要直接把可信原生模式暴露给不信任的人。`--host` 由部署者显式配置，远程部署应另行配置 HTTPS 和访问控制。
 
-## 使用
+另有显式 `--rotom-kernel` 的[实验新会话后端](docs/ROTOM-KERNEL.md)：团队层只做协作/权限/凭据编排，由独立固定版本 rotom 执行。已接入 API 和桌面网页，但仅验证 scripted endpoint；不支持 Qoder、接力/fork/压缩或完整财务预算。默认、现有会话与备用机不变，不要把以下旧后端能力全部算给实验后端。安装和独立验证方式见[部署说明](docs/DEPLOYMENT.md)。
+
+## 使用（默认后端）
 
 1. 管理员启动服务并邀请成员。
 2. 每个成员打开 **My model accounts**，自行连接 ChatGPT 或 Qoder。

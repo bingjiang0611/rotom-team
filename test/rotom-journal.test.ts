@@ -12,7 +12,13 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { RotomJournal, type KernelBinding, type KernelEntry } from "../src/server/rotom-journal.ts";
+import {
+    RotomJournal,
+    requireNoPendingKernel,
+    type KernelBinding,
+    type KernelEntry,
+} from "../src/server/rotom-journal.ts";
+import { takeLock } from "../src/server/lock.ts";
 import { backup, restore } from "../scripts/data.mjs";
 
 function setup() {
@@ -50,6 +56,29 @@ const response = (id: string, provider = "fixture"): KernelEntry => ({
         stopReason: "stop",
         usage: { totalTokens: 12 },
     },
+});
+
+test("disabling the backend cannot erase a pending or unknown fence; legacy writer checks the kernel lease", () => {
+    const f = setup();
+    let journal = new RotomJournal(f.data);
+
+    try {
+        journal.bind("native", f.binding);
+        const receipt = journal.reserve("native", "pending", "never replay");
+
+        assert.throws(() => takeLock(join(f.data, "harness.lock")), /Kernel writer lease/);
+        journal.close();
+        assert.equal(existsSync(join(f.data, "kernel.lock")), false);
+        assert.throws(() => requireNoPendingKernel(f.data), /pending or unknown/);
+        journal = new RotomJournal(f.data);
+        assert.equal(journal.pending("alice")?.id, receipt.id);
+        assert.equal(journal.pending("alice")?.status, "unknown");
+        journal.close();
+        assert.throws(() => requireNoPendingKernel(f.data), /pending or unknown/);
+    } finally {
+        journal.close();
+        rmSync(f.root, { recursive: true, force: true });
+    }
 });
 
 test("durable attempt identity: duplicate intent/unknown never dispatches again after restart", () => {

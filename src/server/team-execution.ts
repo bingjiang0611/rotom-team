@@ -63,7 +63,9 @@ export class TeamExecution {
             );
         }
     }
-    async accountIdle(user: User): Promise<void> {
+    async accountIdle(user: User, exceptKernelSession?: string): Promise<void> {
+        this.#app.kernel?.requireAccountIdle(user, exceptKernelSession);
+
         for (const [id, owner] of this.#owners) {
             if (owner === user.id) {
                 await this.idle(id);
@@ -106,6 +108,12 @@ export class TeamExecution {
 
     async admit(id: ConversationId, user: User): Promise<ModelRef> {
         const app = this.#app;
+
+        app.kernel?.requireAccountIdle(user);
+
+        if (app.sessionMeta(app.rootOf(id))?.backend === "rotom") {
+            throw new HttpError(409, "Native sessions cannot enter Durable execution.");
+        }
 
         await app.accounts.forUser(user);
         const state = await app.agentState(id);
@@ -203,6 +211,10 @@ export class TeamExecution {
             throw new Error("Unknown durable execution identity.");
         }
 
+        if (app.sessionMeta(app.rootOf(id))?.backend === "rotom") {
+            throw new Error("Native sessions cannot dispatch through Durable.");
+        }
+
         const agent = await app.harness.snapshot(AgentDoc, id, context);
         const run = await app.harness.snapshot(TeamRunDoc, id, context);
         const root = await app.harness.snapshot(TeamRunDoc, app.rootOf(id), context);
@@ -217,6 +229,7 @@ export class TeamExecution {
             throw new Error("No authorized personal execution owner.");
         }
 
+        app.kernel?.requireAccountIdle(user);
         app.projects.require(user, app.sessionMeta(app.rootOf(id))?.projectId, "continue");
         app.accounts.assertModel(user, agent.model);
         const configuration = await app.harness.snapshot(ConfigurationDoc, id, context);

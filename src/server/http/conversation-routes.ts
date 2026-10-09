@@ -36,6 +36,53 @@ export async function conversationRoutes(
     const method = request.method ?? "GET";
     const [, , third, fourth] = parts;
 
+    if (app.sessionMeta(id)?.backend === "rotom") {
+        if (!app.kernel) {
+            throw new HttpError(
+                409,
+                "This native session is paused: rotom backend disabled. It will not run on Durable.",
+            );
+        }
+
+        if (third === "kernel" && method === "GET" && fourth === undefined) {
+            return json(response, 200, app.kernel.snapshot(id, user));
+        }
+
+        if (third === "submit" && method === "POST" && fourth === undefined) {
+            const body = await readJson<{ text: string; requestId: string }>(request);
+
+            if (!body || typeof body !== "object" || Array.isArray(body)) {
+                throw new HttpError(400, "A JSON object is required.");
+            }
+
+            if (Object.keys(body).some((key) => !["text", "requestId"].includes(key))) {
+                throw new HttpError(
+                    400,
+                    "Native submission currently supports text and requestId only; attachments/queues are not enabled.",
+                );
+            }
+
+            return json(
+                response,
+                200,
+                await app.kernel.submit(id, user, body.requestId, body.text),
+            );
+        }
+
+        if (third === "abort" && method === "POST" && fourth === undefined) {
+            await app.kernel.abort(id, user);
+
+            return json(response, 200, { requested: true });
+        }
+
+        if (!(third === "configuration" && method === "GET" && fourth === undefined)) {
+            throw new HttpError(
+                409,
+                "This operation is not implemented for the native backend; no Durable fallback is allowed.",
+            );
+        }
+    }
+
     if (third === "configuration" && method === "GET") {
         return json(response, 200, app.profiles.snapshot(id) ?? null);
     }

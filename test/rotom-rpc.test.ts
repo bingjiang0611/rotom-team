@@ -3,16 +3,38 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { RotomRpc, RpcFailure } from "../src/server/rotom-rpc.ts";
 const fixture = fileURLToPath(new URL("./fixtures/rotom-rpc.mjs", import.meta.url));
-const client = (mode: string) =>
-    new RotomRpc(process.execPath, [fixture, mode], {
+
+const client = async (mode: string) => {
+    const rpc = new RotomRpc(process.execPath, [fixture, mode], {
         cwd: process.cwd(),
         env: {},
         timeoutMs: 1000,
     });
+    const ready = Promise.withResolvers<void>();
+    const detach = rpc.onEvent((event) => {
+        if (event.type === "fixture_ready") {
+            ready.resolve();
+        }
+    });
+    const timer = setTimeout(() => ready.reject(new Error("RPC fixture startup timeout")), 10_000);
+
+    try {
+        await ready.promise;
+
+        return rpc;
+    } catch (error) {
+        await rpc.close();
+
+        throw error;
+    } finally {
+        clearTimeout(timer);
+        detach();
+    }
+};
 
 for (const mode of ["normal", "fast", "unicode"]) {
     test(`RPC ${mode}: wait for settled, not acknowledgement/agent_end`, async () => {
-        const rpc = client(mode),
+        const rpc = await client(mode),
             events: string[] = [];
 
         rpc.onEvent((e) => {
@@ -37,29 +59,40 @@ for (const mode of ["normal", "fast", "unicode"]) {
 }
 
 test("handled commands do not wait for a nonexistent run; explicit rejection stays rejected", async () => {
-    const handled = client("handled"),
-        rejected = client("reject");
+    const handled = await client("handled");
 
     try {
         assert.equal(await handled.prompt("/command"), "handled");
-        await assert.rejects(
-            rejected.prompt("rejected"),
-            (e) => e instanceof RpcFailure && e.outcome === "rejected",
-        );
+        const rejected = await client("reject");
+
+        try {
+            await assert.rejects(
+                rejected.prompt("rejected"),
+                (e) => e instanceof RpcFailure && e.outcome === "rejected",
+            );
+        } finally {
+            await rejected.close();
+        }
     } finally {
         await handled.close();
-        await rejected.close();
     }
 });
 
-for (const mode of ["exit", "malformed", "wrong-id", "oversized", "hang", "settled-corrupt"]) {
+for (const [mode, reason] of [
+    ["exit", "kernel disconnected"],
+    ["malformed", "invalid RPC JSONL"],
+    ["wrong-id", "uncorrelated RPC response"],
+    ["oversized", "RPC record exceeds 8 MiB"],
+    ["hang", "kernel run deadline exceeded"],
+    ["settled-corrupt", "invalid RPC JSONL"],
+] as const) {
     test(`RPC ${mode}: ambiguity fences future writes, never redispatches`, async () => {
-        const rpc = client(mode);
+        const rpc = await client(mode);
 
         try {
             await assert.rejects(
                 rpc.prompt("once", 500),
-                (e) => e instanceof RpcFailure && e.outcome === "unknown",
+                (e) => e instanceof RpcFailure && e.outcome === "unknown" && e.message === reason,
             );
             await assert.rejects(
                 rpc.prompt("do not retry"),
@@ -72,7 +105,7 @@ for (const mode of ["exit", "malformed", "wrong-id", "oversized", "hang", "settl
 }
 
 test("raw prompt/queue/model/session mutations cannot bypass the runner", async () => {
-    const rpc = client("normal");
+    const rpc = await client("normal");
 
     try {
         for (const type of [
@@ -97,7 +130,7 @@ test("raw prompt/queue/model/session mutations cannot bypass the runner", async 
 });
 
 test("busy RPC process cannot silently queue another payer", async () => {
-    const rpc = client("hang");
+    const rpc = await client("hang");
 
     try {
         const first = rpc.prompt("first", 500);

@@ -819,8 +819,12 @@ export const actions = {
     clearGoal: () => api(`c/${current()}/goal`, { clear: true }),
     approve: (id, allow) => api(`approvals/${encodeURIComponent(id)}`, { allow }),
     /** `worktree`: the session works in a git worktree of its own, made from the folder. */
-    createSession: (cwd, { worktree = false } = {}) =>
-        api("sessions", { cwd, ...(worktree ? { worktree } : {}) }),
+    createSession: (cwd, { worktree = false, backend = "durable" } = {}) =>
+        api("sessions", {
+            cwd,
+            ...(worktree ? { worktree } : {}),
+            ...(backend === "rotom" ? { backend } : {}),
+        }),
     updateSession: (id, patch) => api(`sessions/${id}`, patch),
     upload: (file) => api(`c/${current()}/upload?name=${encodeURIComponent(file.name)}`, file),
     fullEntry: (entryId) => api(`c/${current()}/entry/${entryId}`),

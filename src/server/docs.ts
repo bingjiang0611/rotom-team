@@ -16,6 +16,8 @@ import type { Repeat } from "./when.ts";
 import type { Worktree } from "./worktrees.ts";
 
 export type SessionMeta = {
+    /** Absent means the original Durable backend. Never reinterpret an existing conversation. */
+    backend?: "rotom";
     projectId?: string;
     title?: string;
     cwd: string;

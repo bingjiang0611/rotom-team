@@ -11,7 +11,7 @@
 - [x] 公共历史压缩 serialization 修复（本地回归）
 - [x] 同成员 browser device 登录/撤销（本地回归，不是执行节点）
 - [x] 离线摘要备份/原路径恢复，拒绝活跃 writer，恢复排除旧 auth
-- [x] 当前主工作区完整测试 264/264，包含 Qoder 账号目录刷新回归
+- [x] 旧后端阶段主工作区完整测试 264/264，包含 Qoder 账号目录刷新回归
 - [x] 独立 HOME/PATH/空 npmrc 冷安装、runtime 门禁、typecheck、focused 22/22（此前冷依赖完整 263/263）
 - [ ] 本次冷依赖完整回归 263/264：browser screencast 宽度 1265/1280 不一致，仍需收口
 - [x] ChatGPT/Codex + Qoder 导入账号的真实协作/工具/fork 和私有录像，明确逻辑成员/恢复与换行差异
@@ -25,11 +25,15 @@
 
 - [x] 固定产品独立安装、bootstrap 校验、严格 RPC、真实 rotom 原生工具 proof（scripted endpoint，无真实账号）
 - [x] 独立 journal/attempt/receipt、unknown 跨重开隔离、原生 stream gate、entry/usage 原子导入，同账号恢复和 scripted 撤权 proof
-- [ ] 接入真实 team 角色/项目/账号/快照、完整 refresh writer 合同及跨账号上下文
-- [ ] 网页 create/submit/stop/接力/fork/压缩以及备份迁移；新内核真实账号验证与备用机部署
-- [x] 当前增量完整套件 284/284；此前浏览器宽度不稳定失败仍保留记录，不宣称已修复
+- [x] 显式启用的新会话接入实际 team 角色/项目/账号代际/快照；父进程 sole refresh writer、单请求 auth broker；关闭 feature flag 不能绕过 unknown
+- [x] HTTP create/submit/read/abort、撤权和重启幂等 scripted proof；桌面网页创建/发送/拒绝修正/receipt/重新打开与旧视图验证
+- [x] 第二阶段历史完整 284/284；第三阶段 focused 46/46、原生和应用 HTTP proof、type/lint/format/syntax 检查通过
+- [x] RPC fixture 就绪后再计协议时限，异常断言精确原因；修正后独立 12/12，生产时限未改
+- [ ] 当前第三阶段完整 284/285：browser 1265/1280 未解决；之前调度顺序/RPC 时限失败日志保留，不用最终通过覆盖历史
+- [ ] 新网页移动端、Stop 点击、飞行中断线 pending 验证；跨账号接力/fork/压缩/附件、财务预算与实时流
+- [ ] 新内核真实账号/刷新与 Qoder、跨库创建对账、host crash/未知副作用恢复、备份迁移和备用机部署
 
-以上第二阶段不等于网页已使用 rotom，实施边界见 [ROTOM-KERNEL.md](ROTOM-KERNEL.md)。
+第三阶段仅为 opt-in 实验入口；原会话不迁移，备用机不变，实施边界见 [ROTOM-KERNEL.md](ROTOM-KERNEL.md)。
 
 ## 正式版仍需完成
 

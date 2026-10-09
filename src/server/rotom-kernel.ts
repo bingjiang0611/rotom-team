@@ -76,8 +76,10 @@ export async function startRotomKernel(options: {
     workspace: string;
     provider: string;
     model: string;
+    thinkingLevel?: string;
     sessionFile?: string;
     gateFile?: string;
+    configuration?: { contextFile: string; skills: string[] };
 }): Promise<RotomRpc> {
     const { executable } = verifyRotomKernel();
     const home = canonical(options.home, "directory"),
@@ -103,6 +105,14 @@ export async function startRotomKernel(options: {
         }
     }
 
+    if (options.configuration) {
+        canonical(options.configuration.contextFile, "file");
+
+        for (const skill of options.configuration.skills) {
+            canonical(skill, "file");
+        }
+    }
+
     const node = realpathSync(process.execPath);
     const client = new RotomRpc(
         executable,
@@ -113,9 +123,20 @@ export async function startRotomKernel(options: {
             options.provider,
             "--model",
             options.model,
+            ...(options.thinkingLevel ? ["--thinking", options.thinkingLevel] : []),
             "--tools",
             "read,write,edit,bash",
             "--no-mcp",
+            ...(options.configuration
+                ? [
+                      "--no-context-files",
+                      "--no-skills",
+                      "--no-prompt-templates",
+                      "--append-system-prompt",
+                      options.configuration.contextFile,
+                      ...options.configuration.skills.flatMap((path) => ["--skill", path]),
+                  ]
+                : []),
             ...(options.sessionFile ? ["--session", options.sessionFile] : []),
             ...(options.gateFile
                 ? ["--extension", fileURLToPath(new URL("./rotom-policy.mjs", import.meta.url))]
@@ -139,12 +160,14 @@ export async function startRotomKernel(options: {
         const state = (await client.request({ type: "get_state" })) as {
             model?: { provider: string; id: string };
             isStreaming?: boolean;
+            thinkingLevel?: string;
         };
 
         if (
             state.model?.provider !== options.provider ||
             state.model.id !== options.model ||
-            state.isStreaming !== false
+            state.isStreaming !== false ||
+            (options.thinkingLevel !== undefined && state.thinkingLevel !== options.thinkingLevel)
         ) {
             throw new Error("Kernel startup model/state mismatch; no fallback allowed");
         }

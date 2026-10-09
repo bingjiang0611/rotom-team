@@ -25,6 +25,23 @@ import {
 import { startRotomKernel, verifyRotomKernel } from "./rotom-kernel.ts";
 import { type RotomRpc, type RpcRecord, RpcFailure } from "./rotom-rpc.ts";
 
+export type KernelRequestAuth = {
+    apiKey?: string;
+    baseUrl?: string;
+    headers?: Record<string, string | null>;
+};
+export type KernelLaunchContext = {
+    modelDefinition: {
+        id: string;
+        name: string;
+        api: string;
+        baseUrl: string;
+        [key: string]: unknown;
+    };
+    context: string;
+    skills: string[];
+};
+
 export class RotomExecutions {
     readonly journal: RotomJournal;
     readonly #data: string;
@@ -32,7 +49,12 @@ export class RotomExecutions {
         binding: Readonly<KernelBinding>,
         operation: "admission" | "inference" | "refresh",
         sessionId: string,
-    ) => Promise<void>;
+    ) => Promise<KernelRequestAuth | void>;
+    readonly #prepare?: (
+        binding: Readonly<KernelBinding>,
+        sessionId: string,
+    ) => KernelLaunchContext;
+    readonly #running = new Map<string, { aborted: boolean; kernel?: RotomRpc }>();
     #active = 0;
     constructor(
         data: string,
@@ -40,11 +62,27 @@ export class RotomExecutions {
             binding: Readonly<KernelBinding>,
             operation: "admission" | "inference" | "refresh",
             sessionId: string,
-        ) => Promise<void>,
+        ) => Promise<KernelRequestAuth | void>,
+        prepare?: (binding: Readonly<KernelBinding>, sessionId: string) => KernelLaunchContext,
     ) {
         this.journal = new RotomJournal(data);
         this.#data = data;
         this.#authorize = authorize;
+        this.#prepare = prepare;
+    }
+
+    async abort(sessionId: string): Promise<void> {
+        const run = this.#running.get(sessionId);
+
+        if (!run) {
+            return;
+        }
+
+        run.aborted = true;
+
+        if (run.kernel) {
+            await run.kernel.request({ type: "abort" });
+        }
     }
 
     async run(
@@ -73,16 +111,21 @@ export class RotomExecutions {
             throw new Error("Kernel version differs from the immutable session binding");
         }
 
+        const prepared = this.#prepare?.(binding, sessionId);
         const receipt = this.journal.reserve(sessionId, requestId, prompt);
         // Admission is asynchronous: an earlier request may have created the native file while it was pending.
         const session = this.journal.session(sessionId);
 
         this.#active++;
+        const running: { aborted: boolean; kernel?: RotomRpc } = { aborted: false };
+
+        this.#running.set(sessionId, running);
         let kernel: RotomRpc | undefined,
             closed = false;
         let failureStatus: "unknown" | "rejected" = "unknown";
         const token = randomBytes(32).toString("base64url");
         let gateFile: string | undefined;
+        let contextFile: string | undefined;
         const gate = createServer(async (req, res) => {
             // The capability belongs to one attempt. Never accept a caller-supplied payer or session identity.
             const authorization = Buffer.from(String(req.headers.authorization ?? "")),
@@ -124,13 +167,37 @@ export class RotomExecutions {
                     throw new Error("attempt is not active");
                 }
 
-                await this.#authorize(binding, value.operation, sessionId);
+                if (running.aborted) {
+                    throw new Error("execution stopped");
+                }
 
-                if (this.journal.receipt(receipt.id).status !== "dispatch-intent") {
+                const auth = await this.#authorize(binding, value.operation, sessionId);
+
+                if (
+                    running.aborted ||
+                    this.journal.receipt(receipt.id).status !== "dispatch-intent"
+                ) {
                     throw new Error("attempt ended during authorization");
                 }
 
-                res.writeHead(204).end();
+                if (prepared && value.operation === "inference") {
+                    if (!auth) {
+                        throw new Error("No request auth");
+                    }
+
+                    const body = JSON.stringify(auth);
+
+                    if (Buffer.byteLength(body) > 65536) {
+                        throw new Error("Request auth is too large");
+                    }
+
+                    res.writeHead(200, {
+                        "Content-Type": "application/json",
+                        "Cache-Control": "no-store",
+                    }).end(body);
+                } else {
+                    res.writeHead(204).end();
+                }
             } catch {
                 res.writeHead(403).end();
             }
@@ -159,14 +226,23 @@ export class RotomExecutions {
                     token,
                     provider: binding.provider,
                     model: binding.model,
+                    ...(prepared ? { modelDefinition: prepared.modelDefinition } : {}),
                 }),
                 { mode: 0o600, flag: "wx" },
             );
+
+            if (prepared) {
+                contextFile = `${gateFile}.context`;
+                writeFileSync(contextFile, prepared.context, { mode: 0o600, flag: "wx" });
+            }
+
             kernel = await startRotomKernel({
                 ...binding,
                 gateFile,
                 sessionFile: session.sessionFile,
+                configuration: prepared && { contextFile: contextFile!, skills: prepared.skills },
             });
+            running.kernel = kernel;
             const state = (await kernel.request({ type: "get_state" })) as {
                 sessionFile: string;
                 sessionId: string;
@@ -188,6 +264,10 @@ export class RotomExecutions {
 
             if (onProvisionalEvent) {
                 kernel.onEvent(onProvisionalEvent);
+            }
+
+            if (running.aborted) {
+                throw new RpcFailure("rejected", "Stopped before prompt dispatch");
             }
 
             const disposition = await kernel.prompt(prompt);
@@ -212,13 +292,24 @@ export class RotomExecutions {
 
             // Keep the active lease and account reservation until child close is observed. A close failure must not release the writer lock.
             if (kernel && !closed) {
-                await kernel.close();
+                try {
+                    await kernel.close();
+                } catch (error) {
+                    this.journal.fail(receipt.id, "unknown");
+
+                    throw error;
+                }
             }
 
             if (gateFile) {
                 rmSync(gateFile, { force: true });
             }
 
+            if (contextFile) {
+                rmSync(contextFile, { force: true });
+            }
+
+            this.#running.delete(sessionId);
             this.#active--;
         }
 

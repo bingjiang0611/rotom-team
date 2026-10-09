@@ -14,6 +14,9 @@ import { getAgentDir, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { TeamAccounts, type Runtime } from "./team-accounts.ts";
 import { TeamExecution, TeamRunDoc } from "./team-execution.ts";
 import { ConfigurationDoc, TeamProfiles } from "./team-profiles.ts";
+import { TeamKernel } from "./team-kernel.ts";
+import { requireNoPendingKernel } from "./rotom-journal.ts";
+import { verifyRotomKernel } from "./rotom-kernel.ts";
 import { TeamUsageDoc, type TeamUsage } from "./team-usage.ts";
 import { TeamProjects } from "./team-projects.ts";
 import {
@@ -107,6 +110,8 @@ export interface OpenOptions {
     dataDir: string;
     defaultCwd: string;
     supervised: boolean;
+    /** Explicit new-session-only native backend. Never changes existing sessions or copies grants. */
+    kernel?: boolean;
     log?: (line: string) => void;
     /** Tests register scripted providers here. */
     configureModels?: (models: Runtime) => void;
@@ -133,6 +138,8 @@ export class PocketApp {
     models!: Runtime;
     readonly accounts: TeamAccounts;
     readonly profiles: TeamProfiles;
+    kernel: TeamKernel | undefined;
+    readonly #kernelEnabled: boolean;
     readonly projects: TeamProjects;
     readonly execution = new TeamExecution(this);
     settings!: SettingsManager;
@@ -179,6 +186,7 @@ export class PocketApp {
 
     private constructor(options: OpenOptions) {
         this.#configureModels = options.configureModels;
+        this.#kernelEnabled = options.kernel === true;
         this.now = options.now ?? Date.now;
         this.dataDir = options.dataDir;
         this.defaultCwd = options.defaultCwd;
@@ -243,7 +251,22 @@ export class PocketApp {
     }
 
     async #open(): Promise<void> {
+        if (this.#kernelEnabled) {
+            verifyRotomKernel();
+        }
+
         takeLock(this.#lockFile);
+
+        try {
+            if (!this.#kernelEnabled) {
+                requireNoPendingKernel(this.dataDir);
+            }
+        } catch (error) {
+            // Only our newly acquired harness lock is released; no server resources or credentials opened yet.
+            rmSync(this.#lockFile);
+
+            throw error;
+        }
 
         try {
             this.pushStore = new PushStore(this.dataDir);
@@ -344,6 +367,10 @@ export class PocketApp {
             },
             context,
         );
+
+        if (this.#kernelEnabled) {
+            this.kernel = new TeamKernel(this);
+        }
 
         const conversations = await this.#recover(storage);
 
@@ -1048,7 +1075,18 @@ export class PocketApp {
     }
 
     /** While take turns is on, only the driver sends to Pi or changes its settings. */
-    async requireDriver(id: ConversationId, user: User): Promise<void> {
+    async requireDriver(
+        id: ConversationId,
+        user: User,
+        backend: "durable" | "rotom" = "durable",
+    ): Promise<void> {
+        if ((this.sessionMeta(this.rootOf(id))?.backend ?? "durable") !== backend) {
+            throw new HttpError(
+                409,
+                "This operation is not supported by this conversation's execution backend.",
+            );
+        }
+
         this.requireSteer(user);
         this.projects.require(user, this.sessionMeta(this.rootOf(id))?.projectId, "continue");
         const turns = await this.harness.snapshot(TurnsDoc, this.rootOf(id), context);
@@ -1068,6 +1106,8 @@ export class PocketApp {
     }
 
     async projectsChanged(): Promise<void> {
+        await this.kernel?.revoke();
+
         for (const client of [...this.#clients]) {
             if (
                 client.conversationId !== undefined &&
@@ -1192,6 +1232,7 @@ export class PocketApp {
                 extensions: this.loader.extensionNames(),
                 // Tells the web app this server has people chat and typing indicators.
                 chat: true,
+                kernel: this.kernel !== undefined,
                 // Tells the web app this server sends peek tiles (`POST /api/peeks`, `peek` events).
                 peeks: true,
                 // This server's clock: peek tiles compare the browser's looks with when runs ended here.
@@ -1207,6 +1248,10 @@ export class PocketApp {
     /** A tab's hello: what everyone gets, and the id of its own connection, which its peek lists name. */
     #helloFor(client: Client, hello: Awaited<ReturnType<PocketApp["hello"]>>) {
         return { ...hello, connection: client.connection };
+    }
+
+    kernelChanged(): void {
+        this.#scheduleSessions();
     }
 
     #scheduleSessions(): void {
@@ -1256,7 +1301,7 @@ export class PocketApp {
             )
             .map(([id, meta]) => {
                 const model = this.#agents.get(Number(id) as unknown as ConversationId)?.model;
-                const busy = this.#busy.has(Number(id) as unknown as ConversationId);
+                const busy = this.isBusy(Number(id) as unknown as ConversationId);
                 const here = [...(people.get(id) ?? new Map<string, string>())].map(
                     ([userId, name]) => ({ id: userId, name }),
                 );
@@ -1278,7 +1323,7 @@ export class PocketApp {
     }
 
     isBusy(id: ConversationId): boolean {
-        return this.#busy.has(id);
+        return this.#busy.has(id) || this.kernel?.isRunning(id) === true;
     }
 
     /** The conversations with a run going. */
@@ -1467,6 +1512,9 @@ export class PocketApp {
         }
 
         this.config.updateUser(userId, change);
+        void this.kernel
+            ?.revoke()
+            .catch(() => this.notice("warning", "Native stop outcome unknown; do not replay."));
         const updated = this.config.userById(userId);
 
         for (const client of [...this.#clients]) {
@@ -1526,6 +1574,9 @@ export class PocketApp {
 
     #forget(userId: string): void {
         this.config.removeUser(userId);
+        void this.kernel
+            ?.revoke()
+            .catch(() => this.notice("warning", "Native stop outcome unknown; do not replay."));
         this.pushStore?.removeUser(userId);
 
         // Their open tabs end now; reconnecting fails, so they land on the sign-in screen.
@@ -1819,6 +1870,7 @@ export class PocketApp {
             }
 
             this.providers.close();
+            await this.kernel?.close();
 
             try {
                 // Close writes no outcome: running work resumes when the next process opens the storage.

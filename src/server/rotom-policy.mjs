@@ -1,10 +1,22 @@
 /** Team-owned policy extension for the pinned product; observer-hook exceptions are not dispatch authorization. */
 import { readFileSync } from "node:fs";
+import { chatGPTPayload } from "./openai-chatgpt-payload.ts";
 import { lazyStream } from "../../runtime/rotom/node_modules/@bingjiang0611/rotom/runtime/pi/node_modules/@earendil-works/pi-ai/dist/index.js";
 
 export default function (pi) {
     const config = JSON.parse(readFileSync(process.env.ROTOM_TEAM_KERNEL_GATE, "utf8"));
     let ready = false;
+
+    if (config.modelDefinition) {
+        // Registration happens before CLI model selection. This sentinel is never sent to a provider.
+        // Only the parent credential store resolves/refreshes auth; no OAuth grant is copied into this HOME.
+        pi.registerProvider(config.provider, {
+            api: config.modelDefinition.api,
+            baseUrl: config.modelDefinition.baseUrl,
+            apiKey: "team-request-auth",
+            models: [config.modelDefinition],
+        });
+    }
 
     const authorize = async (operation, provider, model, signal) => {
         if (provider !== config.provider || (model !== undefined && model !== config.model)) {
@@ -24,7 +36,17 @@ export default function (pi) {
                 : AbortSignal.timeout(10000),
         });
 
-        // Consume no response body into model context; denied/unavailable never dispatches or retries inference.
+        if (config.modelDefinition && operation === "inference" && response.status === 200) {
+            // A private request credential, never a prompt/event/file. Native streams receive it only as auth options.
+            const body = await response.text();
+
+            if (Buffer.byteLength(body) > 65536) {
+                throw new Error("team_kernel_auth_too_large");
+            }
+
+            return JSON.parse(body);
+        }
+
         await response.body?.cancel();
 
         if (response.status !== 204) {
@@ -61,11 +83,41 @@ export default function (pi) {
                             throw new Error("team_kernel_api_unreviewed");
                         }
 
-                        await authorize("inference", model.provider, model.id, options.signal);
+                        const auth = await authorize(
+                            "inference",
+                            model.provider,
+                            model.id,
+                            options.signal,
+                        );
 
-                        // The pinned fork exposes these native request controls. Avoid SDK redispatch and Codex WS/SSE fallback.
-                        return native[method](model, context, {
+                        if (config.modelDefinition && !auth) {
+                            throw new Error("team_kernel_auth_missing");
+                        }
+
+                        const target = auth?.baseUrl ? { ...model, baseUrl: auth.baseUrl } : model;
+                        const siwc =
+                            target.provider === "openai" &&
+                            target.baseUrl === "https://api.openai.com/v1" &&
+                            auth?.apiKey &&
+                            !auth.apiKey.startsWith("sk-");
+
+                        return native[method](target, context, {
                             ...options,
+                            ...(auth
+                                ? {
+                                      apiKey: auth.apiKey,
+                                      headers: { ...options.headers, ...auth.headers },
+                                  }
+                                : {}),
+                            ...(siwc
+                                ? {
+                                      onPayload: async (payload, model) =>
+                                          chatGPTPayload(
+                                              (await options.onPayload?.(payload, model)) ??
+                                                  payload,
+                                          ),
+                                  }
+                                : {}),
                             maxRetries: 0,
                             transport: "sse",
                         });

@@ -21,6 +21,21 @@ The first startup prints an owner bearer login link. Keep it private. Invite mem
 
 Importing existing OAuth material into a separate refresh-capable runtime can race and invalidate the original login. Use independent login for deployed members. The opt-in real-account validation fixture uses read-only imported credentials: inference is allowed, refresh is refused, and the original authentication store is never written. This temporary validation mechanism is not a refresh/installation solution.
 
+## Experimental rotom backend — separate validation only
+
+The default command above and existing conversations still use Durable. To test new native conversations in a separate private data directory, first install the independent pinned product while no execution is using that installation:
+
+```sh
+npm run install:kernel
+npm run test:kernel
+npm run test:kernel:app
+node bin/rotom-team.js --rotom-kernel --data /absolute/experimental-team-data --cwd /absolute/team-workspace --host 127.0.0.1 --port 8788
+```
+
+Select your own supported model, then New session → Execution engine → rotom. Only newly selected native sessions change engine. The parent remains the credential refresh writer; do not place OAuth grants in `kernel-homes`. Native unknown/pending receipts prevent disabling the backend to bypass quarantine. Do not delete receipts or locks to force recovery.
+
+This is not an upgrade instruction for the spare machine. Qoder, account takeover, forks, compaction, attachments, financial enforcement and real-provider validation are not complete. USD-budgeted native sessions refuse execution. The final full test run still has the browser screencast width failure; see [verification](VERIFICATION.md) and the [kernel contract](ROTOM-KERNEL.md) before deployment.
+
 ## Keep it running with launchd
 
 Run as the dedicated user, not root. Create `~/Library/LaunchAgents/dev.rotom.team.plist` using absolute paths below; replace `NODE`, `CHECKOUT`, `DATA`, and `WORKSPACE`. `NODE` is the result of `command -v node` on **that machine**, not a copied maintainer path. Create `DATA` and `WORKSPACE` privately first. Store the plist with mode `0600`.

@@ -20,6 +20,7 @@ export type KernelBinding = {
     accountGeneration: string;
     provider: string;
     model: string;
+    thinkingLevel?: string;
     configurationDigest: string;
     home: string;
     workspace: string;
@@ -33,6 +34,41 @@ export type KernelReceipt = {
 };
 export type KernelEntry = { type: string; id?: string; [key: string]: unknown };
 const digest = (value: string) => createHash("sha256").update(value).digest("hex");
+
+/** Disabling the executable backend is not permission to bypass its persisted account fence. */
+export function requireNoPendingKernel(data: string): void {
+    const path = join(data, "kernel.sqlite");
+
+    if (!existsSync(path)) {
+        return;
+    }
+
+    if (!lstatSync(path).isFile() || realpathSync(path) !== path) {
+        throw new Error("Kernel journal must be canonical and regular");
+    }
+
+    const db = new DatabaseSync(path, { readOnly: true });
+
+    try {
+        if (Number(db.prepare("PRAGMA user_version").get()!.user_version) !== 1) {
+            throw new Error("Unsupported kernel journal version");
+        }
+
+        if (
+            db
+                .prepare(
+                    "SELECT id FROM kernel_attempts WHERE status IN ('dispatch-intent','unknown') LIMIT 1",
+                )
+                .get()
+        ) {
+            throw new Error(
+                "Cannot disable rotom while a native dispatch is pending or unknown; reconcile it with the backend enabled",
+            );
+        }
+    } finally {
+        db.close();
+    }
+}
 
 export class RotomJournal {
     readonly #db: DatabaseSync;
@@ -178,6 +214,15 @@ export class RotomJournal {
             throw new Error("Kernel HOME must be private");
         }
 
+        if (
+            binding.thinkingLevel !== undefined &&
+            !["off", "minimal", "low", "medium", "high", "xhigh", "max"].includes(
+                binding.thinkingLevel,
+            )
+        ) {
+            throw new Error("Invalid kernel thinking level");
+        }
+
         return {
             memberId,
             kernelVersion,
@@ -187,6 +232,9 @@ export class RotomJournal {
             configurationDigest,
             home,
             workspace,
+            ...(binding.thinkingLevel === undefined
+                ? {}
+                : { thinkingLevel: binding.thinkingLevel }),
         };
     }
 
@@ -458,6 +506,25 @@ export class RotomJournal {
         }
 
         return this.receipt(id);
+    }
+
+    receipts(sessionId: string): KernelReceipt[] {
+        return this.#db
+            .prepare(
+                "SELECT id FROM kernel_attempts WHERE session_id=? ORDER BY rowid DESC LIMIT 100",
+            )
+            .all(sessionId)
+            .map((row) => this.receipt(String(row.id)));
+    }
+
+    pending(memberId: string): KernelReceipt | undefined {
+        const row = this.#db
+            .prepare(
+                "SELECT id FROM kernel_attempts WHERE home=? AND status IN ('dispatch-intent','unknown') LIMIT 1",
+            )
+            .get(join(this.#data, "kernel-homes", memberId));
+
+        return row ? this.receipt(String(row.id)) : undefined;
     }
 
     entries(sessionId: string): { attemptId: string; entry: KernelEntry }[] {

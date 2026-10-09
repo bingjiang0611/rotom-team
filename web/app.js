@@ -6,6 +6,7 @@ import { BrowserButton, BrowserPanel } from "./browser-panel.js";
 import { browserAvailable, toggleBrowser } from "./browser.js";
 import { PeopleButton, PeoplePanel } from "./chat.js";
 import { Composer } from "./composer.js";
+import { KernelConversation } from "./kernel.js";
 import {
     FilesButton,
     FilesPanel,
@@ -60,6 +61,17 @@ const toSessions = () => goHome(() => navigate(null, { replace: true }));
 function Topbar() {
     const { view, server } = store.state;
     const conversation = view.conversation;
+    const native = store.state.sessions.find(
+        (session) => session.id === store.state.conversationId && session.backend === "rotom",
+    );
+
+    if (native) {
+        return html`<header class="topbar">
+        <button class="icon-button topbar-back" aria-label="Back to sessions" onClick=${toSessions}><${Icon} name="back" size=${22} /></button>
+        <div class="title"><div class="title-main">${native.title ?? "Native session"}</div><div class="title-sub mono">rotom · ${shortPath(native.cwd, server?.home)}</div></div>
+    </header>`;
+    }
+
     const artifacts = view.artifacts?.length ?? 0;
     const subtitle =
         conversation?.kind === "subagent"
@@ -230,11 +242,15 @@ function App() {
     }
 
     const inConversation = state.conversationId !== null;
+    const native = state.sessions.some(
+        (session) => session.id === state.conversationId && session.backend === "rotom",
+    );
     const rail = prefs().sidebar === "rail";
-    const browsing = inConversation && state.browserOpen && browserAvailable() && !state.missing;
-    const filing = filesShown(state);
-    const people = !browsing && !filing && peopleDocked(state);
-    const peeking = peeksWanted(state);
+    const browsing =
+        !native && inConversation && state.browserOpen && browserAvailable() && !state.missing;
+    const filing = !native && filesShown(state);
+    const people = !native && !browsing && !filing && peopleDocked(state);
+    const peeking = !native && peeksWanted(state);
     const tiles = peeking ? peekTiles(state) : [];
     // The column takes the place beside the conversation when Browser and People leave it free; otherwise a strip,
     // which only shows when there are tiles.
@@ -257,8 +273,9 @@ function App() {
                         !peekColumn &&
                         html`<${PeekStrip} tiles=${tiles} />`
                     }
-                    <${Transcript} key=${state.conversationId} />
+                    ${native ? html`<${KernelConversation} key=${state.conversationId} id=${state.conversationId} />` : html`<${Transcript} key=${state.conversationId} />`}
                     ${
+                        !native &&
                         state.view.conversation &&
                         !state.missing &&
                         html`<${Composer} key=${state.conversationId} />`

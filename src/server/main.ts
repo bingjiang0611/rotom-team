@@ -31,6 +31,7 @@ function parseArgs(argv: string[]) {
         cwd: process.cwd(),
         data: dataDir(),
         rotateToken: false,
+        kernel: false,
     };
 
     for (let index = 0; index < argv.length; index++) {
@@ -54,11 +55,13 @@ function parseArgs(argv: string[]) {
             options.cwd = resolve(value());
         } else if (arg === "--data") {
             options.data = resolve(value());
+        } else if (arg === "--rotom-kernel") {
+            options.kernel = true;
         } else if (arg === "--rotate-token") {
             options.rotateToken = true;
         } else if (arg === "--help" || arg === "-h") {
             console.log(
-                "rotom-team [--host 127.0.0.1] [--port 8787] [--cwd DIR] [--data DIR] [--rotate-token]",
+                "rotom-team [--host 127.0.0.1] [--port 8787] [--cwd DIR] [--data DIR] [--rotate-token] [--rotom-kernel]",
             );
             process.exit(0);
         } else {
@@ -192,6 +195,7 @@ const opened = await App.open({
     dataDir: options.data,
     defaultCwd: options.cwd,
     supervised: process.env.PI_POCKET_SUPERVISED === "1",
+    kernel: options.kernel,
 });
 
 app = opened;

@@ -3,7 +3,12 @@ import { createInterface } from "node:readline";
 const mode = process.argv[2];
 const emit = (value) => process.stdout.write(JSON.stringify(value) + "\n");
 
-for await (const line of createInterface({ input: process.stdin })) {
+const input = createInterface({ input: process.stdin });
+
+// Keep process startup outside the protocol deadlines measured by the tests.
+emit({ type: "fixture_ready" });
+
+for await (const line of input) {
     const command = JSON.parse(line);
 
     if (command.type === "extension_ui_response") {
