@@ -54,7 +54,7 @@ launchctl print gui/$(id -u)/dev.rotom.team
 launchctl bootout gui/$(id -u)/dev.rotom.team
 ```
 
-Do not auto-open or publish login URLs. Logs may contain the startup owner link; keep the directory/logs private and rotate/remove logs deliberately. `KeepAlive` restarts stopped services; use `bootout` to actually stop. Locking refuses a second authoritative writer. This plist is an installation recipe, **not proof of a tested spare-MacBook launchd deployment**.
+Do not auto-open or publish login URLs. Logs may contain the startup owner link; keep the directory/logs private and rotate/remove logs deliberately. `KeepAlive` restarts stopped services; use `bootout` to actually stop. Locking refuses a second authoritative writer. This generic plist remains a recipe. A concrete user LaunchAgent using fixed checkout `5ffc362`, private paths, `Umask=077` and loopback was tested on the user's MacBookPro17,1, including SIGTERM/KeepAlive and bootout/backup/restore/bootstrap; see [VERIFICATION.md](VERIFICATION.md). It requires that user's GUI login domain and does not prove a cross-version upgrade or recovery with live provider grants.
 
 ## Upgrade and offline backup
 
