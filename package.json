@@ -15,6 +15,8 @@
     "scripts": {
         "postinstall": "node scripts/prepare-runtime.mjs",
         "prepare:runtime": "node scripts/prepare-runtime.mjs",
+        "install:kernel": "npm ci --prefix runtime/rotom --ignore-scripts && node scripts/check-kernel.ts",
+        "test:kernel": "node test/rotom-kernel-proof.ts",
         "pretest": "node scripts/prepare-runtime.mjs",
         "pretest:team": "node scripts/prepare-runtime.mjs",
         "start": "node bin/rotom-team.js",

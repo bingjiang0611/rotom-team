@@ -1,0 +1,9 @@
+{
+    "name": "rotom-team-kernel-runtime",
+    "version": "1.0.0",
+    "private": true,
+    "type": "module",
+    "dependencies": {
+        "@bingjiang0611/rotom": "0.1.14"
+    }
+}

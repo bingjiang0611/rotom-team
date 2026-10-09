@@ -21,6 +21,15 @@
 - [x] 指定备用 MacBookPro17,1：固定源码冷安装、完整 264/264、loopback launchd、自动重启及无 Provider auth 的停机备份恢复
 - [x] 官方政策资料检索与未获批准边界说明
 
+## rotom 内核迁移（新增目标）
+
+- [x] 固定产品独立安装、bootstrap 校验、严格 RPC、真实 rotom 原生工具 proof（scripted endpoint，无真实账号）
+- [ ] team 持久 backend/attempt/receipt、授权/refresh writer、原生 entry 投影和跨账号上下文接入
+- [ ] 网页 create/submit/stop/接力/fork/压缩以及备份迁移；新内核真实账号验证与备用机部署
+- [ ] 当前增量完整套件 275/276，既有浏览器宽度断言失败；不继承旧版本全绿结论
+
+以上第一阶段不等于网页已使用 rotom，实施边界见 [ROTOM-KERNEL.md](ROTOM-KERNEL.md)。
+
 ## 正式版仍需完成
 
 - [ ] Qoder 自然到期、服务商撤销/限额和 unknown 刷新真实路径（已验证独立授权及隔离本地到期）
