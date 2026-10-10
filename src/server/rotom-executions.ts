@@ -72,7 +72,13 @@ export type RunHooks = {
     onProgress?: () => void;
 };
 
-type Running = { aborted: boolean; kernel?: RotomRpc; closureUnknown?: boolean };
+type Running = {
+    aborted: boolean;
+    kernel?: RotomRpc;
+    closureUnknown?: boolean;
+    /** Its prompt was dispatched: messages may join it. */
+    prompting?: boolean;
+};
 
 export class RotomExecutions {
     readonly journal: RotomJournal;
@@ -112,6 +118,30 @@ export class RotomExecutions {
                     await run.kernel.request({ type: "abort" });
                 }
             }),
+        );
+    }
+
+    /** Add a message to the session's running prompt. False when none is running. */
+    async queue(sessionId: string, text: string, mode: "steer" | "followUp"): Promise<boolean> {
+        for (const run of this.#running.get(sessionId) ?? []) {
+            if (run.prompting && run.kernel) {
+                await run.kernel.queue(text, mode);
+
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** Answer an extension dialog of the session's running prompt. False when no run is waiting for it. */
+    answer(
+        sessionId: string,
+        dialogId: string,
+        response: Parameters<RotomRpc["answer"]>[1],
+    ): boolean {
+        return [...(this.#running.get(sessionId) ?? [])].some(
+            (run) => run.kernel?.answer(dialogId, response) ?? false,
         );
     }
 
@@ -544,6 +574,8 @@ export class RotomExecutions {
 
             if (hooks.onEvent) {
                 kernel.onEvent(hooks.onEvent);
+                // Someone watches this run, so its dialogs (ask_user_question, permissions) can reach a person.
+                kernel.forwardDialogs();
             }
 
             // Message-level durability: each persisted message is journaled as it lands, so a restart loses at most
@@ -577,6 +609,7 @@ export class RotomExecutions {
                 await kernel.compact(prompt);
                 disposition = "settled";
             } else {
+                running.prompting = true;
                 disposition = await kernel.prompt(prompt);
             }
 

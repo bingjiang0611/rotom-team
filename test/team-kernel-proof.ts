@@ -129,6 +129,53 @@ const modelServer = createServer(async (req, res) => {
             JSON.stringify(
                 input.messages.findLast((message: { role: string }) => message.role === "user")
                     ?.content,
+            ).includes("ASK_THE_USER")
+        ) {
+            const asked = input.messages.find(
+                (message: { role: string; tool_call_id?: string }) =>
+                    message.role === "tool" && message.tool_call_id === "ask-1",
+            );
+
+            if (asked) {
+                emit({ content: `ANSWER_WAS ${JSON.stringify(asked.content)}` });
+                emit({}, "stop");
+            } else {
+                emit({
+                    tool_calls: [
+                        {
+                            index: 0,
+                            id: "ask-1",
+                            type: "function",
+                            function: {
+                                name: "ask_user_question",
+                                arguments: JSON.stringify({
+                                    questions: [
+                                        {
+                                            question: "Which colour?",
+                                            header: "Colour",
+                                            options: [
+                                                { label: "Blue", description: "the sea" },
+                                                { label: "Green", description: "the grass" },
+                                            ],
+                                        },
+                                    ],
+                                }),
+                            },
+                        },
+                    ],
+                });
+                emit({}, "tool_calls");
+            }
+
+            res.end("data: [DONE]\n\n");
+
+            return;
+        }
+
+        if (
+            JSON.stringify(
+                input.messages.findLast((message: { role: string }) => message.role === "user")
+                    ?.content,
             ).includes("STREAM_SLOWLY")
         ) {
             emit({ content: "PARTIAL_NATIVE " });
@@ -1541,6 +1588,108 @@ try {
     );
     assert.equal(calls, 15);
     report.unifiedTranscriptLiveAndMirrored = true;
+
+    // An extension's question reaches the paying member, and only their answer goes back to the run.
+    const asking = await request(aliceToken, `c/${shared2.id}/submit`, "POST", {
+        text: "ASK_THE_USER which colour",
+        requestId: "ask",
+        wait: false,
+    });
+
+    assert.equal(asking.status, 200, await asking.clone().text());
+    const dialogsOf = () =>
+        (app.kernel!.roomState(shared2.id as never, a) as { dialogs?: unknown[] }).dialogs ?? [];
+    let dialog: { id: string; method: string; title: string; options: string[] } | undefined;
+
+    for (let tries = 0; tries < 2400 && !dialog; tries++) {
+        dialog = dialogsOf()[0] as typeof dialog;
+        await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+
+    assert.ok(dialog, "the question is waiting in the room");
+    assert.equal(dialog.method, "select");
+    assert.match(dialog.title, /Which colour\?/);
+    const green = dialog.options.find((option) => option.includes("Green"))!;
+    const answer = (token: string, body: object) =>
+        request(token, `c/${shared2.id}/dialog`, "POST", { id: dialog!.id, ...body });
+
+    assert.equal((await answer(dana.token, { value: green })).status, 403);
+    assert.equal((await answer(aliceToken, { value: "Purple" })).status, 400);
+    assert.equal((await answer(aliceToken, { value: green })).status, 200);
+    assert.equal((await answer(aliceToken, { value: green })).status, 409);
+
+    while (app.kernel!.isRunning(shared2.id as never)) {
+        await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+
+    const answered = (await app.room(shared2.id as never))
+        .value!.entries.filter((entry) => entry.kind === NATIVE_ENTRY)
+        .map((entry) => JSON.stringify(projectEntry(entry)));
+
+    assert.ok(answered.at(-1)!.includes("ANSWER_WAS") && answered.at(-1)!.includes("Green"));
+    assert.equal(dialogsOf().length, 0);
+    assert.equal(calls, 17);
+    report.extensionDialogsReachThePayer = true;
+
+    // A message sent while Pi works joins that run, for the member who pays for it only.
+    assert.equal(
+        (
+            await request(aliceToken, `c/${shared2.id}/submit`, "POST", {
+                text: "STREAM_SLOWLY then a follow-up",
+                requestId: "queue-host",
+                wait: false,
+            })
+        ).status,
+        200,
+    );
+
+    for (let tries = 0; tries < 2400; tries++) {
+        if (
+            JSON.stringify(app.kernel!.clientLive(shared2.id as never)).includes("PARTIAL_NATIVE")
+        ) {
+            break;
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+
+    const queued = (token: string) =>
+        request(token, `c/${shared2.id}/submit`, "POST", {
+            text: "FOLLOW_UP_NOTE",
+            requestId: "queued",
+            mode: "followUp",
+        });
+
+    assert.equal((await queued(dana.token)).status, 409);
+    const accepted = await queued(aliceToken);
+
+    assert.equal(accepted.status, 200, await accepted.clone().text());
+    assert.deepEqual(await accepted.json(), { queued: "followUp" });
+
+    while (app.kernel!.isRunning(shared2.id as never)) {
+        await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+
+    const queuedRoom = await app.room(shared2.id as never);
+    const queuedUsers = queuedRoom
+        .value!.entries.filter((entry) => entry.kind === NATIVE_ENTRY)
+        .map((entry) => projectEntry(entry))
+        .filter((entry) => entry?.kind === "user") as { id: number; text: string }[];
+
+    assert.deepEqual(
+        queuedUsers.slice(-2).map((entry) => [entry.text, queuedRoom.authors[String(entry.id)]]),
+        [
+            ["STREAM_SLOWLY then a follow-up", a.id],
+            ["FOLLOW_UP_NOTE", a.id],
+        ],
+    );
+    assert.equal(
+        app.kernel!.executions.journal.request(String(shared2.id), `${a.id}:queue-host`)?.status,
+        "settled",
+    );
+    // The host answer, then the follow-up's own write-and-finish turn.
+    assert.equal(calls, 20);
+    report.messagesJoinTheRunningPrompt = true;
     Object.assign(report, {
         status: "passed",
         projectViewAndContinue: true,
@@ -1596,7 +1745,7 @@ try {
                 memberName: owner(app).name,
             });
             // The composer's one message, sent by the owner who pays for it; nothing else dispatched.
-            assert.equal(calls, 16);
+            assert.equal(calls, 23);
             assert.equal(requestMembers.at(-1), owner(app).id);
             report.webUiVerified = true;
         } else {

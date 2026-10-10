@@ -1092,6 +1092,7 @@ export function Composer() {
                         </button>
                         ${
                             planAvailable() &&
+                            !view.kernel &&
                             view.conversation?.kind !== "subagent" &&
                             html`<button
                                 class=${`chip toggle ${view.plan?.on ? "on" : ""}`}

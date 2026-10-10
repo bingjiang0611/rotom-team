@@ -127,11 +127,20 @@ export async function conversationRoutes(
                 );
             }
 
+            // While Pi works, the composer's message joins the run (steer) or waits for it (followUp).
+            if (app.kernel.isRunning(id) && (body.mode === "steer" || body.mode === "followUp")) {
+                return json(response, 200, await app.kernel.queue(id, user, body.text, body.mode));
+            }
+
             return json(
                 response,
                 200,
                 await app.kernel.submit(id, user, body.requestId, body.text, body.wait !== false),
             );
+        }
+
+        if (third === "dialog" && method === "POST" && fourth === undefined) {
+            return json(response, 200, app.kernel.answerDialog(id, user, await readJson(request)));
         }
 
         if (third === "configure" && method === "POST" && fourth === undefined) {

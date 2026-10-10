@@ -67,7 +67,20 @@ type NativeLive = {
     retry?: { at: number; error: string };
     tools: { callId: string; name: string; status: "running"; output?: string }[];
     compacting?: string;
+    /** Extension dialogs waiting for the paying member, oldest first. */
+    dialogs?: NativeDialog[];
 };
+/** A dialog a rotom extension opened during a run, such as ask_user_question's choices. */
+export type NativeDialog = {
+    id: string;
+    method: "select" | "confirm" | "input" | "editor";
+    title: string;
+    message?: string;
+    options?: string[];
+    placeholder?: string;
+    prefill?: string;
+};
+const DIALOG_METHODS = new Set(["select", "confirm", "input", "editor"]);
 
 type NativeConfigurations = {
     snapshots: Record<string, ConfigurationSnapshot>;
@@ -508,6 +521,45 @@ export class TeamKernel {
             this.#submit(id, user, requestId, text, wait),
         );
     }
+    /**
+     * A message sent while a prompt runs joins that run (steer) or waits for its turn (followUp). The run is paid by
+     * its member, so only they may add to it; anyone else waits for it to end, then their message takes it over.
+     */
+    async queue(id: ConversationId, user: User, text: string, mode: "steer" | "followUp") {
+        if (typeof text !== "string" || !text.trim() || text.trimStart().startsWith("/")) {
+            throw new HttpError(
+                400,
+                "Native submissions require ordinary text; slash commands are not supported.",
+            );
+        }
+
+        if (text.length > 100_000) {
+            throw new HttpError(400, "That message is too long.");
+        }
+
+        this.#app.requireSteer(user);
+        this.#app.requireSee(user, id);
+        const { binding } = this.executions.journal.session(String(id));
+
+        if (binding.memberId !== user.id) {
+            const name = this.#app.config.userById(binding.memberId)?.name ?? "Another member";
+
+            throw new HttpError(
+                409,
+                `${name}'s run is working on their account. Send when it ends, and it continues on yours.`,
+            );
+        }
+
+        if (!(await this.executions.queue(String(id), text, mode))) {
+            throw new HttpError(
+                409,
+                "Pi is not running a prompt now (it finished, or is compacting). Send again.",
+            );
+        }
+
+        return { queued: mode };
+    }
+
     compact(id: ConversationId, user: User, requestId: string, instructions: string) {
         return this.#operation(id, user, requestId, "compact", { instructions }, () =>
             this.#compact(id, user, requestId, instructions),
@@ -758,11 +810,99 @@ export class TeamKernel {
                 delete live.compacting;
                 break;
 
+            case "extension_ui_request": {
+                // Status lines, widgets and toasts are for a terminal; only dialogs need a person.
+                if (!DIALOG_METHODS.has(String(event.method))) {
+                    return;
+                }
+
+                const text = (value: unknown) =>
+                    typeof value === "string" ? value.slice(0, 16_000) : undefined;
+
+                live.dialogs = [
+                    ...(live.dialogs ?? []),
+                    {
+                        id: String(event.id),
+                        method: event.method as NativeDialog["method"],
+                        title: text(event.title) ?? "",
+                        ...(text(event.message) !== undefined && { message: text(event.message) }),
+                        ...(Array.isArray(event.options) && {
+                            options: event.options.slice(0, 64).map((each) => String(each)),
+                        }),
+                        ...(text(event.placeholder) !== undefined && {
+                            placeholder: text(event.placeholder),
+                        }),
+                        ...(text(event.prefill) !== undefined && { prefill: text(event.prefill) }),
+                    },
+                ];
+                break;
+            }
+
             default:
                 return;
         }
 
         this.#app.roomChanged(id);
+    }
+
+    /**
+     * Answer a dialog of the running prompt. Only the member it runs for may: the run spends their account and
+     * acts with their authority. A dialog that is gone (answered, or its run ended) is a 409, never a resend.
+     */
+    answerDialog(id: ConversationId, user: User, body: unknown): { answered: true } {
+        const request = body as {
+            id?: unknown;
+            value?: unknown;
+            confirmed?: unknown;
+            cancelled?: unknown;
+        } | null;
+        const dialog = this.#live
+            .get(id)
+            ?.dialogs?.find((each) => typeof request?.id === "string" && each.id === request.id);
+
+        if (!request || typeof request !== "object" || typeof request.id !== "string") {
+            throw new HttpError(400, "A dialog id is required.");
+        }
+
+        this.#app.requireSteer(user);
+
+        if (this.executions.journal.session(String(id)).binding.memberId !== user.id) {
+            throw new HttpError(403, "Only the member this run is for can answer its questions.");
+        }
+
+        if (!dialog) {
+            throw new HttpError(409, "That question is no longer waiting.");
+        }
+
+        const response =
+            request.cancelled === true
+                ? { cancelled: true as const }
+                : dialog.method === "confirm"
+                  ? typeof request.confirmed === "boolean"
+                      ? { confirmed: request.confirmed }
+                      : undefined
+                  : typeof request.value === "string" &&
+                      (dialog.method !== "select" || dialog.options?.includes(request.value))
+                    ? { value: request.value }
+                    : undefined;
+
+        if (!response) {
+            throw new HttpError(400, "The answer does not fit this question.");
+        }
+
+        const live = this.#live.get(id)!;
+
+        live.dialogs = live.dialogs!.filter((each) => each.id !== dialog.id);
+
+        if (!this.executions.answer(String(id), dialog.id, response)) {
+            this.#app.roomChanged(id);
+
+            throw new HttpError(409, "That question is no longer waiting.");
+        }
+
+        this.#app.roomChanged(id);
+
+        return { answered: true };
     }
 
     /** The room's agent line for a native conversation: what the current segment runs on, and for whom. */
@@ -807,6 +947,7 @@ export class TeamKernel {
             thinkingLevel: binding.thinkingLevel ?? "off",
             kernelVersion: binding.kernelVersion,
             yours: binding.memberId === viewer.id,
+            dialogs: this.#live.get(id)?.dialogs ?? [],
             ...(pending
                 ? {
                       pending: {

@@ -27,9 +27,13 @@ export class RotomRpc {
         }
     >();
     readonly #listeners = new Set<(record: RpcRecord) => void>();
+    /** Dialogs a person may still answer; null while dialogs are cancelled at once. */
+    #dialogs: Set<string> | null = null;
     #failure?: RpcFailure;
     #buffer = "";
     #busy = false;
+    /** A prompt is running: it may take more of its member's messages. */
+    #prompting = false;
     #shutdown = false;
 
     constructor(
@@ -65,6 +69,25 @@ export class RotomRpc {
         this.#listeners.add(listener);
 
         return () => this.#listeners.delete(listener);
+    }
+
+    /** From now on, pass extension dialogs to the listeners for a person to answer, instead of cancelling them. */
+    forwardDialogs(): void {
+        this.#dialogs ??= new Set();
+    }
+
+    /** Answer a forwarded dialog once. False when it is not waiting (answered, or never forwarded). */
+    answer(
+        id: string,
+        response: { value: string } | { confirmed: boolean } | { cancelled: true },
+    ): boolean {
+        if (!this.#dialogs?.delete(id)) {
+            return false;
+        }
+
+        this.#write({ type: "extension_ui_response", id, ...response });
+
+        return true;
     }
 
     #fail(reason: string): void {
@@ -147,12 +170,20 @@ export class RotomRpc {
                     );
                 }
             } else {
-                // Dialogs must not silently authorize work in a headless host. Full UI forwarding is a later integration step.
+                // Dialogs must not silently authorize work in a headless host: one nobody can answer is cancelled.
                 if (
                     value.type === "extension_ui_request" &&
                     ["select", "confirm", "input", "editor"].includes(String(value.method))
                 ) {
-                    this.#write({ type: "extension_ui_response", id: value.id, cancelled: true });
+                    if (this.#dialogs) {
+                        this.#dialogs.add(String(value.id));
+                    } else {
+                        this.#write({
+                            type: "extension_ui_response",
+                            id: value.id,
+                            cancelled: true,
+                        });
+                    }
                 }
 
                 for (const listener of this.#listeners) {
@@ -234,6 +265,7 @@ export class RotomRpc {
         }
 
         this.#busy = true;
+        this.#prompting = true;
         let resolve!: () => void, reject!: (error: Error) => void;
         const settled = new Promise<void>((yes, no) => {
             resolve = yes;
@@ -287,7 +319,20 @@ export class RotomRpc {
             clearTimeout(timer);
             detach();
             this.#busy = false;
+            this.#prompting = false;
         }
+    }
+
+    /**
+     * Add a message to the running prompt: `steer` joins the current turn, `followUp` waits for it. The same run, the
+     * same payer; nothing is queued when no prompt runs.
+     */
+    async queue(message: string, mode: "steer" | "followUp"): Promise<void> {
+        if (!this.#prompting) {
+            throw new RpcFailure("rejected", "no running prompt to add a message to");
+        }
+
+        await this.#send({ type: mode === "steer" ? "steer" : "follow_up", message });
     }
 
     /** Unlike prompt admission, compact's RPC response arrives after the model operation finishes. */

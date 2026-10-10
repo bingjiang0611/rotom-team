@@ -87,6 +87,41 @@ export async function nativeUiProof(options: {
             20000,
         );
 
+        // A question from the run (ask_user_question) is answered in place, by the member who pays for it.
+        await page.evaluate(`
+            const input = document.querySelector('.composer textarea');
+            input.value = 'ASK_THE_USER from the composer';
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+        `);
+        await until(
+            async () => (await page.evaluate(`Boolean(${send} && !${send}.disabled)`)) === "true",
+            "composer ready again",
+            20000,
+        );
+        await page.evaluate(`${send}.click()`);
+        const green = `Array.from(document.querySelectorAll('.native-question button')).find(b => b.textContent.includes('Green'))`;
+
+        await until(
+            async () => (await page.evaluate(`Boolean(${green})`)) === "true",
+            "the question shows above the composer",
+            20000,
+        );
+        const asked = await page.screenshot();
+        const askedPath = join(options.root, "native-ui-question.jpg");
+
+        writeFileSync(askedPath, Buffer.from(asked.data, "base64"), { mode: 0o600, flag: "wx" });
+        screenshots.push(askedPath);
+        await page.evaluate(`${green}.click()`);
+        await until(
+            async () => (await text(".transcript")).includes("ANSWER_WAS"),
+            "the run continues with the answer",
+            20000,
+        );
+        assert.equal(
+            await page.evaluate(`Boolean(document.querySelector('.native-question'))`),
+            "false",
+        );
+
         await page.evaluate(`document.querySelector('.topbar [aria-label="Menu"]').click()`);
         await until(
             async () => (await page.evaluate(`Boolean(${button("Fork")})`)) === "true",
@@ -100,7 +135,12 @@ export async function nativeUiProof(options: {
         writeFileSync(menuPath, Buffer.from(menu.data, "base64"), { mode: 0o600, flag: "wx" });
         screenshots.push(menuPath);
 
-        return { unifiedTranscript: true, streamedThenPersisted: true, screenshots };
+        return {
+            unifiedTranscript: true,
+            streamedThenPersisted: true,
+            questionAnswered: true,
+            screenshots,
+        };
     } finally {
         await browsers.closeAll({ final: true });
     }

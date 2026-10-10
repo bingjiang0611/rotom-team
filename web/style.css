@@ -7788,3 +7788,22 @@ textarea.notes {
     color: var(--text);
     font-size: 0.82rem;
 }
+
+.native-question {
+    display: grid;
+    gap: 0.5rem;
+}
+
+.native-question-title {
+    white-space: pre-wrap;
+}
+
+.native-question-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.native-question textarea {
+    width: 100%;
+}
