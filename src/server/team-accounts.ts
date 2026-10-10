@@ -24,6 +24,7 @@ import { createQoderProvider } from "../../vendor/qoder/provider.mjs";
 import { createRefreshGuard } from "../../vendor/qoder/refresh-guard.mjs";
 import type { ConfigStore, ModelChoice, User } from "./config.ts";
 import { HttpError } from "./errors.ts";
+import type { KernelRequestAuth, QoderRequestAuth } from "./rotom-executions.ts";
 
 export function protectImportedRefresh(
     provider: ai.Provider,
@@ -134,7 +135,14 @@ export function createRuntime(
 }
 
 type Profile = { generations: Record<string, string>; model?: ModelChoice };
-type Account = { runtime: Runtime; profile: Profile; folder: string; aliases: Set<string> };
+type Account = {
+    runtime: Runtime;
+    credentials: FileCredentials;
+    modelsStore: FileModelsStore;
+    profile: Profile;
+    folder: string;
+    aliases: Set<string>;
+};
 
 /** A cross-account projection is deliberately lossy: only public text/tool calls cross. Original entries stay intact. */
 export function accountContext(
@@ -314,10 +322,9 @@ export class TeamAccounts {
         const profile: Profile = existsSync(path)
             ? JSON.parse(readFileSync(path, "utf8"))
             : { generations: {} };
-        const runtime = createRuntime(
-            new FileCredentials(join(folder, "auth.json")),
-            new FileModelsStore(join(folder, "models-store.json")),
-        );
+        const credentials = new FileCredentials(join(folder, "auth.json"));
+        const modelsStore = new FileModelsStore(join(folder, "models-store.json"));
+        const runtime = createRuntime(credentials, modelsStore);
 
         const refreshFolder = join(folder, "oauth-refresh");
 
@@ -337,12 +344,19 @@ export class TeamAccounts {
                     piAI: ai,
                     clampMaxTokens: clampMaxTokensToContext,
                     authMode: "browser",
-                    oauthOptions: { claimRefresh: createRefreshGuard(folder) },
+                    oauthOptions: { claimRefresh: createRefreshGuard(realpathSync(folder)) },
                 }),
             ),
         );
         this.#configure?.(runtime, user);
-        const account = { runtime, profile, folder, aliases: new Set<string>() };
+        const account = {
+            runtime,
+            credentials,
+            modelsStore,
+            profile,
+            folder,
+            aliases: new Set<string>(),
+        };
 
         this.#accounts.set(user.id, account);
         await this.refresh(user);
@@ -372,7 +386,9 @@ export class TeamAccounts {
                         piAI: ai,
                         clampMaxTokens: clampMaxTokensToContext,
                         authMode: "browser",
-                        oauthOptions: { claimRefresh: createRefreshGuard(account.folder) },
+                        oauthOptions: {
+                            claimRefresh: createRefreshGuard(realpathSync(account.folder)),
+                        },
                     }),
                 ),
             );
@@ -521,9 +537,10 @@ export class TeamAccounts {
 
         if (
             !model ||
-            !["openai-completions", "openai-responses", "openai-codex-responses"].includes(
+            (!["openai-completions", "openai-responses", "openai-codex-responses"].includes(
                 model.api,
-            )
+            ) &&
+                !(provider.id === "qoder" && model.provider === "qoder" && model.api === "qoder"))
         ) {
             throw new HttpError(
                 409,
@@ -534,15 +551,65 @@ export class TeamAccounts {
         return model;
     }
 
-    async kernelAuth(user: User, ref: ModelRef, signal?: AbortSignal): Promise<ai.ModelAuth> {
-        const model = this.kernelModel(user, ref);
-        const auth = await this.#accounts.get(user.id)!.runtime.getAuth(model, { signal });
+    async kernelAuth(user: User, ref: ModelRef, signal?: AbortSignal): Promise<KernelRequestAuth> {
+        let model = this.kernelModel(user, ref);
+        const account = this.#accounts.get(user.id)!;
+
+        if (model.api === "qoder") {
+            const refreshed = await account.runtime.refresh({ providers: ["qoder"], signal });
+
+            if (refreshed.errors.has("qoder")) {
+                throw new HttpError(409, "Qoder account catalog is unavailable.");
+            }
+
+            model = this.kernelModel(user, ref);
+        }
+
+        const auth = await account.runtime.getAuth(model, { signal });
 
         // Login/role changes during refresh invalidate admission. The original store remains the sole refresh writer.
         this.kernelModel(user, ref);
 
         if (!auth || (auth.env && Object.keys(auth.env).length)) {
             throw new HttpError(409, "No supported personal request credential.");
+        }
+
+        if (model.api === "qoder") {
+            // getAuth above validates/refreshes the sole stored grant. Its sealed request envelope
+            // is process-local: export only access fields, never the grant or its refresh capability.
+            const credential = await account.credentials.read("qoder", { signal });
+            const stored = await account.modelsStore.read("qoder", { signal });
+            const catalog = stored as
+                (ai.ModelsStoreEntry & QoderRequestAuth["catalog"]) | undefined;
+
+            this.kernelModel(user, ref);
+
+            if (
+                credential?.type !== "oauth" ||
+                credential.qoderAuthVersion !== 1 ||
+                !catalog ||
+                catalog.scope !== credential.fingerprint
+            ) {
+                throw new HttpError(409, "Qoder request identity is unavailable.");
+            }
+
+            return {
+                qoder: {
+                    credential: {
+                        accessToken: credential.access,
+                        expiresAt: credential.expires,
+                        fingerprint: credential.fingerprint as string,
+                        uid: credential.uid as string | number,
+                        org: credential.org as string | number,
+                        machineId: credential.machineId as string,
+                    },
+                    catalog: {
+                        scope: catalog.scope,
+                        checkedAt: catalog.checkedAt,
+                        metadata: catalog.metadata,
+                    },
+                },
+            };
         }
 
         return auth.auth;

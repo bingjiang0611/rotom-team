@@ -13,7 +13,7 @@ import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { getAgentDir, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { TeamAccounts, type Runtime } from "./team-accounts.ts";
 import { TeamExecution, TeamRunDoc } from "./team-execution.ts";
-import { ConfigurationDoc, TeamProfiles } from "./team-profiles.ts";
+import { ConfigurationDoc, TeamProfiles, type ConfigurationSnapshot } from "./team-profiles.ts";
 import { TeamKernel } from "./team-kernel.ts";
 import { requireNoPendingKernel } from "./rotom-journal.ts";
 import { verifyRotomKernel } from "./rotom-kernel.ts";
@@ -372,10 +372,19 @@ export class PocketApp {
             this.kernel = new TeamKernel(this);
         }
 
-        const conversations = await this.#recover(storage);
+        try {
+            const conversations = await this.#recover(storage);
 
-        await this.execution.recover(conversations);
-        await this.spend.load(conversations);
+            await this.kernel?.reconcile(conversations);
+            await this.execution.recover(conversations);
+            await this.spend.load(conversations);
+        } catch (error) {
+            // The harness has not resumed and no native operation was launched during reconciliation.
+            // Release only resources owned by this failed startup; retain all durable unknown receipts.
+            await this.close();
+
+            throw error;
+        }
 
         this.#unsubscribeCommits = this.harness.subscribeCommits((publication) =>
             this.#committed(publication),
@@ -1614,6 +1623,10 @@ export class PocketApp {
             return;
         }
 
+        // Personal route availability depends on the current role. Recompute the local
+        // alias snapshot even when no browser is connected (e.g. after viewer → guest).
+        await this.models.getAvailable();
+
         for (const client of this.#clients) {
             if (client.user.id !== userId) {
                 continue;
@@ -1660,9 +1673,20 @@ export class PocketApp {
         return this.#agents.get(id)?.cwd ?? this.#sessions[String(id)]?.cwd ?? this.defaultCwd;
     }
 
+    configuration(id: ConversationId): ConfigurationSnapshot | undefined {
+        if (
+            this.sessionMeta(id)?.backend === "rotom" &&
+            this.kernel?.executions.journal.hasConversation(String(id))
+        ) {
+            return this.kernel.configuration(id);
+        }
+
+        return this.profiles.snapshot(id);
+    }
+
     /** Pi's skills in a conversation's folder, to run as `/skill:name`. */
     skillCommands(id: ConversationId): SkillCommand[] {
-        const snapshot = this.profiles.snapshot(id);
+        const snapshot = this.configuration(id);
 
         if (snapshot) {
             return snapshot.skills;

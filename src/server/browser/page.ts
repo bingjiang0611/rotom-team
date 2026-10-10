@@ -675,8 +675,8 @@ export class BrowserPage {
                 this.#frame ??= {
                     seq: ++frameCount,
                     data: Buffer.from(shot.data, "base64"),
-                    width: Math.round(shot.width * shot.scale),
-                    height: Math.round(shot.height * shot.scale),
+                    width: shot.width,
+                    height: shot.height,
                 };
             }
 
@@ -1215,6 +1215,11 @@ export class BrowserPage {
             scale: 1,
         };
         const zoom = view.scale ?? 1;
+        // CDP captures exclude scrollbar gutters. Report that same visible area, in
+        // input-coordinate pixels, so snapshot bootstrap and screencast frames agree.
+        const width = Math.round(view.clientWidth * zoom);
+        const height = Math.round(view.clientHeight * zoom);
+        const imageScale = fit(width, height);
         const shot = await this.#send(
             "Page.captureScreenshot",
             {
@@ -1225,7 +1230,7 @@ export class BrowserPage {
                     y: view.pageY,
                     width: view.clientWidth,
                     height: view.clientHeight,
-                    scale: scale * zoom * fit(view.clientWidth, view.clientHeight),
+                    scale: scale * zoom * imageScale,
                 },
             },
             60_000,
@@ -1233,9 +1238,9 @@ export class BrowserPage {
 
         return {
             data: String(shot.data),
-            width: this.#viewport.width,
-            height: this.#viewport.height,
-            scale: fit(view.clientWidth, view.clientHeight),
+            width,
+            height,
+            scale: imageScale,
         };
     }
 

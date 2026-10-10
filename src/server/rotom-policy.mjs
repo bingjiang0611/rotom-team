@@ -1,6 +1,9 @@
 /** Team-owned policy extension for the pinned product; observer-hook exceptions are not dispatch authorization. */
 import { readFileSync } from "node:fs";
 import { chatGPTPayload } from "./openai-chatgpt-payload.ts";
+import { qoderRequestProvider } from "./rotom-qoder.mjs";
+import { bindSessionAccount } from "../../runtime/rotom/node_modules/@bingjiang0611/rotom/extensions/qoder/session-policy.mjs";
+import { CREDIT_ENTRY } from "../../runtime/rotom/node_modules/@bingjiang0611/rotom/extensions/qoder/credits.mjs";
 import { lazyStream } from "../../runtime/rotom/node_modules/@bingjiang0611/rotom/runtime/pi/node_modules/@earendil-works/pi-ai/dist/index.js";
 
 export default function (pi) {
@@ -15,6 +18,16 @@ export default function (pi) {
             baseUrl: config.modelDefinition.baseUrl,
             apiKey: "team-request-auth",
             models: [config.modelDefinition],
+            ...(config.modelDefinition.api === "qoder"
+                ? {
+                      // Qoder is a custom API. Never allow its startup registration to
+                      // dispatch before the session_start wrapper below installs the gate.
+                      streamSimple: (model) =>
+                          lazyStream(model, async () => {
+                              throw new Error("team_kernel_gate_unavailable");
+                          }),
+                  }
+                : {}),
         });
     }
 
@@ -78,6 +91,7 @@ export default function (pi) {
                                 "openai-completions",
                                 "openai-responses",
                                 "openai-codex-responses",
+                                "qoder",
                             ].includes(model.api)
                         ) {
                             throw new Error("team_kernel_api_unreviewed");
@@ -92,6 +106,45 @@ export default function (pi) {
 
                         if (config.modelDefinition && !auth) {
                             throw new Error("team_kernel_auth_missing");
+                        }
+
+                        if (model.api === "qoder") {
+                            const provider = await qoderRequestProvider(
+                                auth?.qoder,
+                                options.signal,
+                                (data) => {
+                                    const selected = Object.fromEntries(
+                                        [
+                                            "modelId",
+                                            "requestId",
+                                            "status",
+                                            "outcome",
+                                            "credits",
+                                            "billable",
+                                            "originalCredits",
+                                        ]
+                                            .filter((key) => data[key] !== undefined)
+                                            .map((key) => [key, data[key]]),
+                                    );
+
+                                    pi.appendEntry(CREDIT_ENTRY, {
+                                        version: 1,
+                                        sessionId: ctx.sessionManager.getSessionId(),
+                                        ...selected,
+                                    });
+                                },
+                            );
+
+                            bindSessionAccount(
+                                ctx.sessionManager,
+                                (type, data) => pi.appendEntry(type, data),
+                                auth.qoder.credential.fingerprint,
+                            );
+
+                            return provider[method](model, context, {
+                                ...options,
+                                apiKey: undefined,
+                            });
                         }
 
                         const target = auth?.baseUrl ? { ...model, baseUrl: auth.baseUrl } : model;
@@ -132,21 +185,41 @@ export default function (pi) {
                 generateImages: undefined,
                 fetchDeferred: undefined,
                 cancelDeferred: undefined,
-                ...(oauth
+                ...(config.modelDefinition && id === config.provider
                     ? {
+                          // Legacy registration can retain a built-in OAuth definition.
+                          // Replace it, rather than letting prompt preflight seek a native grant.
                           auth: {
-                              ...native.auth,
-                              oauth: {
-                                  ...oauth,
-                                  async refresh(credential, signal) {
-                                      await authorize("refresh", id, undefined, signal);
-
-                                      return oauth.refresh(credential, signal);
-                                  },
+                              apiKey: {
+                                  name: "Team request broker",
+                                  resolve: async () => ({
+                                      auth: { apiKey: "team-request-auth" },
+                                      source: "Team parent credential store",
+                                  }),
                               },
                           },
+                          getModels: () => [config.modelDefinition],
+                          getAllModels: () => [config.modelDefinition],
+                          filterModels: (models) =>
+                              models.filter((model) => model.id === config.model),
+                          filterAllModels: (models) =>
+                              models.filter((model) => model.id === config.model),
                       }
-                    : {}),
+                    : oauth
+                      ? {
+                            auth: {
+                                ...native.auth,
+                                oauth: {
+                                    ...oauth,
+                                    async refresh(credential, signal) {
+                                        await authorize("refresh", id, undefined, signal);
+
+                                        return oauth.refresh(credential, signal);
+                                    },
+                                },
+                            },
+                        }
+                      : {}),
             });
         }
 

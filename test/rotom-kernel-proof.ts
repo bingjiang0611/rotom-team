@@ -1,10 +1,14 @@
 /** Opt-in: actual pinned rotom product and native tools against a loopback scripted model, no real accounts. */
 import assert from "node:assert/strict";
-import { createServer } from "node:http";
+import { createServer, type RequestListener } from "node:http";
+import { createServer as createSecureServer } from "node:https";
+import { execFileSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { once } from "node:events";
+import { connect } from "node:net";
+import type { Duplex } from "node:stream";
 import { startRotomKernel, verifyRotomKernel } from "../src/server/rotom-kernel.ts";
 import { RotomExecutions } from "../src/server/rotom-executions.ts";
 
@@ -16,10 +20,45 @@ const root = realpathSync(mkdtempSync(join(tmpdir(), "rotom-kernel-proof-"))),
 mkdirSync(home, { mode: 0o700 });
 mkdirSync(workspace, { mode: 0o700 });
 mkdirSync(join(home, ".pi/agent"), { recursive: true, mode: 0o700 });
+const proxyMode = process.argv.includes("--proxy");
+const ca = join(root, "proxy-ca.pem");
+const key = join(root, "proxy-key.pem");
+
+if (proxyMode) {
+    const config = join(root, "openssl.cnf");
+
+    writeFileSync(
+        config,
+        "[req]\ndistinguished_name=dn\nx509_extensions=ext\n[dn]\n[ext]\nsubjectAltName=DNS:native-model.invalid\nbasicConstraints=critical,CA:TRUE\n",
+    );
+    execFileSync(
+        "/usr/bin/openssl",
+        [
+            "req",
+            "-x509",
+            "-newkey",
+            "rsa:2048",
+            "-nodes",
+            "-keyout",
+            key,
+            "-out",
+            ca,
+            "-subj",
+            "/CN=native-model.invalid",
+            "-days",
+            "1",
+            "-config",
+            config,
+        ],
+        { stdio: "ignore" },
+    );
+}
+
 let requests = 0,
     toolReadObserved = false,
     rejectStatus = 0;
-const server = createServer(async (req, res) => {
+
+const respond: RequestListener = async (req, res) => {
     try {
         assert.equal(req.url, "/v1/chat/completions");
         let body = "";
@@ -98,18 +137,75 @@ const server = createServer(async (req, res) => {
         res.writeHead(400);
         res.end();
     }
-});
+};
+
+const server = proxyMode
+    ? createSecureServer({ cert: readFileSync(ca), key: readFileSync(key) }, respond)
+    : createServer(respond);
 
 server.listen(0, "127.0.0.1");
 await once(server, "listening");
 const port = (server.address() as { port: number }).port;
+const proxy = createServer((_request, response) => response.writeHead(405).end());
+const proxySockets = new Set<Duplex>();
+const tunnels: string[] = [];
+const rejectedTunnels: string[] = [];
+
+if (proxyMode) {
+    proxy.on("connect", (request, downstream, head) => {
+        if (request.url !== "native-model.invalid:443") {
+            rejectedTunnels.push(request.url ?? "");
+            downstream.end("HTTP/1.1 403 Forbidden\r\n\r\n");
+
+            return;
+        }
+
+        tunnels.push(request.url);
+        const upstream = connect(port, "127.0.0.1");
+
+        proxySockets.add(upstream);
+        proxySockets.add(downstream);
+        upstream.on("connect", () => {
+            downstream.write("HTTP/1.1 200 Connection Established\r\n\r\n");
+
+            if (head.length) {
+                upstream.write(head);
+            }
+
+            downstream.pipe(upstream).pipe(downstream);
+        });
+        upstream.on("error", () => downstream.destroy());
+        downstream.on("error", () => upstream.destroy());
+        downstream.on("close", () => {
+            upstream.destroy();
+            proxySockets.delete(downstream);
+        });
+        upstream.on("close", () => {
+            downstream.destroy();
+            proxySockets.delete(upstream);
+        });
+    });
+    proxy.listen(0, "127.0.0.1");
+    await once(proxy, "listening");
+    const address = `http://127.0.0.1:${(proxy.address() as { port: number }).port}`;
+
+    process.env.HTTP_PROXY = address;
+    process.env.HTTPS_PROXY = address;
+    process.env.NO_PROXY = "";
+    process.env.NODE_EXTRA_CA_CERTS = ca;
+    delete process.env.http_proxy;
+    delete process.env.https_proxy;
+    delete process.env.no_proxy;
+}
 
 writeFileSync(
     join(home, ".pi/agent/models.json"),
     JSON.stringify({
         providers: {
             "kernel-fixture": {
-                baseUrl: `http://127.0.0.1:${port}/v1`,
+                baseUrl: proxyMode
+                    ? "https://native-model.invalid/v1"
+                    : `http://127.0.0.1:${port}/v1`,
                 api: "openai-completions",
                 apiKey: "fixture-not-secret",
                 models: [
@@ -442,6 +538,28 @@ try {
 } finally {
     await kernel?.close();
     server.close();
+
+    for (const socket of proxySockets) {
+        socket.destroy();
+    }
+
+    proxy.close();
+
+    if (proxyMode && report.status === "passed") {
+        assert.ok(tunnels.length > 0, "Model traffic must traverse the test proxy");
+        assert.deepEqual(
+            rejectedTunnels,
+            [],
+            "Loopback credential gates must never reach the proxy",
+        );
+        report.proxy = {
+            httpsVerified: true,
+            explicitCaVerified: true,
+            modelTunnels: tunnels.length,
+            loopbackLeaks: rejectedTunnels.length,
+        };
+    }
+
     writeFileSync(join(root, "report.json"), JSON.stringify(report, null, 2), { mode: 0o600 });
     console.log(JSON.stringify({ ...report, evidence: join(root, "report.json") }));
 }

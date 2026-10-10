@@ -13,6 +13,18 @@ import {
     writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
+import { createRequire } from "node:module";
+
+// Reuse the hash-recorded Qoder reducer without requiring the optional installed kernel at module load.
+const { creditSummary, CREDIT_ENTRY } = createRequire(import.meta.url)(
+    "../../vendor/qoder/credits.mjs",
+) as {
+    CREDIT_ENTRY: string;
+    creditSummary(
+        entries: unknown[],
+        sessionId: string,
+    ): { credits: number | null; reported: number; unknown: number };
+};
 
 export type KernelBinding = {
     memberId: string;
@@ -25,9 +37,15 @@ export type KernelBinding = {
     home: string;
     workspace: string;
 };
+/** A confirmed pre-dispatch identity conflict, not an uncertain external outcome. */
+export class KernelRequestConflict extends Error {}
+
+export type KernelOperation = "prompt" | "handoff" | "fork" | "compact";
 export type KernelReceipt = {
     id: string;
     sessionId: string;
+    segmentId: string;
+    operation: KernelOperation;
     requestId: string;
     status: "dispatch-intent" | "settled" | "handled" | "rejected" | "unknown";
     binding: KernelBinding;
@@ -50,7 +68,7 @@ export function requireNoPendingKernel(data: string): void {
     const db = new DatabaseSync(path, { readOnly: true });
 
     try {
-        if (Number(db.prepare("PRAGMA user_version").get()!.user_version) !== 1) {
+        if (![1, 2].includes(Number(db.prepare("PRAGMA user_version").get()!.user_version))) {
             throw new Error("Unsupported kernel journal version");
         }
 
@@ -123,7 +141,7 @@ export class RotomJournal {
             this.#db = opened = new DatabaseSync(path);
             const version = Number(this.#db.prepare("PRAGMA user_version").get()!.user_version);
 
-            if (version !== 0 && version !== 1) {
+            if (![0, 1, 2].includes(version)) {
                 throw new Error("Unsupported kernel journal version");
             }
 
@@ -132,7 +150,23 @@ export class RotomJournal {
                 CREATE TABLE IF NOT EXISTS kernel_attempts (id TEXT PRIMARY KEY, session_id TEXT NOT NULL REFERENCES kernel_sessions(id), request_id TEXT NOT NULL, prompt_hash TEXT NOT NULL, binding TEXT NOT NULL, home TEXT NOT NULL, status TEXT NOT NULL, UNIQUE(session_id, request_id));
                 CREATE UNIQUE INDEX IF NOT EXISTS one_kernel_writer ON kernel_attempts(home) WHERE status IN ('dispatch-intent','unknown');
                 CREATE TABLE IF NOT EXISTS kernel_entries (kernel_session_id TEXT NOT NULL, entry_id TEXT NOT NULL, session_id TEXT NOT NULL, attempt_id TEXT NOT NULL REFERENCES kernel_attempts(id), body TEXT NOT NULL, digest TEXT NOT NULL, PRIMARY KEY(kernel_session_id,entry_id));
-                CREATE TABLE IF NOT EXISTS kernel_usage (kernel_session_id TEXT NOT NULL, entry_id TEXT NOT NULL, attempt_id TEXT NOT NULL, member_id TEXT NOT NULL, raw_usage TEXT, PRIMARY KEY(kernel_session_id,entry_id), FOREIGN KEY(kernel_session_id,entry_id) REFERENCES kernel_entries(kernel_session_id,entry_id)); PRAGMA user_version=1;`);
+                CREATE TABLE IF NOT EXISTS kernel_usage (kernel_session_id TEXT NOT NULL, entry_id TEXT NOT NULL, attempt_id TEXT NOT NULL, member_id TEXT NOT NULL, raw_usage TEXT, PRIMARY KEY(kernel_session_id,entry_id), FOREIGN KEY(kernel_session_id,entry_id) REFERENCES kernel_entries(kernel_session_id,entry_id));`);
+
+            if (version < 2) {
+                this.#db.exec(`BEGIN IMMEDIATE;
+                    ALTER TABLE kernel_sessions ADD COLUMN conversation_id TEXT;
+                    ALTER TABLE kernel_sessions ADD COLUMN parent_segment_id TEXT;
+                    UPDATE kernel_sessions SET conversation_id=id;
+                    ALTER TABLE kernel_attempts ADD COLUMN conversation_id TEXT;
+                    ALTER TABLE kernel_attempts ADD COLUMN operation TEXT NOT NULL DEFAULT 'prompt';
+                    UPDATE kernel_attempts SET conversation_id=session_id;
+                    CREATE TABLE kernel_heads (conversation_id TEXT PRIMARY KEY, session_id TEXT NOT NULL REFERENCES kernel_sessions(id));
+                    INSERT INTO kernel_heads SELECT id,id FROM kernel_sessions;
+                    CREATE UNIQUE INDEX one_conversation_request ON kernel_attempts(conversation_id,request_id);
+                    CREATE UNIQUE INDEX one_conversation_writer ON kernel_attempts(conversation_id) WHERE status IN ('dispatch-intent','unknown');
+                    PRAGMA user_version=2; COMMIT;`);
+            }
+
             // A cleanly released parent lock is not evidence that an unfinished dispatch never happened.
             this.#db.exec(
                 "UPDATE kernel_attempts SET status='unknown' WHERE status='dispatch-intent'",
@@ -165,9 +199,19 @@ export class RotomJournal {
             return;
         }
 
-        this.#db
-            .prepare("INSERT INTO kernel_sessions(id,binding) VALUES (?,?)")
-            .run(sessionId, JSON.stringify(normalized));
+        this.#db.exec("BEGIN IMMEDIATE");
+
+        try {
+            this.#db
+                .prepare("INSERT INTO kernel_sessions(id,binding,conversation_id) VALUES (?,?,?)")
+                .run(sessionId, JSON.stringify(normalized), sessionId);
+            this.#db.prepare("INSERT INTO kernel_heads VALUES (?,?)").run(sessionId, sessionId);
+            this.#db.exec("COMMIT");
+        } catch (error) {
+            this.#db.exec("ROLLBACK");
+
+            throw error;
+        }
     }
 
     #binding(binding: KernelBinding): KernelBinding {
@@ -238,7 +282,69 @@ export class RotomJournal {
         };
     }
 
-    session(id: string): {
+    hasConversation(id: string): boolean {
+        return (
+            this.#db.prepare("SELECT 1 FROM kernel_heads WHERE conversation_id=?").get(id) !==
+            undefined
+        );
+    }
+
+    /** Startup only, against the app's complete committed native-session set. Never discard execution evidence. */
+    reconcileOrphans(known: ReadonlySet<string>): void {
+        const orphans = this.#db
+            .prepare("SELECT conversation_id FROM kernel_heads")
+            .all()
+            .map((row) => String(row.conversation_id))
+            .filter((id) => !known.has(id));
+
+        this.#db.exec("BEGIN IMMEDIATE");
+
+        try {
+            for (const id of orphans) {
+                const attempts = this.#db
+                    .prepare("SELECT 1 FROM kernel_attempts WHERE conversation_id=? LIMIT 1")
+                    .get(id);
+                const segments = this.#db
+                    .prepare("SELECT id,session_file FROM kernel_sessions WHERE conversation_id=?")
+                    .all(id);
+
+                if (
+                    attempts ||
+                    segments.length !== 1 ||
+                    segments[0]!.id !== id ||
+                    segments[0]!.session_file !== null
+                ) {
+                    throw new Error(
+                        "Native execution exists without application metadata; restore/reconcile metadata before starting, never replay it",
+                    );
+                }
+
+                this.#db.prepare("DELETE FROM kernel_heads WHERE conversation_id=?").run(id);
+                this.#db.prepare("DELETE FROM kernel_sessions WHERE id=?").run(id);
+            }
+
+            this.#db.exec("COMMIT");
+        } catch (error) {
+            this.#db.exec("ROLLBACK");
+
+            throw error;
+        }
+    }
+
+    session(id: string) {
+        const head = this.#db
+            .prepare("SELECT session_id FROM kernel_heads WHERE conversation_id=?")
+            .get(id);
+
+        if (!head) {
+            throw new Error("Unknown kernel session");
+        }
+
+        return this.segment(String(head.session_id));
+    }
+
+    segment(id: string): {
+        segmentId: string;
         binding: KernelBinding;
         sessionFile?: string;
         kernelSessionId?: string;
@@ -250,6 +356,7 @@ export class RotomJournal {
         }
 
         return {
+            segmentId: id,
             binding: JSON.parse(String(row.binding)),
             ...(row.session_file
                 ? {
@@ -269,17 +376,32 @@ export class RotomJournal {
 
         return {
             id,
-            sessionId: String(row.session_id),
+            sessionId: String(row.conversation_id),
+            segmentId: String(row.session_id),
+            operation: row.operation as KernelOperation,
             requestId: String(row.request_id),
             status: row.status as KernelReceipt["status"],
             binding: JSON.parse(String(row.binding)),
         };
     }
 
-    existing(sessionId: string, requestId: string, prompt: string): KernelReceipt | undefined {
+    request(sessionId: string, requestId: string): KernelReceipt | undefined {
+        const row = this.#db
+            .prepare("SELECT id FROM kernel_attempts WHERE conversation_id=? AND request_id=?")
+            .get(sessionId, requestId);
+
+        return row ? this.receipt(String(row.id)) : undefined;
+    }
+
+    existing(
+        sessionId: string,
+        requestId: string,
+        prompt: string,
+        operation: KernelOperation = "prompt",
+    ): KernelReceipt | undefined {
         const row = this.#db
             .prepare(
-                "SELECT id,prompt_hash FROM kernel_attempts WHERE session_id=? AND request_id=?",
+                "SELECT id,prompt_hash,operation FROM kernel_attempts WHERE conversation_id=? AND request_id=?",
             )
             .get(sessionId, requestId);
 
@@ -287,15 +409,22 @@ export class RotomJournal {
             return undefined;
         }
 
-        if (row.prompt_hash !== digest(prompt)) {
-            throw new Error("Request identity cannot be reused with different content");
+        if (row.prompt_hash !== digest(prompt) || row.operation !== operation) {
+            throw new KernelRequestConflict(
+                "Request identity cannot be reused with different content",
+            );
         }
 
         return this.receipt(String(row.id));
     }
 
-    reserve(sessionId: string, requestId: string, prompt: string): KernelReceipt {
-        const existing = this.existing(sessionId, requestId, prompt);
+    reserve(
+        sessionId: string,
+        requestId: string,
+        prompt: string,
+        operation: "prompt" | "compact" | "fork" = "prompt",
+    ): KernelReceipt {
+        const existing = this.existing(sessionId, requestId, prompt, operation);
 
         if (existing) {
             return existing;
@@ -305,34 +434,118 @@ export class RotomJournal {
             throw new Error("Invalid request identity");
         }
 
-        const { binding } = this.session(sessionId);
+        const { binding, segmentId, sessionFile } = this.session(sessionId);
+
+        if (operation === "fork" && sessionFile) {
+            throw new Error("Fork seed requires a fresh native segment");
+        }
+
+        this.#unblocked(sessionId, binding.home);
+
+        return this.#intent(sessionId, segmentId, requestId, prompt, binding, operation);
+    }
+
+    /** Keep the old head until a new immutable segment's public seed is committed. */
+    handoff(
+        sessionId: string,
+        requestId: string,
+        expectedHead: string,
+        binding: KernelBinding,
+    ): KernelReceipt {
+        const normalized = this.#binding(binding);
+        const identity = JSON.stringify({ expectedHead, binding: normalized });
+        const existing = this.existing(sessionId, requestId, identity, "handoff");
+
+        if (existing) {
+            return existing;
+        }
+
+        if (!requestId || requestId.length > 128) {
+            throw new Error("Invalid request identity");
+        }
+
+        this.#db.exec("BEGIN IMMEDIATE");
+
+        try {
+            if (this.session(sessionId).segmentId !== expectedHead) {
+                throw new KernelRequestConflict(
+                    "Conversation head changed; refresh before handoff",
+                );
+            }
+
+            this.#unblocked(sessionId, normalized.home);
+            const segmentId = randomUUID();
+
+            this.#db
+                .prepare(
+                    "INSERT INTO kernel_sessions(id,binding,conversation_id,parent_segment_id) VALUES (?,?,?,?)",
+                )
+                .run(segmentId, JSON.stringify(normalized), sessionId, expectedHead);
+            const receipt = this.#intent(
+                sessionId,
+                segmentId,
+                requestId,
+                identity,
+                normalized,
+                "handoff",
+            );
+
+            this.#db.exec("COMMIT");
+
+            return receipt;
+        } catch (error) {
+            this.#db.exec("ROLLBACK");
+
+            throw error;
+        }
+    }
+
+    #unblocked(sessionId: string, home: string): void {
         const blocked = this.#db
             .prepare(
-                "SELECT id FROM kernel_attempts WHERE home=? AND status IN ('dispatch-intent','unknown')",
+                "SELECT id FROM kernel_attempts WHERE (home=? OR conversation_id=?) AND status IN ('dispatch-intent','unknown')",
             )
-            .get(binding.home);
+            .get(home, sessionId);
 
         if (blocked) {
-            throw new Error(
+            throw new KernelRequestConflict(
                 "Kernel account has a running or unknown attempt; reconcile it before any new dispatch",
             );
         }
+    }
 
+    #intent(
+        sessionId: string,
+        segmentId: string,
+        requestId: string,
+        prompt: string,
+        binding: KernelBinding,
+        operation: KernelOperation,
+    ): KernelReceipt {
         const id = randomUUID();
 
         // Synchronous FULL SQLite commit completes before any child launch or stdin send.
         this.#db
             .prepare(
-                "INSERT INTO kernel_attempts(id,session_id,request_id,prompt_hash,binding,home,status) VALUES (?,?,?,?,?,?,'dispatch-intent')",
+                "INSERT INTO kernel_attempts(id,session_id,request_id,prompt_hash,binding,home,status,conversation_id,operation) VALUES (?,?,?,?,?,?,'dispatch-intent',?,?)",
             )
-            .run(id, sessionId, requestId, digest(prompt), JSON.stringify(binding), binding.home);
+            .run(
+                id,
+                segmentId,
+                requestId,
+                digest(prompt),
+                JSON.stringify(binding),
+                binding.home,
+                sessionId,
+                operation,
+            );
 
         return this.receipt(id);
     }
 
     attach(id: string, sessionFile: string, kernelSessionId: string): void {
         const receipt = this.receipt(id),
-            session = this.session(receipt.sessionId);
+            session = this.segment(receipt.segmentId);
 
         if (receipt.status !== "dispatch-intent") {
             throw new Error("Attempt is not active");
@@ -347,18 +560,20 @@ export class RotomJournal {
 
         this.#db
             .prepare("UPDATE kernel_sessions SET session_file=?,kernel_session_id=? WHERE id=?")
-            .run(sessionFile, kernelSessionId, receipt.sessionId);
+            .run(sessionFile, kernelSessionId, receipt.segmentId);
     }
 
     finish(id: string, status: "settled" | "handled", entries: KernelEntry[]): KernelReceipt {
         const attempt = this.receipt(id),
-            session = this.session(attempt.sessionId);
+            session = this.segment(attempt.segmentId);
 
         if (attempt.status !== "dispatch-intent") {
             throw new Error("Attempt is not active");
         }
 
-        if (!session.kernelSessionId) {
+        const seed = attempt.operation === "handoff" || attempt.operation === "fork";
+
+        if (!session.kernelSessionId && !(seed && entries.length === 0)) {
             throw new Error("Missing kernel session binding");
         }
 
@@ -388,7 +603,7 @@ export class RotomJournal {
                     .prepare(
                         "SELECT digest FROM kernel_entries WHERE kernel_session_id=? AND entry_id=?",
                     )
-                    .get(session.kernelSessionId, entry.id);
+                    .get(session.kernelSessionId!, entry.id);
 
                 if (previous) {
                     if (previous.digest !== hash) {
@@ -400,7 +615,35 @@ export class RotomJournal {
 
                 this.#db
                     .prepare("INSERT INTO kernel_entries VALUES (?,?,?,?,?,?)")
-                    .run(session.kernelSessionId, entry.id, attempt.sessionId, id, body, hash);
+                    .run(session.kernelSessionId!, entry.id, attempt.segmentId, id, body, hash);
+
+                // Inherited context is not a new invocation by the receiving payer.
+                if (seed) {
+                    continue;
+                }
+
+                if (attempt.operation === "compact" && entry.type === "compaction") {
+                    if (
+                        typeof entry.summary !== "string" ||
+                        !entry.summary.trim() ||
+                        (entry.firstKeptEntryId !== null &&
+                            !seen.has(String(entry.firstKeptEntryId)))
+                    ) {
+                        throw new Error("Invalid persisted compaction");
+                    }
+
+                    terminalResponse = true;
+                    this.#db
+                        .prepare("INSERT INTO kernel_usage VALUES (?,?,?,?,?)")
+                        .run(
+                            session.kernelSessionId!,
+                            entry.id,
+                            id,
+                            attempt.binding.memberId,
+                            entry.usage ? JSON.stringify(entry.usage) : null,
+                        );
+                }
+
                 const message = entry.message as
                     | {
                           role?: string;
@@ -425,14 +668,14 @@ export class RotomJournal {
                         );
                     }
 
-                    terminalResponse = ["stop", "error", "aborted", "length"].includes(
-                        String(message.stopReason),
-                    );
+                    terminalResponse =
+                        attempt.operation === "prompt" &&
+                        ["stop", "error", "aborted", "length"].includes(String(message.stopReason));
                     // Preserve raw kernel usage. Pi's zero placeholders do not establish reported cost/credits.
                     this.#db
                         .prepare("INSERT INTO kernel_usage VALUES (?,?,?,?,?)")
                         .run(
-                            session.kernelSessionId,
+                            session.kernelSessionId!,
                             entry.id,
                             id,
                             attempt.binding.memberId,
@@ -441,7 +684,7 @@ export class RotomJournal {
                 }
             }
 
-            if (status === "settled" && !terminalResponse) {
+            if (status === "settled" && !terminalResponse && !seed) {
                 throw new Error(
                     "Settled event has no new persisted terminal response; outcome remains unknown",
                 );
@@ -449,7 +692,26 @@ export class RotomJournal {
 
             if (status === "handled" && entries.length === 0) {
                 // A fresh extension-handled prompt may never create JSONL. Keep its receipt, not a nonexistent resume path.
-                this.#forgetUnmaterialized(attempt.sessionId);
+                this.#forgetUnmaterialized(attempt.segmentId);
+            }
+
+            if (attempt.operation === "handoff") {
+                if (status !== "settled") {
+                    throw new Error("Handoff requires a committed public seed");
+                }
+
+                const target = this.#db
+                    .prepare("SELECT parent_segment_id FROM kernel_sessions WHERE id=?")
+                    .get(attempt.segmentId)!;
+                const changed = this.#db
+                    .prepare(
+                        "UPDATE kernel_heads SET session_id=? WHERE conversation_id=? AND session_id=?",
+                    )
+                    .run(attempt.segmentId, attempt.sessionId, target.parent_segment_id!);
+
+                if (changed.changes !== 1) {
+                    throw new Error("Conversation head changed during handoff");
+                }
             }
 
             this.#db.prepare("UPDATE kernel_attempts SET status=? WHERE id=?").run(status, id);
@@ -494,7 +756,7 @@ export class RotomJournal {
 
         try {
             if (unmaterialized) {
-                this.#forgetUnmaterialized(attempt.sessionId);
+                this.#forgetUnmaterialized(attempt.segmentId);
             }
 
             this.#db.prepare("UPDATE kernel_attempts SET status=? WHERE id=?").run(status, id);
@@ -511,10 +773,20 @@ export class RotomJournal {
     receipts(sessionId: string): KernelReceipt[] {
         return this.#db
             .prepare(
-                "SELECT id FROM kernel_attempts WHERE session_id=? ORDER BY rowid DESC LIMIT 100",
+                "SELECT id FROM kernel_attempts WHERE conversation_id=? ORDER BY rowid DESC LIMIT 100",
             )
             .all(sessionId)
             .map((row) => this.receipt(String(row.id)));
+    }
+
+    pendingConversation(sessionId: string): KernelReceipt | undefined {
+        const row = this.#db
+            .prepare(
+                "SELECT id FROM kernel_attempts WHERE conversation_id=? AND status IN ('dispatch-intent','unknown') LIMIT 1",
+            )
+            .get(sessionId);
+
+        return row ? this.receipt(String(row.id)) : undefined;
     }
 
     pending(memberId: string): KernelReceipt | undefined {
@@ -529,7 +801,9 @@ export class RotomJournal {
 
     entries(sessionId: string): { attemptId: string; entry: KernelEntry }[] {
         return this.#db
-            .prepare("SELECT attempt_id,body FROM kernel_entries WHERE session_id=? ORDER BY rowid")
+            .prepare(
+                "SELECT e.attempt_id,e.body FROM kernel_entries e JOIN kernel_attempts a ON a.id=e.attempt_id WHERE a.conversation_id=? AND a.operation<>'handoff' ORDER BY e.rowid",
+            )
             .all(sessionId)
             .map((row) => ({
                 attemptId: String(row.attempt_id),
@@ -537,12 +811,20 @@ export class RotomJournal {
             }));
     }
 
+    /** Full native entries for exactly one segment, including inherited seed entries. */
+    segmentEntries(segmentId: string): KernelEntry[] {
+        return this.#db
+            .prepare("SELECT body FROM kernel_entries WHERE session_id=? ORDER BY rowid")
+            .all(segmentId)
+            .map((row) => JSON.parse(String(row.body)));
+    }
+
     usage(
         sessionId: string,
     ): { memberId: string; attemptId: string; raw: unknown; costStatus: "unknown" }[] {
         return this.#db
             .prepare(
-                "SELECT u.* FROM kernel_usage u JOIN kernel_entries e USING(kernel_session_id,entry_id) WHERE e.session_id=? ORDER BY u.rowid",
+                "SELECT u.* FROM kernel_usage u JOIN kernel_attempts a ON a.id=u.attempt_id WHERE a.conversation_id=? ORDER BY u.rowid",
             )
             .all(sessionId)
             .map((row) => ({
@@ -551,6 +833,84 @@ export class RotomJournal {
                 raw: row.raw_usage ? JSON.parse(String(row.raw_usage)) : null,
                 costStatus: "unknown",
             }));
+    }
+
+    /** Reported subtotals, not a full account ledger. Imported seeds never become recipient charges. */
+    credits(sessionId: string) {
+        const groups = new Map<
+            string,
+            {
+                memberId: string;
+                nativeId: string;
+                entries: KernelEntry[];
+                attempts: Map<string, { status: string; observed: boolean }>;
+            }
+        >();
+        const rows = this.#db
+            .prepare(
+                `SELECT a.id,a.session_id,a.binding,a.status,s.kernel_session_id,e.body
+            FROM kernel_attempts a JOIN kernel_sessions s ON s.id=a.session_id
+            LEFT JOIN kernel_entries e ON e.attempt_id=a.id AND json_extract(e.body,'$.customType')=?
+            WHERE a.conversation_id=? AND a.operation IN ('prompt','compact') ORDER BY a.rowid,e.rowid`,
+            )
+            .all(CREDIT_ENTRY, sessionId);
+
+        for (const row of rows) {
+            const binding = JSON.parse(String(row.binding)) as KernelBinding;
+
+            if (binding.provider !== "qoder") {
+                continue;
+            }
+
+            const segmentId = String(row.session_id);
+            let group = groups.get(segmentId);
+
+            if (!group) {
+                group = {
+                    memberId: binding.memberId,
+                    nativeId: row.kernel_session_id ? String(row.kernel_session_id) : "",
+                    entries: [],
+                    attempts: new Map(),
+                };
+                groups.set(segmentId, group);
+            }
+
+            const attemptId = String(row.id);
+            const attempt = group.attempts.get(attemptId) ?? {
+                status: String(row.status),
+                observed: false,
+            };
+
+            group.attempts.set(attemptId, attempt);
+
+            if (row.body) {
+                const entry = JSON.parse(String(row.body)) as KernelEntry;
+
+                group.entries.push(entry);
+
+                if (
+                    entry.type === "custom" &&
+                    entry.data !== null &&
+                    typeof entry.data === "object" &&
+                    "sessionId" in entry.data &&
+                    entry.data.sessionId === group.nativeId
+                ) {
+                    attempt.observed = true;
+                }
+            }
+        }
+
+        return [...groups].map(([segmentId, group]) => ({
+            segmentId,
+            memberId: group.memberId,
+            ...creditSummary(group.entries, group.nativeId),
+            unmeteredOperations: [...group.attempts.values()].filter(
+                (attempt) =>
+                    !attempt.observed &&
+                    ["settled", "unknown", "dispatch-intent"].includes(attempt.status),
+            ).length,
+            partial: true as const,
+        }));
     }
 
     close(): void {

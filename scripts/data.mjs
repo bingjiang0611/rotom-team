@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/** Offline private backups. Restore never resurrects potentially rotated model refresh credentials. */
+/** Private backup/restore and read-only native inspection. Restore never resurrects rotated model refresh credentials. */
 import { createHash, randomUUID } from "node:crypto";
 import {
     existsSync,
@@ -14,6 +14,7 @@ import {
 } from "node:fs";
 import { basename, dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { DatabaseSync } from "node:sqlite";
 import { takeLock } from "../src/server/lock.ts";
 const digest = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const ignored = new Set(["harness.lock", "kernel.lock", "kernel-gates", "extensions/node_modules"]);
@@ -61,6 +62,104 @@ function copy(source, destination, records = [], prefix = "") {
     }
 
     return records;
+}
+
+/** Read-only operator evidence. A lease/PID or transcript binding never proves tool closure or business success. */
+export function inspectNative(data) {
+    const source = realpathSync(data);
+
+    if (!lstatSync(source).isDirectory() || lstatSync(source).mode & 0o077) {
+        throw new Error("Native inspection requires a private data directory.");
+    }
+
+    const database = join(source, "kernel.sqlite");
+    const lease = join(source, "kernel.lock");
+
+    for (const path of [database, `${database}-wal`, `${database}-shm`, lease]) {
+        const stat = lstatSync(path, { throwIfNoEntry: false });
+
+        if (stat && !stat.isFile()) {
+            throw new Error("Native inspection refuses non-regular journal or lease paths.");
+        }
+    }
+
+    const leasePresent = existsSync(lease);
+    let leaseOwnerPid = null;
+
+    if (leasePresent) {
+        if (lstatSync(lease).size > 32) {
+            throw new Error("Invalid native lease.");
+        }
+
+        const value = readFileSync(lease, "utf8").trim();
+
+        if (!/^[1-9][0-9]*$/.test(value) || !Number.isSafeInteger(Number(value))) {
+            throw new Error("Invalid native lease.");
+        }
+
+        leaseOwnerPid = Number(value);
+    }
+
+    const evidence = {
+        format: "rotom-team-native-inspection/v1",
+        leasePresent,
+        leaseOwnerPid,
+        toolClosure: "unknown",
+        replayPermitted: false,
+    };
+
+    if (!existsSync(database)) {
+        return { ...evidence, journalPresent: false };
+    }
+
+    const db = new DatabaseSync(database, { readOnly: true });
+
+    try {
+        db.exec("BEGIN");
+        const version = Number(db.prepare("PRAGMA user_version").get().user_version);
+
+        if (![1, 2].includes(version)) {
+            throw new Error("Unsupported native journal version; no migration was attempted.");
+        }
+
+        const pendingTotal = Number(
+            db
+                .prepare(
+                    "SELECT COUNT(*) AS count FROM kernel_attempts WHERE status IN ('dispatch-intent','unknown')",
+                )
+                .get().count,
+        );
+        const rows = db
+            .prepare(
+                `SELECT a.id, a.session_id, a.request_id, a.binding, a.status, s.session_file,
+            ${version === 2 ? "a.conversation_id, a.operation" : "a.session_id AS conversation_id, 'prompt' AS operation"}
+            FROM kernel_attempts a JOIN kernel_sessions s ON s.id=a.session_id
+            WHERE a.status IN ('dispatch-intent','unknown') ORDER BY a.id LIMIT 100`,
+            )
+            .all();
+        const pending = rows.map((row) => ({
+            attemptId: String(row.id),
+            conversationId: String(row.conversation_id),
+            segmentId: String(row.session_id),
+            requestId: String(row.request_id),
+            memberId: String(JSON.parse(row.binding).memberId),
+            operation: String(row.operation),
+            recordedStatus: String(row.status),
+            transcriptBound: row.session_file !== null,
+            outcome: "unresolved",
+        }));
+
+        return {
+            ...evidence,
+            journalPresent: true,
+            version,
+            pendingTotal,
+            pending,
+            truncated: pendingTotal > pending.length,
+        };
+    } finally {
+        db.close();
+    }
 }
 
 export function backup(data, destination) {
@@ -188,16 +287,20 @@ export function restore(archive, destination) {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
     const [command, input, output] = process.argv.slice(2);
 
-    if (!input || !output || !["backup", "restore"].includes(command)) {
-        throw new Error(
-            "Usage: node scripts/data.mjs backup|restore /absolute/source /absolute/destination",
+    if (command === "inspect-native" && input && !output) {
+        console.log(JSON.stringify(inspectNative(input), null, 2));
+    } else {
+        if (!input || !output || !["backup", "restore"].includes(command)) {
+            throw new Error(
+                "Usage: node scripts/data.mjs backup|restore /absolute/source /absolute/destination; or inspect-native /absolute/data",
+            );
+        }
+
+        (command === "backup" ? backup : restore)(input, output);
+        console.log(
+            command === "backup"
+                ? "Private backup verified. It contains credentials: do not upload or share it."
+                : "Backup restored. Model accounts require independent sign-in; old refresh tokens were not restored.",
         );
     }
-
-    (command === "backup" ? backup : restore)(input, output);
-    console.log(
-        command === "backup"
-            ? "Private backup verified. It contains credentials: do not upload or share it."
-            : "Backup restored. Model accounts require independent sign-in; old refresh tokens were not restored.",
-    );
 }

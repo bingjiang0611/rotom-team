@@ -17,6 +17,9 @@ import { PocketApp } from "../src/server/app.ts";
 import { createHandler } from "../src/server/http.ts";
 import { COOKIE } from "../src/server/auth.ts";
 import { ConfigurationDoc } from "../src/server/team-profiles.ts";
+import { NativeSetupDoc, NativeConfigurationsDoc } from "../src/server/team-kernel.ts";
+import { RotomJournal } from "../src/server/rotom-journal.ts";
+import { SessionsDoc } from "../src/server/docs.ts";
 import type { Runtime } from "../src/server/team-accounts.ts";
 import type { User } from "../src/server/config.ts";
 
@@ -44,7 +47,12 @@ const modelServer = createServer(async (req, res) => {
         assert.ok(!body.includes(secret));
         const input = JSON.parse(body);
 
-        assert.ok(body.includes("FROZEN_PERSONAL_CONTEXT"));
+        const compact = !input.tools?.length;
+
+        if (!compact) {
+            assert.ok(body.includes("FROZEN_PERSONAL_CONTEXT"));
+        }
+
         assert.ok(!body.includes("UNFROZEN_CONTEXT"));
         calls++;
         res.writeHead(200, { "Content-Type": "text/event-stream" });
@@ -55,8 +63,43 @@ const modelServer = createServer(async (req, res) => {
 
         emit({ role: "assistant" });
 
-        if (hold) {
+        if (compact) {
+            emit({ content: "APP_NATIVE_COMPACT: preserved the native-app.txt outcome" });
+            emit({}, "stop");
+            res.end("data: [DONE]\n\n");
+
+            return;
+        }
+
+        if (
+            hold ||
+            JSON.stringify(
+                input.messages.findLast((message: { role: string }) => message.role === "user")
+                    ?.content,
+            ).includes("NATIVE_UI_HOLD")
+        ) {
             emit({ content: "Waiting for cancellation" });
+
+            return;
+        }
+
+        if (JSON.stringify(input.messages).includes("Use newly activated profile.")) {
+            assert.ok(JSON.stringify(input.messages).includes("ACTIVATED_PROFILE_CONTEXT"));
+            assert.ok(!JSON.stringify(input.messages).includes("UNACTIVATED_PROFILE_CONTEXT"));
+            emit({ content: "APP_NATIVE_CONFIG_USED" });
+            emit({}, "stop");
+            res.end("data: [DONE]\n\n");
+
+            return;
+        }
+
+        if (
+            JSON.stringify(input.messages).includes("Continue the fork from its inherited summary.")
+        ) {
+            assert.ok(JSON.stringify(input.messages).includes("APP_NATIVE_COMPACT"));
+            emit({ content: "APP_NATIVE_FORK_FINISHED" });
+            emit({}, "stop");
+            res.end("data: [DONE]\n\n");
 
             return;
         }
@@ -211,6 +254,67 @@ try {
     assert.equal(calls, 0);
     report.invalidBackendRejectedWithoutFallback = true;
 
+    // Simulate a process loss after the application transaction but before the native binding commit.
+    const initial = app.commands.defaultModel(a);
+    const frozen = app.profiles.capture(a, workspace, []);
+    const planned = app.kernel!.binding(
+        a,
+        workspace,
+        frozen,
+        initial.model!,
+        initial.thinkingLevel ?? "off",
+    );
+    const gap = await app.harness.createConversation(
+        {
+            ownership: { kind: "ownerless" },
+            agent: { cwd: workspace },
+            init: async (tx, id) => {
+                (await tx.doc(ConfigurationDoc, id)).snapshot = frozen;
+                (await tx.doc(NativeSetupDoc, id)).binding = planned;
+                (await tx.doc(SessionsDoc)).items[String(id)] = {
+                    cwd: workspace,
+                    backend: "rotom",
+                    createdBy: a.id,
+                    createdAt: Date.now(),
+                    updatedAt: Date.now(),
+                };
+            },
+        },
+        context,
+    );
+
+    assert.equal(app.kernel!.executions.journal.hasConversation(String(gap.id)), false);
+    assert.equal(
+        (
+            await request(aliceToken, `c/${gap.id}/submit`, "POST", {
+                text: "Do not dispatch incomplete setup",
+                requestId: "gap",
+            })
+        ).status,
+        409,
+    );
+    assert.equal(calls, 0);
+    await app.close();
+    app = await open();
+    handler = createHandler({ app, listen: { host: "127.0.0.1", port: 0 }, restart: () => {} });
+    assert.deepEqual(app.kernel!.executions.journal.session(String(gap.id)).binding, planned);
+    assert.equal((await app.harness.snapshot(NativeSetupDoc, gap.id, context))?.bound, true);
+    assert.equal(app.kernel!.executions.journal.receipts(String(gap.id)).length, 0);
+    assert.equal(calls, 0);
+    report.creationGapRecoveredWithoutDispatch = true;
+    // Test-only loss of a proven unused binding. Once marked bound, startup must not silently recreate it.
+    app.kernel!.executions.journal.reconcileOrphans(new Set());
+    await app.close();
+    await assert.rejects(open(), /execution journal is missing/);
+    assert.equal(calls, 0);
+    const repairedFixture = new RotomJournal(folder);
+
+    repairedFixture.bind(String(gap.id), planned);
+    repairedFixture.close();
+    app = await open();
+    handler = createHandler({ app, listen: { host: "127.0.0.1", port: 0 }, restart: () => {} });
+    report.lostInitializedJournalFailsClosed = true;
+
     const created = await request(aliceToken, "sessions", "POST", {
         title: "Native app proof",
         backend: "rotom",
@@ -264,7 +368,7 @@ try {
         ).status,
         403,
     );
-    assert.equal((await request(aliceToken, `c/${id}/compact`, "POST", {})).status, 409);
+    assert.equal((await request(aliceToken, `c/${id}/compact`, "POST", {})).status, 400);
     await assert.rejects(
         app.commands.submit(id as never, a, { text: "legacy bypass", requestId: "legacy" }),
         /backend/,
@@ -276,9 +380,18 @@ try {
 
     assert.equal(((await duplicate.json()) as { id: string }).id, receipt.id);
     assert.equal(calls, 2);
+    // A pre-setup-document native session must use its original journal identity, not current defaults.
+    await app.harness.commit(async (tx) => {
+        const setup = await tx.doc(NativeSetupDoc, id as never);
+
+        delete setup.binding;
+        delete setup.bound;
+    }, context);
     await app.close();
     app = await open();
     handler = createHandler({ app, listen: { host: "127.0.0.1", port: 0 }, restart: () => {} });
+    assert.equal((await app.harness.snapshot(NativeSetupDoc, id as never, context))?.bound, true);
+    report.legacyNativeSetupBackfilledFromJournal = true;
     const restarted = await request(aliceToken, `c/${id}/submit`, "POST", {
         text: "Write the proof file.",
         requestId: "first",
@@ -297,6 +410,62 @@ try {
     assert.equal(resumedBody.status, "settled");
     assert.equal(calls, 3);
     assert.equal(app.kernel!.snapshot(id as never, owner(app)).usage.length, 3);
+    const admissionDriver = app.requireDriver.bind(app);
+
+    for (const change of ["stop", "handoff"]) {
+        const admissionEntered = Promise.withResolvers<void>();
+        const admissionRelease = Promise.withResolvers<void>();
+        let pauseAdmission = true;
+
+        app.requireDriver = async (...args) => {
+            await admissionDriver(...args);
+
+            if (pauseAdmission && args[0] === id) {
+                pauseAdmission = false;
+                admissionEntered.resolve();
+                await admissionRelease.promise;
+            }
+        };
+
+        try {
+            const stoppedAdmission = request(aliceToken, `c/${id}/submit`, "POST", {
+                requestId: `${change}-admission`,
+                text: "Never dispatch after admission state changes",
+            });
+
+            await admissionEntered.promise;
+            assert.equal(app.kernel!.isRunning(id as never), true);
+
+            if (change === "stop") {
+                assert.equal((await request(aliceToken, `c/${id}/abort`, "POST", {})).status, 200);
+            } else {
+                const expectedHead = app.kernel!.executions.journal.session(String(id)).segmentId;
+                const handoff = await request(aliceToken, `c/${id}/handoff`, "POST", {
+                    requestId: "admission-handoff",
+                    expectedHead,
+                });
+
+                assert.equal(handoff.status, 200);
+                assert.equal(((await handoff.json()) as { status: string }).status, "settled");
+                assert.notEqual(
+                    app.kernel!.executions.journal.session(String(id)).segmentId,
+                    expectedHead,
+                );
+            }
+
+            admissionRelease.resolve();
+            assert.equal((await stoppedAdmission).status, 409);
+            assert.equal(
+                app.kernel!.executions.journal.request(String(id), `${a.id}:${change}-admission`),
+                undefined,
+            );
+            assert.equal(calls, 3);
+        } finally {
+            admissionRelease.resolve();
+            app.requireDriver = admissionDriver;
+        }
+    }
+
     const snapshot = await app.harness.snapshot(ConfigurationDoc, id as never, context);
 
     await app.harness.commit(async (tx) => {
@@ -330,6 +499,31 @@ try {
     });
 
     await until(() => calls === 4, "native request began", 30000);
+
+    for (const operation of ["submit", "compact"]) {
+        const busyKey = `busy-${operation}`;
+
+        assert.equal(
+            (
+                await request(bob.token, `c/${bobSession.id}/${operation}`, "POST", {
+                    requestId: busyKey,
+                    ...(operation === "submit"
+                        ? { text: "Must not run" }
+                        : { instructions: "Must not run" }),
+                })
+            ).status,
+            409,
+        );
+        assert.equal(
+            app.kernel!.executions.journal.request(
+                String(bobSession.id),
+                `${bob.user.id}:${busyKey}`,
+            ),
+            undefined,
+        );
+    }
+
+    assert.equal(calls, 4);
     app.setAccess(owner(app), bob.user.id, { role: "viewer" });
     const stopped = await inFlight;
 
@@ -472,6 +666,584 @@ try {
     app = await open();
     handler = createHandler({ app, listen: { host: "127.0.0.1", port: 0 }, restart: () => {} });
     app.setAccess(owner(app), bob.user.id, { role: "guest" });
+    const observed = app.kernel!.snapshot(id as never, owner(app));
+
+    assert.equal(
+        (
+            await request(viewer.token, `c/${id}/handoff`, "POST", {
+                requestId: "viewer-handoff",
+                expectedHead: observed.segmentId,
+            })
+        ).status,
+        403,
+    );
+    assert.equal(
+        (
+            await request(bob.token, `c/${id}/handoff`, "POST", {
+                requestId: "borrow",
+                expectedHead: observed.segmentId,
+                memberId: a.id,
+            })
+        ).status,
+        400,
+    );
+    assert.equal(
+        (
+            await request(bob.token, `c/${id}/handoff`, "POST", {
+                requestId: "stale",
+                expectedHead: "stale",
+            })
+        ).status,
+        409,
+    );
+    const transfer = await request(bob.token, `c/${id}/handoff`, "POST", {
+        requestId: "takeover",
+        expectedHead: observed.segmentId,
+    });
+
+    assert.equal(transfer.status, 200, await transfer.clone().text());
+    const transferred = (await transfer.json()) as { id: string; status: string };
+
+    assert.equal(transferred.status, "settled");
+    const afterTransfer = app.kernel!.snapshot(id as never, app.config.userById(bob.user.id)!);
+
+    assert.equal(afterTransfer.memberId, bob.user.id);
+    assert.equal(afterTransfer.usage.length, 3);
+    assert.ok(afterTransfer.usage.every((row) => row.memberId === a.id));
+    assert.equal(calls, 4);
+    assert.equal(
+        (
+            (await (
+                await request(bob.token, `c/${id}/handoff`, "POST", {
+                    requestId: "takeover",
+                    expectedHead: observed.segmentId,
+                })
+            ).json()) as { id: string }
+        ).id,
+        transferred.id,
+    );
+    assert.equal(
+        (
+            (await (
+                await request(aliceToken, `c/${id}/submit`, "POST", {
+                    requestId: "first",
+                    text: "Write the proof file.",
+                })
+            ).json()) as { id: string }
+        ).id,
+        receipt.id,
+    );
+    assert.equal(
+        (await request(aliceToken, `c/${id}/compact`, "POST", { requestId: "foreign-compact" }))
+            .status,
+        403,
+    );
+    assert.equal(
+        (
+            await request(bob.token, `c/${id}/compact`, "POST", {
+                requestId: "bad-compact",
+                instructions: null,
+            })
+        ).status,
+        400,
+    );
+    const settingsFile = join(folder, "kernel-homes", bob.user.id, ".pi/agent/settings.json");
+    const settings = JSON.parse(readFileSync(settingsFile, "utf8"));
+
+    settings.compaction = { enabled: false, keepRecentTokens: 1, reserveTokens: 1024 };
+    writeFileSync(settingsFile, JSON.stringify(settings), { mode: 0o600 });
+    const compactResponse = await request(bob.token, `c/${id}/compact`, "POST", {
+        requestId: "compact",
+    });
+
+    assert.equal(compactResponse.status, 200);
+    const compactReceipt = (await compactResponse.json()) as { id: string; status: string };
+
+    assert.equal(compactReceipt.status, "settled", JSON.stringify(compactReceipt));
+    const afterCompact = app.kernel!.snapshot(id as never, app.config.userById(bob.user.id)!);
+
+    assert.equal(afterCompact.usage.length, 4);
+    assert.equal(afterCompact.usage.at(-1)?.memberId, bob.user.id);
+    // This history needs both the history summary and a split-turn prefix summary.
+    assert.equal(calls, 6);
+    assert.deepEqual(requestMembers.slice(-2), [bob.user.id, bob.user.id]);
+    assert.equal(
+        (
+            (await (
+                await request(bob.token, `c/${id}/compact`, "POST", { requestId: "compact" })
+            ).json()) as { id: string }
+        ).id,
+        compactReceipt.id,
+    );
+    assert.equal(calls, 6);
+    assert.equal(
+        (
+            await request(bob.token, `c/${id}/compact`, "POST", {
+                requestId: "compact",
+                instructions: "different",
+            })
+        ).status,
+        409,
+    );
+    assert.equal(
+        (
+            await request(bob.token, `c/${id}/handoff`, "POST", {
+                requestId: "takeover",
+                expectedHead: afterTransfer.segmentId,
+            })
+        ).status,
+        409,
+    );
+    assert.equal(calls, 6);
+    report.apiHandoffAndCompaction = true;
+    report.handoffHistoricalUsagePreserved = true;
+
+    const originalFile = app.kernel!.executions.journal.session(String(id)).sessionFile!;
+    const originalBytes = readFileSync(originalFile);
+    const countBeforeFork = app.sessions().length;
+    const forkBody = { requestId: "fork-once", expectedHead: afterCompact.segmentId };
+    const forkResponses = await Promise.all([
+        request(aliceToken, `c/${id}/fork`, "POST", forkBody),
+        request(aliceToken, `c/${id}/fork`, "POST", forkBody),
+    ]);
+
+    for (const response of forkResponses) {
+        assert.equal(response.status, 200, await response.clone().text());
+    }
+
+    const forked = (await forkResponses[0]!.json()) as {
+        id: number;
+        receipt: { id: string; status: string };
+    };
+
+    assert.deepEqual(await forkResponses[1]!.json(), forked);
+    assert.equal(forked.receipt.status, "settled");
+
+    const assertForkIdentity = async (requestId: string) => {
+        for (const operation of ["submit", "compact", "handoff", "configuration"]) {
+            const body =
+                operation === "submit"
+                    ? { requestId, text: "Must not run" }
+                    : operation === "compact"
+                      ? { requestId, instructions: "Must not run" }
+                      : operation === "configuration"
+                        ? { requestId, activate: "mine", expectedHead: afterCompact.segmentId }
+                        : { requestId, expectedHead: afterCompact.segmentId };
+
+            assert.equal(
+                (await request(aliceToken, `c/${id}/${operation}`, "POST", body)).status,
+                409,
+                `${operation} must not reuse ${requestId}`,
+            );
+            assert.equal(
+                (
+                    await request(
+                        aliceToken,
+                        `c/${id}/kernel-request?operation=${operation}&requestId=${requestId}`,
+                    )
+                ).status,
+                409,
+            );
+        }
+
+        assert.equal(
+            app.kernel!.executions.journal.request(String(id), `${a.id}:${requestId}`),
+            undefined,
+        );
+    };
+
+    await assertForkIdentity("fork-once");
+    assert.equal(
+        (
+            await request(aliceToken, `c/${id}/fork`, "POST", {
+                requestId: "first",
+                expectedHead: afterCompact.segmentId,
+            })
+        ).status,
+        409,
+    );
+    assert.equal(
+        (await request(aliceToken, `c/${id}/kernel-request?operation=fork&requestId=first`)).status,
+        409,
+    );
+    assert.deepEqual(
+        await (
+            await request(aliceToken, `c/${id}/kernel-request?operation=fork&requestId=fork-once`)
+        ).json(),
+        { targetId: forked.id, receipt: forked.receipt },
+    );
+    assert.deepEqual(
+        await (
+            await request(bob.token, `c/${id}/kernel-request?operation=fork&requestId=fork-once`)
+        ).json(),
+        { targetId: null, receipt: null },
+    );
+    assert.equal(
+        (await request(aliceToken, `c/${id}/kernel-request?operation=compact&requestId=first`))
+            .status,
+        409,
+    );
+    assert.equal(app.sessions().length, countBeforeFork + 1);
+    const forkSnapshot = app.kernel!.snapshot(forked.id as never, owner(app));
+
+    assert.equal(forkSnapshot.initializing, false);
+    assert.equal(forkSnapshot.memberId, a.id);
+    assert.equal(forkSnapshot.usage.length, 0);
+    assert.deepEqual(app.profiles.snapshot(forked.id as never), app.profiles.snapshot(id as never));
+    assert.equal(
+        app.sessionMeta(forked.id as never)?.projectId,
+        app.sessionMeta(id as never)?.projectId,
+    );
+    assert.notEqual(
+        app.kernel!.executions.journal.session(String(forked.id)).sessionFile,
+        originalFile,
+    );
+    assert.equal(calls, 6);
+    assert.equal(
+        (
+            await request(aliceToken, `c/${id}/fork`, "POST", {
+                ...forkBody,
+                expectedHead: "changed",
+            })
+        ).status,
+        409,
+    );
+    assert.equal(
+        (await request(aliceToken, `c/${id}/fork`, "POST", { ...forkBody, memberId: bob.user.id }))
+            .status,
+        400,
+    );
+    await app.close();
+    app = await open();
+    handler = createHandler({ app, listen: { host: "127.0.0.1", port: 0 }, restart: () => {} });
+    assert.deepEqual(
+        await (await request(aliceToken, `c/${id}/fork`, "POST", forkBody)).json(),
+        forked,
+    );
+    const forkReply = await request(aliceToken, `c/${forked.id}/submit`, "POST", {
+        requestId: "fork-followup",
+        text: "Continue the fork from its inherited summary.",
+    });
+
+    assert.equal(forkReply.status, 200);
+    assert.equal(((await forkReply.json()) as { status: string }).status, "settled");
+    assert.equal(calls, 7);
+    assert.deepEqual(
+        app.kernel!.snapshot(forked.id as never, owner(app)).usage.map((row) => row.memberId),
+        [a.id],
+    );
+    assert.deepEqual(readFileSync(originalFile), originalBytes);
+    report.apiForkIdempotencyConfigurationAndPayer = true;
+
+    // Fork permission alone permits a public-history clone, never a paid continuation.
+    project = app.projects.save(
+        owner(app),
+        { ...project, members: { [carla.user.id]: { view: true, continue: false, fork: true } } },
+        (key) => !!app.config.userById(key),
+    );
+    await app.projectsChanged();
+    const carlaHead = app.kernel!.snapshot(
+        scoped.id,
+        app.config.userById(carla.user.id)!,
+    ).segmentId;
+    const sameMemberFork = await request(carla.token, `c/${scoped.id}/fork`, "POST", {
+        requestId: "fork-only",
+        expectedHead: carlaHead,
+    });
+
+    assert.equal(sameMemberFork.status, 200, await sameMemberFork.clone().text());
+    const sameFork = (await sameMemberFork.json()) as { id: number; receipt: { status: string } };
+
+    assert.equal(sameFork.receipt.status, "settled");
+    assert.equal(
+        (
+            await request(carla.token, `c/${sameFork.id}/submit`, "POST", {
+                requestId: "denied-continue",
+                text: "Not authorized",
+            })
+        ).status,
+        403,
+    );
+    project = app.projects.save(
+        owner(app),
+        { ...project, members: { [carla.user.id]: { view: true, continue: true, fork: false } } },
+        (key) => !!app.config.userById(key),
+    );
+    await app.projectsChanged();
+    const beforeDeniedFork = app.sessions().length;
+
+    assert.equal(
+        (
+            await request(carla.token, `c/${scoped.id}/fork`, "POST", {
+                requestId: "denied-fork",
+                expectedHead: carlaHead,
+            })
+        ).status,
+        403,
+    );
+    assert.equal(app.sessions().length, beforeDeniedFork);
+    assert.equal(calls, 7);
+    report.forkAndContinuePermissionsIndependent = true;
+
+    const beforeConfig = app.kernel!.executions.journal.session(String(forked.id));
+    const configSourceBytes = readFileSync(beforeConfig.sessionFile!);
+    const originalConfiguration = app.configuration(forked.id as never)!;
+    const activateBody = {
+        activate: "mine",
+        requestId: "activate-once",
+        expectedHead: beforeConfig.segmentId,
+    };
+
+    assert.equal(
+        (await request(bob.token, `c/${forked.id}/configuration`, "POST", activateBody)).status,
+        403,
+    );
+    assert.equal(
+        (
+            await request(aliceToken, `c/${forked.id}/configuration`, "POST", {
+                ...activateBody,
+                activate: "other",
+            })
+        ).status,
+        400,
+    );
+    const activationSkill = join(workspace, "activation-skill");
+
+    mkdirSync(activationSkill);
+    writeFileSync(
+        join(activationSkill, "SKILL.md"),
+        "---\nname: activation-skill\ndescription: Verify immutable native configuration snapshots.\n---\nUse this skill only when requested.\n",
+    );
+    app.profiles.save(owner(app), {
+        name: "Activated",
+        instructions: "FROZEN_PERSONAL_CONTEXT\nACTIVATED_PROFILE_CONTEXT",
+        skillDirectories: [activationSkill],
+    });
+    const requireDriver = app.requireDriver.bind(app);
+    let release!: () => void, arrived!: () => void;
+    const gate = new Promise<void>((resolve) => {
+        release = resolve;
+    });
+    const arrival = new Promise<void>((resolve) => {
+        arrived = resolve;
+    });
+    let blockAdmission = true;
+
+    app.requireDriver = async (...args) => {
+        if (blockAdmission) {
+            blockAdmission = false;
+            arrived();
+            await gate;
+        }
+
+        return requireDriver(...args);
+    };
+
+    let activatedResponse: Response;
+
+    try {
+        const activating = request(
+            aliceToken,
+            `c/${forked.id}/configuration`,
+            "POST",
+            activateBody,
+        );
+
+        await arrival;
+        const collision = await request(aliceToken, `c/${forked.id}/submit`, "POST", {
+            requestId: activateBody.requestId,
+            text: "Must never be dispatched.",
+        });
+
+        assert.equal(collision.status, 409);
+        assert.equal(
+            app.kernel!.executions.journal.request(
+                String(forked.id),
+                `${a.id}:${activateBody.requestId}`,
+            ),
+            undefined,
+        );
+        release();
+        activatedResponse = await activating;
+    } finally {
+        release();
+        app.requireDriver = requireDriver;
+    }
+
+    report.concurrentConfigurationIdentityProtected = true;
+
+    assert.equal(activatedResponse.status, 200, await activatedResponse.clone().text());
+    const activated = (await activatedResponse.json()) as {
+        receipt: { id: string; status: string; operation: string };
+    };
+
+    assert.equal(activated.receipt.status, "settled");
+    assert.equal(activated.receipt.operation, "configuration");
+    const activeConfiguration = app.configuration(forked.id as never)!;
+
+    assert.notEqual(activeConfiguration.digest, originalConfiguration.digest);
+    assert.equal(app.profiles.snapshot(forked.id as never)!.digest, originalConfiguration.digest);
+    assert.deepEqual(readFileSync(beforeConfig.sessionFile!), configSourceBytes);
+    assert.deepEqual(
+        app.kernel!.executions.journal.segment(beforeConfig.segmentId).binding,
+        beforeConfig.binding,
+    );
+    assert.equal(app.kernel!.snapshot(forked.id as never, owner(app)).usage.length, 1);
+    assert.equal(calls, 7);
+    assert.equal(activeConfiguration.skills.length, 1);
+    const sameContentBody = {
+        activate: "mine",
+        requestId: "same-content-gap",
+        expectedHead: app.kernel!.snapshot(forked.id as never, owner(app)).segmentId,
+    };
+    const handoff = app.kernel!.executions.handoff.bind(app.kernel!.executions);
+
+    let seedReached!: () => void, releaseSeed!: () => void;
+    const seedArrival = new Promise<void>((resolve) => {
+        seedReached = resolve;
+    });
+    const seedGate = new Promise<void>((resolve) => {
+        releaseSeed = resolve;
+    });
+
+    app.kernel!.executions.handoff = async () => {
+        seedReached();
+        await seedGate;
+
+        throw new Error("Fixture: stop after configuration staging, before journal intent");
+    };
+
+    try {
+        const staging = request(
+            aliceToken,
+            `c/${forked.id}/configuration`,
+            "POST",
+            sameContentBody,
+        );
+
+        await seedArrival;
+        assert.deepEqual(
+            await (
+                await request(
+                    aliceToken,
+                    `c/${forked.id}/kernel-request?operation=configuration&requestId=same-content-gap`,
+                )
+            ).json(),
+            { targetId: forked.id, receipt: null },
+        );
+        releaseSeed();
+        assert.equal((await staging).status, 500);
+        assert.deepEqual(
+            await (
+                await request(
+                    aliceToken,
+                    `c/${forked.id}/kernel-request?operation=configuration&requestId=same-content-gap`,
+                )
+            ).json(),
+            { targetId: forked.id, receipt: null, preparedOnly: true },
+        );
+        assert.deepEqual(app.configuration(forked.id as never), activeConfiguration);
+    } finally {
+        releaseSeed();
+        app.kernel!.executions.handoff = handoff;
+    }
+
+    app.profiles.save(owner(app), {
+        name: "Not activated",
+        instructions: "FROZEN_PERSONAL_CONTEXT\nUNACTIVATED_PROFILE_CONTEXT",
+        skillDirectories: [],
+    });
+    await app.close();
+    app = await open();
+    handler = createHandler({ app, listen: { host: "127.0.0.1", port: 0 }, restart: () => {} });
+    assert.deepEqual(app.configuration(forked.id as never), activeConfiguration);
+    assert.deepEqual(
+        await (
+            await request(aliceToken, `c/${forked.id}/configuration`, "POST", sameContentBody)
+        ).json(),
+        { receipt: null },
+    );
+    assert.deepEqual(app.configuration(forked.id as never), activeConfiguration);
+    report.sameDigestStagingPreservesSnapshotIdentity = true;
+    assert.deepEqual(
+        await (
+            await request(aliceToken, `c/${forked.id}/configuration`, "POST", activateBody)
+        ).json(),
+        activated,
+    );
+    assert.equal(
+        (
+            await request(aliceToken, `c/${forked.id}/configuration`, "POST", {
+                ...activateBody,
+                expectedHead: "changed",
+            })
+        ).status,
+        409,
+    );
+    assert.deepEqual(
+        await (
+            await request(
+                aliceToken,
+                `c/${forked.id}/kernel-request?operation=configuration&requestId=activate-once`,
+            )
+        ).json(),
+        { targetId: forked.id, receipt: activated.receipt },
+    );
+    const configReply = await request(aliceToken, `c/${forked.id}/submit`, "POST", {
+        requestId: "config-use",
+        text: "Use newly activated profile.",
+    });
+
+    assert.equal(configReply.status, 200);
+    assert.equal(((await configReply.json()) as { status: string }).status, "settled");
+    assert.equal(calls, 8);
+    const activeHead = app.kernel!.snapshot(forked.id as never, owner(app)).segmentId;
+    const configForkResponse = await request(aliceToken, `c/${forked.id}/fork`, "POST", {
+        requestId: "config-fork",
+        expectedHead: activeHead,
+    });
+
+    assert.equal(configForkResponse.status, 200, await configForkResponse.clone().text());
+    const configFork = (await configForkResponse.json()) as { id: number };
+
+    assert.equal(app.configuration(configFork.id as never)!.digest, activeConfiguration.digest);
+    const staged = app.profiles.capture(owner(app), workspace, []);
+
+    await app.harness.commit(async (tx) => {
+        const configurations = await tx.doc(NativeConfigurationsDoc, forked.id as never);
+
+        configurations.snapshots[staged.digest] = staged;
+        configurations.requests[`${a.id}:config-gap`] = {
+            expectedHead: activeHead,
+            binding: {
+                ...app.kernel!.executions.journal.session(String(forked.id)).binding,
+                configurationDigest: staged.digest,
+            },
+        };
+    }, context);
+    report.nativeConfigurationActivationAndFork = true;
+
+    // App creation is committed, but no seed intent exists: a restart must not silently execute the seed.
+    const forkGap = await app.commands.createSession(
+        owner(app),
+        { backend: "rotom", cwd: workspace },
+        {
+            sourceId: id as never,
+            expectedHead: afterCompact.segmentId,
+            requestId: `${a.id}:fork-gap`,
+        },
+    );
+
+    assert.equal(app.kernel!.snapshot(forkGap.id, owner(app)).initializing, true);
+    assert.equal(
+        (
+            await request(aliceToken, `c/${forkGap.id}/submit`, "POST", {
+                requestId: "no-empty-fork",
+                text: "Not until seeded",
+            })
+        ).status,
+        409,
+    );
     const legacy = await app.commands.createSession(owner(app), {
         title: "Existing engine baseline",
     });
@@ -487,11 +1259,90 @@ try {
     app = await open();
     handler = createHandler({ app, listen: { host: "127.0.0.1", port: 0 }, restart: () => {} });
     assert.equal(app.kernel!.executions.journal.pending(bob.user.id)?.status, "unknown");
+    assert.equal(app.kernel!.snapshot(forkGap.id, owner(app)).initializing, true);
+    assert.deepEqual(
+        await (
+            await request(aliceToken, `c/${id}/fork`, "POST", {
+                requestId: "fork-gap",
+                expectedHead: afterCompact.segmentId,
+            })
+        ).json(),
+        { id: Number(forkGap.id), receipt: null },
+    );
+    assert.equal(app.kernel!.executions.journal.receipts(String(forkGap.id)).length, 0);
+    const unknownHead = app.kernel!.snapshot(bobSession.id, owner(app)).segmentId;
+    const beforeUnknownFork = app.sessions().length;
+
+    assert.equal(
+        (
+            await request(aliceToken, `c/${bobSession.id}/fork`, "POST", {
+                requestId: "unknown-source",
+                expectedHead: unknownHead,
+            })
+        ).status,
+        409,
+    );
+    assert.equal(app.sessions().length, beforeUnknownFork);
+    report.forkGapAndUnknownSourceNotReplayed = true;
+    assert.equal(app.configuration(forked.id as never)!.digest, activeConfiguration.digest);
+    await assertForkIdentity("fork-once");
+    await assertForkIdentity("fork-gap");
+    assert.deepEqual(
+        await (
+            await request(aliceToken, `c/${forked.id}/configuration`, "POST", {
+                activate: "mine",
+                requestId: "config-gap",
+                expectedHead: activeHead,
+            })
+        ).json(),
+        { receipt: null },
+    );
+    assert.equal(
+        app.kernel!.executions.journal.request(String(forked.id), `${a.id}:config-gap`),
+        undefined,
+    );
+    report.configurationGapNotReplayed = true;
+    assert.deepEqual(
+        await (
+            await request(aliceToken, `c/${id}/kernel-request?operation=fork&requestId=fork-gap`)
+        ).json(),
+        { targetId: Number(forkGap.id), receipt: null, preparedOnly: true },
+    );
+    assert.equal(
+        (
+            (await (
+                await request(
+                    bob.token,
+                    `c/${bobSession.id}/kernel-request?operation=submit&requestId=intent-only`,
+                )
+            ).json()) as { receipt: { status: string } }
+        ).receipt.status,
+        "unknown",
+    );
+    const unknownReadback = (await (
+        await request(
+            bob.token,
+            `c/${bobSession.id}/kernel-request?operation=submit&requestId=intent-only`,
+        )
+    ).json()) as { preparedOnly?: boolean };
+
+    assert.equal(unknownReadback.preparedOnly, undefined);
+    assert.deepEqual(
+        await (
+            await request(
+                aliceToken,
+                `c/${forked.id}/kernel-request?operation=configuration&requestId=config-gap`,
+            )
+        ).json(),
+        { targetId: forked.id, receipt: null, preparedOnly: true },
+    );
+    report.preparedOnlyReadbackExcludesLiveAndUnknown = true;
+    report.readOnlyExactReceiptLookup = true;
     await assert.rejects(
         app.execution.admit(legacy.id, app.config.userById(bob.user.id)!),
         /active or unknown/,
     );
-    assert.equal(calls, 4);
+    assert.equal(calls, 8);
     assert.equal(legacyCalls, 0);
     Object.assign(report, {
         status: "passed",
@@ -511,7 +1362,18 @@ try {
         loopbackRequests: calls,
     });
 
-    if (process.argv.includes("--serve")) {
+    if (process.argv.includes("--serve") || process.argv.includes("--ui")) {
+        // Exercise real native compaction on a small UI fixture, without changing product defaults.
+        const uiSettingsPath = join(
+            app.kernel!.executions.journal.session(String(forked.id)).binding.home,
+            ".pi",
+            "agent",
+            "settings.json",
+        );
+        const uiSettings = JSON.parse(readFileSync(uiSettingsPath, "utf8"));
+
+        uiSettings.compaction = { enabled: false, keepRecentTokens: 1, reserveTokens: 1024 };
+        writeFileSync(uiSettingsPath, JSON.stringify(uiSettings), { mode: 0o600 });
         bootstrap = { token: app.config.addDevice(owner(app).id).token, id };
         const uiUrl = `http://rotom-team-kernel-proof.localhost:${(server.address() as { port: number }).port}/kernel-proof-bootstrap`;
 
@@ -526,7 +1388,26 @@ try {
                 evidence: join(realpathSync(root), "team-kernel-report.json"),
             }),
         );
-        await Promise.race([once(process, "SIGTERM"), once(process, "SIGINT")]);
+
+        if (process.argv.includes("--ui")) {
+            const { nativeUiProof } = await import("./kernel-ui-proof.ts");
+
+            report.nativeUi = await nativeUiProof({
+                root: realpathSync(root),
+                base: `http://127.0.0.1:${(server.address() as { port: number }).port}`,
+                id: Number(id),
+                memberId: owner(app).id,
+                configurationDigest: app.configuration(id as never)!.digest,
+                busyId: Number(forked.id),
+            });
+            assert.equal(calls, 8, "UI inspection/dismissal must not dispatch inference");
+            assert.equal(
+                app.kernel!.executions.journal.request(String(forkGap.id), `${a.id}:fork-gap`),
+                undefined,
+            );
+        } else {
+            await Promise.race([once(process, "SIGTERM"), once(process, "SIGINT")]);
+        }
     }
 } finally {
     await app.close();

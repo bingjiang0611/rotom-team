@@ -6,6 +6,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { join, normalize, sep } from "node:path";
 import { Auth } from "./auth.ts";
 import { describe, HttpError } from "./errors.ts";
+import { KernelRequestConflict } from "./rotom-journal.ts";
 import { createApi } from "./http/api.ts";
 import { artifact } from "./http/artifacts.ts";
 import { serveApp, serveFile, VENDOR, WEB } from "./http/assets.ts";
@@ -76,7 +77,12 @@ export function createHandler(options: HttpOptions) {
 
             return serveFile(response, file);
         } catch (error) {
-            const status = error instanceof HttpError ? error.status : 500;
+            const status =
+                error instanceof HttpError
+                    ? error.status
+                    : error instanceof KernelRequestConflict
+                      ? 409
+                      : 500;
 
             if (status === 500) {
                 console.error(error);

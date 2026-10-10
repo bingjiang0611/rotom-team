@@ -267,7 +267,7 @@ export class Workspace {
             join(this.#app.dataDir, "uploads", String(each)),
         );
         const snapshotRoots = this.#lineage(id).flatMap(
-            (each) => this.#app.profiles.snapshot(each)?.skills.map((skill) => skill.baseDir) ?? [],
+            (each) => this.#app.configuration(each)?.skills.map((skill) => skill.baseDir) ?? [],
         );
         const roots = [cwd, ...uploads, ...snapshotRoots]
             .map(real)
@@ -313,8 +313,8 @@ export class Workspace {
                 !inside(join(data, "uploads")) &&
                 !inside(join(data, "worktrees")) &&
                 !this.#lineage(id).some((each) =>
-                    this.#app.profiles
-                        .snapshot(each)
+                    this.#app
+                        .configuration(each)
                         ?.skills.some((skill) => inside(real(skill.baseDir))),
                 ))
         ) {

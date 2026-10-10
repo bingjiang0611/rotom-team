@@ -26,6 +26,7 @@ import type {
 import type { PocketApp } from "./app.ts";
 import { TeamRunDoc } from "./team-execution.ts";
 import { ConfigurationDoc } from "./team-profiles.ts";
+import { NativeForksDoc, NativeSetupDoc, type NativeForkPlan } from "./team-kernel.ts";
 import type { User } from "./config.ts";
 import {
     AuthorsDoc,
@@ -147,6 +148,7 @@ export class Commands {
     async createSession(
         user: User,
         request: { cwd?: string; title?: string; worktree?: unknown; backend?: unknown },
+        fork?: NativeForkPlan,
     ): Promise<{ id: ConversationId }> {
         const app = this.#app;
 
@@ -175,11 +177,25 @@ export class Commands {
             optionalText(request.cwd, "cwd") ?? app.defaultCwd,
         );
 
-        const project = app.projects.forFolder(folder);
+        const projectId = fork
+            ? app.sessionMeta(fork.sourceId)?.projectId
+            : app.projects.forFolder(folder)?.id;
 
-        app.projects.require(user, project?.id, "continue");
+        if (fork) {
+            this.requireForkable(fork.sourceId, user, "rotom");
+
+            if (!native || request.worktree || folder !== app.sessionMeta(fork.sourceId)?.cwd) {
+                throw new HttpError(
+                    400,
+                    "Native fork must preserve its source workspace and backend.",
+                );
+            }
+        } else {
+            app.projects.require(user, projectId, "continue");
+        }
+
         await app.accounts.forUser(user);
-        const initial = this.#defaultModel(user);
+        const initial = this.defaultModel(user);
 
         if (native) {
             if (!initial.model) {
@@ -207,17 +223,39 @@ export class Commands {
                                 : { thinkingLevel: initial.thinkingLevel }),
                         },
                         init: async (tx, id) => {
-                            const snapshot = app.profiles.capture(
-                                user,
-                                cwd,
-                                app.settings.getSkillPaths(),
-                            );
+                            const snapshot = fork
+                                ? structuredClone(app.configuration(fork.sourceId))
+                                : app.profiles.capture(user, cwd, app.settings.getSkillPaths());
+
+                            if (!snapshot) {
+                                throw new HttpError(
+                                    409,
+                                    "Source frozen configuration is unavailable.",
+                                );
+                            }
+
+                            if (fork) {
+                                this.requireForkable(fork.sourceId, user, "rotom");
+                                const requests = await tx.doc(NativeForksDoc, fork.sourceId);
+
+                                if (requests.items[fork.requestId]) {
+                                    throw new HttpError(
+                                        409,
+                                        "Fork request already allocated; read its existing target.",
+                                    );
+                                }
+
+                                requests.items[fork.requestId] = {
+                                    id,
+                                    expectedHead: fork.expectedHead,
+                                };
+                                (await tx.doc(NativeSetupDoc, id)).seed = fork;
+                            }
 
                             (await tx.doc(ConfigurationDoc, id)).snapshot = snapshot;
 
                             if (native) {
-                                app.kernel!.bind(
-                                    id,
+                                (await tx.doc(NativeSetupDoc, id)).binding = app.kernel!.binding(
                                     user,
                                     cwd,
                                     snapshot,
@@ -231,7 +269,8 @@ export class Commands {
                             sessions.items[String(id)] = {
                                 cwd,
                                 ...(native ? { backend: "rotom" as const } : {}),
-                                ...(project ? { projectId: project.id } : {}),
+                                ...(fork ? { forkedFrom: { id: Number(fork.sourceId) } } : {}),
+                                ...(projectId ? { projectId } : {}),
                                 createdAt: now,
                                 updatedAt: now,
                                 createdBy: user.id,
@@ -242,6 +281,10 @@ export class Commands {
                     },
                     context,
                 );
+
+                if (native) {
+                    await app.kernel!.ensureBound(conversation.id);
+                }
 
                 return { id: conversation.id };
             },
@@ -343,7 +386,7 @@ export class Commands {
     }
 
     /** The model a new session starts with: the one last chosen here, else Pi's default, else any available one. */
-    #defaultModel(user: User): { model?: ModelRef; thinkingLevel?: ModelThinkingLevel } {
+    defaultModel(user: User): { model?: ModelRef; thinkingLevel?: ModelThinkingLevel } {
         const { accounts, settings } = this.#app;
         const available = accounts.available(user);
         const pick = (provider: string | undefined, id: string | undefined) =>
@@ -1302,12 +1345,16 @@ export class Commands {
 
     /** Forks are new sessions: who may start one may fork, from a session they can see. */
     #requireForkable(id: ConversationId, user: User): void {
+        this.requireForkable(id, user, "durable");
+    }
+
+    requireForkable(id: ConversationId, user: User, backend: "durable" | "rotom"): void {
         const app = this.#app;
 
-        if (app.sessionMeta(app.rootOf(id))?.backend === "rotom") {
+        if ((app.sessionMeta(app.rootOf(id))?.backend ?? "durable") !== backend) {
             throw new HttpError(
                 409,
-                "Native history fork is not implemented; no Durable fallback is allowed.",
+                "Fork must preserve the source execution backend; no fallback is allowed.",
             );
         }
 

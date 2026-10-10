@@ -200,7 +200,7 @@ export class RotomRpc {
         return this.#send(command);
     }
 
-    #send(command: RpcRecord): Promise<unknown> {
+    #send(command: RpcRecord, timeoutMs = this.#timeout): Promise<unknown> {
         if (this.#failure) {
             return Promise.reject(this.#failure);
         }
@@ -219,7 +219,7 @@ export class RotomRpc {
         return new Promise((resolve, reject) => {
             const timer = setTimeout(
                 () => this.#fail("RPC acknowledgement deadline exceeded"),
-                this.#timeout,
+                timeoutMs,
             );
 
             this.#pending.set(id, { command: command.type, resolve, reject, timer });
@@ -282,6 +282,25 @@ export class RotomRpc {
         } finally {
             clearTimeout(timer);
             detach();
+            this.#busy = false;
+        }
+    }
+
+    /** Unlike prompt admission, compact's RPC response arrives after the model operation finishes. */
+    async compact(customInstructions: string, timeoutMs = 180_000): Promise<void> {
+        if (this.#busy) {
+            throw new RpcFailure("rejected", "kernel busy; no implicit queue or payer change");
+        }
+
+        this.#busy = true;
+
+        try {
+            await this.#send({ type: "compact", customInstructions }, timeoutMs);
+
+            if (this.#failure) {
+                throw this.#failure;
+            }
+        } finally {
             this.#busy = false;
         }
     }

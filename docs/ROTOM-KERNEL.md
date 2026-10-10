@@ -1,6 +1,12 @@
 # rotom 执行内核迁移
 
-## 当前状态：第三阶段，可选新会话后端
+## 当前合同与证据入口
+
+当前实现及 R1–R8 验收以 [NATIVE-DELIVERY.md](NATIVE-DELIVERY.md) 为准；恢复操作以 [NATIVE-RECOVERY.md](NATIVE-RECOVERY.md) 为准。现已加入 Qoder access-only bridge、不可变 segment/public history、handoff/fork/原生 compact、配置激活与 Credit 投影。独立真实账号的指定 ChatGPT↔Qoder 路径已有证据；完整交付仍需冷安装与备用机升级。Native 仍显式 opt-in，旧会话不改后端；附件、任意旧 mutation、子 Agent/Goal 和完整财务账本不在本次核心范围。USD 预算无法证明时拒绝，不以零费用放行。
+
+**以下为第三阶段及更早的历史记录，不是当前功能缺口清单。** 保留当时的验证与限制，不能用它覆盖上述当前合同。
+
+## 历史状态：第三阶段，可选新会话后端
 
 已接入 PocketApp 的真实授权状态、HTTP API 和网页。**仅显式 `--rotom-kernel` 启动并选择 rotom 的新会话使用新后端；默认、现有会话与备用机部署仍使用原 Pi Durable 后端。** 这不是把 rotom 包装为一个模型 Provider；不会让两个 Agent 循环同时执行同一会话。没有复制刷新凭据，没有修改 dev-agent 源码或当前用户的 rotom 安装。新路径目前只用 synthetic accounts / loopback scripted endpoint 验证，不继承旧后端的真实账号证据。
 

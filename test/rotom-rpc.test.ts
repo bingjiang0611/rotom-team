@@ -129,6 +129,55 @@ test("raw prompt/queue/model/session mutations cannot bypass the runner", async 
     }
 });
 
+test("compact waits for its completion response past the admission deadline and excludes other work", async () => {
+    const rpc = await client("compact-slow");
+
+    try {
+        const compact = rpc.compact("preserve decisions", 5000);
+
+        await assert.rejects(rpc.prompt("race"), /busy/);
+        await assert.rejects(rpc.compact("race"), /busy/);
+        await compact;
+    } finally {
+        await rpc.close();
+    }
+});
+
+for (const mode of ["compact-hang", "compact-corrupt"]) {
+    test(`RPC ${mode}: completion ambiguity is unknown and not replayable`, async () => {
+        const rpc = await client(mode);
+
+        try {
+            await assert.rejects(
+                rpc.compact("once", 500),
+                (error) => error instanceof RpcFailure && error.outcome === "unknown",
+            );
+            await assert.rejects(
+                rpc.compact("again"),
+                (error) => error instanceof RpcFailure && error.outcome === "unknown",
+            );
+        } finally {
+            await rpc.close();
+        }
+    });
+}
+
+test("compact permits explicit abort, but its RPC rejection alone says nothing about prior model effects", async () => {
+    const rpc = await client("compact-hang");
+
+    try {
+        const result = assert.rejects(
+            rpc.compact("once"),
+            (error) => error instanceof RpcFailure && error.outcome === "rejected",
+        );
+
+        await rpc.request({ type: "abort" });
+        await result;
+    } finally {
+        await rpc.close();
+    }
+});
+
 test("busy RPC process cannot silently queue another payer", async () => {
     const rpc = await client("hang");
 

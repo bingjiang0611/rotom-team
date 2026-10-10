@@ -326,6 +326,10 @@ test(
 
             assert.deepEqual(await page.navigate(`${base}/`), { status: 200 });
             await until(() => page.title === "Smoke test", "the title");
+            // Force a non-overlay gutter: CDP excludes it from captures regardless of OS preferences.
+            await page.evaluate(
+                "const style=document.createElement('style'); style.textContent='html { overflow-y:scroll; } ::-webkit-scrollbar { width:17px; height:17px; }'; document.head.append(style); 'ready'",
+            );
 
             const outline = await page.snapshot();
 
@@ -417,7 +421,23 @@ test(
             const frame = (await page.frame(0))!;
 
             assert.deepEqual([...frame.data.subarray(0, 3)], [0xff, 0xd8, 0xff]);
-            assert.deepEqual([frame.width, frame.height], [1280, 800]);
+            const viewportGeometry = JSON.parse(
+                await page.evaluate(
+                    "JSON.stringify({innerWidth,innerHeight,clientWidth:document.documentElement.clientWidth,visualWidth:visualViewport.width,visualHeight:visualViewport.height,scale:visualViewport.scale})",
+                ),
+            );
+
+            assert.deepEqual(
+                [frame.width, frame.height],
+                [1263, 800],
+                JSON.stringify({ viewportGeometry, jpeg: jpegSize(frame.data.toString("base64")) }),
+            );
+            assert.equal(viewportGeometry.innerWidth, 1280);
+            assert.equal(viewportGeometry.visualWidth, 1263);
+            assert.deepEqual(jpegSize(frame.data.toString("base64")), {
+                width: frame.width,
+                height: frame.height,
+            });
             await page.evaluate(
                 "document.getElementById('fancy').textContent = 'Fancy div'; scrollTo(0, 0)",
             );
@@ -435,9 +455,18 @@ test(
             await page.input([{ type: "wheel", x: 100, y: 100, dx: 0, dy: 400 }]);
             await until(async () => Number(await page.evaluate("scrollY")) > 0, "the scroll");
 
+            const edge = JSON.parse(
+                await page.evaluate(
+                    "const edge=document.createElement('button'); edge.id='capture-edge'; edge.style.cssText='position:fixed;right:20px;top:20px;width:12px;height:24px;padding:0'; edge.onclick=()=>edge.dataset.clicked='yes'; document.body.append(edge); const r=edge.getBoundingClientRect(); JSON.stringify({x:r.x+r.width/2,y:r.y+r.height/2})",
+                ),
+            );
             const shot = await page.screenshot();
 
-            assert.deepEqual([shot.width, shot.height], [1280, 800]);
+            assert.deepEqual([shot.width, shot.height], [1263, 800]);
+            assert.deepEqual(jpegSize(shot.data), {
+                width: Math.round(shot.width * shot.scale),
+                height: Math.round(shot.height * shot.scale),
+            });
             assert.ok(
                 Buffer.from(shot.data, "base64")
                     .subarray(0, 2)
@@ -445,6 +474,41 @@ test(
             );
             assert.equal(jpegSize(shot.data).height, 800);
             assert.equal(shot.scale, 1);
+            const pixels = jpegSize(shot.data);
+
+            // The panel maps a displayed image point through its declared dimensions.
+            await page.input([
+                {
+                    type: "click",
+                    x: (edge.x / pixels.width) * shot.width,
+                    y: (edge.y / pixels.height) * shot.height,
+                },
+            ]);
+            assert.equal(
+                await page.evaluate("document.getElementById('capture-edge').dataset.clicked"),
+                "yes",
+            );
+            await page.setViewport({ width: 1280, height: 800, scale: 2, mobile: false });
+            const dense = await page.screenshot();
+
+            assert.deepEqual([dense.width, dense.height, dense.scale], [1263, 800, 1]);
+            assert.deepEqual(jpegSize(dense.data), { width: 1263, height: 800 });
+            await page.setViewport({ width: 1280, height: 800, scale: 1, mobile: false });
+            await page.evaluate(
+                "const noGutter=document.createElement('style'); noGutter.textContent='::-webkit-scrollbar { width:0px; height:0px; }'; document.head.append(noGutter); 'ready'",
+            );
+            const noGutter = await page.screenshot();
+
+            assert.deepEqual([noGutter.width, noGutter.height], [1280, 800]);
+            assert.deepEqual(jpegSize(noGutter.data), { width: 1280, height: 800 });
+
+            await page.setViewport({ width: 2800, height: 800, scale: 1, mobile: false });
+            const wide = await page.screenshot();
+
+            assert.equal(wide.width, 2800);
+            assert.equal(jpegSize(wide.data).width, 2000);
+            assert.equal(Math.round(wide.width * wide.scale), 2000);
+            await page.setViewport({ width: 1280, height: 800, scale: 1, mobile: false });
 
             // A huge page comes back small enough for a model to take: too large an image breaks the conversation.
             await page.evaluate("document.body.style.cssText = 'width: 2600px; height: 6000px'; 1");
@@ -660,7 +724,21 @@ test(
 
             await say(app, id, "take a screenshot");
             await until(() => results.length === 2, "the screenshot result");
-            assert.match(results[1]!, /^Screenshot of the viewport, 1280×800 CSS pixels\./);
+            const visual = JSON.parse(
+                await app.browsers
+                    .page(Number(id))!
+                    .evaluate(
+                        "JSON.stringify({width:visualViewport.width,height:visualViewport.height})",
+                    ),
+            );
+
+            assert.equal(visual.height, 800);
+            assert.ok(visual.width <= 1280 && visual.width > 1200);
+            assert.ok(
+                results[1]!.startsWith(
+                    `Screenshot of the viewport, ${visual.width}×${visual.height} CSS pixels.`,
+                ),
+            );
             const conversation = (await app.harness.conversation(id, BACKGROUND_CONTEXT))!;
             const entries = await conversation.entries({}, 256, undefined, BACKGROUND_CONTEXT);
             const shot = entries.items.find(
@@ -669,11 +747,14 @@ test(
                     JSON.stringify(entry.model).includes("Screenshot of the viewport"),
             )!;
 
-            assert.equal(
-                (await app.transcripts.entryImage(id, shot.id as unknown as number, 0))?.mimeType,
-                "image/jpeg",
-                "Pi sees the screenshot",
-            );
+            const storedImage = (await app.transcripts.entryImage(
+                id,
+                shot.id as unknown as number,
+                0,
+            ))!;
+
+            assert.equal(storedImage.mimeType, "image/jpeg", "Pi sees the screenshot");
+            assert.deepEqual(jpegSize(storedImage.data.toString("base64")), visual);
 
             await say(app, id, "open a closed port");
             await until(() => results.length === 3, "the failed navigate");
@@ -691,7 +772,10 @@ test(
             assert.equal(frame.status, 200);
             assert.equal(frame.headers.get("content-type"), "image/jpeg");
             assert.ok(Number(frame.headers.get("x-seq")) > 0);
-            assert.equal(frame.headers.get("x-width"), "1280");
+            const framePixels = jpegSize(Buffer.from(await frame.arrayBuffer()).toString("base64"));
+
+            assert.equal(Number(frame.headers.get("x-width")), framePixels.width);
+            assert.equal(Number(frame.headers.get("x-height")), framePixels.height);
             assert.equal(
                 (await request(viewer.token, `c/${id}/browser/navigate`, { url: "example.com" }))
                     .status,

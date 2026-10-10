@@ -2,7 +2,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { accessSync, constants, lstatSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { RotomRpc } from "./rotom-rpc.ts";
 
 const runtime = fileURLToPath(new URL("../../runtime/rotom/", import.meta.url));
@@ -30,6 +30,25 @@ function canonical(path: string, kind: "file" | "directory"): string {
     }
 
     return actual;
+}
+
+/** Session data operations only: load the pinned fork, never a second Agent execution loop. */
+export async function nativeSessionManager() {
+    verifyRotomKernel();
+    const { resolveInstalledPi } = await import(
+        pathToFileURL(join(product, "runtime/resolve-installed-pi.mjs")).href
+    );
+
+    await resolveInstalledPi(product);
+    const entry = canonical(
+        join(
+            product,
+            "runtime/pi/node_modules/@earendil-works/pi-coding-agent/dist/core/session-manager.js",
+        ),
+        "file",
+    );
+
+    return import(pathToFileURL(entry).href);
 }
 
 export function verifyRotomKernel(): { version: string; executable: string } {
@@ -68,6 +87,38 @@ export function verifyRotomKernel(): { version: string; executable: string } {
 
     // The verified product launcher performs its own bundled Pi/resource identity gate. Never invoke raw Pi instead.
     return { version: pkg.version, executable };
+}
+
+/** Preserve network routing, not general environment credentials. The local auth gate must never traverse a proxy. */
+export function kernelNetworkEnvironment(environment: NodeJS.ProcessEnv): Record<string, string> {
+    const routing: Record<string, string> = {};
+
+    for (const name of [
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "all_proxy",
+    ]) {
+        const value = environment[name];
+
+        if (value !== undefined) {
+            routing[name] = value;
+        }
+    }
+
+    // Undici gives lowercase no_proxy precedence. Normalize it before adding the fixed IPv4 broker host.
+    const bypass = environment.no_proxy ?? environment.NO_PROXY;
+
+    routing.NO_PROXY = bypass ? `${bypass},127.0.0.1` : "127.0.0.1";
+
+    // Node reads extra trust roots only at process startup. Preserve the parent's explicit trust file, not NODE_OPTIONS.
+    if (environment.NODE_EXTRA_CA_CERTS) {
+        routing.NODE_EXTRA_CA_CERTS = canonical(environment.NODE_EXTRA_CA_CERTS, "file");
+    }
+
+    return routing;
 }
 
 /** Caller owns a private HOME and a stopped/authorized session. No ambient credential or user-extension inheritance. */
@@ -145,6 +196,7 @@ export async function startRotomKernel(options: {
         {
             cwd: workspace,
             env: {
+                ...kernelNetworkEnvironment(process.env),
                 HOME: home,
                 PATH: `${dirname(node)}:/usr/bin:/bin`,
                 ROTOM_NODE: node,

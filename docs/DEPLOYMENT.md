@@ -19,7 +19,7 @@ node bin/rotom-team.js --data /absolute/team-data --cwd /absolute/team-workspace
 
 The first startup prints an owner bearer login link. Keep it private. Invite members with their own accounts; do not distribute the owner's link. Each member selects their own provider/model. Configuration & skills → My browser sign-ins creates separately revocable credentials for another browser **with the same member identity and provider accounts**; these are not remote execution workers. There are at most 32 additional browser credentials per member; revoke old ones to add more. Revocation closes that member's established streams so they authenticate again. Owner-token rotation revokes the owner's additional credentials too.
 
-Importing existing OAuth material into a separate refresh-capable runtime can race and invalidate the original login. Use independent login for deployed members. The opt-in real-account validation fixture uses read-only imported credentials: inference is allowed, refresh is refused, and the original authentication store is never written. This temporary validation mechanism is not a refresh/installation solution.
+Importing existing OAuth material into a separate refresh-capable runtime can race and invalidate the original login. Use independent login for deployed members. The earliest validation fixture used read-only imports and refused refresh; it was not a deployment solution. Current native acceptance uses independent logins and one guarded parent refresh writer, never copied refresh-capable grants. See [native evidence](NATIVE-DELIVERY.md); neither approach authorizes importing the maintainer's grants into a deployment.
 
 ## Experimental rotom backend — separate validation only
 
@@ -34,7 +34,7 @@ node bin/rotom-team.js --rotom-kernel --data /absolute/experimental-team-data --
 
 Select your own supported model, then New session → Execution engine → rotom. Only newly selected native sessions change engine. The parent remains the credential refresh writer; do not place OAuth grants in `kernel-homes`. Native unknown/pending receipts prevent disabling the backend to bypass quarantine. Do not delete receipts or locks to force recovery.
 
-This is not an upgrade instruction for the spare machine. Qoder, account takeover, forks, compaction, attachments, financial enforcement and real-provider validation are not complete. USD-budgeted native sessions refuse execution. The final full test run still has the browser screencast width failure; see [verification](VERIFICATION.md) and the [kernel contract](ROTOM-KERNEL.md) before deployment.
+Core Qoder, account takeover, forks, compaction, configuration and Credit projections now have the evidence recorded in [native acceptance](NATIVE-DELIVERY.md). Attachments and the full legacy mutation surface are outside this core scope. USD-budgeted native sessions still refuse execution because an authoritative dollar charge is unavailable. The spare remains on its old release until the reviewed artifact and cold-install gates pass; this recipe is not evidence of that upgrade. Consult [verification](VERIFICATION.md) before deployment. To enable native creation in the final LaunchAgent, explicitly add `--rotom-kernel`; stored Durable conversations retain their backend.
 
 ## Keep it running with launchd
 

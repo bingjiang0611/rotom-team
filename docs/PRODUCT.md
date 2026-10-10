@@ -2,7 +2,7 @@
 
 共享会话历史，不共享模型账号。谁提交执行，使用谁的个人模型与额度；查看、评论不发起模型推理。当前仍是 `0.1.0-alpha.1` 私有候选，不宣称正式版完成。
 
-[rotom 执行内核迁移](ROTOM-KERNEL.md) 已到第三阶段：`--rotom-kernel` 可显式为新会话启用独立固定产品，接入真实 app 权限、请求 auth broker、持久 receipt 和网页文本/工具结果。**默认和旧会话仍用原 Pi Durable；备用机未更新。** 新后端仅 scripted endpoint 验证，尚无真实账号、Qoder、接力/fork/压缩、附件或完整预算/账本支持；设置美元预算时拒绝执行。以下完整能力仍指旧后端，不自动算给新内核。
+[rotom 执行内核迁移](ROTOM-KERNEL.md) 的第三阶段基线已接入真实 app 权限、请求 auth broker、持久 receipt 和网页文本/工具结果；`--rotom-kernel` 显式为新会话启用固定产品。后续核心交付增量见 [NATIVE-DELIVERY.md](NATIVE-DELIVERY.md)：Qoder access-only bridge、公开历史接力/fork、原生压缩、配置激活、Credit 投影和恢复已有 synthetic provider / 原生进程验证；真实 ChatGPT 写入、Qoder 接力读取/压缩/重启续接、ChatGPT fork 续接及反向 handoff 也已通过指定场景。**完整 R1–R8 交付仍未完成**；首次连接失败的服务接收/费用保留 unknown，后续新验证有用户明确授权。**默认和旧会话仍用原 Pi Durable；备用机未更新。** 原生路径尚无附件或完整预算/账本支持，设置美元预算时拒绝执行。下文旧后端证据不自动算给新内核。
 
 ## 信任与部署
 

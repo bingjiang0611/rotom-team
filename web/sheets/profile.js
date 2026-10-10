@@ -10,8 +10,11 @@ export function ProfileSheet() {
     const [deviceLink, setDeviceLink] = useState("");
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState("");
-    const id = store.state.view.conversation?.id;
+    const id = store.state.conversationId;
     const editable = store.state.me?.role !== "viewer";
+    const native = store.state.sessions.some(
+        (session) => session.id === id && session.backend === "rotom",
+    );
 
     useEffect(() => {
         Promise.all([
@@ -89,15 +92,19 @@ export function ProfileSheet() {
             html`<div class="group">
             <div class="group-title">This session</div>
             ${snapshot ? html`<p>${snapshot.name} · <code>${snapshot.digest.slice(0, 12)}</code></p><details><summary>Inspect active configuration</summary><pre>${snapshot.context}</pre><ul>${snapshot.skills.map((skill) => html`<li>${skill.name} — ${skill.description}</li>`)}</ul></details>` : html`<p>Legacy session: resources have not been frozen yet.</p>`}
-            <button class="button" disabled=${!editable || !profile || busy} onClick=${() => {
-                if (
-                    confirm(
-                        "Save and activate your configuration in this shared session? Everyone with access can read it. This is an explicit version change; taking over does not change it automatically.",
-                    )
-                ) {
-                    void save(true);
-                }
-            }}>Save & activate in this session</button>
+            ${
+                native
+                    ? html`<p class="muted">Save your profile here, then use “Activate saved profile” in the native conversation. Activation creates a new execution segment and is recorded before dispatch.</p>`
+                    : html`<button class="button" disabled=${!editable || !profile || busy} onClick=${() => {
+                          if (
+                              confirm(
+                                  "Save and activate your configuration in this shared session? Everyone with access can read it. This is an explicit version change; taking over does not change it automatically.",
+                              )
+                          ) {
+                              void save(true);
+                          }
+                      }}>Save & activate in this session</button>`
+            }
         </div>`
         }
         <div class="group">

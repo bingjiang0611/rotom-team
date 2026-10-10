@@ -48,6 +48,48 @@ export async function conversationRoutes(
             return json(response, 200, app.kernel.snapshot(id, user));
         }
 
+        if (third === "configuration" && method === "POST" && fourth === undefined) {
+            const body = await readJson<{
+                activate: string;
+                requestId: string;
+                expectedHead: string;
+            }>(request);
+
+            if (
+                !body ||
+                typeof body !== "object" ||
+                Array.isArray(body) ||
+                body.activate !== "mine" ||
+                Object.keys(body).some(
+                    (key) => !["activate", "requestId", "expectedHead"].includes(key),
+                )
+            ) {
+                throw new HttpError(
+                    400,
+                    "Explicit activate: mine, requestId and expectedHead are required.",
+                );
+            }
+
+            return json(
+                response,
+                200,
+                await app.kernel.configure(id, user, body.requestId, body.expectedHead),
+            );
+        }
+
+        if (third === "kernel-request" && method === "GET" && fourth === undefined) {
+            return json(
+                response,
+                200,
+                await app.kernel.lookup(
+                    id,
+                    user,
+                    url.searchParams.get("requestId") ?? "",
+                    url.searchParams.get("operation") ?? "",
+                ),
+            );
+        }
+
         if (third === "submit" && method === "POST" && fourth === undefined) {
             const body = await readJson<{ text: string; requestId: string }>(request);
 
@@ -69,6 +111,47 @@ export async function conversationRoutes(
             );
         }
 
+        if (
+            (third === "handoff" || third === "compact" || third === "fork") &&
+            method === "POST" &&
+            fourth === undefined
+        ) {
+            const body = await readJson<{
+                requestId: string;
+                expectedHead: string;
+                instructions?: string;
+            }>(request);
+            const allowed =
+                third === "compact" ? ["requestId", "instructions"] : ["requestId", "expectedHead"];
+
+            if (
+                !body ||
+                typeof body !== "object" ||
+                Array.isArray(body) ||
+                Object.keys(body).some((key) => !allowed.includes(key))
+            ) {
+                throw new HttpError(
+                    400,
+                    "Invalid native operation fields; payer is always your own account.",
+                );
+            }
+
+            return json(
+                response,
+                200,
+                third === "fork"
+                    ? await app.kernel.fork(id, user, body.requestId, body.expectedHead)
+                    : third === "handoff"
+                      ? await app.kernel.handoff(id, user, body.requestId, body.expectedHead)
+                      : await app.kernel.compact(
+                            id,
+                            user,
+                            body.requestId,
+                            body.instructions === undefined ? "" : body.instructions,
+                        ),
+            );
+        }
+
         if (third === "abort" && method === "POST" && fourth === undefined) {
             await app.kernel.abort(id, user);
 
@@ -84,7 +167,7 @@ export async function conversationRoutes(
     }
 
     if (third === "configuration" && method === "GET") {
-        return json(response, 200, app.profiles.snapshot(id) ?? null);
+        return json(response, 200, app.configuration(id) ?? null);
     }
 
     if (third === "configuration" && method === "POST") {
