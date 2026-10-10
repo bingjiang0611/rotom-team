@@ -7,7 +7,7 @@
  * Under the launcher (PI_POCKET_LAUNCHER=1 with an IPC channel) the server reports `ready` instead of printing its
  * sign-in links, and takes `access` messages that say how other devices reach it (a tunnel's public URL).
  */
-import { chmodSync, mkdirSync } from "node:fs";
+import { chmodSync, mkdirSync, realpathSync } from "node:fs";
 import { createServer } from "node:http";
 import { networkInterfaces } from "node:os";
 import { join, resolve } from "node:path";
@@ -31,7 +31,8 @@ function parseArgs(argv: string[]) {
         cwd: process.cwd(),
         data: dataDir(),
         rotateToken: false,
-        kernel: false,
+        // rotom runs every new session. `--no-rotom-kernel` keeps a server on Pi Durable only.
+        kernel: true,
     };
 
     for (let index = 0; index < argv.length; index++) {
@@ -57,11 +58,13 @@ function parseArgs(argv: string[]) {
             options.data = resolve(value());
         } else if (arg === "--rotom-kernel") {
             options.kernel = true;
+        } else if (arg === "--no-rotom-kernel") {
+            options.kernel = false;
         } else if (arg === "--rotate-token") {
             options.rotateToken = true;
         } else if (arg === "--help" || arg === "-h") {
             console.log(
-                "rotom-team [--host 127.0.0.1] [--port 8787] [--cwd DIR] [--data DIR] [--rotate-token] [--rotom-kernel]",
+                "rotom-team [--host 127.0.0.1] [--port 8787] [--cwd DIR] [--data DIR] [--rotate-token] [--no-rotom-kernel]",
             );
             process.exit(0);
         } else {
@@ -78,11 +81,13 @@ function parseArgs(argv: string[]) {
 
 const options = parseArgs(process.argv.slice(2));
 
-process.env.PI_POCKET_DIR = options.data;
 // The data folder holds the database, sign-in tokens, push keys, and uploads: only this user may open it, also when
 // --data named a folder that already existed.
 mkdirSync(options.data, { recursive: true, mode: 0o700 });
 chmodSync(options.data, 0o700);
+// The rotom journal and member HOMEs accept only canonical paths: name the folder by its real path.
+options.data = realpathSync(options.data);
+process.env.PI_POCKET_DIR = options.data;
 
 /** How long stopping may wait for running work to stop. What is still running then resumes in the next process. */
 const STOP_LIMIT_MS = 10_000;
@@ -191,6 +196,18 @@ const [{ PocketApp: App }, { createHandler: makeHandler }, { watchTree }] = awai
     import("./http.ts"),
     import("./reload.ts"),
 ]);
+if (options.kernel) {
+    const { verifyRotomKernel } = await import("./rotom-kernel.ts");
+
+    try {
+        verifyRotomKernel();
+    } catch (error) {
+        throw new Error(
+            `The pinned rotom runtime is not ready (${(error as Error).message}). Run \`npm run install:kernel\`, or start with --no-rotom-kernel.`,
+        );
+    }
+}
+
 const opened = await App.open({
     dataDir: options.data,
     defaultCwd: options.cwd,
