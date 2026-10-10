@@ -206,12 +206,12 @@ export function createApi(options: HttpOptions, auth: Auth) {
             }
 
             if (second === undefined && method === "POST") {
-                const body = await readJson<{ instructions?: unknown }>(
+                const body = await readJson<{ instructions?: unknown; mcp?: unknown }>(
                     request,
-                    2 * MAX_INSTRUCTIONS,
+                    4 * MAX_INSTRUCTIONS,
                 );
 
-                profiles.setInstructions(user.id, body.instructions);
+                profiles.save(user.id, body);
             } else if (
                 second === "skills" &&
                 third !== undefined &&

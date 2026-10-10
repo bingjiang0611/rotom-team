@@ -1,4 +1,4 @@
-// `rotom-team profile push`: copy your own AGENTS.md and skills to your private layer on a rotom-team server.
+// `rotom-team profile push`: copy your own AGENTS.md, skills and mcp.json to your private layer on a rotom-team server.
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, relative } from "node:path";
@@ -35,8 +35,8 @@ function skillFiles(folder) {
 }
 
 /**
- * Replace your AGENTS.md on the server and add or replace each skill found in `agentDir/skills`. Skills already on
- * the server that are not pushed stay. Returns what was sent and what the server refused, skill by skill.
+ * Replace your AGENTS.md and mcp.json on the server and add or replace each skill found in `agentDir/skills`. Files
+ * and skills already on the server that are not pushed stay. Returns what was sent and what the server refused.
  */
 export async function pushProfile({ server, token, agentDir = join(homedir(), ".pi", "agent") }) {
     const call = async (path, method, body) => {
@@ -58,12 +58,23 @@ export async function pushProfile({ server, token, agentDir = join(homedir(), ".
         return JSON.parse(text);
     };
 
-    const report = { instructions: false, skills: [], refused: [] };
+    const report = { instructions: false, mcp: false, skills: [], refused: [] };
     const agents = join(agentDir, "AGENTS.md");
 
     if (existsSync(agents)) {
         await call("kernel-profile", "POST", { instructions: readFileSync(agents, "utf8") });
         report.instructions = true;
+    }
+
+    const mcp = join(agentDir, "mcp.json");
+
+    if (existsSync(mcp)) {
+        try {
+            await call("kernel-profile", "POST", { mcp: readFileSync(mcp, "utf8") });
+            report.mcp = true;
+        } catch (error) {
+            report.refused.push({ name: "mcp.json", error: error.message });
+        }
     }
 
     const skills = join(agentDir, "skills");
@@ -90,8 +101,8 @@ export async function pushProfile({ server, token, agentDir = join(homedir(), ".
 
 const usage = `Usage: ROTOM_TEAM_TOKEN=<your sign-in token> rotom-team profile push --server <url> [--agent-dir <dir>]
 
-Copies <dir>/AGENTS.md and each skill folder in <dir>/skills (default ~/.pi/agent) to your private
-layer on the server. Create the token from "My instructions & skills" → "Create my private sign-in link".`;
+Copies <dir>/AGENTS.md, <dir>/mcp.json and each skill folder in <dir>/skills (default ~/.pi/agent)
+to your private layer on the server. MCP sign-ins (mcp-auth.json) stay on this machine. Create the token from "My instructions & skills" → "Create my private sign-in link".`;
 
 export async function main(args) {
     const option = (name) => {

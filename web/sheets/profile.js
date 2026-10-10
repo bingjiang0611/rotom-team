@@ -25,12 +25,13 @@ async function skillFiles(list) {
 }
 
 /**
- * The member's personal rotom layer: their AGENTS.md and skills, private to them. Each run they pay for loads it next
- * to the project's own AGENTS.md and skills, whoever started the session.
+ * The member's personal rotom layer: their AGENTS.md, skills and MCP servers, private to them. Each run they pay for
+ * loads it next to the project's own AGENTS.md and skills, whoever started the session.
  */
 function PersonalLayer({ editable }) {
     const [layer, setLayer] = useState(null);
     const [instructions, setInstructions] = useState("");
+    const [mcp, setMcp] = useState("");
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState("");
 
@@ -39,6 +40,7 @@ function PersonalLayer({ editable }) {
             .then((value) => {
                 setLayer(value);
                 setInstructions(value.instructions);
+                setMcp(value.mcp);
             })
             .catch((e) => setError(e.message));
     }, []);
@@ -71,7 +73,7 @@ function PersonalLayer({ editable }) {
                 onSubmit=${(event) => {
                     event.preventDefault();
                     void run(
-                        () => api("kernel-profile", { instructions }),
+                        () => api("kernel-profile", { instructions, mcp }),
                         "Saved. Your next run uses it.",
                     );
                 }}
@@ -86,6 +88,22 @@ function PersonalLayer({ editable }) {
                         onInput=${(event) => setInstructions(event.currentTarget.value)}
                     />
                 </label>
+                <label class="field">
+                    My MCP servers (mcp.json)
+                    <textarea
+                        rows="6"
+                        maxlength="65536"
+                        spellcheck="false"
+                        placeholder='{ "mcpServers": { "name": { "command": "…" } } }'
+                        value=${mcp}
+                        disabled=${!editable || busy}
+                        onInput=${(event) => setMcp(event.currentTarget.value)}
+                    />
+                </label>
+                <p class="muted small">
+                    Commands run on the server. \${NAME} values do not see the server's environment,
+                    so write tokens in place. Sign-in (OAuth) servers are not supported.
+                </p>
                 <button class="button primary" type="submit" disabled=${!editable || busy}>
                     ${busy ? "Saving…" : "Save"}
                 </button>

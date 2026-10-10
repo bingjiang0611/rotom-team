@@ -44,6 +44,8 @@ let calls = 0,
     childRequests = 0,
     hold = false;
 let subagentSearch = "";
+/** The one member whose private mcp.json declares the probe server; nobody else's run may see its tool. */
+let mcpOwner: string | undefined;
 const modelServer = createServer(async (req, res) => {
     try {
         const authorization = req.headers.authorization;
@@ -71,6 +73,8 @@ const modelServer = createServer(async (req, res) => {
             if (personal.has(member)) {
                 assert.ok(body.includes(personal.get(member)!), `personal layer of ${member}`);
             }
+
+            assert.ok(!body.includes("mcp__probe__") || member === mcpOwner, `MCP of ${member}`);
         }
 
         for (const [other, text] of personal) {
@@ -659,12 +663,35 @@ try {
         "---\nname: local-proof\ndescription: LOCAL_SKILL_DESCRIPTION\n---\nLocal.\n",
     );
     writeFileSync(join(localAgent, "skills", "local-proof", "references", "a.md"), "ref\n");
+    // Bob's own MCP server: a stdio command on the server, declared only in his runs.
+    writeFileSync(
+        join(localAgent, "mcp.json"),
+        JSON.stringify({
+            mcpServers: {
+                probe: {
+                    command: process.execPath,
+                    args: [join(import.meta.dirname, "fixtures/mcp-echo.mjs")],
+                    exposure: "direct",
+                },
+            },
+        }),
+    );
+    mcpOwner = bob.user.id;
     mkdirSync(join(localAgent, "skills", "Bad Name"));
     writeFileSync(join(localAgent, "skills", "Bad Name", "SKILL.md"), "---\nname: x\n---\n");
     const { pushProfile } = await import("../scripts/profile-push.mjs");
     const pushed = await pushProfile({ server: base, token: bob.token, agentDir: localAgent });
 
     assert.equal(pushed.instructions, true);
+    assert.equal(pushed.mcp, true);
+    assert.equal(
+        (await request(bob.token, "kernel-profile", "POST", { mcp: '{"servers":{}}' })).status,
+        400,
+    );
+    assert.equal(
+        ((await (await request(aliceToken, "kernel-profile")).json()) as { mcp: string }).mcp,
+        "",
+    );
     assert.deepEqual(pushed.skills, ["local-proof"]);
     assert.deepEqual(
         pushed.refused.map((each: { name: string }) => each.name),
@@ -689,6 +716,7 @@ try {
     assert.ok(lastBody.includes("PROJECT_SKILL_DESCRIPTION"));
     assert.ok(lastBody.includes("BOB_SKILL_DESCRIPTION"));
     assert.ok(lastBody.includes("LOCAL_SKILL_DESCRIPTION"));
+    assert.ok(lastBody.includes("mcp__probe__echo"), "Bob's own MCP tool is declared");
 
     for (const operation of ["submit", "compact"]) {
         const busyKey = `busy-${operation}`;

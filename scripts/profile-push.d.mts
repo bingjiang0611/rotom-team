@@ -4,6 +4,7 @@ export function pushProfile(options: {
     agentDir?: string;
 }): Promise<{
     instructions: boolean;
+    mcp: boolean;
     skills: string[];
     refused: { name: string; error: string }[];
 }>;

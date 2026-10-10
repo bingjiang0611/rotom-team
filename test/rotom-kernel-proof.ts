@@ -67,6 +67,8 @@ let requests = 0,
 let offeredTools: string[] | undefined;
 let browserReply: string | undefined;
 let browserAsked = false;
+let mcpReply: string | undefined;
+let mcpAsked = false;
 
 const respond: RequestListener = async (req, res) => {
     try {
@@ -115,6 +117,9 @@ const respond: RequestListener = async (req, res) => {
         );
 
         browserReply ??= browserResult && String(browserResult.content);
+        const mcpResult = messages.find((m) => m.role === "tool" && m.tool_call_id === "mcp-proof");
+
+        mcpReply ??= mcpResult && String(mcpResult.content);
         // A read-only browser call: it lists this session's tabs through the service user's Chrome relay.
         const tool = !hasWrite
             ? {
@@ -130,7 +135,13 @@ const respond: RequestListener = async (req, res) => {
                       name: "browser_inspect",
                       arguments: JSON.stringify({ operation: "tabs" }),
                   }
-                : undefined;
+                : !mcpResult && !mcpAsked
+                  ? {
+                        id: "mcp-proof",
+                        name: "mcp__probe__echo",
+                        arguments: JSON.stringify({ text: "hello" }),
+                    }
+                  : undefined;
 
         res.writeHead(200, { "Content-Type": "text/event-stream" });
         const emit = (delta: unknown, finish: string | null = null) =>
@@ -141,6 +152,7 @@ const respond: RequestListener = async (req, res) => {
         emit({ role: "assistant" });
 
         browserAsked ||= tool?.id === "browser-proof";
+        mcpAsked ||= tool?.id === "mcp-proof";
 
         if (tool) {
             emit({
@@ -254,6 +266,32 @@ writeFileSync(
     JSON.stringify({ retry: { enabled: false }, compaction: { enabled: false } }),
     { mode: 0o600 },
 );
+// The member's own MCP server lives in their HOME and loads natively. A project server needs project trust, which the
+// team kernel never grants. `${...}` values resolve against the kernel's scrubbed env, so a server that names a service
+// secret fails closed instead of receiving it.
+const mcpServer = (env: Record<string, string> = {}) => ({
+    command: process.execPath,
+    args: [join(import.meta.dirname, "fixtures/mcp-echo.mjs")],
+    env,
+    exposure: "direct",
+});
+
+process.env.MCP_PROBE_SERVICE_SECRET = "service-secret-must-not-reach-mcp";
+writeFileSync(
+    join(home, ".pi/agent/mcp.json"),
+    JSON.stringify({
+        mcpServers: {
+            probe: mcpServer(),
+            leakprobe: mcpServer({ MCP_PROBE_LEAK: "${MCP_PROBE_SERVICE_SECRET}" }),
+        },
+    }),
+    { mode: 0o600 },
+);
+mkdirSync(join(workspace, ".pi"));
+writeFileSync(
+    join(workspace, ".pi/mcp.json"),
+    JSON.stringify({ mcpServers: { projectprobe: mcpServer() } }),
+);
 const report: Record<string, unknown> = {
     version: verifyRotomKernel().version,
     realProvider: false,
@@ -289,7 +327,17 @@ try {
     );
     assert.equal(readFileSync(join(workspace, "proof.txt"), "utf8"), "ROTOM_KERNEL_OK\n");
     assert.equal(toolReadObserved, true);
-    assert.equal(requests, 4);
+    assert.equal(requests, 5);
+    assert.ok(offeredTools?.includes("mcp__probe__echo"), "personal MCP tool must be offered");
+    assert.ok(
+        !offeredTools?.some((name) => name.startsWith("mcp__projectprobe")),
+        "an untrusted project's MCP server must not load",
+    );
+    assert.ok(
+        !offeredTools?.some((name) => name.startsWith("mcp__leakprobe")),
+        "a server naming a service env var must fail closed",
+    );
+    assert.equal(mcpReply, "MCP_ECHO:hello:leak=");
 
     // The member HOME is not the service user's, yet browser tools reach the service user's relay. Where this machine
     // runs no relay, the call can only show that it looked for one.
@@ -342,6 +390,9 @@ try {
         nativeWriteAndRead: true,
         browserRelay: hostRelay ? "reached" : "absent-on-host",
         browserReply: browserReply!.slice(0, 300),
+        personalMcp: mcpReply,
+        projectMcpLoaded: false,
+        serviceEnvMcpLoaded: false,
         loopbackRequests: requests,
         settledObserved: events.some((e) => e.type === "agent_settled"),
         sessionFileReadback: true,

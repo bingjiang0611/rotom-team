@@ -1,7 +1,7 @@
 /**
- * A member's personal rotom layer: `AGENTS.md` and `skills/` in their private kernel HOME. Rotom loads it natively next
- * to the project's own AGENTS.md and skills, for every run that member pays for. Nothing else in that HOME (auth,
- * models, settings, sessions) is reachable from here.
+ * A member's personal rotom layer: `AGENTS.md`, `skills/` and `mcp.json` in their private kernel HOME. Rotom loads it
+ * natively next to the project's own AGENTS.md and skills, for every run that member pays for. Nothing else in that
+ * HOME (auth, models, settings, sessions, MCP sign-ins) is reachable from here.
  */
 import { randomUUID } from "node:crypto";
 import {
@@ -22,6 +22,7 @@ const SKILL_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const PATH_SEGMENT = /^[A-Za-z0-9_][A-Za-z0-9._ -]{0,127}$/;
 
 export const MAX_INSTRUCTIONS = 64 * 1024;
+const MAX_MCP = 64 * 1024;
 const MAX_SKILL_FILES = 256;
 
 export const MAX_SKILL_BYTES = 8 * 1024 * 1024;
@@ -29,6 +30,8 @@ export const MAX_SKILL_BYTES = 8 * 1024 * 1024;
 export type SkillFiles = Record<string, { text?: string; base64?: string }>;
 export type PersonalLayer = {
     instructions: string;
+    /** The member's `mcp.json` as written: their own servers, which can hold their own tokens. */
+    mcp: string;
     skills: { name: string; description: string; files: number }[];
 };
 
@@ -42,10 +45,12 @@ export class KernelProfiles {
     get(memberId: string): PersonalLayer {
         const agent = this.#agentDir(memberId);
         const file = join(agent, "AGENTS.md");
+        const mcp = join(agent, "mcp.json");
         const skills = join(agent, "skills");
 
         return {
             instructions: existsSync(file) ? readFileSync(file, "utf8") : "",
+            mcp: existsSync(mcp) ? readFileSync(mcp, "utf8") : "",
             skills: existsSync(skills)
                 ? readdirSync(skills, { withFileTypes: true })
                       .filter((entry) => entry.isDirectory() && SKILL_NAME.test(entry.name))
@@ -67,25 +72,57 @@ export class KernelProfiles {
     }
 
     setInstructions(memberId: string, instructions: unknown): void {
+        this.save(memberId, { instructions });
+    }
+
+    /**
+     * Replace the given files and leave the others alone; an empty text removes its file. Everything is checked before
+     * anything is written. Pi checks each MCP server itself and skips a bad one, so `mcp` only has to be an
+     * `mcpServers` object.
+     */
+    save(memberId: string, changes: { instructions?: unknown; mcp?: unknown }): void {
+        const { instructions, mcp } = changes;
+
+        if (instructions === undefined && mcp === undefined) {
+            throw new HttpError(400, "Send instructions, mcp, or both.");
+        }
+
         if (
-            typeof instructions !== "string" ||
-            Buffer.byteLength(instructions) > MAX_INSTRUCTIONS
+            instructions !== undefined &&
+            (typeof instructions !== "string" || Buffer.byteLength(instructions) > MAX_INSTRUCTIONS)
         ) {
             throw new HttpError(400, "instructions must be text of at most 64 KiB.");
         }
 
-        const file = join(this.#agentDir(memberId), "AGENTS.md");
+        if (mcp !== undefined) {
+            if (typeof mcp !== "string" || Buffer.byteLength(mcp) > MAX_MCP) {
+                throw new HttpError(400, "mcp must be the text of an mcp.json of at most 64 KiB.");
+            }
 
-        if (instructions === "") {
-            rmSync(file, { force: true });
+            if (mcp !== "") {
+                let servers: unknown;
 
-            return;
+                try {
+                    servers = (JSON.parse(mcp) as { mcpServers?: unknown } | null)?.mcpServers;
+                } catch {
+                    throw new HttpError(400, "mcp.json is not valid JSON.");
+                }
+
+                if (!servers || typeof servers !== "object" || Array.isArray(servers)) {
+                    throw new HttpError(400, 'mcp.json needs an "mcpServers" object.');
+                }
+            }
         }
 
-        const temporary = `${file}.${randomUUID()}.tmp`;
+        const agent = this.#agentDir(memberId);
 
-        writeFileSync(temporary, instructions, { mode: 0o600, flag: "wx" });
-        renameSync(temporary, file);
+        if (typeof instructions === "string") {
+            replace(join(agent, "AGENTS.md"), instructions);
+        }
+
+        if (typeof mcp === "string") {
+            replace(join(agent, "mcp.json"), mcp);
+        }
     }
 
     /** Replace one skill folder as a whole: the new files land beside it, then take its place. */
@@ -159,6 +196,20 @@ export class KernelProfiles {
 
         rmSync(join(this.#agentDir(memberId), "skills", name), { recursive: true, force: true });
     }
+}
+
+/** Write the file whole, or remove it when `text` is empty. */
+function replace(file: string, text: string): void {
+    if (text === "") {
+        rmSync(file, { force: true });
+
+        return;
+    }
+
+    const temporary = `${file}.${randomUUID()}.tmp`;
+
+    writeFileSync(temporary, text, { mode: 0o600, flag: "wx" });
+    renameSync(temporary, file);
 }
 
 function decode(path: string, value: { text?: unknown; base64?: unknown } | undefined): Buffer {
