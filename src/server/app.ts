@@ -427,6 +427,7 @@ export class PocketApp {
 
         // Work a previous process left unfinished continues now.
         this.harness.resume();
+        void this.kernel?.resumeInterrupted();
     }
 
     /**

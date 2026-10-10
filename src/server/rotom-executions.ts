@@ -565,7 +565,7 @@ export class RotomExecutions {
                 throw new Error("Native session outside admitted HOME");
             }
 
-            this.journal.attach(receipt.id, state.sessionFile, state.sessionId);
+            this.journal.attach(receipt.id, state.sessionFile, state.sessionId, kernel.pid);
             // Recheck after startup/catalog work, immediately before sending the user request.
             await this.#authorize(binding, "admission", sessionId);
 

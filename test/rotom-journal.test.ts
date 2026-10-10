@@ -13,6 +13,7 @@ import {
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
+    MAX_RESUME_CHAIN,
     RotomJournal,
     requireNoPendingKernel,
     type KernelBinding,
@@ -262,6 +263,88 @@ test("a fresh handled prompt retains its receipt without binding a nonexistent n
 
         assert.throws(() => journal.finish(badClear.id, "handled", []), /materialized session/);
         assert.equal(journal.session("conversation").kernelSessionId, "materialized-native");
+    } finally {
+        journal.close();
+        rmSync(f.root, { recursive: true, force: true });
+    }
+});
+
+test("progress journals each finished message of a running prompt, and finish still decides the outcome", () => {
+    const f = setup();
+    const journal = new RotomJournal(f.data);
+
+    try {
+        journal.bind("native", f.binding);
+        const run = journal.reserve("native", "run", "work");
+
+        journal.attach(run.id, "session.jsonl", "native-session", 4242);
+        const user: KernelEntry = {
+            type: "message",
+            id: "u1",
+            message: { role: "user", content: "work" },
+        };
+
+        assert.equal(journal.progress(run.id, [user]), 1);
+        assert.equal(journal.progress(run.id, [user]), 0, "a message is recorded once");
+        assert.equal(journal.receipt(run.id).status, "dispatch-intent");
+        assert.equal(journal.pending("alice")?.id, run.id, "progress keeps the account fenced");
+        journal.finish(run.id, "settled", [user, response("a1")]);
+        assert.deepEqual(
+            journal.entries("native").map(({ entry }) => entry.id),
+            ["u1", "a1"],
+        );
+        assert.throws(() => journal.progress(run.id, [response("late")]), /not an active prompt/);
+    } finally {
+        journal.close();
+        rmSync(f.root, { recursive: true, force: true });
+    }
+});
+
+test("an unknown prompt whose kernel is gone becomes interrupted, frees its account, and plans one continuation", () => {
+    const f = setup();
+    let journal = new RotomJournal(f.data);
+
+    try {
+        journal.bind("native", f.binding);
+        const run = journal.reserve("native", "run", "work");
+
+        journal.attach(run.id, "session.jsonl", "native-session", 4242);
+        journal.close();
+        journal = new RotomJournal(f.data);
+        assert.deepEqual(journal.unknownPrompts(), [
+            {
+                id: run.id,
+                pid: 4242,
+                sessionFile: "session.jsonl",
+                kernelSessionId: "native-session",
+            },
+        ]);
+        journal.interrupt(run.id, [response("partial")]);
+        assert.equal(journal.receipt(run.id).status, "interrupted");
+        assert.equal(journal.pending("alice"), undefined);
+        assert.deepEqual(journal.unknownPrompts(), []);
+        assert.throws(() => journal.interrupt(run.id, []), /Only an unknown prompt/);
+
+        // Each continuation that is cut off again counts up, until a person has to say Continue.
+        let plan = journal.planResume(run.id);
+
+        assert.deepEqual([plan.chain, plan.state], [1, "pending"]);
+        assert.equal(journal.planResume(run.id).chain, 1, "planning twice keeps the first plan");
+
+        for (let chain = 2; chain <= MAX_RESUME_CHAIN + 1; chain++) {
+            const next = journal.reserve("native", `alice:#resume-${plan.attemptId}`, "continue");
+
+            journal.fail(next.id, "rejected");
+            plan = journal.planResume(next.id);
+            assert.equal(plan.chain, chain);
+        }
+
+        assert.equal(plan.state, "capped");
+        assert.deepEqual(
+            journal.resumes("pending").map((each) => each.chain),
+            [1, 2, 3],
+        );
+        assert.equal(journal.latest("native")?.id, plan.attemptId);
     } finally {
         journal.close();
         rmSync(f.root, { recursive: true, force: true });

@@ -1690,6 +1690,110 @@ try {
     // The host answer, then the follow-up's own write-and-finish turn.
     assert.equal(calls, 20);
     report.messagesJoinTheRunningPrompt = true;
+
+    // A server restart cuts a prompt off; the next start continues it once, as its member, without a person.
+    const journalOf = () => app.kernel!.executions.journal;
+
+    const reopen = async () => {
+        await app.close();
+        app = await open();
+        handler = createHandler({ app, listen: { host: "127.0.0.1", port: 0 }, restart: () => {} });
+    };
+
+    const startCutOff = async (requestId: string) => {
+        const started = await request(aliceToken, `c/${shared2.id}/submit`, "POST", {
+            text: `STREAM_SLOWLY until ${requestId}`,
+            requestId,
+            wait: false,
+        });
+
+        assert.equal(started.status, 200, await started.clone().text());
+
+        for (let tries = 0; tries < 2400; tries++) {
+            if (JSON.stringify(app.kernel!.clientLive(shared2.id as never)).includes("PARTIAL")) {
+                break;
+            }
+
+            await new Promise((resolve) => setTimeout(resolve, 25));
+        }
+
+        return ((await started.json()) as { id: string }).id;
+    };
+
+    const continued = async (attemptId: string) => {
+        const key = `${a.id}:#resume-${attemptId}`;
+
+        for (let tries = 0; tries < 2400; tries++) {
+            if (journalOf().request(String(shared2.id), key)?.status === "settled") {
+                break;
+            }
+
+            await new Promise((resolve) => setTimeout(resolve, 25));
+        }
+
+        assert.equal(journalOf().request(String(shared2.id), key)?.status, "settled");
+        assert.equal(journalOf().resume(attemptId)?.state, "started");
+
+        while (app.kernel!.isRunning(shared2.id as never)) {
+            await new Promise((resolve) => setTimeout(resolve, 25));
+        }
+
+        const room = await app.room(shared2.id as never);
+        const users = room
+            .value!.entries.filter((entry) => entry.kind === NATIVE_ENTRY)
+            .map((entry) => projectEntry(entry))
+            .filter((entry) => entry?.kind === "user") as { from?: string; text: string }[];
+
+        assert.equal(users.at(-1)!.from, "server");
+        assert.match(users.at(-1)!.text, /server restarted/);
+        assert.equal(requestMembers.at(-1), a.id);
+        assert.equal(
+            (app.kernel!.roomState(shared2.id as never, a) as { cutOff?: boolean }).cutOff,
+            undefined,
+        );
+    };
+
+    const cleanHost = await startCutOff("restart-host");
+    const beforeRestart = calls;
+
+    await reopen();
+    await continued(cleanHost);
+    assert.equal(journalOf().receipt(cleanHost).status, "settled");
+    assert.equal(journalOf().resume(cleanHost)?.chain, 1);
+    assert.ok(calls > beforeRestart, "the continuation asked the model again");
+    // A second start finds the continuation already made; it sends nothing more.
+    const afterContinue = calls;
+
+    await reopen();
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    assert.equal(calls, afterContinue);
+    report.cleanRestartContinues = true;
+
+    // A crash: the kernel dies without a word. Its run is unknown until a start proves the process gone.
+    const crashHost = await startCutOff("crash-host");
+    const { DatabaseSync } = await import("node:sqlite");
+    const reader = new DatabaseSync(join(folder, "kernel.sqlite"), { readOnly: true });
+    const { pid } = reader.prepare("SELECT pid FROM kernel_attempts WHERE id=?").get(crashHost) as {
+        pid: number;
+    };
+
+    reader.close();
+    process.kill(pid, "SIGKILL");
+
+    while (app.kernel!.isRunning(shared2.id as never)) {
+        await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+
+    assert.equal(journalOf().receipt(crashHost).status, "unknown");
+    assert.equal(
+        (app.kernel!.roomState(shared2.id as never, a) as { pending?: { status: string } }).pending
+            ?.status,
+        "unknown",
+    );
+    await reopen();
+    await continued(crashHost);
+    assert.equal(journalOf().receipt(crashHost).status, "interrupted");
+    report.crashedKernelInterruptedAndContinued = true;
     Object.assign(report, {
         status: "passed",
         projectViewAndContinue: true,
@@ -1745,7 +1849,7 @@ try {
                 memberName: owner(app).name,
             });
             // The composer's one message, sent by the owner who pays for it; nothing else dispatched.
-            assert.equal(calls, 23);
+            assert.equal(calls, 27);
             assert.equal(requestMembers.at(-1), owner(app).id);
             report.webUiVerified = true;
         } else {

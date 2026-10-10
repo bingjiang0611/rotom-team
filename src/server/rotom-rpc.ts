@@ -65,6 +65,11 @@ export class RotomRpc {
         );
     }
 
+    /** The kernel's process id, recorded so a later startup can tell a dead run from a live one. */
+    get pid(): number | undefined {
+        return this.#child.pid;
+    }
+
     onEvent(listener: (record: RpcRecord) => void): () => void {
         this.#listeners.add(listener);
 

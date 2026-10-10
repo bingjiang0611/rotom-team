@@ -127,6 +127,10 @@ export async function conversationRoutes(
                 );
             }
 
+            if (typeof body.requestId === "string" && body.requestId.startsWith("#")) {
+                throw new HttpError(400, "Request ids starting with # belong to the server.");
+            }
+
             // While Pi works, the composer's message joins the run (steer) or waits for it (followUp).
             if (app.kernel.isRunning(id) && (body.mode === "steer" || body.mode === "followUp")) {
                 return json(response, 200, await app.kernel.queue(id, user, body.text, body.mode));

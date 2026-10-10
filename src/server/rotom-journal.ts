@@ -47,8 +47,18 @@ export type KernelReceipt = {
     segmentId: string;
     operation: KernelOperation;
     requestId: string;
-    status: "dispatch-intent" | "settled" | "handled" | "rejected" | "unknown";
+    /** `interrupted`: the server stopped mid-run and its kernel is gone; the session file holds what happened. */
+    status: "dispatch-intent" | "settled" | "handled" | "rejected" | "unknown" | "interrupted";
     binding: KernelBinding;
+};
+/** How many automatic continuations may follow one another before a person has to say Continue. */
+export const MAX_RESUME_CHAIN = 3;
+/** A prompt cut off by a server stop: `pending` resumes at startup, `capped` waits for a person. */
+export type KernelResume = {
+    attemptId: string;
+    sessionId: string;
+    chain: number;
+    state: "pending" | "started" | "capped" | "skipped";
 };
 export type KernelEntry = { type: string; id?: string; [key: string]: unknown };
 const digest = (value: string) => createHash("sha256").update(value).digest("hex");
@@ -68,7 +78,7 @@ export function requireNoPendingKernel(data: string): void {
     const db = new DatabaseSync(path, { readOnly: true });
 
     try {
-        if (![1, 2].includes(Number(db.prepare("PRAGMA user_version").get()!.user_version))) {
+        if (![1, 2, 3].includes(Number(db.prepare("PRAGMA user_version").get()!.user_version))) {
             throw new Error("Unsupported kernel journal version");
         }
 
@@ -141,7 +151,7 @@ export class RotomJournal {
             this.#db = opened = new DatabaseSync(path);
             const version = Number(this.#db.prepare("PRAGMA user_version").get()!.user_version);
 
-            if (![0, 1, 2].includes(version)) {
+            if (![0, 1, 2, 3].includes(version)) {
                 throw new Error("Unsupported kernel journal version");
             }
 
@@ -165,6 +175,13 @@ export class RotomJournal {
                     CREATE UNIQUE INDEX one_conversation_request ON kernel_attempts(conversation_id,request_id);
                     CREATE UNIQUE INDEX one_conversation_writer ON kernel_attempts(conversation_id) WHERE status IN ('dispatch-intent','unknown');
                     PRAGMA user_version=2; COMMIT;`);
+            }
+
+            if (version < 3) {
+                this.#db.exec(`BEGIN IMMEDIATE;
+                    ALTER TABLE kernel_attempts ADD COLUMN pid INTEGER;
+                    CREATE TABLE kernel_resume (attempt_id TEXT PRIMARY KEY REFERENCES kernel_attempts(id), conversation_id TEXT NOT NULL, chain INTEGER NOT NULL, state TEXT NOT NULL);
+                    PRAGMA user_version=3; COMMIT;`);
             }
 
             // A cleanly released parent lock is not evidence that an unfinished dispatch never happened.
@@ -543,7 +560,7 @@ export class RotomJournal {
         return this.receipt(id);
     }
 
-    attach(id: string, sessionFile: string, kernelSessionId: string): void {
+    attach(id: string, sessionFile: string, kernelSessionId: string, pid?: number): void {
         const receipt = this.receipt(id),
             session = this.segment(receipt.segmentId);
 
@@ -561,6 +578,116 @@ export class RotomJournal {
         this.#db
             .prepare("UPDATE kernel_sessions SET session_file=?,kernel_session_id=? WHERE id=?")
             .run(sessionFile, kernelSessionId, receipt.segmentId);
+
+        if (pid !== undefined) {
+            // After a crash, a dead kernel process is what lets its unknown run count as interrupted.
+            this.#db.prepare("UPDATE kernel_attempts SET pid=? WHERE id=?").run(pid, id);
+        }
+    }
+
+    /** Unknown prompts that ran in a recorded kernel process, with what is needed to read their session file. */
+    unknownPrompts(): { id: string; pid: number; sessionFile: string; kernelSessionId: string }[] {
+        return this.#db
+            .prepare(
+                `SELECT a.id, a.pid, s.session_file, s.kernel_session_id FROM kernel_attempts a
+                 JOIN kernel_sessions s ON s.id=a.session_id
+                 WHERE a.status='unknown' AND a.operation='prompt' AND a.pid IS NOT NULL
+                   AND s.session_file IS NOT NULL AND s.kernel_session_id IS NOT NULL`,
+            )
+            .all()
+            .map((row) => ({
+                id: String(row.id),
+                pid: Number(row.pid),
+                sessionFile: String(row.session_file),
+                kernelSessionId: String(row.kernel_session_id),
+            }));
+    }
+
+    /**
+     * An unknown prompt whose kernel process is gone: record what its session file holds, and release its fence. The
+     * caller proves the process is gone; what the run did outside the session file stays unproven.
+     */
+    interrupt(id: string, entries: KernelEntry[]): KernelReceipt {
+        const attempt = this.receipt(id),
+            session = this.segment(attempt.segmentId);
+
+        if (attempt.status !== "unknown" || attempt.operation !== "prompt") {
+            throw new Error("Only an unknown prompt can be interrupted");
+        }
+
+        this.#db.exec("BEGIN IMMEDIATE");
+
+        try {
+            this.#ingest(attempt, session.kernelSessionId!, entries);
+            this.#db.prepare("UPDATE kernel_attempts SET status='interrupted' WHERE id=?").run(id);
+            this.#db.exec("COMMIT");
+        } catch (error) {
+            this.#db.exec("ROLLBACK");
+
+            throw error;
+        }
+
+        return this.receipt(id);
+    }
+
+    /**
+     * Plan the continuation of a prompt cut off by a server stop. A continuation of a continuation counts up; past
+     * MAX_RESUME_CHAIN it waits for a person instead. Planning the same attempt twice keeps the first plan.
+     */
+    planResume(attemptId: string): KernelResume {
+        const attempt = this.receipt(attemptId);
+        const previous = /:#resume-(.+)$/.exec(attempt.requestId)?.[1];
+        const chain = previous ? (this.resume(previous)?.chain ?? 0) + 1 : 1;
+
+        this.#db
+            .prepare("INSERT OR IGNORE INTO kernel_resume VALUES (?,?,?,?)")
+            .run(
+                attemptId,
+                attempt.sessionId,
+                chain,
+                chain > MAX_RESUME_CHAIN ? "capped" : "pending",
+            );
+
+        return this.resume(attemptId)!;
+    }
+
+    resume(attemptId: string): KernelResume | undefined {
+        const row = this.#db
+            .prepare("SELECT * FROM kernel_resume WHERE attempt_id=?")
+            .get(attemptId);
+
+        return row
+            ? {
+                  attemptId,
+                  sessionId: String(row.conversation_id),
+                  chain: Number(row.chain),
+                  state: row.state as KernelResume["state"],
+              }
+            : undefined;
+    }
+
+    resumes(state: KernelResume["state"]): KernelResume[] {
+        return this.#db
+            .prepare("SELECT attempt_id FROM kernel_resume WHERE state=? ORDER BY rowid")
+            .all(state)
+            .map((row) => this.resume(String(row.attempt_id))!);
+    }
+
+    markResume(attemptId: string, state: "started" | "skipped"): void {
+        this.#db
+            .prepare("UPDATE kernel_resume SET state=? WHERE attempt_id=?")
+            .run(state, attemptId);
+    }
+
+    /** The conversation's newest attempt, whatever its operation. */
+    latest(sessionId: string): KernelReceipt | undefined {
+        const row = this.#db
+            .prepare(
+                "SELECT id FROM kernel_attempts WHERE conversation_id=? ORDER BY rowid DESC LIMIT 1",
+            )
+            .get(sessionId);
+
+        return row ? this.receipt(String(row.id)) : undefined;
     }
 
     /** Provisional ingestion while a prompt runs: records each persisted message once, never settles the attempt. */
@@ -971,7 +1098,9 @@ export class RotomJournal {
             unmeteredOperations: [...group.attempts.values()].filter(
                 (attempt) =>
                     !attempt.observed &&
-                    ["settled", "unknown", "dispatch-intent"].includes(attempt.status),
+                    ["settled", "unknown", "dispatch-intent", "interrupted"].includes(
+                        attempt.status,
+                    ),
             ).length,
             partial: true as const,
         }));

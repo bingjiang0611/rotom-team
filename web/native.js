@@ -1,6 +1,6 @@
 // What a rotom session shows above its composer: questions its run asks, and an operation whose outcome is unknown.
 import { useState } from "preact/hooks";
-import { api, attempt, store } from "./store.js";
+import { actions, api, attempt, store } from "./store.js";
 import { html } from "./ui.js";
 
 /** Send one answer; the room update that follows removes the question. */
@@ -80,6 +80,25 @@ export function NativeBanner() {
             yours=${kernel.yours}
             memberName=${kernel.memberName}
         />`;
+    }
+
+    if (kernel?.cutOff && !store.state.view.live?.busy) {
+        return html`<div class="native-banner" role="status">
+            A server restart cut Pi off, and it did not continue by itself.
+            <button
+                class="button small"
+                onClick=${() =>
+                    attempt(() =>
+                        actions.submit(
+                            "Continue the interrupted task from where it stopped. Do not repeat finished steps.",
+                            [],
+                            "followUp",
+                        ),
+                    )}
+            >
+                Continue
+            </button>
+        </div>`;
     }
 
     if (!pending || pending.status !== "unknown") {

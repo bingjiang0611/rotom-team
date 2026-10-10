@@ -16,12 +16,12 @@ import type { User } from "./config.ts";
 import type { ConfigurationSnapshot } from "./team-profiles.ts";
 import { accountContext } from "./team-accounts.ts";
 import { HttpError } from "./errors.ts";
-import { RotomExecutions, type RunHooks } from "./rotom-executions.ts";
+import { NativeTail, RotomExecutions, type RunHooks } from "./rotom-executions.ts";
 import type { RpcRecord } from "./rotom-rpc.ts";
 import { AuthorsDoc } from "./docs.ts";
 import { THINKING_LEVELS } from "./commands.ts";
 import { KernelProfiles } from "./kernel-profile.ts";
-import { NATIVE_ENTRY } from "./entry-format.ts";
+import { NATIVE_ENTRY, RESUME_PREFIX } from "./entry-format.ts";
 import { projectLive, type ClientLive } from "./projection.ts";
 import type { KernelBinding, KernelEntry, KernelReceipt } from "./rotom-journal.ts";
 import { verifyRotomKernel } from "./rotom-kernel.ts";
@@ -398,6 +398,7 @@ export class TeamKernel {
         const native = ids.filter((id) => this.#app.sessionMeta(id)?.backend === "rotom");
 
         this.executions.journal.reconcileOrphans(new Set(native.map(String)));
+        this.#interruptDeadRuns();
 
         for (const id of native) {
             const configurations = await this.#app.harness.snapshot(
@@ -948,6 +949,7 @@ export class TeamKernel {
             kernelVersion: binding.kernelVersion,
             yours: binding.memberId === viewer.id,
             dialogs: this.#live.get(id)?.dialogs ?? [],
+            ...(this.#cutOff(id) ? { cutOff: true } : {}),
             ...(pending
                 ? {
                       pending: {
@@ -959,6 +961,22 @@ export class TeamKernel {
                   }
                 : {}),
         };
+    }
+
+    /** The last run was cut off by a server stop and did not continue by itself: a person may say Continue. */
+    #cutOff(id: ConversationId): boolean {
+        const journal = this.executions.journal;
+        const latest = journal.latest(String(id));
+
+        if (!latest || this.isRunning(id)) {
+            return false;
+        }
+
+        const plan = journal.resume(latest.id);
+
+        return latest.status === "interrupted"
+            ? plan?.state !== "pending" && plan?.state !== "started"
+            : plan?.state === "capped" || plan?.state === "skipped";
     }
 
     /** The live view of a native conversation for the Transcript; `busy` while any native operation runs. */
@@ -1469,8 +1487,86 @@ export class TeamKernel {
         }
     }
 
+    /**
+     * After a crash, an unknown prompt whose kernel process no longer exists is over: what its session file holds is
+     * what it did. It becomes interrupted, which releases its account, and is planned to continue. A run whose process
+     * still lives, or that recorded none, stays unknown for a person to reconcile.
+     */
+    #interruptDeadRuns(): void {
+        const journal = this.executions.journal;
+
+        for (const attempt of journal.unknownPrompts()) {
+            if (processAlive(attempt.pid)) {
+                continue;
+            }
+
+            const { binding } = journal.receipt(attempt.id);
+
+            try {
+                const entries = new NativeTail(
+                    attempt.sessionFile,
+                    attempt.kernelSessionId,
+                    binding.workspace,
+                ).read();
+
+                journal.interrupt(attempt.id, entries);
+                journal.planResume(attempt.id);
+            } catch (error) {
+                this.#app.notice(
+                    "warning",
+                    `A rotom run cut off by a crash stays unknown: its session file did not read back (${error}).`,
+                );
+            }
+        }
+    }
+
+    /**
+     * Continue prompts a server stop cut off, once each: as the member they ran for, under the usual checks, with a
+     * message that tells Pi what happened. The request id is derived from the cut-off attempt, so a second startup
+     * finds the first continuation instead of sending another.
+     */
+    async resumeInterrupted(): Promise<void> {
+        const journal = this.executions.journal;
+
+        for (const plan of journal.resumes("pending")) {
+            const id = this.#id(plan.sessionId);
+            const attempt = journal.receipt(plan.attemptId);
+            const { binding } = journal.session(plan.sessionId);
+            const user = this.#app.config.userById(binding.memberId);
+
+            // Someone acted since (a new message, a handoff, a fork seed): their choice stands.
+            if (journal.latest(plan.sessionId)?.id !== attempt.id || !user) {
+                journal.markResume(plan.attemptId, "skipped");
+                continue;
+            }
+
+            try {
+                await this.#app.accounts.forUser(user);
+                await this.submit(id, user, `#resume-${attempt.id}`, RESUME_TEXT, false);
+                journal.markResume(plan.attemptId, "started");
+            } catch (error) {
+                journal.markResume(plan.attemptId, "skipped");
+                this.#app.notice(
+                    "warning",
+                    `A rotom run cut off by a server restart did not continue by itself: ${error}`,
+                );
+            }
+
+            this.#app.roomChanged(id);
+        }
+    }
+
     async close(): Promise<void> {
         this.#closing = true;
+
+        // A stop cuts prompts off mid-work: plan their continuation before stopping them.
+        for (const id of new Set([...this.#active].map((run) => run.id))) {
+            const pending = this.executions.journal.pendingConversation(String(id));
+
+            if (pending?.operation === "prompt") {
+                this.executions.journal.planResume(pending.id);
+            }
+        }
 
         for (const id of new Set([...this.#active].map((run) => run.id))) {
             await this.executions.abort(String(id));
@@ -1478,6 +1574,20 @@ export class TeamKernel {
 
         await Promise.allSettled([...this.#active].map((run) => run.promise));
         this.executions.close();
+    }
+}
+
+/** What a continuation after a server stop tells Pi. It shows in the transcript as the server's note. */
+const RESUME_TEXT = `${RESUME_PREFIX} The server restarted while you were working, and your last step may have been cut off. Check what was already done, then continue the task from where it stopped. Do not repeat finished steps.`;
+
+function processAlive(pid: number): boolean {
+    try {
+        process.kill(pid, 0);
+
+        return true;
+    } catch (error) {
+        // EPERM: the process exists but belongs to someone else.
+        return (error as NodeJS.ErrnoException).code === "EPERM";
     }
 }
 
