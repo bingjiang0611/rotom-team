@@ -41,7 +41,9 @@ const personal = new Map<string, string>();
 let lastBody = "";
 let calls = 0,
     legacyCalls = 0,
+    childRequests = 0,
     hold = false;
+let subagentSearch = "";
 const modelServer = createServer(async (req, res) => {
     try {
         const authorization = req.headers.authorization;
@@ -159,6 +161,76 @@ const modelServer = createServer(async (req, res) => {
                                             ],
                                         },
                                     ],
+                                }),
+                            },
+                        },
+                    ],
+                });
+                emit({}, "tool_calls");
+            }
+
+            res.end("data: [DONE]\n\n");
+
+            return;
+        }
+
+        const lastUser = JSON.stringify(
+            input.messages.findLast((message: { role: string }) => message.role === "user")
+                ?.content,
+        );
+
+        if (lastUser.includes("SUBAGENT_CHILD_TASK")) {
+            childRequests++;
+            emit({ content: "CHILD_DONE" });
+            emit({}, "stop");
+            res.end("data: [DONE]\n\n");
+
+            return;
+        }
+
+        if (lastUser.includes("SPAWN_SUBAGENT")) {
+            const spawned = input.messages.find(
+                (message: { role: string; tool_call_id?: string }) =>
+                    message.role === "tool" && message.tool_call_id === "spawn-1",
+            );
+
+            const found = input.messages.find(
+                (message: { role: string; tool_call_id?: string }) =>
+                    message.role === "tool" && message.tool_call_id === "search-1",
+            );
+
+            if (!found) {
+                emit({
+                    tool_calls: [
+                        {
+                            index: 0,
+                            id: "search-1",
+                            type: "function",
+                            function: {
+                                name: "search_tools",
+                                arguments: JSON.stringify({ query: "subagent", limit: 3 }),
+                            },
+                        },
+                    ],
+                });
+                emit({}, "tool_calls");
+            } else if (spawned) {
+                subagentSearch = JSON.stringify(found.content);
+                emit({ content: "PARENT_AFTER_SUBAGENT" });
+                emit({}, "stop");
+            } else {
+                emit({
+                    tool_calls: [
+                        {
+                            index: 0,
+                            id: "spawn-1",
+                            type: "function",
+                            function: {
+                                name: "subagent",
+                                arguments: JSON.stringify({
+                                    agent: "reviewer",
+                                    task: "SUBAGENT_CHILD_TASK: reply CHILD_DONE",
+                                    extensions: [],
                                 }),
                             },
                         },
@@ -1721,6 +1793,44 @@ try {
     assert.equal(calls, 20);
     report.messagesJoinTheRunningPrompt = true;
 
+    // A subagent is a separate rotom process in the member HOME. That HOME holds no credential, and the team gate is
+    // given to the run's own kernel only: a child cannot reach the model, and never refreshes a grant.
+    const spawn = await request(aliceToken, `c/${shared2.id}/submit`, "POST", {
+        text: "SPAWN_SUBAGENT now",
+        requestId: "spawn-subagent",
+    });
+
+    assert.equal(spawn.status, 200, await spawn.clone().text());
+    assert.equal(((await spawn.json()) as { status: string }).status, "settled");
+    assert.equal(
+        subagentSearch,
+        JSON.stringify("Loaded specialized tools: subagent, subagent_wait"),
+    );
+    const runs = join(
+        folder,
+        "kernel-homes",
+        a.id,
+        ".local/state/rotom/subagent-store/owned-process-groups-v2/async-subagent-runs",
+    );
+    let childOutput = "";
+
+    for (let tries = 0; tries < 400 && !childOutput.includes("No API key"); tries++) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        childOutput = readdirSync(runs, { recursive: true })
+            .filter((name) => String(name).endsWith("output-0.log"))
+            .map((name) => readFileSync(join(runs, String(name)), "utf8"))
+            .join("\n");
+    }
+
+    assert.match(childOutput, /No API key found for openai/);
+    assert.equal(childRequests, 0, "a subagent never reaches the model");
+    assert.equal(
+        readFileSync(join(folder, "kernel-homes", a.id, ".pi/agent/auth.json"), "utf8").trim(),
+        "{}",
+        "no grant appears in the member HOME",
+    );
+    report.subagentsHoldNoCredential = true;
+
     // A server restart cuts a prompt off; the next start continues it once, as its member, without a person.
     const journalOf = () => app.kernel!.executions.journal;
 
@@ -1879,7 +1989,7 @@ try {
                 memberName: owner(app).name,
             });
             // The composer's one message, sent by the owner who pays for it; nothing else dispatched.
-            assert.equal(calls, 27);
+            assert.equal(calls, 30);
             assert.equal(requestMembers.at(-1), owner(app).id);
             report.webUiVerified = true;
         } else {
