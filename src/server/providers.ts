@@ -1,7 +1,7 @@
 /**
  * Model providers: which ones Pi knows, whether each is signed in, and sign-ins run from the app. A sign-in asks its
- * questions (an API key, a code, a choice) through the tabs of the person who started it. Pi Pocket shares Pi's own
- * sign-ins (`~/.pi/agent/auth.json`).
+ * questions (an API key, a code, a choice) through the tabs of the person who started it. Credentials belong to
+ * that member's private store, never the host Pi account.
  */
 import { randomUUID } from "node:crypto";
 import type { AuthPrompt } from "@earendil-works/pi-ai";
@@ -15,6 +15,7 @@ interface AuthFlow {
     userId: string;
     prompts: Map<string, { resolve: (value: string) => void; reject: (error: Error) => void }>;
     abort: AbortController;
+    openaiCallback: boolean;
 }
 
 export class Providers {
@@ -76,11 +77,22 @@ export class Providers {
         }
 
         await app.execution.accountIdle(user);
+        // Both SDK sign-ins may bind the same host callback port. Claim synchronously after admission.
+        const openaiCallback = type === "oauth" && ["openai", "openai-codex"].includes(providerId);
+
+        if (openaiCallback && [...this.#flows.values()].some((flow) => flow.openaiCallback)) {
+            throw new HttpError(
+                409,
+                "Another OpenAI login is in progress. Finish or cancel it first; callback port 1455 is shared.",
+            );
+        }
+
         const flow: AuthFlow = {
             id: randomUUID(),
             userId: user.id,
             prompts: new Map(),
             abort: new AbortController(),
+            openaiCallback,
         };
 
         app.accounts.beginChange(user, providerId);
@@ -98,12 +110,15 @@ export class Providers {
             signal: flow.abort.signal,
             prompt: (prompt: AuthPrompt) =>
                 new Promise<string>((resolvePrompt, rejectPrompt) => {
+                    const { signal = flow.abort.signal, ...shown } = prompt;
+
+                    // Cancellation may land between answering one prompt and creating the next.
+                    flow.abort.signal.throwIfAborted();
+                    signal.throwIfAborted();
                     const promptId = randomUUID();
 
                     flow.prompts.set(promptId, { resolve: resolvePrompt, reject: rejectPrompt });
-                    const { signal, ...shown } = prompt;
-
-                    signal?.addEventListener("abort", () => {
+                    signal.addEventListener("abort", () => {
                         flow.prompts.delete(promptId);
                         send({ step: "prompt-closed", promptId });
                         rejectPrompt(new Error("cancelled"));
@@ -113,14 +128,64 @@ export class Providers {
             notify: (event: unknown) => send({ step: "event", event }),
         };
 
+        const timeout = openaiCallback
+            ? setTimeout(
+                  () =>
+                      flow.abort.abort(
+                          new Error(
+                              "OpenAI login timed out after 10 minutes. Start a new login; do not reuse the old callback URL.",
+                          ),
+                      ),
+                  10 * 60_000,
+              ).unref()
+            : undefined;
+
         void (async () => {
             let result: { ok: boolean; error?: string };
 
             try {
+                if (providerId === "openai" && type === "oauth") {
+                    // Host/Origin cannot distinguish a local browser from an SSH-forwarded one.
+                    // Ask before the SDK registers a client, binds its callback or emits an authorization URL.
+                    const location = await interaction.prompt({
+                        type: "select",
+                        message:
+                            "Where is this browser running? OpenAI returns to this browser's 127.0.0.1:1455, not automatically to the team server.",
+                        options: [
+                            { id: "local", label: "On the same computer as the team server" },
+                            { id: "ssh", label: "On another computer — temporary SSH forwarding" },
+                        ],
+                        signal: flow.abort.signal,
+                    });
+
+                    if (location === "ssh") {
+                        send({ step: "callback-guide" });
+                        const ready = await interaction.prompt({
+                            type: "select",
+                            message:
+                                "Prepare the SSH forward shown here before continuing. This is your confirmation, not an automatic connectivity check.",
+                            options: [
+                                {
+                                    id: "ready",
+                                    label: "My temporary forward is ready — continue to OpenAI",
+                                },
+                            ],
+                            signal: flow.abort.signal,
+                        });
+
+                        if (ready !== "ready") {
+                            throw new Error("Invalid callback readiness choice");
+                        }
+                    } else if (location !== "local") {
+                        throw new Error("Invalid browser location choice");
+                    }
+                }
+
+                flow.abort.signal.throwIfAborted();
                 await runtime.login(providerId, type, interaction, { getDeviceId: () => user.id });
                 result = { ok: true };
             } catch (error) {
-                result = { ok: false, error: describe(error) };
+                result = { ok: false, error: describe(flow.abort.signal.reason ?? error) };
             }
 
             try {
@@ -141,7 +206,10 @@ export class Providers {
                     error: "Account synchronization failed. Reconnect your account before executing.",
                 }),
             )
-            .finally(() => this.#flows.delete(flow.id));
+            .finally(() => {
+                clearTimeout(timeout);
+                this.#flows.delete(flow.id);
+            });
 
         return flow.id;
     }

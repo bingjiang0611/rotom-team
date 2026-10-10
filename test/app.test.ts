@@ -194,7 +194,15 @@ test("personal sign-in has a stable member-scoped device identity, not the host 
     try {
         for (let index = 0; index < 2; index++) {
             const flow = await app.providers.startLogin(owner(), "openai", "oauth");
+            const setup = tab.events.find(
+                (event) =>
+                    event.event === "auth" &&
+                    event.data.flowId === flow &&
+                    event.data.step === "prompt",
+            )!;
 
+            assert.ok(typeof setup.data.promptId === "string");
+            app.providers.answerLogin(owner(), flow, setup.data.promptId, "local");
             await until(
                 () =>
                     tab.events.some(

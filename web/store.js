@@ -650,6 +650,10 @@ function pollEvents(query) {
 
 function handleAuth(data) {
     store.set((state) => {
+        if (state.dismissedAuthFlowId === data.flowId) {
+            return {};
+        }
+
         const flow =
             state.auth?.flowId === data.flowId
                 ? state.auth
@@ -669,6 +673,10 @@ function handleAuth(data) {
             return { auth: flow.prompt?.id === data.promptId ? { ...flow, prompt: null } : flow };
         }
 
+        if (data.step === "callback-guide") {
+            return { auth: { ...flow, remoteCallback: true } };
+        }
+
         if (data.step === "event") {
             return { auth: { ...flow, events: [...flow.events, data.event] } };
         }
@@ -678,7 +686,10 @@ function handleAuth(data) {
                 notify("info", `Signed in to ${data.providerId}.`);
             }
 
-            return { auth: data.ok ? null : { ...flow, prompt: null, done: data } };
+            return {
+                auth:
+                    data.ok && !flow.remoteCallback ? null : { ...flow, prompt: null, done: data },
+            };
         }
 
         return {};

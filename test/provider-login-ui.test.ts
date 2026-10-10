@@ -1,0 +1,211 @@
+import assert from "node:assert/strict";
+import { after, before, test } from "node:test";
+import { createServer, type Server } from "node:http";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { cleanUp, openApp, owner, root, scriptedModel, until, type App } from "./helpers.ts";
+import { Browsers } from "../src/server/browser.ts";
+import { findBrowser } from "../src/server/browser/discovery.ts";
+import type { BrowserPage } from "../src/server/browser/page.ts";
+import { createHandler } from "../src/server/http.ts";
+
+const real = { skip: findBrowser() === undefined ? "no Chromium browser" : false };
+let app: App;
+let server: Server;
+let browsers: Browsers;
+let page: BrowserPage;
+let base: string;
+let sdkCalls = 0;
+let answersCompleted = 0;
+let rejectLogin = false;
+
+async function state() {
+    return JSON.parse(
+        await page.evaluate(`
+        const {store} = await import('/store.js');
+        return JSON.stringify({ auth: store.state.auth, text: document.body.innerText,
+            width: document.documentElement.scrollWidth, viewport: innerWidth });
+    `),
+    );
+}
+
+async function click(label: string) {
+    await page.evaluate(`
+        const button = [...document.querySelectorAll('button')].find(b => b.textContent.trim() === ${JSON.stringify(label)});
+        if (!button) throw Error('Missing test button');
+        button.click();
+    `);
+}
+
+async function begin() {
+    await page.evaluate(
+        `const {api} = await import('/store.js'); await api('providers/openai/login', {type:'oauth'});`,
+    );
+    await until(async () => (await state()).auth?.prompt?.type === "select", "location prompt");
+}
+
+async function readyForSsh() {
+    await begin();
+    const before = answersCompleted;
+
+    await click("On another computer — temporary SSH forwarding");
+    await until(() => answersCompleted > before, "delayed location HTTP answer");
+    await until(
+        async () => (await state()).auth?.prompt?.options?.[0]?.id === "ready",
+        "SSH readiness prompt survives earlier answer",
+    );
+}
+
+before(async () => {
+    if (real.skip) {
+        return;
+    }
+
+    app = await openApp(scriptedModel());
+    const { runtime } = await app.accounts.forUser(owner(app));
+
+    runtime.login = async () => {
+        sdkCalls++;
+
+        if (rejectLogin) {
+            throw new Error("Synthetic provider refusal");
+        }
+
+        return {} as never;
+    };
+
+    const handler = createHandler({
+        app,
+        listen: { host: "127.0.0.1", port: 0 },
+        restart: () => {},
+    });
+
+    server = createServer((request, response) => {
+        // Force the next SSE prompt/result to precede the answer's HTTP completion.
+        if (
+            request.method === "POST" &&
+            request.url?.startsWith("/api/auth/") &&
+            !request.url.endsWith("/cancel")
+        ) {
+            const end = response.end;
+
+            response.end = ((...args: Parameters<typeof end>) => {
+                setTimeout(() => {
+                    Reflect.apply(end, response, args);
+                    answersCompleted++;
+                }, 150);
+
+                return response;
+            }) as typeof end;
+        }
+
+        void handler(request, response);
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+    browsers = new Browsers({
+        dataDir: mkdtempSync(join(root, "login-ui-")),
+        load: async () => undefined,
+        save: () => {},
+    });
+    page = await browsers.open(1);
+    await page.setViewport({ width: 390, height: 844, scale: 1, mobile: true });
+    // Only this isolated Chromium profile receives the synthetic fixture cookie.
+    await page.navigate(`${base}/login?token=${encodeURIComponent(app.config.ownerToken)}`);
+    await until(
+        async () => (await state()).text.includes("My accounts"),
+        "fixture sign-in",
+        20_000,
+    );
+});
+
+after(async () => {
+    await browsers?.closeAll({ final: true });
+    server?.closeAllConnections();
+    server?.close();
+    await app?.close();
+    cleanUp();
+});
+
+test(
+    "remote setup is visible before authorization, at 390px and 320px; success retains cleanup",
+    real,
+    async () => {
+        await readyForSsh();
+        const before = await state();
+
+        assert.equal(sdkCalls, 0);
+        assert.match(before.text, /ExitOnForwardFailure=yes/);
+        assert.match(before.text, /not an automatic connectivity check/i);
+        assert.ok(!before.text.includes("Open the sign-in page"));
+        assert.ok(before.width <= before.viewport);
+        writeFileSync(
+            "/tmp/rotom-team-oauth-guide-390.jpg",
+            Buffer.from((await page.screenshot()).data, "base64"),
+            { mode: 0o600 },
+        );
+        await page.setViewport({ width: 320, height: 740, scale: 1, mobile: true });
+        const narrow = await state();
+
+        assert.ok(narrow.width <= narrow.viewport);
+        writeFileSync(
+            "/tmp/rotom-team-oauth-guide-320.jpg",
+            Buffer.from((await page.screenshot()).data, "base64"),
+            { mode: 0o600 },
+        );
+        const answered = answersCompleted;
+
+        await click("My temporary forward is ready — continue to OpenAI");
+        await until(() => answersCompleted > answered, "delayed readiness HTTP answer");
+        await until(
+            async () => (await state()).auth?.done?.ok === true,
+            "success cleanup remains visible",
+        );
+        assert.equal(sdkCalls, 1);
+        assert.match((await state()).text, /Close your temporary port 1455 forward now/);
+        await click("Close");
+        await until(async () => (await state()).auth === null, "close completed login");
+    },
+);
+
+test(
+    "cancel dismisses the flow, hides late completion, and reminds to remove only its forward",
+    real,
+    async () => {
+        await readyForSsh();
+        const flowId = (await state()).auth.flowId;
+
+        await page.evaluate(
+            `document.querySelector('.sheet:not(.leaving) [aria-label="Close"]').click()`,
+        );
+        await until(async () => (await state()).auth === null, "cancel dialog");
+        // Server acknowledgement is a readback, not a replay of the cancellation mutation.
+        await until(async () => {
+            try {
+                app.providers.answerLogin(owner(app), flowId, "not-a-prompt", "local");
+            } catch (error) {
+                return (error as Error).message === "No such login";
+            }
+
+            return false;
+        }, "cancelled flow reservation released");
+        const closed = await state();
+
+        assert.equal(closed.auth, null);
+        assert.match(closed.text, /Close your temporary port 1455 SSH forward now/);
+        assert.equal(sdkCalls, 1);
+    },
+);
+
+test("provider failure retains remote cleanup instructions", real, async () => {
+    rejectLogin = true;
+    await readyForSsh();
+    await click("My temporary forward is ready — continue to OpenAI");
+    await until(async () => (await state()).auth?.done?.ok === false, "failed login cleanup");
+    const failed = await state();
+
+    assert.match(failed.text, /Synthetic provider refusal/);
+    assert.match(failed.text, /-O cancel/);
+    assert.equal(sdkCalls, 2);
+    await click("Close");
+});
