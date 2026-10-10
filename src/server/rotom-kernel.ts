@@ -1,6 +1,7 @@
 /** Experimental pinned rotom product boundary. Not yet connected to Pocket's Durable execution backend. */
 import { createHash, randomUUID } from "node:crypto";
 import { accessSync, constants, lstatSync, readFileSync, realpathSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { RotomRpc } from "./rotom-rpc.ts";
@@ -165,6 +166,16 @@ export async function startRotomKernel(options: {
     }
 
     const node = realpathSync(process.execPath);
+    // Desktop tools run as the service user. The member HOME isolates credentials, not the screen:
+    // reuse the service user's installed (and TCC-authorized) Computer Use helper.
+    const { resolveMacosHelperAppPath } = await import(
+        pathToFileURL(
+            join(
+                product,
+                "extensions/third-party/node_modules/@injaneity/pi-computer-use/src/platform/macos/helper-path.mjs",
+            ),
+        ).href
+    );
     const client = new RotomRpc(
         executable,
         [
@@ -175,9 +186,6 @@ export async function startRotomKernel(options: {
             "--model",
             options.model,
             ...(options.thinkingLevel ? ["--thinking", options.thinkingLevel] : []),
-            "--tools",
-            "read,write,edit,bash",
-            "--no-mcp",
             ...(options.configuration
                 ? [
                       "--no-context-files",
@@ -198,7 +206,9 @@ export async function startRotomKernel(options: {
             env: {
                 ...kernelNetworkEnvironment(process.env),
                 HOME: home,
-                PATH: `${dirname(node)}:/usr/bin:/bin`,
+                // Coding tools need the service's developer toolchain (git, rg, package managers).
+                PATH: `${dirname(node)}:${process.env.PATH ?? "/usr/bin:/bin"}`,
+                PI_COMPUTER_USE_HELPER_APP_PATH: resolveMacosHelperAppPath({ homeDir: homedir() }),
                 ROTOM_NODE: node,
                 PI_CODING_AGENT_DIR: join(home, ".pi/agent"),
                 ROTOM_OBSERVABILITY: "0",

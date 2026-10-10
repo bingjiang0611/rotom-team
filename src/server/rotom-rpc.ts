@@ -227,7 +227,8 @@ export class RotomRpc {
         });
     }
 
-    async prompt(message: string, timeoutMs = 180_000): Promise<"settled" | "handled"> {
+    /** Coding runs have no natural length: without timeoutMs only Stop or process loss ends a run. */
+    async prompt(message: string, timeoutMs?: number): Promise<"settled" | "handled"> {
         if (this.#busy) {
             throw new RpcFailure("rejected", "kernel busy; no implicit queue or payer change");
         }
@@ -251,7 +252,10 @@ export class RotomRpc {
 
         // A response rejection can arrive before we await this promise.
         void settled.catch(() => {});
-        const timer = setTimeout(() => this.#fail("kernel run deadline exceeded"), timeoutMs);
+        const timer =
+            timeoutMs === undefined
+                ? undefined
+                : setTimeout(() => this.#fail("kernel run deadline exceeded"), timeoutMs);
 
         try {
             const data = (await this.#send({ type: "prompt", message })) as {

@@ -17,7 +17,7 @@
 - `runtime/rotom/package.json` / lock：单独安装公开 `@bingjiang0611/rotom@0.1.14`，npm lock 绑定 registry tarball SRI。不是复用本机全局安装，不是 `file:` 引用 dev-agent。
 - `runtime/rotom/pin.json`：产品 bootstrap 的 SHA-256。`verifyRotomKernel()` 检查 canonical 路径、版本、名称、公开入口、摘要及可执行性；真正启动仍由产品 launcher 完成它原有的 bundled Pi/resource gate。这不是整个安装树的逐字节审计，也不是 OS 沙箱。
 - `src/server/rotom-kernel.ts`：调用真正的公开 `bin/rotom --mode rpc`。使用显式私有 HOME、agent directory、workspace、provider/model；不合并维护进程环境、不传 API key、不查 PATH/global rotom。启动模型与请求不一致则拒绝，不 fallback。
-- 产品扩展正常加载；当前验证工具面明确限定 `read,write,edit,bash`。没有宣称完整工具/Goal/Subagent/Browser 能力迁移。受门禁包装的原生调用显式使用 `maxRetries:0`、`transport:sse`；当前 OpenAI-compatible scripted endpoint 的 429/503 各只派发一次，不据此宣称所有第三方 Provider 都支持这些选项。
+- 产品扩展正常加载，不再用 `--tools` 限定工具面：scripted proof 断言模型请求包含 browser、Computer Use、codemode、ask_user_question 等 rotom 工具（交互式 extension UI 仍自动取消，尚未转发网页）。PATH 继承服务进程；Computer Use helper 指向服务用户已安装/已授权的副本；browser relay socket 仍按成员 HOME 解析，待 rotom 提供路径覆盖后才可用。单次运行不再有 180 秒硬时限，只由 Stop 或进程丢失结束。工具真实行为（Goal/Subagent/Browser/Computer Use）未逐项验收。受门禁包装的原生调用显式使用 `maxRetries:0`、`transport:sse`；当前 OpenAI-compatible scripted endpoint 的 429/503 各只派发一次，不据此宣称所有第三方 Provider 都支持这些选项。
 - `src/server/rotom-rpc.ts`：只按 LF 分帧，正确处理分块 UTF-8、CRLF、U+2028/U+2029；响应按 id+command 关联。持续排空但不保留 stderr，不打印 prompt/工具正文或认证信息。
 - prompt response 只证明准入；`agent_end` 不证明执行结束。等待 `agent_settled`，区分 `handled`、明确 `rejected` 和 `unknown`。同一个进程忙时不自动排队、不换账号；断连/超时/坏协议后 fence 后续写入，绝不自动重新启动/重发。
 - 未接入的交互式 dialog 一律取消，不默认批准；未实现的模型切换、fork、compact、steer、bash RPC 等命令明确拒绝。控制请求不能绕过 prompt 的 busy 检查。

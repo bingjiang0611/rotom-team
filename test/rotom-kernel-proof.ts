@@ -57,6 +57,7 @@ if (proxyMode) {
 let requests = 0,
     toolReadObserved = false,
     rejectStatus = 0;
+let offeredTools: string[] | undefined;
 
 const respond: RequestListener = async (req, res) => {
     try {
@@ -71,6 +72,9 @@ const respond: RequestListener = async (req, res) => {
 
         assert.equal(input.model, "kernel-fixture");
         requests++;
+        offeredTools ??= (input.tools as { function: { name: string } }[]).map(
+            (tool) => tool.function.name,
+        );
 
         if (rejectStatus) {
             res.writeHead(rejectStatus, { "Content-Type": "application/json" });
@@ -263,6 +267,12 @@ try {
     assert.equal(readFileSync(join(workspace, "proof.txt"), "utf8"), "ROTOM_KERNEL_OK\n");
     assert.equal(toolReadObserved, true);
     assert.equal(requests, 3);
+
+    // The team boundary must not reduce rotom to its four core tools.
+    for (const name of ["browser_inspect", "act_ui", "codemode", "ask_user_question"]) {
+        assert.ok(offeredTools?.includes(name), `rotom tool ${name} must be offered`);
+    }
+
     const entries = (await kernel.request({ type: "get_entries" })) as {
         entries: {
             type: string;
@@ -289,6 +299,7 @@ try {
     assert.ok(disk.some((e) => e.type === "message" && e.message?.role === "toolResult"));
     Object.assign(report, {
         productExtensionLoaded: true,
+        offeredTools,
         nativeWriteAndRead: true,
         loopbackRequests: requests,
         settledObserved: events.some((e) => e.type === "agent_settled"),
