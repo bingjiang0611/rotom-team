@@ -87,6 +87,7 @@ mkdirSync(options.data, { recursive: true, mode: 0o700 });
 chmodSync(options.data, 0o700);
 // The rotom journal and member HOMEs accept only canonical paths: name the folder by its real path.
 options.data = realpathSync(options.data);
+options.cwd = realpathSync(options.cwd);
 process.env.PI_POCKET_DIR = options.data;
 
 /** How long stopping may wait for running work to stop. What is still running then resumes in the next process. */

@@ -27,6 +27,7 @@
         "start": "node bin/rotom-team.js",
         "dev": "node bin/rotom-team.js --cwd .",
         "demo": "node test/team-serve.ts",
+        "demo:kernel": "node test/team-kernel-demo.ts",
         "test:team": "node --test test/team.test.ts",
         "check": "tsc --noEmit -p .",
         "test": "node --test --test-concurrency=2 test/*.test.ts",
