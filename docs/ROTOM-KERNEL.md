@@ -8,7 +8,7 @@
 
 ## 历史状态：第三阶段，可选新会话后端
 
-已接入 PocketApp 的真实授权状态、HTTP API 和网页。**仅显式 `--rotom-kernel` 启动并选择 rotom 的新会话使用新后端；默认、现有会话与备用机部署仍使用原 Pi Durable 后端。** 这不是把 rotom 包装为一个模型 Provider；不会让两个 Agent 循环同时执行同一会话。没有复制刷新凭据，没有修改 dev-agent 源码或当前用户的 rotom 安装。新路径目前只用 synthetic accounts / loopback scripted endpoint 验证，不继承旧后端的真实账号证据。
+已接入 PocketApp 的真实授权状态、HTTP API 和网页。**v1（0.1.0）起 rotom 默认执行新会话，`--no-rotom-kernel` 关闭；现有 Durable 会话与备用机部署不变。v1 的完整合同见 [V1.md](V1.md)，本文其余部分是阶段历史。** 这不是把 rotom 包装为一个模型 Provider；不会让两个 Agent 循环同时执行同一会话。没有复制刷新凭据，没有修改 dev-agent 源码或当前用户的 rotom 安装。新路径目前只用 synthetic accounts / loopback scripted endpoint 验证，不继承旧后端的真实账号证据。
 
 长期边界：team 拥有成员/项目权限、协作、不可变付费人、配置快照、请求准入和共享视图；rotom 拥有模型接入、Agent 循环、工具、扩展和原生会话。rotom 不引入团队业务概念，也不依赖 team。team 固定已验证的产品版本，通过版本化适配边界升级，不能追随全局 CLI 或开发 checkout 自动变化。
 
@@ -60,7 +60,7 @@ npm run test:kernel:app
 npm start -- --rotom-kernel --data /absolute/experimental-team-data --cwd /absolute/workspace
 ```
 
-第一条命令在 `runtime/rotom/` 内按锁安装产品并检查 bootstrap，不更新全局 rotom。发行产品本身携带运行时，不执行依赖安装脚本。根 launcher 不自动安装产品；不带 `--rotom-kernel` 不启用新后端。启用后在 New session → Execution engine 显式选择 rotom；先选好自己的受支持模型。不要据此替换现有部署。
+第一条命令在 `runtime/rotom/` 内按锁安装产品并检查 bootstrap，不更新全局 rotom。发行产品本身携带运行时，不执行依赖安装脚本。根 launcher 不自动安装产品；未安装时默认启动会提示运行 `npm run install:kernel` 或使用 `--no-rotom-kernel`。新会话直接使用 rotom；先选好自己的受支持模型。不要据此替换现有部署。
 
 `test:kernel` 是显式的真实产品/本地 scripted endpoint 验证，不是 Faux 代替 rotom，也不是付费模型测试。创建私有临时 HOME/workspace，仅 loopback endpoint，验证产品 `qoder-credits` command 存在、真正的原生 write/read、工具回传、最终回答、settled 与原生 JSONL 文件读取。产物留在工具输出所示私有临时目录，不进入 Git。JSONL readback 证明受测正常退出场景的文件内容，不宣称断电持久性。
 

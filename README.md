@@ -2,7 +2,9 @@
 
 共享 Agent 会话，使用自己的模型账号。基于 Pi Pocket 和 Pi Durable 的自托管团队工作台。
 
-**状态：`0.1.0-alpha.1`，原生 macOS / 可信团队预览。不是已完成的企业级产品，也不是安全沙箱。**
+**状态：`0.1.0`（v1），原生 macOS / 可信团队预览。不是已完成的企业级产品，也不是安全沙箱。**
+
+**v1：rotom 是执行引擎。** 新会话默认由固定版本 rotom 执行；团队层只负责共享状态、唯一的 Transcript 界面、权限、个人账号和恢复。能力、信任边界、限制和验证见 [docs/V1.md](docs/V1.md)。
 
 ## 启动
 
@@ -10,6 +12,7 @@
 
 ```sh
 npm ci
+npm run install:kernel
 npm start -- --cwd /absolute/path/to/project
 ```
 
@@ -19,7 +22,10 @@ npm start -- --cwd /absolute/path/to/project
 # 指定独立数据目录和端口
 npm start -- --data /absolute/path/to/team-data --port 8787 --cwd /absolute/path/to/project
 
-# 无账号、无真实模型请求、无推理费用的双人演示
+# 无账号、无真实模型请求、无推理费用的 rotom 演示：执行 → 接力 → fork → 重启续跑
+npm run demo:kernel
+
+# 旧 Durable 后端的双人演示
 npm run demo
 ```
 
@@ -27,9 +33,9 @@ npm run demo
 
 当前不配置隧道、Tailscale 或公网代理。需要其他设备访问时再明确部署入口；不要直接把可信原生模式暴露给不信任的人。`--host` 由部署者显式配置，远程部署应另行配置 HTTPS 和访问控制。
 
-另有显式 `--rotom-kernel` 的[实验新会话后端](docs/ROTOM-KERNEL.md)：团队层只做协作/权限/凭据编排，由独立固定版本 rotom 执行。已接入 API 和桌面网页，但仅验证 scripted endpoint；不支持 Qoder、接力/fork/压缩或完整财务预算。默认、现有会话与备用机不变，不要把以下旧后端能力全部算给实验后端。安装和独立验证方式见[部署说明](docs/DEPLOYMENT.md)。
+`--no-rotom-kernel` 启动只用 Pi Durable 的服务；已存的 Durable 会话保持原后端。rotom 内核的历史设计与证据见 [ROTOM-KERNEL.md](docs/ROTOM-KERNEL.md)。
 
-## 使用（默认后端）
+## 使用（Durable 后端；rotom 会话见 docs/V1.md）
 
 1. 管理员启动服务并邀请成员。
 2. 每个成员打开 **My model accounts**，自行连接 ChatGPT 或 Qoder。

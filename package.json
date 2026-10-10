@@ -1,6 +1,6 @@
 {
     "name": "rotom-team",
-    "version": "0.1.0-alpha.1",
+    "version": "0.1.0",
     "description": "Self-hosted shared agent sessions with personal ChatGPT and Qoder accounts",
     "private": true,
     "type": "module",

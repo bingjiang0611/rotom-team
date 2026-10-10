@@ -197,6 +197,7 @@ const [{ PocketApp: App }, { createHandler: makeHandler }, { watchTree }] = awai
     import("./http.ts"),
     import("./reload.ts"),
 ]);
+
 if (options.kernel) {
     const { verifyRotomKernel } = await import("./rotom-kernel.ts");
 
