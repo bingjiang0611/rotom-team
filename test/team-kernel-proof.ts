@@ -577,6 +577,35 @@ try {
             .skills,
         [],
     );
+    // The CLI pushes a member's local ~/.pi/agent layer with their own sign-in token.
+    const localAgent = join(realpathSync(root), "carol-local-agent");
+
+    mkdirSync(join(localAgent, "skills", "local-proof", "references"), { recursive: true });
+    writeFileSync(join(localAgent, "AGENTS.md"), personal.get(bob.user.id)!);
+    writeFileSync(
+        join(localAgent, "skills", "local-proof", "SKILL.md"),
+        "---\nname: local-proof\ndescription: LOCAL_SKILL_DESCRIPTION\n---\nLocal.\n",
+    );
+    writeFileSync(join(localAgent, "skills", "local-proof", "references", "a.md"), "ref\n");
+    mkdirSync(join(localAgent, "skills", "Bad Name"));
+    writeFileSync(join(localAgent, "skills", "Bad Name", "SKILL.md"), "---\nname: x\n---\n");
+    const { pushProfile } = await import("../scripts/profile-push.mjs");
+    const pushed = await pushProfile({ server: base, token: bob.token, agentDir: localAgent });
+
+    assert.equal(pushed.instructions, true);
+    assert.deepEqual(pushed.skills, ["local-proof"]);
+    assert.deepEqual(
+        pushed.refused.map((each: { name: string }) => each.name),
+        ["Bad Name"],
+    );
+    assert.deepEqual(
+        ((await (await request(bob.token, "kernel-profile")).json()) as { skills: unknown[] })
+            .skills,
+        [
+            { name: "bob-proof", description: "BOB_SKILL_DESCRIPTION", files: 2 },
+            { name: "local-proof", description: "LOCAL_SKILL_DESCRIPTION", files: 2 },
+        ],
+    );
     hold = true;
     const inFlight = request(bob.token, `c/${bobSession.id}/submit`, "POST", {
         text: "Wait for revocation",
@@ -587,6 +616,7 @@ try {
     assert.ok(lastBody.includes("UPDATED_PROJECT_LAYER"));
     assert.ok(lastBody.includes("PROJECT_SKILL_DESCRIPTION"));
     assert.ok(lastBody.includes("BOB_SKILL_DESCRIPTION"));
+    assert.ok(lastBody.includes("LOCAL_SKILL_DESCRIPTION"));
 
     for (const operation of ["submit", "compact"]) {
         const busyKey = `busy-${operation}`;

@@ -11,6 +11,14 @@ if (Number(process.versions.node.split(".")[0]) < 24) {
 
 process.umask(0o077);
 const args = process.argv.slice(2);
+
+// A client command: talk to a running server, start nothing here.
+if (args[0] === "profile") {
+    const { main } = await import("../scripts/profile-push.mjs");
+
+    await main(args.slice(1));
+}
+
 const index = args.lastIndexOf("--data");
 const data = resolve(
     index >= 0 && args[index + 1]
