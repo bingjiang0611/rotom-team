@@ -1,12 +1,12 @@
 {
-    "version": "0.1.14",
-    "integrity": "sha512-SQJ5yCyeFZlzGJpuIwMSgjnvS/sgtJ4Py3KxqjcmwMu8h/eVX8ZBTdrKoXL9cBVGVZk2IMrtBLg0uATKPV9daA==",
+    "version": "0.1.16",
+    "integrity": "sha512-w1N3kOTtfJKFdmipym4QHF+0svMTLMX/efScuHouWmrtF1llZ4EeUl/C+HIog7pB5WtV6E82iT3XKPp5o5lQ/w==",
     "sha256": {
-        "package.json": "39b577129b2d31023b11694cc7b4dd6c89f525f5af67a3c1734835f05a218194",
+        "package.json": "3f3786c827a92d9d745ae117c3296623e8e6a619a09e0a78400d97b46a36b5c9",
         "bin/rotom": "c9f1dd3df66d995540c006e8f8cd930ab7bb9a8f0741aaf71e44c1bd56f15e80",
         "bin/rotom-launcher": "1fe528c46586f845d4ef4cadf25d18852531ce77b444fe1c30a49241981541d1",
         "runtime/launch-runtime.mjs": "db6881cd60936a01d8a7c323e72741b679a96c5d924448316b419a2317fa0b61",
-        "runtime/product-config.mjs": "3ad16eff6f239185093e7b6a9901c2309f6d67a7e1300486a69c50b8797cab4f",
+        "runtime/product-config.mjs": "a2791671ec529a89de34273a1e743558d31ae748108cdec1dec6946eef53e213",
         "runtime/resolve-installed-pi.mjs": "1ce11fc37c0cc1027098cf65c16fd6bf3a9dc98c9bb6900a6288d79bda44dec7",
         "runtime/verify-pi-runtime.mjs": "483c739102d06f6b0417d8c3f83b8c73482c4e61cc47ed629c8649d40fdd76b0"
     }

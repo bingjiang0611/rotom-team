@@ -64,7 +64,6 @@ export function verifyRotomKernel(): { version: string; executable: string } {
     }
 
     if (
-        pin.version !== "0.1.14" ||
         pkg.version !== pin.version ||
         pkg.name !== "@bingjiang0611/rotom" ||
         pkg.bin?.rotom !== "bin/rotom"

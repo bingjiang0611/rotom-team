@@ -351,7 +351,7 @@ try {
     let executions = new RotomExecutions(data, authorize);
     const binding = {
         memberId: "alice",
-        kernelVersion: "0.1.14",
+        kernelVersion: verifyRotomKernel().version,
         accountGeneration: "isolated-fixture-1",
         provider: "kernel-fixture",
         model: "kernel-fixture",

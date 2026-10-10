@@ -491,13 +491,33 @@ export class TeamKernel {
             return this.#receipt(previous);
         }
 
-        const binding = this.executions.journal.session(String(id)).binding;
+        const journal = this.executions.journal;
+        const source = journal.session(String(id));
+
+        // Whoever sends pays: take over with the sender's own account, on the pinned kernel, before running.
+        if (
+            source.binding.memberId !== user.id ||
+            source.binding.kernelVersion !== verifyRotomKernel().version
+        ) {
+            const takeover = await this.#handoff(
+                id,
+                user,
+                `${requestId}:takeover`,
+                source.segmentId,
+            );
+
+            if (takeover.status !== "settled") {
+                throw new HttpError(
+                    409,
+                    `Taking over with your own account ended ${takeover.status}; the message was not sent.`,
+                );
+            }
+        }
+
+        const binding = journal.session(String(id)).binding;
 
         if (binding.memberId !== user.id) {
-            throw new HttpError(
-                403,
-                "Explicitly take over with your own account before sending; another member's quota cannot be used.",
-            );
+            throw new HttpError(409, "Another member took over first; refresh and send again.");
         }
 
         return this.#track(id, binding, this.executions.run(String(id), key, text));
@@ -827,6 +847,7 @@ export class TeamKernel {
         mkdirSync(home, { recursive: true, mode: 0o700 });
         const binding: KernelBinding = {
             ...source.binding,
+            kernelVersion: verifyRotomKernel().version,
             memberId: user.id,
             home,
             accountGeneration: choice.provider,

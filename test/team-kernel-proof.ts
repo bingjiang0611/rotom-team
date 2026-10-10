@@ -19,6 +19,7 @@ import { COOKIE } from "../src/server/auth.ts";
 import { ConfigurationDoc } from "../src/server/team-profiles.ts";
 import { NativeSetupDoc, NativeConfigurationsDoc } from "../src/server/team-kernel.ts";
 import { RotomJournal } from "../src/server/rotom-journal.ts";
+import { verifyRotomKernel } from "../src/server/rotom-kernel.ts";
 import { SessionsDoc } from "../src/server/docs.ts";
 import type { Runtime } from "../src/server/team-accounts.ts";
 import type { User } from "../src/server/config.ts";
@@ -350,15 +351,6 @@ try {
     assert.ok(view.usage.every((row) => row.memberId === a.id));
     assert.equal(view.costStatus, "unknown");
     assert.ok(JSON.stringify(view.messages).includes("APP_NATIVE_FINISHED"));
-    assert.equal(
-        (
-            await request(bob.token, `c/${id}/submit`, "POST", {
-                text: "Borrow Alice",
-                requestId: "foreign",
-            })
-        ).status,
-        403,
-    );
     assert.equal(
         (
             await request(viewer.token, `c/${id}/submit`, "POST", {
@@ -1344,6 +1336,89 @@ try {
     );
     assert.equal(calls, 8);
     assert.equal(legacyCalls, 0);
+
+    // Whoever sends pays: a member's submit takes over with their own account, carrying public history only.
+    const shared2 = (await (
+        await request(aliceToken, "sessions", "POST", { title: "Auto takeover", backend: "rotom" })
+    ).json()) as { id: number };
+    const aliceRun = (await (
+        await request(aliceToken, `c/${shared2.id}/submit`, "POST", {
+            text: "Write the proof file.",
+            requestId: "alice-run",
+        })
+    ).json()) as { status: string };
+
+    assert.equal(aliceRun.status, "settled");
+    const beforeTakeover = app.kernel!.snapshot(shared2.id as never, owner(app));
+    const dana = app.config.addUser("Dana", "guest");
+
+    await app.hello(dana.user);
+    project = app.projects.save(
+        owner(app),
+        {
+            ...project,
+            members: {
+                ...project.members,
+                [dana.user.id]: { view: true, continue: true, fork: true },
+            },
+        },
+        (key) => !!app.config.userById(key),
+    );
+    await app.projectsChanged();
+    const danaRun = await request(dana.token, `c/${shared2.id}/submit`, "POST", {
+        text: "Write the proof file.",
+        requestId: "bob-run",
+    });
+
+    assert.equal(danaRun.status, 200, await danaRun.clone().text());
+    assert.equal(((await danaRun.json()) as { status: string }).status, "settled");
+    const afterTakeover = app.kernel!.snapshot(shared2.id as never, owner(app));
+
+    assert.equal(afterTakeover.memberId, dana.user.id);
+    assert.notEqual(afterTakeover.segmentId, beforeTakeover.segmentId);
+    assert.deepEqual(
+        afterTakeover.usage.map((row) => row.memberId),
+        [a.id, a.id, dana.user.id, dana.user.id],
+    );
+    assert.deepEqual(requestMembers.slice(-2), [dana.user.id, dana.user.id]);
+    assert.equal(calls, 12);
+    report.submitTakesOverWithSendersAccount = true;
+
+    // A kernel pin upgrade starts a new segment recording the new version instead of rejecting old sessions.
+    const oldPin = { ...planned, kernelVersion: "0.0.0-previous-pin" };
+    const upgraded = await app.harness.createConversation(
+        {
+            ownership: { kind: "ownerless" },
+            agent: { cwd: workspace },
+            init: async (tx, id) => {
+                (await tx.doc(ConfigurationDoc, id)).snapshot = frozen;
+                (await tx.doc(NativeSetupDoc, id)).binding = oldPin;
+                (await tx.doc(SessionsDoc)).items[String(id)] = {
+                    cwd: workspace,
+                    backend: "rotom",
+                    createdBy: a.id,
+                    createdAt: Date.now(),
+                    updatedAt: Date.now(),
+                };
+            },
+        },
+        context,
+    );
+
+    await app.kernel!.ensureBound(upgraded.id);
+    const upgradeRun = await request(aliceToken, `c/${upgraded.id}/submit`, "POST", {
+        text: "Write the proof file.",
+        requestId: "after-upgrade",
+    });
+
+    assert.equal(upgradeRun.status, 200, await upgradeRun.clone().text());
+    assert.equal(((await upgradeRun.json()) as { status: string }).status, "settled");
+    assert.equal(
+        app.kernel!.executions.journal.session(String(upgraded.id)).binding.kernelVersion,
+        verifyRotomKernel().version,
+    );
+    assert.equal(calls, 14);
+    report.kernelUpgradeStartsNewSegment = true;
     Object.assign(report, {
         status: "passed",
         projectViewAndContinue: true,
@@ -1400,7 +1475,7 @@ try {
                 configurationDigest: app.configuration(id as never)!.digest,
                 busyId: Number(forked.id),
             });
-            assert.equal(calls, 8, "UI inspection/dismissal must not dispatch inference");
+            assert.equal(calls, 14, "UI inspection/dismissal must not dispatch inference");
             assert.equal(
                 app.kernel!.executions.journal.request(String(forkGap.id), `${a.id}:fork-gap`),
                 undefined,
