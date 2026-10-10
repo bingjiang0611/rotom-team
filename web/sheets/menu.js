@@ -1,4 +1,6 @@
 // The menu: what can be done in this session and in the app.
+import { useContext } from "preact/hooks";
+import { KernelContext } from "../kernel.js";
 import { browserAvailable, displayUrl, setBrowserOpen } from "../browser.js";
 import { chatUnread } from "../chat.js";
 import { schedulesAvailable } from "../commands.js";
@@ -132,7 +134,10 @@ export function PlacesSheet() {
 
 export function MenuSheet() {
     const { view, me, server } = store.state;
-    const conversation = view.conversation;
+    const kernel = useContext(KernelContext);
+    const native =
+        kernel && store.state.sessions.find((session) => session.id === store.state.conversationId);
+    const conversation = kernel ? null : view.conversation;
     const steer = canSteer();
     const session = conversation?.kind === "session";
     const turns = view.turns;
@@ -146,8 +151,58 @@ export function MenuSheet() {
         !store.state.presence.some((person) => person.id === turns.driver);
     const instructions = view.agent?.instructions;
 
-    return html`<${Sheet} title=${conversation?.title ?? "Menu"} onClose=${closeSheet}>
-        <${Places} />
+    return html`<${Sheet} title=${native?.title ?? conversation?.title ?? "Menu"} onClose=${closeSheet}>
+        ${!kernel && html`<${Places} />`}
+        ${
+            kernel &&
+            html`<div class="group" aria-label="Session actions">
+            <div class="group-title">This session</div>
+            ${
+                kernel.view &&
+                kernel.view.memberId !== me.id &&
+                me.role !== "viewer" &&
+                html`<button
+                    class="list-item"
+                    disabled=${kernel.blocked}
+                    onClick=${() => {
+                        closeSheet();
+                        void kernel.dispatch("handoff");
+                    }}
+                >
+                    <span>Continue with my account</span>
+                    <span class="muted small">your model and quota · keeps configuration</span>
+                </button>`
+            }
+            <button
+                class="list-item"
+                disabled=${kernel.blocked || me.role === "viewer" || Array.isArray(me.sessions)}
+                onClick=${() => {
+                    closeSheet();
+                    void kernel.dispatch("fork");
+                }}
+            >
+                <span>Fork</span>
+                <span class="muted small">public context · your account</span>
+            </button>
+            <button
+                class="list-item"
+                disabled=${kernel.blocked || !kernel.own}
+                onClick=${() => {
+                    closeSheet();
+                    void kernel.dispatch("compact");
+                }}
+            >
+                <span>Compact context</span>
+                <span class="muted small">summarize older messages</span>
+            </button>
+            ${item("Copy link", () =>
+                copyText(location.href).then(
+                    () => notify("info", "Link copied. Other signed-in devices can open it."),
+                    () => notify("error", "Could not copy."),
+                ),
+            )}
+        </div>`
+        }
         ${
             conversation &&
             collab() &&
@@ -208,7 +263,7 @@ export function MenuSheet() {
         ${session && steer && driving && item("Instructions for Pi", () => openSheet({ type: "instructions" }), instructions ? "on" : "none")}
         ${conversation && steer && driving && item("Compact context", () => openSheet({ type: "compact" }), "summarize older messages")}
         ${conversation && steer && driving && item("New context", () => openSheet({ type: "reset" }), "Pi starts fresh; history stays")}
-        ${schedulesAvailable() && item("Scheduled messages", () => openSheet({ type: "schedules" }), view.schedules.length === 0 ? "none" : `${view.schedules.length} coming`)}
+        ${!kernel && schedulesAvailable() && item("Scheduled messages", () => openSheet({ type: "schedules" }), view.schedules.length === 0 ? "none" : `${view.schedules.length} coming`)}
         ${
             conversation &&
             item("Copy link", () =>
@@ -234,6 +289,7 @@ export function MenuSheet() {
             })
         }
         ${
+            !kernel &&
             view.subagents.length > 0 &&
             html`<div class="group">
                 <div class="group-title">Subagents</div>
@@ -257,6 +313,20 @@ export function MenuSheet() {
             ${item("Projects & access", () => openSheet({ type: "projects" }), "view · continue · fork")}
             ${item("Configuration & skills", () => openSheet({ type: "profile" }), "personal draft · shared snapshot")}
             ${item("My model accounts", () => openSheet({ type: "providers" }), "your ChatGPT / Qoder quota")}
+            ${
+                kernel?.own &&
+                html`<button
+                    class="list-item"
+                    disabled=${kernel.blocked}
+                    onClick=${() => {
+                        closeSheet();
+                        void kernel.dispatch("handoff");
+                    }}
+                >
+                    <span>Update session account</span>
+                    <span class="muted small">after reconnecting · preserves configuration</span>
+                </button>`
+            }
             ${item("Extensions", () => openSheet({ type: "extensions" }), store.state.guard?.enabled ? "Lancet Guard on" : store.state.guard?.available ? "Lancet Guard off" : "")}
             ${
                 me?.role === "owner" &&

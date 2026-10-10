@@ -25,14 +25,16 @@ export async function nativeUiProof(options: {
     const draftKey = `kernel.${options.memberId}.${options.id}`;
     const draft = "Keep this unexecuted draft";
     const button = (label: string) =>
-        `Array.from(document.querySelectorAll('button')).find(b => b.textContent.trim() === ${JSON.stringify(label)})`;
+        `Array.from(document.querySelectorAll('button')).find(b => (b.querySelector(':scope > span')?.textContent ?? b.textContent).trim() === ${JSON.stringify(label)})`;
     const screenshots: string[] = [];
 
     try {
         await page.navigate(`${options.base}/kernel-proof-bootstrap`);
         await until(
             async () =>
-                (await page.evaluate(`Boolean(${button("Configuration & skills")})`)) === "true",
+                (await page.evaluate(
+                    `Boolean(document.querySelector('.topbar [aria-label="Menu"]'))`,
+                )) === "true",
             "native UI ready",
             20000,
         );
@@ -71,20 +73,37 @@ export async function nativeUiProof(options: {
         assert.equal(lookup.preparedOnly, true);
         assert.equal(lookup.receipt, null);
 
+        assert.equal(
+            await page.evaluate(
+                `Boolean(document.querySelector('.transcript button:not(.icon-button)'))`,
+            ),
+            "false",
+        );
+        await page.evaluate(`document.querySelector('.topbar [aria-label="Menu"]').click()`);
+        await until(
+            async () =>
+                (await page.evaluate(`Boolean(${button("Configuration & skills")})`)) === "true",
+            "shared app menu available to native sessions",
+            20000,
+        );
+        assert.equal(await page.evaluate(`Boolean(${button("Use my account")})`), "false");
+        assert.equal(await page.evaluate(`Boolean(${button("Continue with my account")})`), "true");
+        assert.equal(await page.evaluate(`Boolean(${button("Update session account")})`), "false");
+
         for (const width of [390, 320, 1280]) {
             await page.setViewport({ width, height: 844, scale: 1, mobile: width < 600 });
             await page.evaluate(
-                "await document.fonts.ready; await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))); return 'ready';",
+                "await document.fonts.ready; await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))); await Promise.all(document.getAnimations().filter(animation => animation.effect.getComputedTiming().iterations !== Infinity).map(animation => animation.finished)); return 'ready';",
             );
             const geometry = JSON.parse(
                 await page.evaluate(
-                    `return JSON.stringify({ width:innerWidth, overflow:document.documentElement.scrollWidth-innerWidth, controls:Array.from(document.querySelectorAll('[aria-label="Native session actions"] button')).map(button => { const r=button.getBoundingClientRect(); return {label:button.textContent.trim(),left:r.left,right:r.right,width:r.width}; }) })`,
+                    `return JSON.stringify({ width:innerWidth, overflow:document.documentElement.scrollWidth-innerWidth, controls:Array.from(document.querySelectorAll('[aria-label="Session actions"] button')).map(button => { const r=button.getBoundingClientRect(); return {label:button.textContent.trim(),left:r.left,right:r.right,width:r.width}; }) })`,
                 ),
             );
 
             assert.equal(geometry.width, width);
             assert.ok(geometry.overflow <= 1, JSON.stringify(geometry));
-            assert.equal(geometry.controls.length, 5);
+            assert.equal(geometry.controls.length, 4);
 
             for (const control of geometry.controls) {
                 assert.ok(
@@ -195,7 +214,9 @@ export async function nativeUiProof(options: {
         await page.navigate(`${options.base}/s/${options.busyId}`);
         await until(
             async () =>
-                (await page.evaluate(`Boolean(${button("Configuration & skills")})`)) === "true",
+                (await page.evaluate(
+                    `Boolean(document.querySelector('.topbar [aria-label="Menu"]'))`,
+                )) === "true",
             "reload after refusal",
             20000,
         );
@@ -210,7 +231,117 @@ export async function nativeUiProof(options: {
             "Keep the busy draft",
         );
 
+        await until(
+            async () =>
+                (await page.evaluate(`!document.querySelector('textarea').disabled`)) === "true",
+            "own session readback after reload",
+            20000,
+        );
+        await page.evaluate(`document.querySelector('.topbar .title').click()`);
+        await until(
+            async () =>
+                (await page.evaluate(`Boolean(${button("Configuration & skills")})`)) === "true",
+            "session title opens the same menu",
+            20000,
+        );
+        assert.equal(
+            await page.evaluate(`Boolean(${button("Continue with my account")})`),
+            "false",
+        );
+        assert.equal(await page.evaluate(`${button("Update session account")}.disabled`), "false");
+        assert.equal(await page.evaluate(`${button("Fork")}.disabled`), "false");
+        assert.equal(await page.evaluate(`${button("Compact context")}.disabled`), "false");
+        await page.evaluate(`${button("Configuration & skills")}.click()`);
+        await until(
+            async () =>
+                (await page.evaluate(
+                    `Boolean(${button("Activate saved profile")} && !${button("Activate saved profile")}.disabled)`,
+                )) === "true",
+            "own session can activate from configuration sheet",
+            20000,
+        );
+        const beforeActivation = JSON.parse(
+            await page.evaluate(
+                `return JSON.stringify(await (await fetch('/api/c/${options.busyId}/configuration')).json())`,
+            ),
+        );
+
+        await page.evaluate(`
+            const input = Array.from(document.querySelectorAll('label')).find(label => label.textContent.trim().startsWith('Profile name')).querySelector('input');
+            input.value = 'Unsaved UI draft';
+            input.dispatchEvent(new Event('input', {bubbles:true}));
+        `);
+        await page.evaluate(
+            `window.confirm = () => true; ${button("Activate saved profile")}.click()`,
+        );
+        await until(
+            async () =>
+                (await page.evaluate(
+                    `localStorage.getItem(${JSON.stringify(busyKey)}) === null && Boolean(${button("Activate saved profile")} && !${button("Activate saved profile")}.disabled)`,
+                )) === "true",
+            "native activation durably read back",
+            20000,
+        );
+        const afterActivation = JSON.parse(
+            await page.evaluate(
+                `return JSON.stringify(await (await fetch('/api/c/${options.busyId}/configuration')).json())`,
+            ),
+        );
+
+        assert.equal(afterActivation.name, "UI private draft");
+        assert.notEqual(afterActivation.digest, beforeActivation.digest);
+        await until(
+            async () =>
+                (await page.evaluate(
+                    `document.body.innerText.includes(${JSON.stringify(afterActivation.digest.slice(0, 12))})`,
+                )) === "true",
+            "active snapshot refreshed in configuration sheet",
+            20000,
+        );
+
+        assert.equal(
+            await page.evaluate(
+                `Array.from(document.querySelectorAll('label')).find(label => label.textContent.trim().startsWith('Profile name')).querySelector('input').value`,
+            ),
+            "Unsaved UI draft",
+        );
+
+        // UI-only role projection; real server authorization/revocation is covered by the HTTP proof.
+        await page.evaluate(
+            `const {store} = await import('/store.js'); store.set({me: {...store.state.me, role: 'viewer'}});`,
+        );
+        await until(
+            async () =>
+                (await page.evaluate(`${button("Activate saved profile")}.disabled`)) === "true",
+            "viewer cannot activate configuration",
+            20000,
+        );
+        assert.equal(
+            await page.evaluate(
+                `document.body.innerText.includes('Continue with your account from the session menu before activating configuration.')`,
+            ),
+            "false",
+        );
+        await page.evaluate(`document.querySelector('.sheet-head [aria-label="Close"]').click()`);
+        await page.evaluate(`document.querySelector('.topbar [aria-label="Menu"]').click()`);
+        await until(
+            async () => (await page.evaluate(`Boolean(${button("Fork")})`)) === "true",
+            "viewer session menu",
+            20000,
+        );
+        assert.equal(
+            await page.evaluate(`Boolean(${button("Continue with my account")})`),
+            "false",
+        );
+        assert.equal(await page.evaluate(`Boolean(${button("Update session account")})`), "false");
+        assert.equal(await page.evaluate(`${button("Fork")}.disabled`), "true");
+        assert.equal(await page.evaluate(`${button("Compact context")}.disabled`), "true");
+
         return {
+            viewerActionsDisabled: true,
+            sharedSessionMenu: true,
+            handoffOnlyForAnotherMembersSession: true,
+            nativeConfigurationActivatedFromSheet: true,
             knownBusyRefusalClearsPendingWithoutReplay: true,
             nativeProfileDraftSavedWithoutActivation: true,
             preparedOnlyDismissedWithoutReplay: true,

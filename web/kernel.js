@@ -1,6 +1,7 @@
 // Native conversations use their own receipts/transcript. Polling is read-only; a lost POST is never resubmitted.
-import { useEffect, useRef, useState } from "preact/hooks";
-import { api, drafts, navigate, openSheet, store } from "./store.js";
+import { createContext } from "preact";
+import { useContext, useEffect, useRef, useState } from "preact/hooks";
+import { api, drafts, navigate, store } from "./store.js";
 import { html, Markdown } from "./ui.js";
 
 // Legacy saved values contain only a UUID. New values bind the operation as well.
@@ -18,7 +19,10 @@ const lookup = (id, value) => {
     );
 };
 
-export function KernelConversation({ id }) {
+export const KernelContext = createContext(null);
+
+// One request identity and readback loop shared by the transcript, menu and configuration sheet.
+export function KernelSession({ id, children }) {
     const me = store.state.me;
     const draftKey = `kernel.${me.id}.${id}`;
     const pendingKey = `rotom.kernel.pending.${me.id}.${id}`;
@@ -251,6 +255,47 @@ export function KernelConversation({ id }) {
         }
     };
 
+    return html`<${KernelContext.Provider} value=${{
+        view,
+        error,
+        prepared,
+        running,
+        own,
+        blocked,
+        waiting,
+        text,
+        setText,
+        draftKey,
+        submit,
+        stop,
+        stopping,
+        dispatch,
+        refresh,
+        dismissPrepared,
+    }}>${children}<//>`;
+}
+
+export function KernelConversation() {
+    const me = store.state.me;
+    const {
+        view,
+        error,
+        prepared,
+        running,
+        own,
+        blocked,
+        waiting,
+        text,
+        setText,
+        draftKey,
+        submit,
+        stop,
+        stopping,
+        refresh,
+        dismissPrepared,
+    } = useContext(KernelContext);
+    const unknown = view?.receipts.some((receipt) => receipt.status === "unknown");
+
     return html`<div class="scroller"><div class="transcript">
         <section class="assistant" aria-label="Execution details">
             <strong>rotom · experimental</strong>
@@ -259,32 +304,6 @@ export function KernelConversation({ id }) {
                 <summary>Execution rules</summary>
                 <p>Handoff uses your selected account. Fork copies public context and frozen configuration; old usage stays with its payer. Compact calls the current account. Results appear after durable readback, not as a live stream.</p>
             </details>
-            <div class="composer-row" style="flex-wrap: wrap" aria-label="Native session actions">
-                <button
-                    class="button" type="button"
-                    disabled=${blocked || me.role === "viewer"}
-                    onClick=${() => dispatch("handoff")}
-                >Use my account</button>
-                <button
-                    class="button" type="button"
-                    disabled=${blocked || me.role === "viewer" || Array.isArray(me.sessions)}
-                    onClick=${() => dispatch("fork")}
-                >Fork</button>
-                <button
-                    class="button" type="button"
-                    disabled=${blocked || !own}
-                    onClick=${() => dispatch("compact")}
-                >Compact</button>
-                <button
-                    class="button" type="button"
-                    onClick=${() => openSheet({ type: "profile" })}
-                >Configuration & skills</button>
-                <button
-                    class="button" type="button"
-                    disabled=${blocked || !own}
-                    onClick=${() => dispatch("configuration")}
-                >Activate saved profile</button>
-            </div>
         </section>
         ${
             view?.credits?.length > 0 &&
@@ -339,7 +358,7 @@ export function KernelConversation({ id }) {
         ${view && !view.messages.length && !running && html`<div class="empty">No native messages yet.</div>`}
     </div></div>
     <div class="composer-wrap"><form class="composer" onSubmit=${submit}>
-        <textarea aria-label="Message to rotom" placeholder=${own ? "Send to your pinned rotom kernel…" : "Read-only: another member owns this execution"} value=${text} disabled=${!own || blocked} onInput=${(
+        <textarea aria-label="Message to rotom" placeholder=${own ? "Message rotom…" : me.role === "viewer" ? "Read-only session" : "Continue with your account from the session menu"} value=${text} disabled=${!own || blocked} onInput=${(
             event,
         ) => {
             setText(event.currentTarget.value);

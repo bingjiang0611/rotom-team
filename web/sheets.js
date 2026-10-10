@@ -85,9 +85,9 @@ store.subscribe(({ sheet, conversationId }) => {
  * The open sheet, if any. A sheet that closes stays a moment longer, marked as leaving, so it can animate out; one sheet
  * replacing another swaps at once.
  */
-export function Sheets() {
-    const [sheet, leaving] = usePresence(store.state.sheet, 200);
-    const auth = store.state.auth ? html`<${AuthDialog} />` : null;
+export function Sheets({ state }) {
+    const [sheet, leaving] = usePresence(state.sheet, 200);
+    const auth = state.auth ? html`<${AuthDialog} />` : null;
 
     if (!sheet) {
         return auth;

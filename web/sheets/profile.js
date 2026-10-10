@@ -1,4 +1,5 @@
-import { useEffect, useState } from "preact/hooks";
+import { useContext, useEffect, useState } from "preact/hooks";
+import { KernelContext } from "../kernel.js";
 import { api, closeSheet, store, notify } from "../store.js";
 import { html, Loader, Sheet } from "../ui.js";
 
@@ -12,23 +13,22 @@ export function ProfileSheet() {
     const [error, setError] = useState("");
     const id = store.state.conversationId;
     const editable = store.state.me?.role !== "viewer";
-    const native = store.state.sessions.some(
-        (session) => session.id === id && session.backend === "rotom",
-    );
+    const kernel = useContext(KernelContext);
 
     useEffect(() => {
-        Promise.all([
-            api("profile"),
-            id ? api(`c/${id}/configuration`) : Promise.resolve(null),
-            api("devices"),
-        ])
-            .then(([p, s, d]) => {
+        Promise.all([api("profile"), api("devices")])
+            .then(([p, d]) => {
                 setDevices(d);
                 setProfile(p);
-                setSnapshot(s);
             })
             .catch((e) => setError(e.message));
     }, [id]);
+
+    useEffect(() => {
+        const active = id ? api(`c/${id}/configuration`) : Promise.resolve(null);
+
+        active.then(setSnapshot).catch((e) => setError(e.message));
+    }, [id, kernel?.view?.segmentId]);
     const change = (field, value) => setProfile({ ...profile, [field]: value });
 
     const save = async (activate) => {
@@ -93,8 +93,26 @@ export function ProfileSheet() {
             <div class="group-title">This session</div>
             ${snapshot ? html`<p>${snapshot.name} · <code>${snapshot.digest.slice(0, 12)}</code></p><details><summary>Inspect active configuration</summary><pre>${snapshot.context}</pre><ul>${snapshot.skills.map((skill) => html`<li>${skill.name} — ${skill.description}</li>`)}</ul></details>` : html`<p>Legacy session: resources have not been frozen yet.</p>`}
             ${
-                native
-                    ? html`<p class="muted">Save your profile here, then use “Activate saved profile” in the native conversation. Activation creates a new execution segment and is recorded before dispatch.</p>`
+                kernel
+                    ? html`<p class="muted">Save your profile first, then activate the saved version here. Activation creates a recorded execution segment; taking over does not change configuration.</p>
+                      <button
+                          class="button"
+                          disabled=${!editable || !profile || busy || kernel.blocked || !kernel.own}
+                          onClick=${() => {
+                              if (
+                                  confirm(
+                                      "Activate your saved configuration in this shared session? Everyone with access can read it. This creates a new execution segment.",
+                                  )
+                              ) {
+                                  void kernel.dispatch("configuration");
+                              }
+                          }}
+                      >
+                          Activate saved profile
+                      </button>
+                      ${!kernel.own && editable && html`<p class="muted">Continue with your account from the session menu before activating configuration.</p>`}
+                      ${kernel.waiting && html`<p role="status">Checking the saved request identity. No automatic resend.</p>`}
+                      ${kernel.error && html`<p role="alert">${kernel.error}</p>`}`
                     : html`<button class="button" disabled=${!editable || !profile || busy} onClick=${() => {
                           if (
                               confirm(

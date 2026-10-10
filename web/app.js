@@ -6,7 +6,7 @@ import { BrowserButton, BrowserPanel } from "./browser-panel.js";
 import { browserAvailable, toggleBrowser } from "./browser.js";
 import { PeopleButton, PeoplePanel } from "./chat.js";
 import { Composer } from "./composer.js";
-import { KernelConversation } from "./kernel.js";
+import { KernelConversation, KernelSession } from "./kernel.js";
 import {
     FilesButton,
     FilesPanel,
@@ -67,9 +67,27 @@ function Topbar() {
 
     if (native) {
         return html`<header class="topbar">
-        <button class="icon-button topbar-back" aria-label="Back to sessions" onClick=${toSessions}><${Icon} name="back" size=${22} /></button>
-        <div class="title"><div class="title-main">${native.title ?? "Native session"}</div><div class="title-sub mono">rotom · ${shortPath(native.cwd, server?.home)}</div></div>
-    </header>`;
+            <button
+                class="icon-button topbar-back"
+                aria-label="Back to sessions"
+                onClick=${toSessions}
+            >
+                <${Icon} name="back" size=${22} />
+            </button>
+            <button class="title" onClick=${() => openSheet({ type: "menu" })}>
+                <div class="title-main">${native.title ?? "Native session"}</div>
+                <div class="title-sub mono">
+                    rotom · ${shortPath(native.cwd, server?.home)}
+                </div>
+            </button>
+            <button
+                class="icon-button"
+                aria-label="Menu"
+                onClick=${() => openSheet({ type: "menu" })}
+            >
+                <${Icon} name="menu" />
+            </button>
+        </header>`;
     }
 
     const artifacts = view.artifacts?.length ?? 0;
@@ -256,7 +274,7 @@ function App() {
     // which only shows when there are tiles.
     const peekColumn = peeking && PEEK_WIDE.matches && !browsing && !filing && !people;
 
-    return html`<div
+    const content = html`<div
         class=${`layout ${inConversation ? "" : "home"} ${browsing ? "browsing" : ""} ${filing ? "filing" : ""}`}
     >
         <aside class="sidebar window">
@@ -273,7 +291,7 @@ function App() {
                         !peekColumn &&
                         html`<${PeekStrip} tiles=${tiles} />`
                     }
-                    ${native ? html`<${KernelConversation} key=${state.conversationId} id=${state.conversationId} />` : html`<${Transcript} key=${state.conversationId} />`}
+                    ${native ? html`<${KernelConversation} />` : html`<${Transcript} key=${state.conversationId} />`}
                     ${
                         !native &&
                         state.view.conversation &&
@@ -299,10 +317,14 @@ function App() {
         <${PanelHost} key=${`files:${state.conversationId}`} shown=${filing} panel=${FilesPanel} />
         ${inConversation && html`<${PeopleHost} shown=${people} replaced=${browsing || filing} />`}
         <${Drawer} />
-        <${Sheets} />
+        <${Sheets} state=${state} />
         <${LauncherHost} />
         <${Notices} />
     </div>`;
+
+    return native
+        ? html`<${KernelSession} key=${state.conversationId} id=${state.conversationId}>${content}<//>`
+        : content;
 }
 
 // ─── Windows and keys ───────────────────────────────────────────────────────────
