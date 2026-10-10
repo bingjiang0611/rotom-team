@@ -174,7 +174,7 @@ export function CwdSheet({ mode }) {
                 <option value="durable">Existing team engine</option>
                 <option value="rotom">rotom · experimental</option>
             </select>
-            ${backend === "rotom" && html`<p class="muted">Uses your selected personal account and frozen profile. Text/native tools only; no Qoder, takeover, forks, attachments or compaction yet. Existing sessions do not change.</p>`}
+            ${backend === "rotom" && html`<p class="muted">Uses your selected personal account and frozen profile. Supports ChatGPT/Qoder, account handoff, forks and native compaction. Text/native tools only; attachments are not supported. Existing sessions do not change.</p>`}
         </label>`
         }
         <button class="button primary wide" ref=${useButton} onClick=${() => use(path)}>
