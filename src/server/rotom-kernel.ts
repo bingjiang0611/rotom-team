@@ -232,7 +232,18 @@ export async function startRotomKernel(options: {
                 PI_CODING_AGENT_DIR: join(home, ".pi/agent"),
                 ROTOM_OBSERVABILITY: "0",
                 LANG: "en_US.UTF-8",
-                ...(options.gateFile ? { ROTOM_TEAM_KERNEL_GATE: options.gateFile } : {}),
+                ...(options.gateFile
+                    ? {
+                          ROTOM_TEAM_KERNEL_GATE: options.gateFile,
+                          // Subagents start through the team wrapper, so they reach the model through this gate too.
+                          PI_SUBAGENT_PI_BINARY: fileURLToPath(
+                              new URL("./rotom-child.sh", import.meta.url),
+                          ),
+                          ROTOM_TEAM_POLICY: fileURLToPath(
+                              new URL("./rotom-policy.mjs", import.meta.url),
+                          ),
+                      }
+                    : {}),
             },
         },
     );

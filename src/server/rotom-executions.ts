@@ -115,7 +115,7 @@ export class RotomExecutions {
                 run.aborted = true;
 
                 if (run.kernel) {
-                    await run.kernel.request({ type: "abort" });
+                    await run.kernel.abort();
                 }
             }),
         );
@@ -454,15 +454,27 @@ export class RotomExecutions {
                 const value = JSON.parse(body);
 
                 if (
-                    !["inference", "refresh"].includes(value.operation) ||
+                    !["inference", "refresh", "usage"].includes(value.operation) ||
                     value.provider !== binding.provider ||
-                    (value.operation === "inference" && value.model !== binding.model)
+                    (value.operation !== "refresh" && value.model !== binding.model)
                 ) {
                     throw new Error("identity denied");
                 }
 
                 if (this.journal.receipt(receipt.id).status !== "dispatch-intent") {
                     throw new Error("attempt is not active");
+                }
+
+                // A subagent's response: its entries stay in its own session, so the gate records what it spent.
+                if (value.operation === "usage") {
+                    if (!value.usage || typeof value.usage !== "object") {
+                        throw new Error("usage must be an object");
+                    }
+
+                    this.journal.childUsage(receipt.id, value.usage);
+                    res.writeHead(204).end();
+
+                    return;
                 }
 
                 if (running.aborted) {

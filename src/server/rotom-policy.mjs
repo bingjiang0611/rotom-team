@@ -1,4 +1,5 @@
 /** Team-owned policy extension for the pinned product; observer-hook exceptions are not dispatch authorization. */
+import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { chatGPTPayload } from "./openai-chatgpt-payload.ts";
 import { qoderRequestProvider } from "./rotom-qoder.mjs";
@@ -31,7 +32,7 @@ export default function (pi) {
         });
     }
 
-    const authorize = async (operation, provider, model, signal) => {
+    const authorize = async (operation, provider, model, signal, usage) => {
         if (provider !== config.provider || (model !== undefined && model !== config.model)) {
             throw new Error("team_kernel_identity_denied");
         }
@@ -43,7 +44,7 @@ export default function (pi) {
                 Authorization: `Bearer ${config.token}`,
                 "Content-Type": "application/json",
             },
-            body: JSON.stringify({ operation, provider, model }),
+            body: JSON.stringify({ operation, provider, model, ...(usage ? { usage } : {}) }),
             signal: signal
                 ? AbortSignal.any([signal, AbortSignal.timeout(10000)])
                 : AbortSignal.timeout(10000),
@@ -67,7 +68,55 @@ export default function (pi) {
         }
     };
 
+    // Background subagents outlive the tool call that starts them. Report how many still owe this kernel a result, so
+    // the team keeps the run, and with it this gate, open until each result is back. Children run this policy too.
+    const children = new Set();
+    let ui;
+
+    const report = () =>
+        ui?.notify(
+            JSON.stringify({ kind: "team-kernel-children-v1", pending: children.size }),
+            "info",
+        );
+
+    pi.events.on("subagent:async-started", (data) => {
+        children.add(String(data?.id));
+        report();
+    });
+    // pi-subagents announces completion once it has handed the result to this session.
+    pi.events.on("subagent:async-complete", (data) => {
+        children.delete(String(data?.id));
+        report();
+    });
+
+    // A subagent's entries stay in its own session, out of the team journal: it tells the gate what each response spent.
+    if (process.env.ROTOM_TEAM_SUBAGENT === "1") {
+        pi.on("message_end", async (event) => {
+            const message = event.message;
+
+            if (message?.role === "assistant" && message.usage) {
+                await authorize("usage", message.provider, message.model, undefined, message.usage);
+            }
+        });
+    }
+
+    pi.registerCommand("team-kernel-stop-children", {
+        description: "Private: stop this run's background subagents (no model request)",
+        handler: async () => {
+            for (const id of children) {
+                // pi-subagents' cross-extension RPC; it signals the child before it replies.
+                pi.events.emit("subagents:rpc:v1:request", {
+                    version: 1,
+                    requestId: randomUUID(),
+                    method: "stop",
+                    params: { id },
+                });
+            }
+        },
+    });
+
     pi.on("session_start", async (_event, ctx) => {
+        ui = ctx.ui;
         const registry = ctx.modelRegistry;
         const ids = new Set(
             [...registry.getAll(), ...registry.getModelsOfType("image")].map(

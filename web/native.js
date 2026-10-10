@@ -82,6 +82,16 @@ export function NativeBanner() {
         />`;
     }
 
+    if (kernel?.subagents > 0 && store.state.view.live?.busy) {
+        const count = kernel.subagents === 1 ? "a subagent" : `${kernel.subagents} subagents`;
+        const account = kernel.yours ? "your account" : `${kernel.memberName}'s account`;
+
+        return html`<div class="native-banner" role="status">
+            Pi is waiting for ${count}. The run ends when the results are back, on ${account}.
+            Stop ends the subagents too.
+        </div>`;
+    }
+
     if (kernel?.cutOff && !store.state.view.live?.busy) {
         return html`<div class="native-banner" role="status">
             A server restart cut Pi off, and it did not continue by itself.

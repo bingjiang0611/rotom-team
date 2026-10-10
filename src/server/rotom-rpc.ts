@@ -35,6 +35,12 @@ export class RotomRpc {
     /** A prompt is running: it may take more of its member's messages. */
     #prompting = false;
     #shutdown = false;
+    /** Background subagents this kernel started whose results are not back yet, as the team policy reports them. */
+    #children = 0;
+    /** Stop was asked: the running prompt no longer waits for its children. */
+    #stopping = false;
+    /** Ends the running prompt if it is only waiting for children. */
+    #stopWaiting?: () => void;
 
     constructor(
         command: string,
@@ -175,6 +181,12 @@ export class RotomRpc {
                     );
                 }
             } else {
+                const children = childrenReport(value);
+
+                if (children !== undefined) {
+                    this.#children = children;
+                }
+
                 // Dialogs must not silently authorize work in a headless host: one nobody can answer is cancelled.
                 if (
                     value.type === "extension_ui_request" &&
@@ -276,10 +288,39 @@ export class RotomRpc {
             resolve = yes;
             reject = no;
         });
+        // The turn has settled, but subagents it started still run. Their results come back as new turns of this
+        // prompt, paid by the same member through the same gate; the prompt ends when none is left.
+        let waiting = false;
+
+        this.#stopWaiting = () => {
+            if (waiting) {
+                resolve();
+            }
+        };
+
         // Attach before writing: fast runs may settle before the prompt response arrives.
         const detach = this.onEvent((event) => {
+            if (event.type === "agent_start") {
+                waiting = false;
+            }
+
             if (event.type === "agent_settled") {
-                resolve();
+                if (this.#children === 0 || this.#stopping) {
+                    resolve();
+                } else {
+                    waiting = true;
+                }
+            }
+
+            // The last result is back. Pi starts the turn it triggers before reporting it, so an idle kernel is done.
+            if (waiting && this.#children === 0 && childrenReport(event) === 0) {
+                void this.#send({ type: "get_state" })
+                    .then((state) => {
+                        if (waiting && (state as { isStreaming?: unknown }).isStreaming === false) {
+                            resolve();
+                        }
+                    })
+                    .catch(() => {});
             }
 
             if (event.type === "transport_unknown") {
@@ -323,8 +364,21 @@ export class RotomRpc {
         } finally {
             clearTimeout(timer);
             detach();
+            this.#stopWaiting = undefined;
             this.#busy = false;
             this.#prompting = false;
+        }
+    }
+
+    /** Stop the running prompt and the background subagents it started. It does not wait for their results. */
+    async abort(): Promise<void> {
+        this.#stopping = true;
+        await this.#send({ type: "abort" });
+
+        if (this.#children > 0) {
+            // An extension command runs at once, even while a turn streams.
+            await this.#send({ type: "prompt", message: "/team-kernel-stop-children" });
+            this.#stopWaiting?.();
         }
     }
 
@@ -371,4 +425,20 @@ export class RotomRpc {
         }
         // This proves only this child closed, not that external effects or detached descendants were undone.
     }
+}
+
+/** The pending-children count in a team policy report, or undefined for any other record. */
+export function childrenReport(record: RpcRecord): number | undefined {
+    if (
+        record.type !== "extension_ui_request" ||
+        record.method !== "notify" ||
+        typeof record.message !== "string" ||
+        !record.message.startsWith('{"kind":"team-kernel-children-v1"')
+    ) {
+        return undefined;
+    }
+
+    const pending = (JSON.parse(record.message) as { pending?: unknown }).pending;
+
+    return typeof pending === "number" ? pending : undefined;
 }

@@ -300,6 +300,33 @@ test("progress journals each finished message of a running prompt, and finish st
     }
 });
 
+test("subagent usage is charged to the run's member while the run is active, never after", () => {
+    const f = setup();
+    const journal = new RotomJournal(f.data);
+
+    try {
+        journal.bind("native", f.binding);
+        const run = journal.reserve("native", "run", "work");
+
+        journal.attach(run.id, "session.jsonl", "native-session", 4242);
+        journal.childUsage(run.id, { input: 3, output: 2 });
+        journal.finish(run.id, "settled", [response("a1")]);
+        assert.throws(() => journal.childUsage(run.id, { input: 1 }), /after its run ended/);
+        assert.deepEqual(
+            journal
+                .usage("native")
+                .map(({ memberId, raw, subagent }) => ({ memberId, raw, subagent })),
+            [
+                { memberId: "alice", raw: { totalTokens: 12 }, subagent: undefined },
+                { memberId: "alice", raw: { input: 3, output: 2 }, subagent: true },
+            ],
+        );
+    } finally {
+        journal.close();
+        rmSync(f.root, { recursive: true, force: true });
+    }
+});
+
 test("an unknown prompt whose kernel is gone becomes interrupted, frees its account, and plans one continuation", () => {
     const f = setup();
     let journal = new RotomJournal(f.data);

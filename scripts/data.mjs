@@ -118,7 +118,7 @@ export function inspectNative(data) {
         db.exec("BEGIN");
         const version = Number(db.prepare("PRAGMA user_version").get().user_version);
 
-        if (![1, 2, 3].includes(version)) {
+        if (![1, 2, 3, 4].includes(version)) {
             throw new Error("Unsupported native journal version; no migration was attempted.");
         }
 

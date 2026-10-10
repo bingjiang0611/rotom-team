@@ -65,7 +65,7 @@ function PersonalLayer({ editable }) {
             Private to you. Every run on your account loads them with the project's own AGENTS.md
             and skills, in your sessions and in ones you continue or fork.
         </p>
-        ${error && html`<p role="alert">${error}</p>`}
+        ${!layer && error && html`<p role="alert">${error}</p>`}
         ${!layer && !error && html`<${Loader} label="Loading your instructions" />`}
         ${
             layer &&
@@ -104,6 +104,7 @@ function PersonalLayer({ editable }) {
                     Commands run on the server. \${NAME} values do not see the server's environment,
                     so write tokens in place. Sign-in (OAuth) servers are not supported.
                 </p>
+                ${error && html`<p role="alert">${error}</p>`}
                 <button class="button primary" type="submit" disabled=${!editable || busy}>
                     ${busy ? "Saving…" : "Save"}
                 </button>

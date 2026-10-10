@@ -78,7 +78,7 @@ export function requireNoPendingKernel(data: string): void {
     const db = new DatabaseSync(path, { readOnly: true });
 
     try {
-        if (![1, 2, 3].includes(Number(db.prepare("PRAGMA user_version").get()!.user_version))) {
+        if (![1, 2, 3, 4].includes(Number(db.prepare("PRAGMA user_version").get()!.user_version))) {
             throw new Error("Unsupported kernel journal version");
         }
 
@@ -151,7 +151,7 @@ export class RotomJournal {
             this.#db = opened = new DatabaseSync(path);
             const version = Number(this.#db.prepare("PRAGMA user_version").get()!.user_version);
 
-            if (![0, 1, 2, 3].includes(version)) {
+            if (![0, 1, 2, 3, 4].includes(version)) {
                 throw new Error("Unsupported kernel journal version");
             }
 
@@ -182,6 +182,13 @@ export class RotomJournal {
                     ALTER TABLE kernel_attempts ADD COLUMN pid INTEGER;
                     CREATE TABLE kernel_resume (attempt_id TEXT PRIMARY KEY REFERENCES kernel_attempts(id), conversation_id TEXT NOT NULL, chain INTEGER NOT NULL, state TEXT NOT NULL);
                     PRAGMA user_version=3; COMMIT;`);
+            }
+
+            // Usage a run's subagents reported through its gate. Their entries live in their own sessions, not this one.
+            if (version < 4) {
+                this.#db.exec(`BEGIN IMMEDIATE;
+                    CREATE TABLE kernel_child_usage (attempt_id TEXT NOT NULL REFERENCES kernel_attempts(id), member_id TEXT NOT NULL, raw_usage TEXT NOT NULL);
+                    PRAGMA user_version=4; COMMIT;`);
             }
 
             // A cleanly released parent lock is not evidence that an unfinished dispatch never happened.
@@ -1010,20 +1017,48 @@ export class RotomJournal {
             .map((row) => JSON.parse(String(row.body)));
     }
 
-    usage(
-        sessionId: string,
-    ): { memberId: string; attemptId: string; raw: unknown; costStatus: "unknown" }[] {
-        return this.#db
-            .prepare(
-                "SELECT u.* FROM kernel_usage u JOIN kernel_attempts a ON a.id=u.attempt_id WHERE a.conversation_id=? ORDER BY u.rowid",
-            )
-            .all(sessionId)
-            .map((row) => ({
+    /** One model response of a subagent, charged to the member its run's attempt is bound to. */
+    childUsage(attemptId: string, raw: unknown): void {
+        const attempt = this.receipt(attemptId);
+
+        if (attempt.status !== "dispatch-intent") {
+            throw new Error("Subagent usage arrived after its run ended");
+        }
+
+        this.#db
+            .prepare("INSERT INTO kernel_child_usage VALUES (?,?,?)")
+            .run(attemptId, attempt.binding.memberId, JSON.stringify(raw));
+    }
+
+    usage(sessionId: string): {
+        memberId: string;
+        attemptId: string;
+        raw: unknown;
+        costStatus: "unknown";
+        subagent?: true;
+    }[] {
+        const rows = (table: string) =>
+            this.#db
+                .prepare(
+                    `SELECT u.* FROM ${table} u JOIN kernel_attempts a ON a.id=u.attempt_id WHERE a.conversation_id=? ORDER BY u.rowid`,
+                )
+                .all(sessionId);
+
+        return [
+            ...rows("kernel_usage").map((row) => ({
                 memberId: String(row.member_id),
                 attemptId: String(row.attempt_id),
                 raw: row.raw_usage ? JSON.parse(String(row.raw_usage)) : null,
-                costStatus: "unknown",
-            }));
+                costStatus: "unknown" as const,
+            })),
+            ...rows("kernel_child_usage").map((row) => ({
+                memberId: String(row.member_id),
+                attemptId: String(row.attempt_id),
+                raw: JSON.parse(String(row.raw_usage)),
+                costStatus: "unknown" as const,
+                subagent: true as const,
+            })),
+        ];
     }
 
     /** Reported subtotals, not a full account ledger. Imported seeds never become recipient charges. */

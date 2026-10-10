@@ -1,7 +1,8 @@
 /**
  * Scripted end-to-end demo of rotom-team v1, over its HTTP API, with a loopback model and synthetic accounts only.
- * The owner starts a rotom session, Bob continues it, Carol forks it, and a server restart cuts the owner's next run off and
- * continues it by itself. The model server tells who paid by the request credential it receives.
+ * The owner starts a rotom session, Bob continues it, Carol forks it and has a subagent review it, and a server restart
+ * cuts the owner's next run off and continues it by itself. The model server tells who paid by the request credential it
+ * receives.
  *
  *   node test/team-kernel-demo.ts           run the story, print each step, exit
  *   node test/team-kernel-demo.ts --serve   then keep the server for a look in the browser (Ctrl-C ends it)
@@ -29,7 +30,9 @@ const model = createServer(async (req, res) => {
         body += chunk;
     }
 
-    const input = JSON.parse(body) as { messages: { role: string; content: unknown }[] };
+    const input = JSON.parse(body) as {
+        messages: { role: string; content: unknown; tool_call_id?: string }[];
+    };
     const payer = String(req.headers.authorization).replace(`Bearer ${secret}:`, "");
     const last = JSON.stringify(input.messages.findLast((m) => m.role === "user")?.content);
     const emit = (delta: object, finish: string | null = null) =>
@@ -40,6 +43,71 @@ const model = createServer(async (req, res) => {
     payers.push(payer);
     res.writeHead(200, { "Content-Type": "text/event-stream" });
     emit({ role: "assistant" });
+
+    const toolCall = (id: string, name: string, args: object) => {
+        emit({
+            tool_calls: [
+                {
+                    index: 0,
+                    id,
+                    type: "function",
+                    function: { name, arguments: JSON.stringify(args) },
+                },
+            ],
+        });
+        emit({}, "tool_calls");
+        res.end("data: [DONE]\n\n");
+    };
+
+    const answered = (id: string) => input.messages.some((m) => m.tool_call_id === id);
+
+    // DELEGATE: the parent loads the subagent tool and starts a reviewer. The reviewer answers in its own process, and
+    // its result comes back to the parent as a new turn.
+    if (last.includes("REVIEW_TASK")) {
+        if (last.includes("SLOW")) {
+            await new Promise((resolve) => setTimeout(resolve, 8000));
+        }
+
+        emit({ content: `Reviewed by a subagent on the account of ${names.get(payer) ?? payer}.` });
+        emit({}, "stop");
+        res.end("data: [DONE]\n\n");
+
+        return;
+    }
+
+    if (last.includes("Background task completed")) {
+        emit({ content: "The reviewer's report is back: nothing to change." });
+        emit({}, "stop");
+        res.end("data: [DONE]\n\n");
+
+        return;
+    }
+
+    if (last.includes("DELEGATE")) {
+        const round = String(input.messages.filter((m) => m.role === "user").length);
+
+        if (!answered(`search-${round}`)) {
+            toolCall(`search-${round}`, "search_tools", { query: "subagent", limit: 3 });
+
+            return;
+        }
+
+        if (!answered(`spawn-${round}`)) {
+            toolCall(`spawn-${round}`, "subagent", {
+                agent: "reviewer",
+                task: `REVIEW_TASK${last.includes("SLOW") ? " SLOW" : ""}: review the summary`,
+                extensions: [],
+            });
+
+            return;
+        }
+
+        emit({ content: "A reviewer is on it; its result follows." });
+        emit({}, "stop");
+        res.end("data: [DONE]\n\n");
+
+        return;
+    }
 
     if (last.includes("SLOW")) {
         emit({ content: "Working on it… " });
@@ -190,6 +258,21 @@ const third = await call(carol.token, `c/${fork.id}/submit`, "POST", {
 assert.equal(third.status, "settled");
 assert.equal(lastPayer(), carol.user.name);
 console.log(`  fork ${fork.id} settled; paid by ${lastPayer()}`);
+
+step("Carol has a subagent review her fork; the run waits for its result");
+const beforeReview = payers.length;
+const review = await call(carol.token, `c/${fork.id}/submit`, "POST", {
+    text: "DELEGATE: have a reviewer check this.",
+    requestId: "carol-review",
+});
+
+assert.equal(review.status, "settled");
+// search, spawn, the parent's reply, the reviewer, and the parent's turn on the reviewer's result.
+assert.deepEqual(
+    payers.slice(beforeReview).map((id) => names.get(id)),
+    Array(5).fill(carol.user.name),
+);
+console.log(`  settled after the reviewer's result was back; all 5 calls paid by ${lastPayer()}`);
 
 step("The owner starts a long run; the server restarts in the middle of it");
 await call(aliceToken, `c/${session.id}/submit`, "POST", {

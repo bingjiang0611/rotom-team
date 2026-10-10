@@ -44,6 +44,9 @@ let calls = 0,
     childRequests = 0,
     hold = false;
 let subagentSearch = "";
+/** Who paid for each subagent request: the gate tells the model server the member. */
+const childMembers: string[] = [];
+const hangingChild = Promise.withResolvers<void>();
 /** The one member whose private mcp.json declares the probe server; nobody else's run may see its tool. */
 let mcpOwner: string | undefined;
 const modelServer = createServer(async (req, res) => {
@@ -183,8 +186,28 @@ const modelServer = createServer(async (req, res) => {
                 ?.content,
         );
 
+        // The child's result comes back to the parent as a message that starts a new turn of the same prompt.
+        if (lastUser.includes("Background task completed: **reviewer**")) {
+            assert.match(lastUser, /CHILD_DONE/);
+            emit({ content: "PARENT_SAW_CHILD" });
+            emit({}, "stop");
+            res.end("data: [DONE]\n\n");
+
+            return;
+        }
+
+        // A child that never finishes on its own: only Stop ends it, and its request with it.
+        if (lastUser.includes("SUBAGENT_CHILD_HANG")) {
+            childMembers.push(member);
+            hangingChild.resolve();
+            await once(req.socket, "close");
+
+            return;
+        }
+
         if (lastUser.includes("SUBAGENT_CHILD_TASK")) {
             childRequests++;
+            childMembers.push(member);
             emit({ content: "CHILD_DONE" });
             emit({}, "stop");
             res.end("data: [DONE]\n\n");
@@ -192,15 +215,17 @@ const modelServer = createServer(async (req, res) => {
             return;
         }
 
-        if (lastUser.includes("SPAWN_SUBAGENT")) {
+        if (lastUser.includes("SPAWN_SUBAGENT") || lastUser.includes("SPAWN_HANGING")) {
+            // Each spawning prompt has its own tool call ids: an earlier prompt's calls stay in the history.
+            const round = lastUser.includes("SPAWN_HANGING") ? "2" : "1";
             const spawned = input.messages.find(
                 (message: { role: string; tool_call_id?: string }) =>
-                    message.role === "tool" && message.tool_call_id === "spawn-1",
+                    message.role === "tool" && message.tool_call_id === `spawn-${round}`,
             );
 
             const found = input.messages.find(
                 (message: { role: string; tool_call_id?: string }) =>
-                    message.role === "tool" && message.tool_call_id === "search-1",
+                    message.role === "tool" && message.tool_call_id === `search-${round}`,
             );
 
             if (!found) {
@@ -208,7 +233,7 @@ const modelServer = createServer(async (req, res) => {
                     tool_calls: [
                         {
                             index: 0,
-                            id: "search-1",
+                            id: `search-${round}`,
                             type: "function",
                             function: {
                                 name: "search_tools",
@@ -227,13 +252,16 @@ const modelServer = createServer(async (req, res) => {
                     tool_calls: [
                         {
                             index: 0,
-                            id: "spawn-1",
+                            id: `spawn-${round}`,
                             type: "function",
                             function: {
                                 name: "subagent",
                                 arguments: JSON.stringify({
                                     agent: "reviewer",
-                                    task: "SUBAGENT_CHILD_TASK: reply CHILD_DONE",
+                                    task:
+                                        round === "2"
+                                            ? "SUBAGENT_CHILD_HANG: never answer"
+                                            : "SUBAGENT_CHILD_TASK: reply CHILD_DONE",
                                     extensions: [],
                                 }),
                             },
@@ -1821,8 +1849,9 @@ try {
     assert.equal(calls, 20);
     report.messagesJoinTheRunningPrompt = true;
 
-    // A subagent is a separate rotom process in the member HOME. That HOME holds no credential, and the team gate is
-    // given to the run's own kernel only: a child cannot reach the model, and never refreshes a grant.
+    // A subagent is a separate rotom process in the member HOME, which holds no credential. It starts through the team
+    // wrapper, so its requests pass the run's own gate: same payer, same model, only while the run is active. The run
+    // stays active, and the session busy, until the child's result is back and the parent's turn on it has settled.
     const spawn = await request(aliceToken, `c/${shared2.id}/submit`, "POST", {
         text: "SPAWN_SUBAGENT now",
         requestId: "spawn-subagent",
@@ -1834,30 +1863,78 @@ try {
         subagentSearch,
         JSON.stringify("Loaded specialized tools: subagent, subagent_wait"),
     );
-    const runs = join(
+    assert.equal(childRequests, 1, "the child reached the model once");
+    const subagentRuns = join(
         folder,
         "kernel-homes",
         a.id,
         ".local/state/rotom/subagent-store/owned-process-groups-v2/async-subagent-runs",
     );
-    let childOutput = "";
 
-    for (let tries = 0; tries < 400 && !childOutput.includes("No API key"); tries++) {
-        await new Promise((resolve) => setTimeout(resolve, 50));
-        childOutput = readdirSync(runs, { recursive: true })
-            .filter((name) => String(name).endsWith("output-0.log"))
-            .map((name) => readFileSync(join(runs, String(name)), "utf8"))
-            .join("\n");
-    }
+    assert.deepEqual(childMembers, [a.id], "the child spends the member who sent the prompt");
+    const subagentTurn = app
+        .kernel!.executions.journal.segmentEntries(
+            app.kernel!.executions.journal.session(String(shared2.id)).segmentId,
+        )
+        .map((entry) => JSON.stringify(entry));
 
-    assert.match(childOutput, /No API key found for openai/);
-    assert.equal(childRequests, 0, "a subagent never reaches the model");
+    assert.ok(subagentTurn.some((entry) => entry.includes("PARENT_AFTER_SUBAGENT")));
+    assert.ok(
+        subagentTurn.findIndex((entry) => entry.includes("PARENT_SAW_CHILD")) >
+            subagentTurn.findIndex((entry) => entry.includes("PARENT_AFTER_SUBAGENT")),
+        "the parent's turn on the child's result is part of the same run",
+    );
     assert.equal(
         readFileSync(join(folder, "kernel-homes", a.id, ".pi/agent/auth.json"), "utf8").trim(),
         "{}",
         "no grant appears in the member HOME",
     );
-    report.subagentsHoldNoCredential = true;
+    const childUsage = app
+        .kernel!.executions.journal.usage(String(shared2.id))
+        .filter((each) => each.subagent);
+
+    assert.deepEqual(
+        childUsage.map((each) => each.memberId),
+        [a.id],
+        "the child's response is charged to the same member",
+    );
+    report.subagentsThroughTheGate = true;
+
+    // Stop ends a run that waits for its children, and stops them: the hanging child's request is cut, and the session
+    // takes the next prompt.
+    const hanging = request(aliceToken, `c/${shared2.id}/submit`, "POST", {
+        text: "SPAWN_HANGING subagent",
+        requestId: "spawn-hanging",
+    });
+
+    await hangingChild.promise;
+    assert.equal(app.kernel!.isRunning(shared2.id as never), true, "the run waits for its child");
+    await until(
+        () =>
+            (app.kernel!.roomState(shared2.id as never, a) as { subagents?: number }).subagents ===
+            1,
+        "the room shows the run waiting for its child",
+        10000,
+    );
+    assert.equal((await request(aliceToken, `c/${shared2.id}/abort`, "POST", {})).status, 200);
+    const stoppedRun = await hanging;
+
+    assert.equal(stoppedRun.status, 200, await stoppedRun.clone().text());
+    assert.equal(((await stoppedRun.json()) as { status: string }).status, "settled");
+    assert.deepEqual(childMembers, [a.id, a.id]);
+    const childStates = () =>
+        readdirSync(subagentRuns, { withFileTypes: true })
+            .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
+            .map(
+                (entry) =>
+                    JSON.parse(readFileSync(join(subagentRuns, entry.name, "status.json"), "utf8"))
+                        .state as string,
+            )
+            .sort();
+
+    await until(() => !childStates().includes("running"), "the stopped child ended", 30000);
+    assert.deepEqual(childStates(), ["complete", "stopped"]);
+    report.stopEndsSubagents = true;
 
     // A server restart cuts a prompt off; the next start continues it once, as its member, without a person.
     const journalOf = () => app.kernel!.executions.journal;
@@ -2016,8 +2093,9 @@ try {
                 id: Number(id),
                 memberName: owner(app).name,
             });
-            // The composer's one message, sent by the owner who pays for it; nothing else dispatched.
-            assert.equal(calls, 30);
+            // The composer's one message, sent by the owner who pays for it; nothing else dispatched. The subagent runs
+            // before it count six: a child and the parent's turn on its result, then a stopped run with its child.
+            assert.equal(calls, 36);
             assert.equal(requestMembers.at(-1), owner(app).id);
             report.webUiVerified = true;
         } else {

@@ -383,7 +383,7 @@ test("schema-1 migration preserves bindings, hashes, receipts and usage, includi
 
     try {
         // Reconstruct the previous schema with real persisted rows, not a mock migration result.
-        db.exec(`DROP TABLE kernel_heads; DROP TABLE kernel_resume;
+        db.exec(`DROP TABLE kernel_heads; DROP TABLE kernel_resume; DROP TABLE kernel_child_usage;
             ALTER TABLE kernel_attempts DROP COLUMN pid;
             DROP INDEX one_conversation_request; DROP INDEX one_conversation_writer;
             ALTER TABLE kernel_attempts DROP COLUMN conversation_id;

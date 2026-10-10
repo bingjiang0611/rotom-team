@@ -374,6 +374,20 @@ function projectNative(entry: EntryRecord, full: boolean): ClientEntry | undefin
         return { id, kind: "compaction", summary: String(native.summary ?? "") };
     }
 
+    // What an extension told the model, such as a subagent's report. Like Pi, show only what it marks for display:
+    // pi-subagents hides a background run that completed, and shows one that failed or was stopped.
+    if (native?.type === "custom_message") {
+        return native.display === true
+            ? {
+                  id,
+                  kind: "user",
+                  text: textOfContent(native.content),
+                  images: 0,
+                  from: native.customType === "subagent-notify" ? "subagents" : "extension",
+              }
+            : undefined;
+    }
+
     const message = native?.type === "message" ? (native.message as { role?: unknown }) : undefined;
     const kind =
         message?.role === "user"

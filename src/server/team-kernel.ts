@@ -17,7 +17,7 @@ import type { ConfigurationSnapshot } from "./team-profiles.ts";
 import { accountContext } from "./team-accounts.ts";
 import { HttpError } from "./errors.ts";
 import { NativeTail, RotomExecutions, type RunHooks } from "./rotom-executions.ts";
-import type { RpcRecord } from "./rotom-rpc.ts";
+import { childrenReport, type RpcRecord } from "./rotom-rpc.ts";
 import { AuthorsDoc } from "./docs.ts";
 import { THINKING_LEVELS } from "./commands.ts";
 import { KernelProfiles } from "./kernel-profile.ts";
@@ -69,6 +69,8 @@ type NativeLive = {
     compacting?: string;
     /** Extension dialogs waiting for the paying member, oldest first. */
     dialogs?: NativeDialog[];
+    /** Background subagents whose results the run still waits for. */
+    subagents?: number;
 };
 /** A dialog a rotom extension opened during a run, such as ask_user_question's choices. */
 export type NativeDialog = {
@@ -812,6 +814,13 @@ export class TeamKernel {
                 break;
 
             case "extension_ui_request": {
+                const subagents = childrenReport(event);
+
+                if (subagents !== undefined) {
+                    live.subagents = subagents;
+                    break;
+                }
+
                 // Status lines, widgets and toasts are for a terminal; only dialogs need a person.
                 if (!DIALOG_METHODS.has(String(event.method))) {
                     return;
@@ -949,6 +958,7 @@ export class TeamKernel {
             kernelVersion: binding.kernelVersion,
             yours: binding.memberId === viewer.id,
             dialogs: this.#live.get(id)?.dialogs ?? [],
+            subagents: this.#live.get(id)?.subagents ?? 0,
             ...(this.#cutOff(id) ? { cutOff: true } : {}),
             ...(pending
                 ? {

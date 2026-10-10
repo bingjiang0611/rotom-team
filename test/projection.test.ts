@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { EntryRecord } from "@earendil-works/pi-durable";
+import { NATIVE_ENTRY } from "../src/server/entry-format.ts";
 import { slugify } from "../src/server/extensions/artifacts.ts";
 import {
     type ClientEntry,
@@ -355,4 +356,30 @@ test("peek lines keep each step short: shell commands, notes, attachments, long 
         [{ kind: "tool", name: "bash", args: { command: "ls" }, status: "running" }],
     );
     assert.deepEqual(peekLines([], { busy: false }), []);
+});
+
+test("a rotom extension's message shows only when it is marked for display", () => {
+    const report = (display: boolean) =>
+        projectEntry({
+            id: 1,
+            conversationId: 2,
+            kind: NATIVE_ENTRY,
+            data: {
+                entry: {
+                    type: "custom_message",
+                    customType: "subagent-notify",
+                    content: "Background task failed: **reviewer**",
+                    display,
+                },
+            },
+        } as unknown as EntryRecord);
+
+    assert.equal(report(false), undefined);
+    assert.deepEqual(report(true), {
+        id: 1,
+        kind: "user",
+        text: "Background task failed: **reviewer**",
+        images: 0,
+        from: "subagents",
+    });
 });
