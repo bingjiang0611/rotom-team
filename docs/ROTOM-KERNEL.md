@@ -2,7 +2,7 @@
 
 ## 当前合同与证据入口
 
-当前实现及 R1–R8 验收以 [NATIVE-DELIVERY.md](NATIVE-DELIVERY.md) 为准；恢复操作以 [NATIVE-RECOVERY.md](NATIVE-RECOVERY.md) 为准。现已加入 Qoder access-only bridge、不可变 segment/public history、handoff/fork/原生 compact、配置激活与 Credit 投影。独立真实账号的指定 ChatGPT↔Qoder 路径已有证据；完整交付仍需冷安装与备用机升级。Native 仍显式 opt-in，旧会话不改后端；附件、任意旧 mutation、子 Agent/Goal 和完整财务账本不在本次核心范围。USD 预算无法证明时拒绝，不以零费用放行。
+当前实现及 R1–R8 验收以 [NATIVE-DELIVERY.md](NATIVE-DELIVERY.md) 为准；恢复操作以 [NATIVE-RECOVERY.md](NATIVE-RECOVERY.md) 为准。现已加入 Qoder access-only bridge、不可变 segment/public history、handoff/fork/原生 compact、配置激活与 Credit 投影。独立真实账号的指定 ChatGPT↔Qoder 路径已有证据；最终 `e31e9ca` 产物已在备用机完成冷安装、312/312、原生 smoke、UI、重启/恢复与受限回滚验证，具体范围及证据见验收矩阵。Native 仍显式 opt-in，旧会话不改后端；附件、任意旧 mutation、子 Agent/Goal 和完整财务账本不在本次核心范围。USD 预算无法证明时拒绝，不以零费用放行。
 
 **以下为第三阶段及更早的历史记录，不是当前功能缺口清单。** 保留当时的验证与限制，不能用它覆盖上述当前合同。
 
