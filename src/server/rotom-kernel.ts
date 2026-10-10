@@ -121,6 +121,16 @@ export function kernelNetworkEnvironment(environment: NodeJS.ProcessEnv): Record
     return routing;
 }
 
+/** The service user's Chrome relay socket: `browserRelaySocketPathV1()` in rotom's `browser-relay.ts`. */
+const relaySocket = join(
+    homedir(),
+    "Library",
+    "Application Support",
+    "rotom",
+    "browser-relay",
+    "relay.sock",
+);
+
 /** Caller owns a private HOME and a stopped/authorized session. No ambient credential or user-extension inheritance. */
 export async function startRotomKernel(options: {
     home: string;
@@ -215,6 +225,9 @@ export async function startRotomKernel(options: {
                 // Coding tools need the service's developer toolchain (git, rg, package managers).
                 PATH: `${dirname(node)}:${process.env.PATH ?? "/usr/bin:/bin"}`,
                 PI_COMPUTER_USE_HELPER_APP_PATH: resolveMacosHelperAppPath({ homeDir: homedir() }),
+                // Browser tools drive the service user's Chrome too, through its relay: see rotom-relay.mjs.
+                NODE_OPTIONS: `--import=${new URL("./rotom-relay.mjs", import.meta.url).href}`,
+                ROTOM_TEAM_BROWSER_RELAY: relaySocket,
                 ROTOM_NODE: node,
                 PI_CODING_AGENT_DIR: join(home, ".pi/agent"),
                 ROTOM_OBSERVABILITY: "0",

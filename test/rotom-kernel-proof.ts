@@ -3,8 +3,15 @@ import assert from "node:assert/strict";
 import { createServer, type RequestListener } from "node:http";
 import { createServer as createSecureServer } from "node:https";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import {
+    existsSync,
+    mkdtempSync,
+    mkdirSync,
+    readFileSync,
+    realpathSync,
+    writeFileSync,
+} from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { once } from "node:events";
 import { connect } from "node:net";
@@ -58,6 +65,8 @@ let requests = 0,
     toolReadObserved = false,
     rejectStatus = 0;
 let offeredTools: string[] | undefined;
+let browserReply: string | undefined;
+let browserAsked = false;
 
 const respond: RequestListener = async (req, res) => {
     try {
@@ -101,6 +110,12 @@ const respond: RequestListener = async (req, res) => {
                 m.tool_call_id === "read-proof" &&
                 String(m.content).includes("ROTOM_KERNEL_OK"),
         );
+        const browserResult = messages.find(
+            (m) => m.role === "tool" && m.tool_call_id === "browser-proof",
+        );
+
+        browserReply ??= browserResult && String(browserResult.content);
+        // A read-only browser call: it lists this session's tabs through the service user's Chrome relay.
         const tool = !hasWrite
             ? {
                   id: "write-proof",
@@ -109,7 +124,13 @@ const respond: RequestListener = async (req, res) => {
               }
             : !hasRead
               ? { id: "read-proof", name: "read", arguments: JSON.stringify({ path: "proof.txt" }) }
-              : undefined;
+              : !browserResult && !browserAsked
+                ? {
+                      id: "browser-proof",
+                      name: "browser_inspect",
+                      arguments: JSON.stringify({ operation: "tabs" }),
+                  }
+                : undefined;
 
         res.writeHead(200, { "Content-Type": "text/event-stream" });
         const emit = (delta: unknown, finish: string | null = null) =>
@@ -118,6 +139,8 @@ const respond: RequestListener = async (req, res) => {
             );
 
         emit({ role: "assistant" });
+
+        browserAsked ||= tool?.id === "browser-proof";
 
         if (tool) {
             emit({
@@ -266,7 +289,23 @@ try {
     );
     assert.equal(readFileSync(join(workspace, "proof.txt"), "utf8"), "ROTOM_KERNEL_OK\n");
     assert.equal(toolReadObserved, true);
-    assert.equal(requests, 3);
+    assert.equal(requests, 4);
+
+    // The member HOME is not the service user's, yet browser tools reach the service user's relay. Where this machine
+    // runs no relay, the call can only show that it looked for one.
+    const hostRelay = existsSync(
+        join(homedir(), "Library/Application Support/rotom/browser-relay/relay.sock"),
+    );
+
+    assert.ok(browserReply, "browser_inspect ran");
+
+    if (hostRelay) {
+        assert.doesNotMatch(
+            browserReply,
+            /unavailable|ENOENT|EINVAL|连接失败|不可用/i,
+            browserReply,
+        );
+    }
 
     // The team boundary must not reduce rotom to its four core tools.
     for (const name of ["browser_inspect", "act_ui", "codemode", "ask_user_question"]) {
@@ -301,6 +340,8 @@ try {
         productExtensionLoaded: true,
         offeredTools,
         nativeWriteAndRead: true,
+        browserRelay: hostRelay ? "reached" : "absent-on-host",
+        browserReply: browserReply!.slice(0, 300),
         loopbackRequests: requests,
         settledObserved: events.some((e) => e.type === "agent_settled"),
         sessionFileReadback: true,
