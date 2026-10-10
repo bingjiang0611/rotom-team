@@ -1259,6 +1259,14 @@ export class PocketApp {
         return { ...hello, connection: client.connection };
     }
 
+    /** A native conversation's live view or receipts changed: update the tabs watching it. */
+    roomChanged(id: ConversationId): void {
+        void this.#rooms.get(id)?.then(
+            (room) => room.schedule(),
+            () => {},
+        );
+    }
+
     kernelChanged(): void {
         this.#scheduleSessions();
     }

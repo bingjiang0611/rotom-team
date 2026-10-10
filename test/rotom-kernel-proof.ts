@@ -363,13 +363,37 @@ try {
     try {
         executions.journal.bind("team-conversation", binding);
         const before = requests;
+        // Journal size observed when each provisional import lands, and while each tool still runs.
+        const progressed: number[] = [];
+        const duringTools: number[] = [];
+        let reserved: string | undefined;
         const first = await executions.run(
             "team-conversation",
             "request-once",
             "Write and read proof.txt, then finish.",
+            {
+                onReserved: (receipt) => {
+                    reserved = receipt.id;
+                },
+                onProgress: () =>
+                    progressed.push(executions.journal.entries("team-conversation").length),
+                onEvent: (event) => {
+                    if (event.type === "tool_execution_start") {
+                        duringTools.push(executions.journal.entries("team-conversation").length);
+                    }
+                },
+            },
         );
 
         assert.equal(first.status, "settled");
+        assert.equal(reserved, first.id);
+        // The tool-calling assistant message is journaled before its tool runs: restart loses at most one message.
+        assert.ok(
+            duringTools.length >= 2 && duringTools.every((count) => count > 0),
+            `${duringTools}`,
+        );
+        assert.ok(progressed.length >= 3, `${progressed}`);
+        report.messageLevelJournal = { duringTools, progressed };
         assert.equal(requests, before + 3);
         assert.equal(inferenceChecks, 3);
         assert.equal(executions.journal.usage("team-conversation").length, 3);
@@ -407,10 +431,12 @@ try {
             "revocation-conversation",
             "revoke-after-tool",
             "Write and read proof.txt.",
-            (event) => {
-                if (event.type === "tool_execution_end" && event.toolName === "write") {
-                    allowed = false;
-                }
+            {
+                onEvent: (event) => {
+                    if (event.type === "tool_execution_end" && event.toolName === "write") {
+                        allowed = false;
+                    }
+                },
             },
         );
 

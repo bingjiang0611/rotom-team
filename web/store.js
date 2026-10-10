@@ -47,6 +47,8 @@ const emptyView = () => ({
     schedules: [],
     goal: null,
     branch: null,
+    /** A rotom session's segment, payer, and pending receipt; null for a Durable session. */
+    kernel: null,
 });
 
 export const store = {
@@ -363,6 +365,7 @@ function applyView(data) {
                 goal: data.goal === undefined ? base.goal : data.goal,
                 // What the folder has checked out: `{ branch }` or `{ detached }`, and null outside a repository.
                 branch: data.branch === undefined ? base.branch : data.branch,
+                kernel: data.kernel ?? null,
             },
             missing: null,
         };
@@ -780,6 +783,17 @@ export const actions = {
             mode,
             requestId: uid(),
             ...(inlineFiles ? { inlineFiles } : {}),
+            // A rotom run answers once its intent is recorded; it streams into the transcript from there.
+            ...(store.state.view.kernel ? { wait: false } : {}),
+        }),
+    /** A rotom session operation on the head this browser last saw. A lost answer is never resent. */
+    kernel: (operation, extra = {}) =>
+        api(`c/${current()}/${operation}`, {
+            requestId: uid(),
+            ...(operation === "compact"
+                ? {}
+                : { expectedHead: store.state.view.kernel?.segmentId }),
+            ...extra,
         }),
     /** Run a command in the session's folder (`!`); `context: false` keeps it from Pi (`!!`). */
     shell: (command, context, requestId = uid()) =>
@@ -807,7 +821,11 @@ export const actions = {
     setAccess: (userId, patch) => api(`users/${encodeURIComponent(userId)}`, patch),
     withdraw: (submissionId) => api(`c/${current()}/withdraw`, { submissionId }),
     configure: (change) => api(`c/${current()}/configure`, change),
-    compact: (instructions) => api(`c/${current()}/compact`, { instructions }),
+    compact: (instructions) =>
+        api(`c/${current()}/compact`, {
+            instructions,
+            ...(store.state.view.kernel ? { requestId: uid() } : {}),
+        }),
     reset: (note) => api(`c/${current()}/reset`, { note }),
     setInstructions: (text) => api(`c/${current()}/instructions`, { text }),
     /** A new session with this one's history through `entryId`. */
@@ -830,7 +848,11 @@ export const actions = {
     clearGoal: () => api(`c/${current()}/goal`, { clear: true }),
     approve: (id, allow) => api(`approvals/${encodeURIComponent(id)}`, { allow }),
     /** `worktree`: the session works in a git worktree of its own, made from the folder. */
-    createSession: (cwd, { worktree = false, backend = "durable" } = {}) =>
+    // With rotom enabled on this server, every new session runs on it: one engine, one transcript.
+    createSession: (
+        cwd,
+        { worktree = false, backend = store.state.server?.kernel ? "rotom" : "durable" } = {},
+    ) =>
         api("sessions", {
             cwd,
             ...(worktree ? { worktree } : {}),

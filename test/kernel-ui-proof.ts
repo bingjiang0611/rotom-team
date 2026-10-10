@@ -1,4 +1,7 @@
-/** Opt-in native UI regression using Pocket's existing isolated Chromium test infrastructure; no real accounts. */
+/**
+ * Opt-in UI regression for rotom sessions in Pocket's one Transcript UI, on an isolated Chromium; no real accounts.
+ * It sends one message through the composer and watches the answer stream, then persist, in the same transcript.
+ */
 import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -10,9 +13,7 @@ export async function nativeUiProof(options: {
     root: string;
     base: string;
     id: number;
-    memberId: string;
-    configurationDigest: string;
-    busyId: number;
+    memberName: string;
 }) {
     assert.ok(findBrowser(), "Chromium is required; native UI verification cannot be skipped");
     const browsers = new Browsers({
@@ -21,335 +22,85 @@ export async function nativeUiProof(options: {
         save: () => {},
     });
     const page = await browsers.open(1);
-    const key = `rotom.kernel.pending.${options.memberId}.${options.id}`;
-    const draftKey = `kernel.${options.memberId}.${options.id}`;
-    const draft = "Keep this unexecuted draft";
+    const text = (selector: string) =>
+        page.evaluate(`document.querySelector(${JSON.stringify(selector)})?.textContent ?? ""`);
     const button = (label: string) =>
         `Array.from(document.querySelectorAll('button')).find(b => (b.querySelector(':scope > span')?.textContent ?? b.textContent).trim() === ${JSON.stringify(label)})`;
+    const send = `document.querySelector('.composer [aria-label="Send"]')`;
     const screenshots: string[] = [];
 
     try {
         await page.navigate(`${options.base}/kernel-proof-bootstrap`);
         await until(
-            async () =>
-                (await page.evaluate(
-                    `Boolean(document.querySelector('.topbar [aria-label="Menu"]'))`,
-                )) === "true",
-            "native UI ready",
+            async () => (await text(".transcript")).includes("Write the proof file."),
+            "persisted native history in the Transcript",
             20000,
         );
-        await page.evaluate(
-            `localStorage.setItem(${JSON.stringify(key)}, 'fork:fork-gap'); (await import('/store.js')).drafts.set(${JSON.stringify(draftKey)}, ${JSON.stringify(draft)});`,
-        );
-        await page.navigate(`${options.base}/s/${options.id}`);
-        await until(
-            async () =>
-                (await page.evaluate(
-                    `Boolean(${button("Dismiss unexecuted pending request")})`,
-                )) === "true",
-            "prepared-only UI recovery",
-            20000,
-        );
-        await page.evaluate(`${button("Dismiss unexecuted pending request")}.click()`);
-        await until(
-            async () =>
-                (await page.evaluate(`localStorage.getItem(${JSON.stringify(key)}) === null`)) ===
-                "true",
-            "explicit pending dismissal",
-            20000,
-        );
+        // Whoever's account ran it last is named; the owner's message below takes it over to their own.
+        assert.match(await text(".topbar .title-sub"), /^rotom · .+'s account · /);
+        // One UI: the separate kernel view is gone, and Pocket's own browser panel is not offered.
+        assert.equal(await page.evaluate(`Boolean(document.querySelector('.kernel'))`), "false");
         assert.equal(
             await page.evaluate(
-                `(await import('/store.js')).drafts.get(${JSON.stringify(draftKey)})`,
-            ),
-            draft,
-        );
-        const lookup = JSON.parse(
-            await page.evaluate(
-                `return JSON.stringify(await (await fetch('/api/c/${options.id}/kernel-request?operation=fork&requestId=fork-gap')).json())`,
-            ),
-        );
-
-        assert.equal(lookup.preparedOnly, true);
-        assert.equal(lookup.receipt, null);
-
-        assert.equal(
-            await page.evaluate(
-                `Boolean(document.querySelector('.transcript button:not(.icon-button)'))`,
+                `Boolean(document.querySelector('.topbar [aria-label="Browser"]'))`,
             ),
             "false",
         );
-        await page.evaluate(`document.querySelector('.topbar [aria-label="Menu"]').click()`);
+
+        await page.evaluate(`
+            const input = document.querySelector('.composer textarea');
+            input.value = 'STREAM_SLOWLY from the composer';
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+        `);
         await until(
-            async () =>
-                (await page.evaluate(`Boolean(${button("Configuration & skills")})`)) === "true",
-            "shared app menu available to native sessions",
+            async () => (await page.evaluate(`Boolean(${send} && !${send}.disabled)`)) === "true",
+            "composer ready",
             20000,
         );
-        assert.equal(await page.evaluate(`Boolean(${button("Use my account")})`), "false");
-        assert.equal(await page.evaluate(`Boolean(${button("Continue with my account")})`), "true");
-        assert.equal(await page.evaluate(`Boolean(${button("Update session account")})`), "false");
+        await page.evaluate(`${send}.click()`);
+        await until(
+            async () => {
+                const shown = await text(".transcript");
 
-        for (const width of [390, 320, 1280]) {
-            await page.setViewport({ width, height: 844, scale: 1, mobile: width < 600 });
-            await page.evaluate(
-                "await document.fonts.ready; await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))); await Promise.all(document.getAnimations().filter(animation => animation.effect.getComputedTiming().iterations !== Infinity).map(animation => animation.finished)); return 'ready';",
-            );
-            const geometry = JSON.parse(
-                await page.evaluate(
-                    `return JSON.stringify({ width:innerWidth, overflow:document.documentElement.scrollWidth-innerWidth, controls:Array.from(document.querySelectorAll('[aria-label="Session actions"] button')).map(button => { const r=button.getBoundingClientRect(); return {label:button.textContent.trim(),left:r.left,right:r.right,width:r.width}; }) })`,
+                return shown.includes("PARTIAL_NATIVE") && !shown.includes("STREAM_DONE");
+            },
+            "the streaming answer shows live",
+            20000,
+        );
+        const image = await page.screenshot();
+        const path = join(options.root, "native-ui-streaming.jpg");
+
+        writeFileSync(path, Buffer.from(image.data, "base64"), { mode: 0o600, flag: "wx" });
+        screenshots.push(path);
+        await until(
+            async () => (await text(".transcript")).includes("STREAM_DONE"),
+            "the finished answer persists in place",
+            20000,
+        );
+        assert.ok((await text(".transcript")).includes("STREAM_SLOWLY from the composer"));
+        await until(
+            async () =>
+                (await text(".topbar .title-sub")).startsWith(
+                    `rotom · ${options.memberName}'s account`,
                 ),
-            );
-
-            assert.equal(geometry.width, width);
-            assert.ok(geometry.overflow <= 1, JSON.stringify(geometry));
-            assert.equal(geometry.controls.length, 4);
-
-            for (const control of geometry.controls) {
-                assert.ok(
-                    control.left >= 0 && control.right <= width + 1 && control.width > 0,
-                    JSON.stringify(control),
-                );
-            }
-
-            const image = await page.screenshot();
-            const path = join(options.root, `native-ui-${width}.jpg`);
-
-            writeFileSync(path, Buffer.from(image.data, "base64"), { mode: 0o600, flag: "wx" });
-            screenshots.push(path);
-        }
-
-        await page.evaluate(`${button("Configuration & skills")}.click()`);
-        await until(
-            async () =>
-                (await page.evaluate(
-                    `document.body.innerText.includes(${JSON.stringify(options.configurationDigest.slice(0, 12))})`,
-                )) === "true",
-            "active native snapshot in profile sheet",
-            20000,
-        );
-        assert.equal(
-            await page.evaluate(`Boolean(${button("Save & activate in this session")})`),
-            "false",
-        );
-        assert.equal(
-            await page.evaluate(`document.body.innerText.includes('Activate saved profile')`),
-            "true",
-        );
-
-        await page.evaluate(
-            `const input=Array.from(document.querySelectorAll('label')).find(label=>label.textContent.trim().startsWith('Profile name')).querySelector('input'); input.value='UI private draft'; input.dispatchEvent(new Event('input',{bubbles:true}));`,
-        );
-        await page.evaluate(`${button("Save my profile")}.click()`);
-        await until(
-            async () =>
-                (await page.evaluate(
-                    "document.body.innerText.includes('Personal profile saved. Existing sessions are unchanged.')",
-                )) === "true",
-            "personal draft saved without activation",
-            20000,
-        );
-        const savedProfile = JSON.parse(
-            await page.evaluate(
-                "return JSON.stringify(await (await fetch('/api/profile')).json())",
-            ),
-        );
-
-        assert.equal(savedProfile.name, "UI private draft");
-        const stillActive = JSON.parse(
-            await page.evaluate(
-                `return JSON.stringify(await (await fetch('/api/c/${options.id}/configuration')).json())`,
-            ),
-        );
-
-        assert.equal(stillActive.digest, options.configurationDigest);
-
-        // Server busy/refusal is exercised by the HTTP proof; isolate its UI contract here.
-        await page.navigate(`${options.base}/s/${options.busyId}`);
-        await until(
-            async () =>
-                (await page.evaluate(
-                    `Boolean(document.querySelector('textarea') && !document.querySelector('textarea').disabled)`,
-                )) === "true",
-            "own native session ready",
-            20000,
-        );
-        const busyKey = `rotom.kernel.pending.${options.memberId}.${options.busyId}`;
-        const busyDraftKey = `kernel.${options.memberId}.${options.busyId}`;
-
-        await page.evaluate(`
-            const original = window.fetch;
-            window.busyDispatch = null;
-            window.fetch = async (url, options) => {
-                if (url === '/api/c/${options.busyId}/submit' && options?.method === 'POST') {
-                    window.fetch = original;
-                    window.busyDispatch = localStorage.getItem(${JSON.stringify(busyKey)});
-                    return new Response(JSON.stringify({error:'Fixture known busy refusal'}), {status:409, headers:{'content-type':'application/json'}});
-                }
-                return original(url, options);
-            };
-            const input=document.querySelector('textarea');
-            input.value='Keep the busy draft';
-            input.dispatchEvent(new Event('input',{bubbles:true}));
-        `);
-        await page.evaluate(`${button("Send")}.click()`);
-        await until(
-            async () =>
-                (await page.evaluate(
-                    `Boolean(window.busyDispatch && localStorage.getItem(${JSON.stringify(busyKey)}) === null)`,
-                )) === "true",
-            "known refusal clears only pending identity",
-            20000,
-        );
-        const busyIdentity = await page.evaluate("window.busyDispatch");
-
-        assert.match(busyIdentity, /^submit:/);
-        const absent = JSON.parse(
-            await page.evaluate(
-                `return JSON.stringify(await (await fetch('/api/c/${options.busyId}/kernel-request?operation=submit&requestId='+encodeURIComponent(${JSON.stringify(busyIdentity.slice(7))}))).json())`,
-            ),
-        );
-
-        assert.equal(absent.receipt, null);
-        await page.navigate(`${options.base}/s/${options.busyId}`);
-        await until(
-            async () =>
-                (await page.evaluate(
-                    `Boolean(document.querySelector('.topbar [aria-label="Menu"]'))`,
-                )) === "true",
-            "reload after refusal",
-            20000,
-        );
-        assert.equal(
-            await page.evaluate(`localStorage.getItem(${JSON.stringify(busyKey)}) === null`),
-            "true",
-        );
-        assert.equal(
-            await page.evaluate(
-                `(await import('/store.js')).drafts.get(${JSON.stringify(busyDraftKey)})`,
-            ),
-            "Keep the busy draft",
-        );
-
-        await until(
-            async () =>
-                (await page.evaluate(`!document.querySelector('textarea').disabled`)) === "true",
-            "own session readback after reload",
-            20000,
-        );
-        await page.evaluate(`document.querySelector('.topbar .title').click()`);
-        await until(
-            async () =>
-                (await page.evaluate(`Boolean(${button("Configuration & skills")})`)) === "true",
-            "session title opens the same menu",
-            20000,
-        );
-        assert.equal(
-            await page.evaluate(`Boolean(${button("Continue with my account")})`),
-            "false",
-        );
-        assert.equal(await page.evaluate(`${button("Update session account")}.disabled`), "false");
-        assert.equal(await page.evaluate(`${button("Fork")}.disabled`), "false");
-        assert.equal(await page.evaluate(`${button("Compact context")}.disabled`), "false");
-        await page.evaluate(`${button("Configuration & skills")}.click()`);
-        await until(
-            async () =>
-                (await page.evaluate(
-                    `Boolean(${button("Activate saved profile")} && !${button("Activate saved profile")}.disabled)`,
-                )) === "true",
-            "own session can activate from configuration sheet",
-            20000,
-        );
-        const beforeActivation = JSON.parse(
-            await page.evaluate(
-                `return JSON.stringify(await (await fetch('/api/c/${options.busyId}/configuration')).json())`,
-            ),
-        );
-
-        await page.evaluate(`
-            const input = Array.from(document.querySelectorAll('label')).find(label => label.textContent.trim().startsWith('Profile name')).querySelector('input');
-            input.value = 'Unsaved UI draft';
-            input.dispatchEvent(new Event('input', {bubbles:true}));
-        `);
-        await page.evaluate(
-            `window.confirm = () => true; ${button("Activate saved profile")}.click()`,
-        );
-        await until(
-            async () =>
-                (await page.evaluate(
-                    `localStorage.getItem(${JSON.stringify(busyKey)}) === null && Boolean(${button("Activate saved profile")} && !${button("Activate saved profile")}.disabled)`,
-                )) === "true",
-            "native activation durably read back",
-            20000,
-        );
-        const afterActivation = JSON.parse(
-            await page.evaluate(
-                `return JSON.stringify(await (await fetch('/api/c/${options.busyId}/configuration')).json())`,
-            ),
-        );
-
-        assert.equal(afterActivation.name, "UI private draft");
-        assert.notEqual(afterActivation.digest, beforeActivation.digest);
-        await until(
-            async () =>
-                (await page.evaluate(
-                    `document.body.innerText.includes(${JSON.stringify(afterActivation.digest.slice(0, 12))})`,
-                )) === "true",
-            "active snapshot refreshed in configuration sheet",
+            "the sender pays and is named",
             20000,
         );
 
-        assert.equal(
-            await page.evaluate(
-                `Array.from(document.querySelectorAll('label')).find(label => label.textContent.trim().startsWith('Profile name')).querySelector('input').value`,
-            ),
-            "Unsaved UI draft",
-        );
-
-        // UI-only role projection; real server authorization/revocation is covered by the HTTP proof.
-        await page.evaluate(
-            `const {store} = await import('/store.js'); store.set({me: {...store.state.me, role: 'viewer'}});`,
-        );
-        await until(
-            async () =>
-                (await page.evaluate(`${button("Activate saved profile")}.disabled`)) === "true",
-            "viewer cannot activate configuration",
-            20000,
-        );
-        assert.equal(
-            await page.evaluate(
-                `document.body.innerText.includes('Continue with your account from the session menu before activating configuration.')`,
-            ),
-            "false",
-        );
-        await page.evaluate(`document.querySelector('.sheet-head [aria-label="Close"]').click()`);
         await page.evaluate(`document.querySelector('.topbar [aria-label="Menu"]').click()`);
         await until(
             async () => (await page.evaluate(`Boolean(${button("Fork")})`)) === "true",
-            "viewer session menu",
+            "rotom session actions in the menu",
             20000,
         );
-        assert.equal(
-            await page.evaluate(`Boolean(${button("Continue with my account")})`),
-            "false",
-        );
-        assert.equal(await page.evaluate(`Boolean(${button("Update session account")})`), "false");
-        assert.equal(await page.evaluate(`${button("Fork")}.disabled`), "true");
-        assert.equal(await page.evaluate(`${button("Compact context")}.disabled`), "true");
+        assert.equal(await page.evaluate(`Boolean(${button("New context")})`), "false");
+        const menu = await page.screenshot();
+        const menuPath = join(options.root, "native-ui-menu.jpg");
 
-        return {
-            viewerActionsDisabled: true,
-            sharedSessionMenu: true,
-            handoffOnlyForAnotherMembersSession: true,
-            nativeConfigurationActivatedFromSheet: true,
-            knownBusyRefusalClearsPendingWithoutReplay: true,
-            nativeProfileDraftSavedWithoutActivation: true,
-            preparedOnlyDismissedWithoutReplay: true,
-            draftRetained: true,
-            nativeProfileSheet: true,
-            viewportWidths: [390, 320, 1280],
-            screenshots,
-        };
+        writeFileSync(menuPath, Buffer.from(menu.data, "base64"), { mode: 0o600, flag: "wx" });
+        screenshots.push(menuPath);
+
+        return { unifiedTranscript: true, streamedThenPersisted: true, screenshots };
     } finally {
         await browsers.closeAll({ final: true });
     }

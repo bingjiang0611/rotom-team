@@ -7,6 +7,13 @@
 export const FILE_BLOCK = '<file name="';
 /** The entry kind of a note about what a person did (`Commands.note`). */
 export const NOTE_ENTRY = "pocket.note";
+/**
+ * The entry kind mirroring one rotom session entry (`data.entry`) for display. It carries no `model`: the Durable loop
+ * never reads it, and rotom's own session file stays the model context.
+ */
+export const NATIVE_ENTRY = "rotom-team.native";
+/** How an automatic continuation after a restart starts: it shows as the server's, not a person's. */
+export const RESUME_PREFIX = "[rotom-team: server restarted]";
 
 /** The speaker prefix Pi Pocket adds to messages when several people share the server. */
 export const FROM_PREFIX = /^\[from: ([^\]\n]{1,60})\] /;

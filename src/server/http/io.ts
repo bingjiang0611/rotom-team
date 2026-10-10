@@ -72,8 +72,8 @@ export async function readBody(request: IncomingMessage, limit: number): Promise
     }
 }
 
-export async function readJson<T>(request: IncomingMessage): Promise<T> {
-    const body = await readBody(request, MAX_JSON);
+export async function readJson<T>(request: IncomingMessage, limit = MAX_JSON): Promise<T> {
+    const body = await readBody(request, limit);
 
     if (body.length === 0) {
         return {} as T;

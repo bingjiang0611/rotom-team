@@ -66,7 +66,6 @@ export function CwdSheet({ mode }) {
     const [hidden, setHidden] = useState(false);
     const [browse, setBrowse] = useState(true);
     const [worktree, setWorktree] = useState(false);
-    const [backend, setBackend] = useState("durable");
     // Whether a folder is being named, to make in the one shown; and a path typed that is not there yet.
     const [naming, setNaming] = useState(false);
     const [missing, setMissing] = useState(null);
@@ -105,7 +104,7 @@ export function CwdSheet({ mode }) {
                 await actions.configure({ cwd: target });
                 closeSheet();
             } else {
-                const created = await actions.createSession(target, { worktree, backend });
+                const created = await actions.createSession(target, { worktree });
 
                 navigate(created.id);
             }
@@ -165,17 +164,6 @@ export function CwdSheet({ mode }) {
             html`<label class="check">
                 <input type="checkbox" checked=${worktree} onChange=${(event) => setWorktree(event.currentTarget.checked)} /> In a git worktree of its own: a branch, apart from this folder
             </label>`
-        }
-        ${
-            mode === "new" &&
-            server?.kernel &&
-            html`<label>Execution engine
-            <select value=${backend} onChange=${(event) => setBackend(event.currentTarget.value)}>
-                <option value="durable">Existing team engine</option>
-                <option value="rotom">rotom · experimental</option>
-            </select>
-            ${backend === "rotom" && html`<p class="muted">Uses your selected personal account and frozen profile. Supports ChatGPT/Qoder, account handoff, forks and native compaction. Text/native tools only; attachments are not supported. Existing sessions do not change.</p>`}
-        </label>`
         }
         <button class="button primary wide" ref=${useButton} onClick=${() => use(path)}>
             ${missing === path ? "Create and use" : "Use"} ${shortPath(path, home)}

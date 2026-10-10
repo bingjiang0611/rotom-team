@@ -21,6 +21,7 @@ import {
 } from "../auth.ts";
 import type { User } from "../config.ts";
 import { HttpError } from "../errors.ts";
+import { MAX_INSTRUCTIONS, MAX_SKILL_BYTES } from "../kernel-profile.ts";
 import { desktopTheme, wallpaperFile } from "../omarchy.ts";
 import { runningNow } from "../running.ts";
 import { serveImage } from "./assets.ts";
@@ -191,6 +192,48 @@ export function createApi(options: HttpOptions, auth: Auth) {
 
                 return json(response, 200, { ok: true });
             }
+        }
+
+        if (first === "kernel-profile") {
+            if (!app.kernel) {
+                throw new HttpError(409, "The rotom backend is not enabled on this server.");
+            }
+
+            const profiles = app.kernel.profiles;
+
+            if (method !== "GET") {
+                app.requireSteer(user);
+            }
+
+            if (second === undefined && method === "POST") {
+                const body = await readJson<{ instructions?: unknown }>(
+                    request,
+                    2 * MAX_INSTRUCTIONS,
+                );
+
+                profiles.setInstructions(user.id, body.instructions);
+            } else if (
+                second === "skills" &&
+                third !== undefined &&
+                fourth === undefined &&
+                method === "PUT"
+            ) {
+                // Base64 grows files by a third; leave room for the JSON around them.
+                const body = await readJson<{ files?: unknown }>(request, 2 * MAX_SKILL_BYTES);
+
+                profiles.putSkill(user.id, third, body.files);
+            } else if (
+                second === "skills" &&
+                third !== undefined &&
+                fourth === undefined &&
+                method === "DELETE"
+            ) {
+                profiles.removeSkill(user.id, third);
+            } else if (!(second === undefined && method === "GET")) {
+                throw new HttpError(404, "Not found");
+            }
+
+            return json(response, 200, profiles.get(user.id));
         }
 
         if (first === "profile" && method === "GET") {

@@ -1,6 +1,4 @@
 // The menu: what can be done in this session and in the app.
-import { useContext } from "preact/hooks";
-import { KernelContext } from "../kernel.js";
 import { browserAvailable, displayUrl, setBrowserOpen } from "../browser.js";
 import { chatUnread } from "../chat.js";
 import { schedulesAvailable } from "../commands.js";
@@ -52,17 +50,18 @@ function Places() {
             label: "Changes",
             run: () => setFilesOpen(true, "changes"),
         },
-        browserAvailable() && {
-            id: "browser",
-            icon: "globe",
-            label: "Browser",
-            on: browserOpen,
-            dot: live,
-            run: () => {
-                setBrowserOpen(true);
-                closeSheet();
+        browserAvailable() &&
+            !view.kernel && {
+                id: "browser",
+                icon: "globe",
+                label: "Browser",
+                on: browserOpen,
+                dot: live,
+                run: () => {
+                    setBrowserOpen(true);
+                    closeSheet();
+                },
             },
-        },
         {
             id: "artifacts",
             icon: "artifact",
@@ -132,12 +131,22 @@ export function PlacesSheet() {
     <//>`;
 }
 
+/** A rotom session operation from the menu. Its outcome shows in the transcript; a fork opens its new session. */
+function kernelAction(operation) {
+    closeSheet();
+    void attempt(async () => {
+        const result = await actions.kernel(operation);
+
+        if (operation === "fork" && result?.id !== undefined) {
+            navigate(result.id);
+        }
+    });
+}
+
 export function MenuSheet() {
     const { view, me, server } = store.state;
-    const kernel = useContext(KernelContext);
-    const native =
-        kernel && store.state.sessions.find((session) => session.id === store.state.conversationId);
-    const conversation = kernel ? null : view.conversation;
+    const kernel = view.kernel;
+    const conversation = view.conversation;
     const steer = canSteer();
     const session = conversation?.kind === "session";
     const turns = view.turns;
@@ -150,61 +159,50 @@ export function MenuSheet() {
         !turns.driver ||
         !store.state.presence.some((person) => person.id === turns.driver);
     const instructions = view.agent?.instructions;
+    // Durable-only controls do not apply to a rotom session: its kernel owns context, tools and the folder.
+    const durable = conversation && !kernel;
+    const blocked = Boolean(kernel?.pending) || view.live?.busy === true;
 
-    return html`<${Sheet} title=${native?.title ?? conversation?.title ?? "Menu"} onClose=${closeSheet}>
-        ${!kernel && html`<${Places} />`}
+    return html`<${Sheet} title=${conversation?.title ?? "Menu"} onClose=${closeSheet}>
+        <${Places} />
         ${
             kernel &&
             html`<div class="group" aria-label="Session actions">
-            <div class="group-title">This session</div>
+            <div class="group-title">
+                Rotom · ${kernel.memberName}'s account · ${kernel.model ?? "no model"}
+            </div>
             ${
-                kernel.view &&
-                kernel.view.memberId !== me.id &&
-                me.role !== "viewer" &&
+                !kernel.yours &&
+                steer &&
                 html`<button
                     class="list-item"
-                    disabled=${kernel.blocked}
-                    onClick=${() => {
-                        closeSheet();
-                        void kernel.dispatch("handoff");
-                    }}
+                    disabled=${blocked}
+                    onClick=${() => kernelAction("handoff")}
                 >
                     <span>Continue with my account</span>
-                    <span class="muted small">your model and quota · keeps configuration</span>
+                    <span class="muted small">sending a message does this too</span>
                 </button>`
             }
             <button
                 class="list-item"
-                disabled=${kernel.blocked || me.role === "viewer" || Array.isArray(me.sessions)}
-                onClick=${() => {
-                    closeSheet();
-                    void kernel.dispatch("fork");
-                }}
+                disabled=${blocked || !steer || Array.isArray(me.sessions)}
+                onClick=${() => kernelAction("fork")}
             >
                 <span>Fork</span>
-                <span class="muted small">public context · your account</span>
+                <span class="muted small">public history · your account</span>
             </button>
             <button
                 class="list-item"
-                disabled=${kernel.blocked || !kernel.own}
-                onClick=${() => {
-                    closeSheet();
-                    void kernel.dispatch("compact");
-                }}
+                disabled=${blocked || !kernel.yours}
+                onClick=${() => kernelAction("compact")}
             >
                 <span>Compact context</span>
                 <span class="muted small">summarize older messages</span>
             </button>
-            ${item("Copy link", () =>
-                copyText(location.href).then(
-                    () => notify("info", "Link copied. Other signed-in devices can open it."),
-                    () => notify("error", "Could not copy."),
-                ),
-            )}
         </div>`
         }
         ${
-            conversation &&
+            durable &&
             collab() &&
             steer &&
             (!turns?.on || canStopTurns) &&
@@ -237,7 +235,7 @@ export function MenuSheet() {
                       () => openSheet({ type: "worktree" }),
                       conversation.worktree.branch,
                   )
-                : conversation &&
+                : durable &&
                   steer &&
                   driving &&
                   !scoped() &&
@@ -248,7 +246,7 @@ export function MenuSheet() {
                   )
         }
         ${
-            conversation &&
+            durable &&
             browserAvailable() &&
             store.state.browserOpen &&
             item(
@@ -260,10 +258,10 @@ export function MenuSheet() {
                 store.state.browser?.open && displayUrl(store.state.browser.url),
             )
         }
-        ${session && steer && driving && item("Instructions for Pi", () => openSheet({ type: "instructions" }), instructions ? "on" : "none")}
-        ${conversation && steer && driving && item("Compact context", () => openSheet({ type: "compact" }), "summarize older messages")}
-        ${conversation && steer && driving && item("New context", () => openSheet({ type: "reset" }), "Pi starts fresh; history stays")}
-        ${!kernel && schedulesAvailable() && item("Scheduled messages", () => openSheet({ type: "schedules" }), view.schedules.length === 0 ? "none" : `${view.schedules.length} coming`)}
+        ${durable && session && steer && driving && item("Instructions for Pi", () => openSheet({ type: "instructions" }), instructions ? "on" : "none")}
+        ${durable && steer && driving && item("Compact context", () => openSheet({ type: "compact" }), "summarize older messages")}
+        ${durable && steer && driving && item("New context", () => openSheet({ type: "reset" }), "Pi starts fresh; history stays")}
+        ${durable && schedulesAvailable() && item("Scheduled messages", () => openSheet({ type: "schedules" }), view.schedules.length === 0 ? "none" : `${view.schedules.length} coming`)}
         ${
             conversation &&
             item("Copy link", () =>
@@ -289,7 +287,7 @@ export function MenuSheet() {
             })
         }
         ${
-            !kernel &&
+            durable &&
             view.subagents.length > 0 &&
             html`<div class="group">
                 <div class="group-title">Subagents</div>
@@ -311,22 +309,8 @@ export function MenuSheet() {
             ${item("Running now", () => openSheet({ type: "running" }), "everything Pi is doing")}
             ${item("Spend", () => openSheet({ type: "spend" }), me?.role === "owner" ? "by person and session, limits" : "yours")}
             ${item("Projects & access", () => openSheet({ type: "projects" }), "view · continue · fork")}
-            ${item("Configuration & skills", () => openSheet({ type: "profile" }), "personal draft · shared snapshot")}
+            ${item("My instructions & skills", () => openSheet({ type: "profile" }), "loaded with the project's own")}
             ${item("My model accounts", () => openSheet({ type: "providers" }), "your ChatGPT / Qoder quota")}
-            ${
-                kernel?.own &&
-                html`<button
-                    class="list-item"
-                    disabled=${kernel.blocked}
-                    onClick=${() => {
-                        closeSheet();
-                        void kernel.dispatch("handoff");
-                    }}
-                >
-                    <span>Update session account</span>
-                    <span class="muted small">after reconnecting · preserves configuration</span>
-                </button>`
-            }
             ${item("Extensions", () => openSheet({ type: "extensions" }), store.state.guard?.enabled ? "Lancet Guard on" : store.state.guard?.available ? "Lancet Guard off" : "")}
             ${
                 me?.role === "owner" &&

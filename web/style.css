@@ -7776,3 +7776,15 @@ textarea.notes {
         scroll-margin-top: 6.4rem;
     }
 }
+
+/* A rotom operation whose outcome is unknown, above the composer. */
+.native-banner {
+    margin: 0 auto 0.5rem;
+    width: min(100%, var(--column, 48rem));
+    padding: 0.5rem 0.8rem;
+    border: 1px solid var(--warn-line);
+    border-radius: var(--radius);
+    background: var(--warn-soft);
+    color: var(--text);
+    font-size: 0.82rem;
+}

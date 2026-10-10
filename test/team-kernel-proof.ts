@@ -17,9 +17,15 @@ import { PocketApp } from "../src/server/app.ts";
 import { createHandler } from "../src/server/http.ts";
 import { COOKIE } from "../src/server/auth.ts";
 import { ConfigurationDoc } from "../src/server/team-profiles.ts";
-import { NativeSetupDoc, NativeConfigurationsDoc } from "../src/server/team-kernel.ts";
+import {
+    NATIVE_LAYERS,
+    NativeConfigurationsDoc,
+    NativeSetupDoc,
+} from "../src/server/team-kernel.ts";
 import { RotomJournal } from "../src/server/rotom-journal.ts";
 import { verifyRotomKernel } from "../src/server/rotom-kernel.ts";
+import { NATIVE_ENTRY } from "../src/server/entry-format.ts";
+import { projectEntry } from "../src/server/projection.ts";
 import { SessionsDoc } from "../src/server/docs.ts";
 import type { Runtime } from "../src/server/team-accounts.ts";
 import type { User } from "../src/server/config.ts";
@@ -30,6 +36,9 @@ const workspace = realpathSync(work);
 mkdirSync(folder, { mode: 0o700 });
 const secret = `synthetic-request-key-${randomUUID()}`;
 const requestMembers: string[] = [];
+/** Each member's personal AGENTS.md text, by member id; only the paying member's may reach the model. */
+const personal = new Map<string, string>();
+let lastBody = "";
 let calls = 0,
     legacyCalls = 0,
     hold = false;
@@ -46,15 +55,26 @@ const modelServer = createServer(async (req, res) => {
         }
 
         assert.ok(!body.includes(secret));
+        lastBody = body;
         const input = JSON.parse(body);
 
         const compact = !input.tools?.length;
 
+        const member = requestMembers.at(-1)!;
+
         if (!compact) {
-            assert.ok(body.includes("FROZEN_PERSONAL_CONTEXT"));
+            // The project's layer is read live from the workspace, the payer's from their private HOME.
+            assert.ok(body.includes("PROJECT_LIVE_CONTEXT"));
+
+            if (personal.has(member)) {
+                assert.ok(body.includes(personal.get(member)!), `personal layer of ${member}`);
+            }
         }
 
-        assert.ok(!body.includes("UNFROZEN_CONTEXT"));
+        for (const [other, text] of personal) {
+            assert.ok(other === member || !body.includes(text), `foreign personal layer ${other}`);
+        }
+
         calls++;
         res.writeHead(200, { "Content-Type": "text/event-stream" });
         const emit = (delta: unknown, finish: string | null = null) =>
@@ -99,6 +119,21 @@ const modelServer = createServer(async (req, res) => {
         ) {
             assert.ok(JSON.stringify(input.messages).includes("APP_NATIVE_COMPACT"));
             emit({ content: "APP_NATIVE_FORK_FINISHED" });
+            emit({}, "stop");
+            res.end("data: [DONE]\n\n");
+
+            return;
+        }
+
+        if (
+            JSON.stringify(
+                input.messages.findLast((message: { role: string }) => message.role === "user")
+                    ?.content,
+            ).includes("STREAM_SLOWLY")
+        ) {
+            emit({ content: "PARTIAL_NATIVE " });
+            await new Promise((resolve) => setTimeout(resolve, 1500));
+            emit({ content: "STREAM_DONE" });
             emit({}, "stop");
             res.end("data: [DONE]\n\n");
 
@@ -238,11 +273,8 @@ try {
     await app.hello(bob.user);
 
     for (const user of [a, bob.user]) {
-        app.profiles.save(user, {
-            name: "Frozen",
-            instructions: "FROZEN_PERSONAL_CONTEXT",
-            skillDirectories: [],
-        });
+        personal.set(user.id, `PERSONAL_LAYER_${user.name.toUpperCase()}`);
+        app.kernel!.profiles.setInstructions(user.id, personal.get(user.id));
     }
 
     const beforeInvalidBackend = app.sessions().length;
@@ -261,7 +293,6 @@ try {
     const planned = app.kernel!.binding(
         a,
         workspace,
-        frozen,
         initial.model!,
         initial.thinkingLevel ?? "off",
     );
@@ -325,7 +356,7 @@ try {
     const { id } = (await created.json()) as { id: number };
 
     assert.equal(app.sessionMeta(id as never)?.backend, "rotom");
-    writeFileSync(join(workspace, "AGENTS.md"), "UNFROZEN_CONTEXT\n");
+    writeFileSync(join(workspace, "AGENTS.md"), "PROJECT_LIVE_CONTEXT\n");
     const first = await request(aliceToken, `c/${id}/submit`, "POST", {
         text: "Write the proof file.",
         requestId: "first",
@@ -458,32 +489,47 @@ try {
         }
     }
 
-    const snapshot = await app.harness.snapshot(ConfigurationDoc, id as never, context);
-
-    await app.harness.commit(async (tx) => {
-        (await tx.doc(ConfigurationDoc, id as never)).snapshot = {
-            ...snapshot!.snapshot!,
-            digest: "changed",
-        };
-    }, context);
-    assert.equal(
-        (
-            await request(aliceToken, `c/${id}/submit`, "POST", {
-                text: "Must not send",
-                requestId: "tampered",
-            })
-        ).status,
-        409,
-    );
-    assert.equal(calls, 3);
-    await app.harness.commit(async (tx) => {
-        (await tx.doc(ConfigurationDoc, id as never)).snapshot = snapshot!.snapshot;
-    }, context);
-
-    writeFileSync(join(workspace, "AGENTS.md"), "NEW_PROJECT_CONTEXT\n");
+    // No snapshot: the next run reads the project's AGENTS.md as it is now.
+    writeFileSync(join(workspace, "AGENTS.md"), "PROJECT_LIVE_CONTEXT UPDATED_PROJECT_LAYER\n");
     const bobNow = app.config.userById(bob.user.id)!;
     const bobSession = await app.commands.createSession(bobNow, { backend: "rotom" });
 
+    // Personal skills arrive over the API into Bob's private HOME; project skills live in the workspace.
+    mkdirSync(join(workspace, ".pi", "skills", "project-proof"), { recursive: true });
+    writeFileSync(
+        join(workspace, ".pi", "skills", "project-proof", "SKILL.md"),
+        "---\nname: project-proof\ndescription: PROJECT_SKILL_DESCRIPTION\n---\nProject skill.\n",
+    );
+    const skillPut = await request(bob.token, "kernel-profile/skills/bob-proof", "PUT", {
+        files: {
+            "SKILL.md": {
+                text: "---\nname: bob-proof\ndescription: BOB_SKILL_DESCRIPTION\n---\nBob's skill.\n",
+            },
+            "scripts/run.sh": { base64: Buffer.from("echo bob\n").toString("base64") },
+        },
+    });
+
+    assert.equal(skillPut.status, 200, await skillPut.clone().text());
+    assert.deepEqual(((await skillPut.json()) as { skills: unknown[] }).skills, [
+        { name: "bob-proof", description: "BOB_SKILL_DESCRIPTION", files: 2 },
+    ]);
+
+    for (const bad of [
+        { "SKILL.md": { text: "---\nname: other\ndescription: x\n---\n" } },
+        { "SKILL.md": { text: "---\nname: bob-bad\ndescription: x\n---\n" }, "../x": { text: "" } },
+    ]) {
+        assert.equal(
+            (await request(bob.token, "kernel-profile/skills/bob-bad", "PUT", { files: bad }))
+                .status,
+            400,
+        );
+    }
+
+    assert.deepEqual(
+        ((await (await request(aliceToken, "kernel-profile")).json()) as { skills: unknown[] })
+            .skills,
+        [],
+    );
     hold = true;
     const inFlight = request(bob.token, `c/${bobSession.id}/submit`, "POST", {
         text: "Wait for revocation",
@@ -491,6 +537,9 @@ try {
     });
 
     await until(() => calls === 4, "native request began", 30000);
+    assert.ok(lastBody.includes("UPDATED_PROJECT_LAYER"));
+    assert.ok(lastBody.includes("PROJECT_SKILL_DESCRIPTION"));
+    assert.ok(lastBody.includes("BOB_SKILL_DESCRIPTION"));
 
     for (const operation of ["submit", "compact"]) {
         const busyKey = `busy-${operation}`;
@@ -545,11 +594,8 @@ try {
     const carla = app.config.addUser("Carla", "guest");
 
     await app.hello(carla.user);
-    app.profiles.save(carla.user, {
-        name: "Frozen",
-        instructions: "FROZEN_PERSONAL_CONTEXT",
-        skillDirectories: [],
-    });
+    personal.set(carla.user.id, "PERSONAL_LAYER_CARLA");
+    app.kernel!.profiles.setInstructions(carla.user.id, personal.get(carla.user.id));
     let project = app.projects.save(
         owner(app),
         {
@@ -918,7 +964,9 @@ try {
     });
 
     assert.equal(forkReply.status, 200);
-    assert.equal(((await forkReply.json()) as { status: string }).status, "settled");
+    const forkReceipt = (await forkReply.json()) as { status: string };
+
+    assert.equal(forkReceipt.status, "settled", JSON.stringify(forkReceipt));
     assert.equal(calls, 7);
     assert.deepEqual(
         app.kernel!.snapshot(forked.id as never, owner(app)).usage.map((row) => row.memberId),
@@ -979,7 +1027,13 @@ try {
 
     const beforeConfig = app.kernel!.executions.journal.session(String(forked.id));
     const configSourceBytes = readFileSync(beforeConfig.sessionFile!);
-    const originalConfiguration = app.configuration(forked.id as never)!;
+
+    // A rotom session starts layered: nothing is frozen until a member explicitly activates a snapshot.
+    assert.equal(app.configuration(forked.id as never), undefined);
+    assert.equal(
+        app.kernel!.executions.journal.session(String(forked.id)).binding.configurationDigest,
+        NATIVE_LAYERS,
+    );
     const activateBody = {
         activate: "mine",
         requestId: "activate-once",
@@ -1008,7 +1062,7 @@ try {
     );
     app.profiles.save(owner(app), {
         name: "Activated",
-        instructions: "FROZEN_PERSONAL_CONTEXT\nACTIVATED_PROFILE_CONTEXT",
+        instructions: `${personal.get(a.id)}\nACTIVATED_PROFILE_CONTEXT`,
         skillDirectories: [activationSkill],
     });
     const requireDriver = app.requireDriver.bind(app);
@@ -1073,8 +1127,8 @@ try {
     assert.equal(activated.receipt.operation, "configuration");
     const activeConfiguration = app.configuration(forked.id as never)!;
 
-    assert.notEqual(activeConfiguration.digest, originalConfiguration.digest);
-    assert.equal(app.profiles.snapshot(forked.id as never)!.digest, originalConfiguration.digest);
+    assert.notEqual(activeConfiguration.digest, NATIVE_LAYERS);
+    assert.equal(app.profiles.snapshot(forked.id as never), undefined);
     assert.deepEqual(readFileSync(beforeConfig.sessionFile!), configSourceBytes);
     assert.deepEqual(
         app.kernel!.executions.journal.segment(beforeConfig.segmentId).binding,
@@ -1082,7 +1136,10 @@ try {
     );
     assert.equal(app.kernel!.snapshot(forked.id as never, owner(app)).usage.length, 1);
     assert.equal(calls, 7);
-    assert.equal(activeConfiguration.skills.length, 1);
+    assert.deepEqual(activeConfiguration.skills.map((skill) => skill.name).sort(), [
+        "activation-skill",
+        "project-proof",
+    ]);
     const sameContentBody = {
         activate: "mine",
         requestId: "same-content-gap",
@@ -1142,7 +1199,7 @@ try {
 
     app.profiles.save(owner(app), {
         name: "Not activated",
-        instructions: "FROZEN_PERSONAL_CONTEXT\nUNACTIVATED_PROFILE_CONTEXT",
+        instructions: `${personal.get(a.id)}\nUNACTIVATED_PROFILE_CONTEXT`,
         skillDirectories: [],
     });
     await app.close();
@@ -1198,7 +1255,12 @@ try {
     assert.equal(configForkResponse.status, 200, await configForkResponse.clone().text());
     const configFork = (await configForkResponse.json()) as { id: number };
 
-    assert.equal(app.configuration(configFork.id as never)!.digest, activeConfiguration.digest);
+    // A fork runs on the forker's own layers; it never inherits the source's frozen personal snapshot.
+    assert.equal(app.configuration(configFork.id as never), undefined);
+    assert.equal(
+        app.kernel!.executions.journal.session(String(configFork.id)).binding.configurationDigest,
+        NATIVE_LAYERS,
+    );
     const staged = app.profiles.capture(owner(app), workspace, []);
 
     await app.harness.commit(async (tx) => {
@@ -1419,6 +1481,66 @@ try {
     );
     assert.equal(calls, 14);
     report.kernelUpgradeStartsNewSegment = true;
+
+    // One transcript: the run answers at reservation, streams into the room live, and lands as mirrored entries.
+    const streamed = await request(aliceToken, `c/${shared2.id}/submit`, "POST", {
+        text: "STREAM_SLOWLY please",
+        requestId: "stream",
+        wait: false,
+    });
+
+    assert.equal(streamed.status, 200, await streamed.clone().text());
+    const streamReceipt = (await streamed.json()) as { id: string; status: string };
+
+    assert.equal(streamReceipt.status, "dispatch-intent");
+    let partial: unknown;
+
+    for (let tries = 0; tries < 2400 && partial === undefined; tries++) {
+        const live = app.kernel!.clientLive(shared2.id as never);
+
+        if (live.busy && JSON.stringify(live.generation ?? {}).includes("PARTIAL_NATIVE")) {
+            partial = live;
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+
+    assert.ok(partial, "the in-flight answer shows live before it is persisted");
+
+    while (app.kernel!.isRunning(shared2.id as never)) {
+        await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+
+    assert.equal(app.kernel!.clientLive(shared2.id as never).busy, false);
+    assert.equal(
+        app.kernel!.executions.journal.request(String(shared2.id), `${a.id}:stream`)?.status,
+        "settled",
+    );
+    const room = await app.room(shared2.id as never);
+    const mirrored = room.value!.entries.filter((entry) => entry.kind === NATIVE_ENTRY);
+
+    assert.equal(
+        mirrored.length,
+        app.kernel!.executions.journal.entries(String(shared2.id)).length,
+    );
+    const shown = mirrored.map((entry) => projectEntry(entry)).filter((entry) => entry);
+    const users = shown.filter((entry) => entry!.kind === "user") as { id: number; text: string }[];
+
+    assert.deepEqual(
+        users.map((entry) => entry.text),
+        ["Write the proof file.", "Write the proof file.", "STREAM_SLOWLY please"],
+    );
+    assert.deepEqual(
+        users.map((entry) => room.authors[String(entry.id)]),
+        [a.id, dana.user.id, a.id],
+    );
+    assert.ok(shown.some((entry) => entry!.kind === "toolResult"));
+    assert.ok(
+        JSON.stringify(shown.at(-1)).includes("PARTIAL_NATIVE STREAM_DONE"),
+        JSON.stringify(shown.at(-1)),
+    );
+    assert.equal(calls, 15);
+    report.unifiedTranscriptLiveAndMirrored = true;
     Object.assign(report, {
         status: "passed",
         projectViewAndContinue: true,
@@ -1428,7 +1550,7 @@ try {
         disablingCannotBypassUnknownFence: true,
         apiCreateSubmitReadAbort: true,
         roleRevocation: true,
-        frozenContext: true,
+        layeredContext: true,
         fixedPayer: true,
         restartIdempotency: true,
         nativeHistoryResume: true,
@@ -1471,15 +1593,12 @@ try {
                 root: realpathSync(root),
                 base: `http://127.0.0.1:${(server.address() as { port: number }).port}`,
                 id: Number(id),
-                memberId: owner(app).id,
-                configurationDigest: app.configuration(id as never)!.digest,
-                busyId: Number(forked.id),
+                memberName: owner(app).name,
             });
-            assert.equal(calls, 14, "UI inspection/dismissal must not dispatch inference");
-            assert.equal(
-                app.kernel!.executions.journal.request(String(forkGap.id), `${a.id}:fork-gap`),
-                undefined,
-            );
+            // The composer's one message, sent by the owner who pays for it; nothing else dispatched.
+            assert.equal(calls, 16);
+            assert.equal(requestMembers.at(-1), owner(app).id);
+            report.webUiVerified = true;
         } else {
             await Promise.race([once(process, "SIGTERM"), once(process, "SIGINT")]);
         }

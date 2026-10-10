@@ -7,7 +7,9 @@ import {
     ATTACHMENTS_HEADING,
     FILE_BLOCK,
     FROM_PREFIX,
+    NATIVE_ENTRY,
     NOTE_ENTRY,
+    RESUME_PREFIX,
     SHELL_ENTRY,
     type ShellData,
 } from "./entry-format.ts";
@@ -329,6 +331,9 @@ export function projectEntry(entry: EntryRecord, full = false): ClientEntry | un
         case "pi.system":
             return undefined;
 
+        case NATIVE_ENTRY:
+            return projectNative(entry, full);
+
         case NOTE_ENTRY: {
             const data = entry.data as { text?: unknown; name?: unknown } | undefined;
 
@@ -358,6 +363,51 @@ export function projectEntry(entry: EntryRecord, full = false): ClientEntry | un
         default:
             return { id, kind: "other", entryKind: entry.kind };
     }
+}
+
+/** A mirrored rotom entry shows as Pocket's own kind of the same message; bookkeeping entries do not show. */
+function projectNative(entry: EntryRecord, full: boolean): ClientEntry | undefined {
+    const native = (entry.data as { entry?: Record<string, unknown> } | undefined)?.entry;
+    const id = entry.id as unknown as number;
+
+    if (native?.type === "compaction" || native?.type === "branch_summary") {
+        return { id, kind: "compaction", summary: String(native.summary ?? "") };
+    }
+
+    const message = native?.type === "message" ? (native.message as { role?: unknown }) : undefined;
+    const kind =
+        message?.role === "user"
+            ? "pi.user"
+            : message?.role === "assistant"
+              ? "pi.assistant"
+              : message?.role === "toolResult"
+                ? "pi.tool-result"
+                : undefined;
+
+    if (kind === undefined) {
+        return undefined;
+    }
+
+    const projected = projectEntry({ ...entry, kind, model: [message as never] }, full);
+
+    if (projected?.kind === "user" && projected.text.startsWith(RESUME_PREFIX)) {
+        return {
+            ...projected,
+            text: projected.text.slice(RESUME_PREFIX.length).trim(),
+            from: "server",
+        };
+    }
+
+    return projected;
+}
+
+/** The message a mirrored entry carries, in Pocket's stored-entry shape, for code that reads `model`. */
+export function nativeModel(entry: EntryRecord): EntryRecord {
+    const native = (entry.data as { entry?: Record<string, unknown> } | undefined)?.entry;
+
+    return entry.kind === NATIVE_ENTRY && native?.type === "message"
+        ? { ...entry, model: [native.message as never] }
+        : entry;
 }
 
 export function projectLive(live: LiveState | undefined): ClientLive {
@@ -450,14 +500,17 @@ export function projectStats(
     let contextTokens: number | undefined;
 
     for (let index = entries.length - 1; index >= 0; index--) {
-        const entry = entries[index]!;
+        const entry = nativeModel(entries[index]!);
+        const message = entry.model?.[0] as
+            { role?: string; usage?: UsageNumbers; stopReason?: string } | undefined;
 
-        if (entry.kind !== "pi.assistant") {
+        if (
+            entry.kind !== "pi.assistant" &&
+            !(entry.kind === NATIVE_ENTRY && message?.role === "assistant")
+        ) {
             continue;
         }
 
-        const message = entry.model?.[0] as
-            { usage?: UsageNumbers; stopReason?: string } | undefined;
         const used = message?.usage;
 
         if (

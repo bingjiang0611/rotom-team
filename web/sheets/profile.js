@@ -1,7 +1,155 @@
-import { useContext, useEffect, useState } from "preact/hooks";
-import { KernelContext } from "../kernel.js";
+import { useEffect, useState } from "preact/hooks";
 import { api, closeSheet, store, notify } from "../store.js";
 import { html, Loader, Sheet } from "../ui.js";
+
+/** The files of one picked skill folder, as the server takes them: relative path → base64. */
+async function skillFiles(list) {
+    const files = {};
+    let name = "";
+
+    for (const file of list) {
+        const [top, ...rest] = file.webkitRelativePath.split("/");
+
+        name = top;
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        let binary = "";
+
+        for (let index = 0; index < bytes.length; index += 0x8000) {
+            binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
+        }
+
+        files[rest.join("/")] = { base64: btoa(binary) };
+    }
+
+    return { name, files };
+}
+
+/**
+ * The member's personal rotom layer: their AGENTS.md and skills, private to them. Each run they pay for loads it next
+ * to the project's own AGENTS.md and skills, whoever started the session.
+ */
+function PersonalLayer({ editable }) {
+    const [layer, setLayer] = useState(null);
+    const [instructions, setInstructions] = useState("");
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState("");
+
+    useEffect(() => {
+        api("kernel-profile")
+            .then((value) => {
+                setLayer(value);
+                setInstructions(value.instructions);
+            })
+            .catch((e) => setError(e.message));
+    }, []);
+
+    const run = async (work, done) => {
+        setBusy(true);
+        setError("");
+
+        try {
+            setLayer(await work());
+            notify("info", done);
+        } catch (e) {
+            setError(e.message);
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    return html`<div class="group">
+        <div class="group-title">My instructions & skills</div>
+        <p>
+            Private to you. Every run on your account loads them with the project's own AGENTS.md
+            and skills, in your sessions and in ones you continue or fork.
+        </p>
+        ${error && html`<p role="alert">${error}</p>`}
+        ${!layer && !error && html`<${Loader} label="Loading your instructions" />`}
+        ${
+            layer &&
+            html`<form
+                onSubmit=${(event) => {
+                    event.preventDefault();
+                    void run(
+                        () => api("kernel-profile", { instructions }),
+                        "Saved. Your next run uses it.",
+                    );
+                }}
+            >
+                <label class="field">
+                    My AGENTS.md
+                    <textarea
+                        rows="8"
+                        maxlength="65536"
+                        value=${instructions}
+                        disabled=${!editable || busy}
+                        onInput=${(event) => setInstructions(event.currentTarget.value)}
+                    />
+                </label>
+                <button class="button primary" type="submit" disabled=${!editable || busy}>
+                    ${busy ? "Saving…" : "Save"}
+                </button>
+            </form>
+            <ul>
+                ${layer.skills.map(
+                    (skill) =>
+                        html`<li>
+                            <strong>${skill.name}</strong> — ${skill.description}
+                            <span class="muted small"> · ${skill.files} files</span>
+                            <button
+                                class="button small"
+                                disabled=${!editable || busy}
+                                onClick=${() => {
+                                    if (confirm(`Remove your skill ${skill.name}?`)) {
+                                        void run(
+                                            () =>
+                                                api(
+                                                    `kernel-profile/skills/${skill.name}`,
+                                                    undefined,
+                                                    {
+                                                        method: "DELETE",
+                                                    },
+                                                ),
+                                            "Skill removed.",
+                                        );
+                                    }
+                                }}
+                            >
+                                Remove
+                            </button>
+                        </li>`,
+                )}
+            </ul>
+            <label class="field">
+                Add or replace a skill: pick its folder (it needs SKILL.md)
+                <input
+                    type="file"
+                    webkitdirectory
+                    disabled=${!editable || busy}
+                    onChange=${(event) => {
+                        const list = [...event.currentTarget.files];
+
+                        event.currentTarget.value = "";
+
+                        if (list.length > 0) {
+                            void run(async () => {
+                                const { name, files } = await skillFiles(list);
+
+                                return api(
+                                    `kernel-profile/skills/${encodeURIComponent(name)}`,
+                                    { files },
+                                    {
+                                        method: "PUT",
+                                    },
+                                );
+                            }, "Skill saved. Your next run has it.");
+                        }
+                    }}
+                />
+            </label>`
+        }
+    </div>`;
+}
 
 /** Personal drafts stay private; only explicitly activated snapshots enter shared sessions. */
 export function ProfileSheet() {
@@ -13,7 +161,7 @@ export function ProfileSheet() {
     const [error, setError] = useState("");
     const id = store.state.conversationId;
     const editable = store.state.me?.role !== "viewer";
-    const kernel = useContext(KernelContext);
+    const native = Boolean(store.state.server?.kernel);
 
     useEffect(() => {
         Promise.all([api("profile"), api("devices")])
@@ -25,10 +173,10 @@ export function ProfileSheet() {
     }, [id]);
 
     useEffect(() => {
-        const active = id ? api(`c/${id}/configuration`) : Promise.resolve(null);
+        const active = id && !native ? api(`c/${id}/configuration`) : Promise.resolve(null);
 
         active.then(setSnapshot).catch((e) => setError(e.message));
-    }, [id, kernel?.view?.segmentId]);
+    }, [id]);
     const change = (field, value) => setProfile({ ...profile, [field]: value });
 
     const save = async (activate) => {
@@ -55,11 +203,13 @@ export function ProfileSheet() {
         }
     };
 
-    return html`<${Sheet} title="Configuration & skills" onClose=${closeSheet}>
-        <p>Your draft belongs to you. New sessions freeze it with project rules. Taking over preserves the existing snapshot.</p>
+    return html`<${Sheet} title=${native ? "My instructions & skills" : "Configuration & skills"} onClose=${closeSheet}>
+        ${native && html`<${PersonalLayer} editable=${editable} />`}
+        ${!native && html`<p>Your draft belongs to you. New sessions freeze it with project rules. Taking over preserves the existing snapshot.</p>`}
         ${error && html`<p role="alert">${error}</p>`}
         ${!profile && !error && html`<${Loader} label="Loading configuration" />`}
         ${
+            !native &&
             profile &&
             html`<form onSubmit=${(event) => {
                 event.preventDefault();
@@ -89,40 +239,19 @@ export function ProfileSheet() {
         }
         ${
             id &&
+            !native &&
             html`<div class="group">
             <div class="group-title">This session</div>
             ${snapshot ? html`<p>${snapshot.name} · <code>${snapshot.digest.slice(0, 12)}</code></p><details><summary>Inspect active configuration</summary><pre>${snapshot.context}</pre><ul>${snapshot.skills.map((skill) => html`<li>${skill.name} — ${skill.description}</li>`)}</ul></details>` : html`<p>Legacy session: resources have not been frozen yet.</p>`}
-            ${
-                kernel
-                    ? html`<p class="muted">Save your profile first, then activate the saved version here. Activation creates a recorded execution segment; taking over does not change configuration.</p>
-                      <button
-                          class="button"
-                          disabled=${!editable || !profile || busy || kernel.blocked || !kernel.own}
-                          onClick=${() => {
-                              if (
-                                  confirm(
-                                      "Activate your saved configuration in this shared session? Everyone with access can read it. This creates a new execution segment.",
-                                  )
-                              ) {
-                                  void kernel.dispatch("configuration");
-                              }
-                          }}
-                      >
-                          Activate saved profile
-                      </button>
-                      ${!kernel.own && editable && html`<p class="muted">Continue with your account from the session menu before activating configuration.</p>`}
-                      ${kernel.waiting && html`<p role="status">Checking the saved request identity. No automatic resend.</p>`}
-                      ${kernel.error && html`<p role="alert">${kernel.error}</p>`}`
-                    : html`<button class="button" disabled=${!editable || !profile || busy} onClick=${() => {
-                          if (
-                              confirm(
-                                  "Save and activate your configuration in this shared session? Everyone with access can read it. This is an explicit version change; taking over does not change it automatically.",
-                              )
-                          ) {
-                              void save(true);
-                          }
-                      }}>Save & activate in this session</button>`
-            }
+            <button class="button" disabled=${!editable || !profile || busy} onClick=${() => {
+                if (
+                    confirm(
+                        "Save and activate your configuration in this shared session? Everyone with access can read it. This is an explicit version change; taking over does not change it automatically.",
+                    )
+                ) {
+                    void save(true);
+                }
+            }}>Save & activate in this session</button>
         </div>`
         }
         <div class="group">

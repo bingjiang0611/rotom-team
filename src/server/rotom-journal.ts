@@ -563,6 +563,34 @@ export class RotomJournal {
             .run(sessionFile, kernelSessionId, receipt.segmentId);
     }
 
+    /** Provisional ingestion while a prompt runs: records each persisted message once, never settles the attempt. */
+    progress(id: string, entries: KernelEntry[]): number {
+        const attempt = this.receipt(id),
+            session = this.segment(attempt.segmentId);
+
+        if (attempt.status !== "dispatch-intent" || attempt.operation !== "prompt") {
+            throw new Error("Attempt is not an active prompt");
+        }
+
+        if (!session.kernelSessionId) {
+            throw new Error("Missing kernel session binding");
+        }
+
+        this.#db.exec("BEGIN IMMEDIATE");
+
+        try {
+            const added = this.#ingest(attempt, session.kernelSessionId, entries);
+
+            this.#db.exec("COMMIT");
+
+            return added;
+        } catch (error) {
+            this.#db.exec("ROLLBACK");
+
+            throw error;
+        }
+    }
+
     finish(id: string, status: "settled" | "handled", entries: KernelEntry[]): KernelReceipt {
         const attempt = this.receipt(id),
             session = this.segment(attempt.segmentId);
@@ -580,111 +608,11 @@ export class RotomJournal {
         this.#db.exec("BEGIN IMMEDIATE");
 
         try {
-            const seen = new Set<string>();
-            let terminalResponse = false;
-
-            for (const entry of entries) {
-                if (entry.type === "session") {
-                    continue;
-                }
-
-                if (typeof entry.id !== "string" || !entry.id) {
-                    throw new Error("Missing native entry identity");
-                }
-
-                if (seen.has(entry.id)) {
-                    throw new Error("Duplicate native entry in one snapshot");
-                }
-
-                seen.add(entry.id);
-                const body = JSON.stringify(entry),
-                    hash = digest(body);
-                const previous = this.#db
-                    .prepare(
-                        "SELECT digest FROM kernel_entries WHERE kernel_session_id=? AND entry_id=?",
-                    )
-                    .get(session.kernelSessionId!, entry.id);
-
-                if (previous) {
-                    if (previous.digest !== hash) {
-                        throw new Error("Native entry changed after ingestion");
-                    }
-
-                    continue;
-                }
-
-                this.#db
-                    .prepare("INSERT INTO kernel_entries VALUES (?,?,?,?,?,?)")
-                    .run(session.kernelSessionId!, entry.id, attempt.segmentId, id, body, hash);
-
-                // Inherited context is not a new invocation by the receiving payer.
-                if (seed) {
-                    continue;
-                }
-
-                if (attempt.operation === "compact" && entry.type === "compaction") {
-                    if (
-                        typeof entry.summary !== "string" ||
-                        !entry.summary.trim() ||
-                        (entry.firstKeptEntryId !== null &&
-                            !seen.has(String(entry.firstKeptEntryId)))
-                    ) {
-                        throw new Error("Invalid persisted compaction");
-                    }
-
-                    terminalResponse = true;
-                    this.#db
-                        .prepare("INSERT INTO kernel_usage VALUES (?,?,?,?,?)")
-                        .run(
-                            session.kernelSessionId!,
-                            entry.id,
-                            id,
-                            attempt.binding.memberId,
-                            entry.usage ? JSON.stringify(entry.usage) : null,
-                        );
-                }
-
-                const message = entry.message as
-                    | {
-                          role?: string;
-                          provider?: string;
-                          model?: string;
-                          stopReason?: string;
-                          usage?: unknown;
-                      }
-                    | undefined;
-
-                if (entry.type === "message" && message?.role === "user") {
-                    terminalResponse = false;
-                }
-
-                if (entry.type === "message" && message?.role === "assistant") {
-                    if (
-                        message.provider !== attempt.binding.provider ||
-                        message.model !== attempt.binding.model
-                    ) {
-                        throw new Error(
-                            "Native response model does not match admitted payer/model",
-                        );
-                    }
-
-                    terminalResponse =
-                        attempt.operation === "prompt" &&
-                        ["stop", "error", "aborted", "length"].includes(String(message.stopReason));
-                    // Preserve raw kernel usage. Pi's zero placeholders do not establish reported cost/credits.
-                    this.#db
-                        .prepare("INSERT INTO kernel_usage VALUES (?,?,?,?,?)")
-                        .run(
-                            session.kernelSessionId!,
-                            entry.id,
-                            id,
-                            attempt.binding.memberId,
-                            message.usage ? JSON.stringify(message.usage) : null,
-                        );
-                }
+            if (session.kernelSessionId) {
+                this.#ingest(attempt, session.kernelSessionId, entries);
             }
 
-            if (status === "settled" && !terminalResponse && !seed) {
+            if (status === "settled" && !seed && !this.#terminal(attempt)) {
                 throw new Error(
                     "Settled event has no new persisted terminal response; outcome remains unknown",
                 );
@@ -723,6 +651,132 @@ export class RotomJournal {
         }
 
         return this.receipt(id);
+    }
+
+    /** Record new native entries of one snapshot for an attempt. Callers hold a write transaction. */
+    #ingest(attempt: KernelReceipt, kernelSessionId: string, entries: KernelEntry[]): number {
+        const seen = new Set<string>();
+        const seed = attempt.operation === "handoff" || attempt.operation === "fork";
+        let added = 0;
+
+        for (const entry of entries) {
+            if (entry.type === "session") {
+                continue;
+            }
+
+            if (typeof entry.id !== "string" || !entry.id) {
+                throw new Error("Missing native entry identity");
+            }
+
+            if (seen.has(entry.id)) {
+                throw new Error("Duplicate native entry in one snapshot");
+            }
+
+            seen.add(entry.id);
+            const body = JSON.stringify(entry),
+                hash = digest(body);
+            const previous = this.#db
+                .prepare(
+                    "SELECT digest FROM kernel_entries WHERE kernel_session_id=? AND entry_id=?",
+                )
+                .get(kernelSessionId, entry.id);
+
+            if (previous) {
+                if (previous.digest !== hash) {
+                    throw new Error("Native entry changed after ingestion");
+                }
+
+                continue;
+            }
+
+            this.#db
+                .prepare("INSERT INTO kernel_entries VALUES (?,?,?,?,?,?)")
+                .run(kernelSessionId, entry.id, attempt.segmentId, attempt.id, body, hash);
+            added++;
+
+            // Inherited context is not a new invocation by the receiving payer.
+            if (seed) {
+                continue;
+            }
+
+            if (attempt.operation === "compact" && entry.type === "compaction") {
+                if (
+                    typeof entry.summary !== "string" ||
+                    !entry.summary.trim() ||
+                    (entry.firstKeptEntryId !== null &&
+                        !this.#db
+                            .prepare(
+                                "SELECT 1 FROM kernel_entries WHERE kernel_session_id=? AND entry_id=?",
+                            )
+                            .get(kernelSessionId, String(entry.firstKeptEntryId)))
+                ) {
+                    throw new Error("Invalid persisted compaction");
+                }
+
+                this.#db
+                    .prepare("INSERT INTO kernel_usage VALUES (?,?,?,?,?)")
+                    .run(
+                        kernelSessionId,
+                        entry.id,
+                        attempt.id,
+                        attempt.binding.memberId,
+                        entry.usage ? JSON.stringify(entry.usage) : null,
+                    );
+            }
+
+            const message = entry.message as
+                { role?: string; provider?: string; model?: string; usage?: unknown } | undefined;
+
+            if (entry.type === "message" && message?.role === "assistant") {
+                if (
+                    message.provider !== attempt.binding.provider ||
+                    message.model !== attempt.binding.model
+                ) {
+                    throw new Error("Native response model does not match admitted payer/model");
+                }
+
+                // Preserve raw kernel usage. Pi's zero placeholders do not establish reported cost/credits.
+                this.#db
+                    .prepare("INSERT INTO kernel_usage VALUES (?,?,?,?,?)")
+                    .run(
+                        kernelSessionId,
+                        entry.id,
+                        attempt.id,
+                        attempt.binding.memberId,
+                        message.usage ? JSON.stringify(message.usage) : null,
+                    );
+            }
+        }
+
+        return added;
+    }
+
+    /** Whether everything this attempt recorded ends in a terminal response: across progress and finish snapshots. */
+    #terminal(attempt: KernelReceipt): boolean {
+        let terminal = false;
+
+        for (const row of this.#db
+            .prepare("SELECT body FROM kernel_entries WHERE attempt_id=? ORDER BY rowid")
+            .all(attempt.id)) {
+            const entry = JSON.parse(String(row.body)) as KernelEntry;
+            const message = entry.message as { role?: string; stopReason?: string } | undefined;
+
+            if (attempt.operation === "compact" && entry.type === "compaction") {
+                terminal = true;
+            }
+
+            if (entry.type === "message" && message?.role === "user") {
+                terminal = false;
+            }
+
+            if (entry.type === "message" && message?.role === "assistant") {
+                terminal =
+                    attempt.operation === "prompt" &&
+                    ["stop", "error", "aborted", "length"].includes(String(message.stopReason));
+            }
+        }
+
+        return terminal;
     }
 
     #forgetUnmaterialized(sessionId: string): void {
@@ -799,15 +853,25 @@ export class RotomJournal {
         return row ? this.receipt(String(row.id)) : undefined;
     }
 
-    entries(sessionId: string): { attemptId: string; entry: KernelEntry }[] {
+    /** The conversation's own history in journal order (append-only), without handoff seed copies. */
+    entries(sessionId: string): {
+        attemptId: string;
+        entry: KernelEntry;
+        operation: KernelOperation;
+        requestId: string;
+        memberId: string;
+    }[] {
         return this.#db
             .prepare(
-                "SELECT e.attempt_id,e.body FROM kernel_entries e JOIN kernel_attempts a ON a.id=e.attempt_id WHERE a.conversation_id=? AND a.operation<>'handoff' ORDER BY e.rowid",
+                "SELECT e.attempt_id,e.body,a.operation,a.request_id,a.binding FROM kernel_entries e JOIN kernel_attempts a ON a.id=e.attempt_id WHERE a.conversation_id=? AND a.operation<>'handoff' ORDER BY e.rowid",
             )
             .all(sessionId)
             .map((row) => ({
                 attemptId: String(row.attempt_id),
                 entry: JSON.parse(String(row.body)),
+                operation: row.operation as KernelOperation,
+                requestId: String(row.request_id),
+                memberId: (JSON.parse(String(row.binding)) as KernelBinding).memberId,
             }));
     }
 

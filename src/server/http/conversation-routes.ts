@@ -91,25 +91,71 @@ export async function conversationRoutes(
         }
 
         if (third === "submit" && method === "POST" && fourth === undefined) {
-            const body = await readJson<{ text: string; requestId: string }>(request);
+            const body = await readJson<{
+                text: string;
+                requestId: string;
+                attachments?: unknown;
+                mode?: unknown;
+                inlineFiles?: unknown;
+                wait?: unknown;
+            }>(request);
 
             if (!body || typeof body !== "object" || Array.isArray(body)) {
                 throw new HttpError(400, "A JSON object is required.");
             }
 
-            if (Object.keys(body).some((key) => !["text", "requestId"].includes(key))) {
+            if (
+                Object.keys(body).some(
+                    (key) =>
+                        ![
+                            "text",
+                            "requestId",
+                            "attachments",
+                            "mode",
+                            "inlineFiles",
+                            "wait",
+                        ].includes(key),
+                ) ||
+                (body.attachments !== undefined &&
+                    !(Array.isArray(body.attachments) && body.attachments.length === 0)) ||
+                (body.inlineFiles !== undefined && body.inlineFiles !== false) ||
+                (body.wait !== undefined && typeof body.wait !== "boolean")
+            ) {
                 throw new HttpError(
                     400,
-                    "Native submission currently supports text and requestId only; attachments/queues are not enabled.",
+                    "Rotom sessions take text only: attachments and inline files are not supported yet.",
                 );
             }
 
             return json(
                 response,
                 200,
-                await app.kernel.submit(id, user, body.requestId, body.text),
+                await app.kernel.submit(id, user, body.requestId, body.text, body.wait !== false),
             );
         }
+
+        if (third === "configure" && method === "POST" && fourth === undefined) {
+            return json(
+                response,
+                200,
+                await app.kernel.chooseModel(id, user, await readJson(request)),
+            );
+        }
+
+        // Reading, people's chat, and the folder do not run Pi: they work as in any session.
+        const shared =
+            (method === "GET" &&
+                [
+                    "image",
+                    "entry",
+                    "export",
+                    "file",
+                    "files",
+                    "view",
+                    "changes",
+                    "branches",
+                ].includes(third ?? "")) ||
+            (method === "POST" && ["chat", "react", "pin", "typing"].includes(third ?? ""));
 
         if (
             (third === "handoff" || third === "compact" || third === "fork") &&
@@ -158,7 +204,7 @@ export async function conversationRoutes(
             return json(response, 200, { requested: true });
         }
 
-        if (!(third === "configuration" && method === "GET" && fourth === undefined)) {
+        if (!shared && !(third === "configuration" && method === "GET" && fourth === undefined)) {
             throw new HttpError(
                 409,
                 "This operation is not implemented for the native backend; no Durable fallback is allowed.",

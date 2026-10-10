@@ -1,6 +1,6 @@
 /** Experimental pinned rotom product boundary. Not yet connected to Pocket's Durable execution backend. */
 import { createHash, randomUUID } from "node:crypto";
-import { accessSync, constants, lstatSync, readFileSync, realpathSync } from "node:fs";
+import { accessSync, constants, existsSync, lstatSync, readFileSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -164,6 +164,13 @@ export async function startRotomKernel(options: {
         }
     }
 
+    // Without a frozen snapshot the kernel reads the project's AGENTS.md itself. Project skills are named explicitly:
+    // trusting the whole project would also run its `.pi` extensions, settings and packages.
+    const projectSkills = options.configuration
+        ? []
+        : [join(workspace, ".pi", "skills"), join(workspace, ".agents", "skills")].filter(
+              (folder) => existsSync(folder) && lstatSync(folder).isDirectory(),
+          );
     const node = realpathSync(process.execPath);
     // Desktop tools run as the service user. The member HOME isolates credentials, not the screen:
     // reuse the service user's installed (and TCC-authorized) Computer Use helper.
@@ -194,7 +201,7 @@ export async function startRotomKernel(options: {
                       options.configuration.contextFile,
                       ...options.configuration.skills.flatMap((path) => ["--skill", path]),
                   ]
-                : []),
+                : projectSkills.flatMap((folder) => ["--skill", folder])),
             ...(options.sessionFile ? ["--session", options.sessionFile] : []),
             ...(options.gateFile
                 ? ["--extension", fileURLToPath(new URL("./rotom-policy.mjs", import.meta.url))]

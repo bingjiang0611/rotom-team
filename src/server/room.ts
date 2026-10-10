@@ -308,6 +308,13 @@ export class Room {
         return head;
     }
 
+    /** A rotom session: its live view and agent come from the kernel, never from Durable's loop. */
+    #native(): boolean {
+        return (
+            this.#app.kernel !== undefined && this.#app.sessionMeta(this.id)?.backend === "rotom"
+        );
+    }
+
     get value(): ConversationView | undefined {
         return this.#view?.value;
     }
@@ -446,7 +453,7 @@ export class Room {
             conversation: this.#app.conversationInfo(this),
             entries,
             ...(orderChanged || full ? { order } : {}),
-            live: projectLive(live),
+            live: this.#native() ? this.#app.kernel!.clientLive(this.id) : projectLive(live),
             inbox: inbox.items.map((item) =>
                 item.mode === "write"
                     ? {
@@ -468,7 +475,12 @@ export class Room {
                           ...this.#app.attribution.submitterOf(item.id as unknown as number, this),
                       },
             ),
-            agent: agentInfo(this.#app.models, agentState, this.#app.defaultCwd),
+            agent: this.#native()
+                ? this.#app.kernel!.agentInfo(this.id)
+                : agentInfo(this.#app.models, agentState, this.#app.defaultCwd),
+            ...(this.#native()
+                ? { kernel: this.#app.kernel!.roomState(this.id, client.user) }
+                : {}),
             stats: projectStats(view.docs["pi.usage"] as UsageState | undefined, view.entries),
             clients: [...new Set([...this.clients].map((each) => each.id))].length,
             viewers: [...new Set([...this.clients].map((each) => each.user.name))],
@@ -545,7 +557,9 @@ export class Room {
             conversationId: this.id,
             lines: peekLines(
                 recent.reverse(),
-                projectLive(view.docs["pi.live"] as LiveState | undefined),
+                this.#native()
+                    ? this.#app.kernel!.clientLive(this.id)
+                    : projectLive(view.docs["pi.live"] as LiveState | undefined),
             ),
             // A subagent's calls wait on its session's tile, as they make the session wait.
             approvals: this.#app.approvals

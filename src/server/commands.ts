@@ -72,7 +72,7 @@ export interface SubmitRequest {
     inlineFiles?: boolean;
 }
 
-const THINKING_LEVELS = new Set(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
+export const THINKING_LEVELS = new Set(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
 /** Attached images that also go to the model itself, when it takes images. */
 const IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
 const MAX_INLINE_IMAGE = 5 * 1024 * 1024;
@@ -223,11 +223,14 @@ export class Commands {
                                 : { thinkingLevel: initial.thinkingLevel }),
                         },
                         init: async (tx, id) => {
-                            const snapshot = fork
-                                ? structuredClone(app.configuration(fork.sourceId))
-                                : app.profiles.capture(user, cwd, app.settings.getSkillPaths());
+                            // A rotom session loads the project's and the payer's own layers each run, never a snapshot.
+                            const snapshot = native
+                                ? undefined
+                                : fork
+                                  ? structuredClone(app.configuration(fork.sourceId))
+                                  : app.profiles.capture(user, cwd, app.settings.getSkillPaths());
 
-                            if (!snapshot) {
+                            if (!native && !snapshot) {
                                 throw new HttpError(
                                     409,
                                     "Source frozen configuration is unavailable.",
@@ -252,13 +255,14 @@ export class Commands {
                                 (await tx.doc(NativeSetupDoc, id)).seed = fork;
                             }
 
-                            (await tx.doc(ConfigurationDoc, id)).snapshot = snapshot;
+                            if (snapshot) {
+                                (await tx.doc(ConfigurationDoc, id)).snapshot = snapshot;
+                            }
 
                             if (native) {
                                 (await tx.doc(NativeSetupDoc, id)).binding = app.kernel!.binding(
                                     user,
                                     cwd,
-                                    snapshot,
                                     initial.model!,
                                     initial.thinkingLevel ?? "off",
                                 );

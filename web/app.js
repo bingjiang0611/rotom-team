@@ -6,7 +6,6 @@ import { BrowserButton, BrowserPanel } from "./browser-panel.js";
 import { browserAvailable, toggleBrowser } from "./browser.js";
 import { PeopleButton, PeoplePanel } from "./chat.js";
 import { Composer } from "./composer.js";
-import { KernelConversation, KernelSession } from "./kernel.js";
 import {
     FilesButton,
     FilesPanel,
@@ -17,6 +16,7 @@ import {
 import { startEdgeBack, startSwipes } from "./gestures.js";
 import { Splash } from "./home.js";
 import { Launcher } from "./launcher.js";
+import { NativeBanner } from "./native.js";
 import { registerWorker, updateBadge } from "./notify.js";
 import {
     PEEK_WIDE,
@@ -61,42 +61,15 @@ const toSessions = () => goHome(() => navigate(null, { replace: true }));
 function Topbar() {
     const { view, server } = store.state;
     const conversation = view.conversation;
-    const native = store.state.sessions.find(
-        (session) => session.id === store.state.conversationId && session.backend === "rotom",
-    );
-
-    if (native) {
-        return html`<header class="topbar">
-            <button
-                class="icon-button topbar-back"
-                aria-label="Back to sessions"
-                onClick=${toSessions}
-            >
-                <${Icon} name="back" size=${22} />
-            </button>
-            <button class="title" onClick=${() => openSheet({ type: "menu" })}>
-                <div class="title-main">${native.title ?? "Native session"}</div>
-                <div class="title-sub mono">
-                    rotom · ${shortPath(native.cwd, server?.home)}
-                </div>
-            </button>
-            <button
-                class="icon-button"
-                aria-label="Menu"
-                onClick=${() => openSheet({ type: "menu" })}
-            >
-                <${Icon} name="menu" />
-            </button>
-        </header>`;
-    }
-
     const artifacts = view.artifacts?.length ?? 0;
     const subtitle =
         conversation?.kind === "subagent"
             ? `subagent of ${conversation.parent?.title ?? "?"}`
             : conversation?.worktree
               ? `⎇ ${view.branch?.branch ?? conversation.worktree.branch}`
-              : shortPath(view.agent?.cwd ?? conversation?.cwd, server?.home);
+              : view.kernel?.memberName
+                ? `rotom · ${view.kernel.memberName}'s account · ${shortPath(view.agent?.cwd ?? conversation?.cwd, server?.home)}`
+                : shortPath(view.agent?.cwd ?? conversation?.cwd, server?.home);
     const busySubagents = (view.subagents ?? []).filter((agent) => agent.busy).length;
     // Other sessions waiting for an approval, counted on the way back to them.
     const waiting = store.state.sessions.filter(
@@ -136,7 +109,7 @@ function Topbar() {
         <${PeeksButton} />
         <${PeopleButton} />
         <${FilesButton} />
-        <${BrowserButton} />
+        ${!view.kernel && html`<${BrowserButton} />`}
         <button
             class=${`icon-button badge-host ${artifacts > 0 ? "" : "quiet"}`}
             aria-label="Artifacts"
@@ -260,21 +233,20 @@ function App() {
     }
 
     const inConversation = state.conversationId !== null;
-    const native = state.sessions.some(
-        (session) => session.id === state.conversationId && session.backend === "rotom",
-    );
+    // Rotom sessions browse with the kernel's own browser tools, not Pocket's server-side browser.
+    const native = Boolean(state.view.kernel);
     const rail = prefs().sidebar === "rail";
     const browsing =
         !native && inConversation && state.browserOpen && browserAvailable() && !state.missing;
-    const filing = !native && filesShown(state);
-    const people = !native && !browsing && !filing && peopleDocked(state);
-    const peeking = !native && peeksWanted(state);
+    const filing = filesShown(state);
+    const people = !browsing && !filing && peopleDocked(state);
+    const peeking = peeksWanted(state);
     const tiles = peeking ? peekTiles(state) : [];
     // The column takes the place beside the conversation when Browser and People leave it free; otherwise a strip,
     // which only shows when there are tiles.
     const peekColumn = peeking && PEEK_WIDE.matches && !browsing && !filing && !people;
 
-    const content = html`<div
+    return html`<div
         class=${`layout ${inConversation ? "" : "home"} ${browsing ? "browsing" : ""} ${filing ? "filing" : ""}`}
     >
         <aside class="sidebar window">
@@ -291,9 +263,9 @@ function App() {
                         !peekColumn &&
                         html`<${PeekStrip} tiles=${tiles} />`
                     }
-                    ${native ? html`<${KernelConversation} />` : html`<${Transcript} key=${state.conversationId} />`}
+                    <${Transcript} key=${state.conversationId} />
+                    <${NativeBanner} />
                     ${
-                        !native &&
                         state.view.conversation &&
                         !state.missing &&
                         html`<${Composer} key=${state.conversationId} />`
@@ -321,10 +293,6 @@ function App() {
         <${LauncherHost} />
         <${Notices} />
     </div>`;
-
-    return native
-        ? html`<${KernelSession} key=${state.conversationId} id=${state.conversationId}>${content}<//>`
-        : content;
 }
 
 // ─── Windows and keys ───────────────────────────────────────────────────────────

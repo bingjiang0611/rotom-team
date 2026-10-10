@@ -15,7 +15,7 @@ import type { User } from "./config.ts";
 import { AuthorsDoc } from "./docs.ts";
 import { transcriptMarkdown } from "./export.ts";
 import { homePath } from "./paths.ts";
-import { type ClientEntry, projectEntry } from "./projection.ts";
+import { type ClientEntry, nativeModel, projectEntry } from "./projection.ts";
 
 const context = BACKGROUND_CONTEXT;
 
@@ -42,7 +42,8 @@ export class Transcripts {
             return undefined;
         }
 
-        const content = (entry.model?.[0] as { content?: unknown } | undefined)?.content;
+        const content = (nativeModel(entry).model?.[0] as { content?: unknown } | undefined)
+            ?.content;
 
         if (!Array.isArray(content)) {
             return undefined;

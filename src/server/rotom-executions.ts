@@ -12,7 +12,7 @@ import {
     lstatSync,
     mkdirSync,
     openSync,
-    readFileSync,
+    readSync,
     realpathSync,
     rmSync,
     writeFileSync,
@@ -55,8 +55,21 @@ export type KernelLaunchContext = {
         baseUrl: string;
         [key: string]: unknown;
     };
-    context: string;
-    skills: string[];
+    /** A legacy frozen snapshot; absent: rotom loads the project's and the member's own layers natively. */
+    frozen?: { context: string; skills: string[] };
+};
+
+/** A screenshot-bearing tool result can be large; a single record above this is refused, not truncated. */
+const NATIVE_LINE_LIMIT = 64 * 1024 * 1024;
+
+/** Observers of one prompt: none may change its outcome, and a failing observer cannot authorize work. */
+export type RunHooks = {
+    /** The intent is durably committed: the request can no longer be lost, only end unknown. */
+    onReserved?: (receipt: KernelReceipt) => void;
+    /** Every kernel event, for provisional display only. */
+    onEvent?: (event: RpcRecord) => void;
+    /** New persisted entries were journaled mid-run. */
+    onProgress?: () => void;
 };
 
 type Running = { aborted: boolean; kernel?: RotomRpc; closureUnknown?: boolean };
@@ -317,10 +330,10 @@ export class RotomExecutions {
         sessionId: string,
         requestId: string,
         prompt: string,
-        onProvisionalEvent?: (event: RpcRecord) => void,
+        hooks: RunHooks = {},
     ): Promise<KernelReceipt> {
         return this.#track(sessionId, (running) =>
-            this.#execute(sessionId, requestId, prompt, "prompt", running, onProvisionalEvent),
+            this.#execute(sessionId, requestId, prompt, "prompt", running, hooks),
         );
     }
 
@@ -336,7 +349,7 @@ export class RotomExecutions {
         prompt: string,
         operation: "prompt" | "compact",
         running: Running,
-        onProvisionalEvent?: (event: RpcRecord) => void,
+        hooks: RunHooks = {},
     ): Promise<KernelReceipt> {
         const admitted = this.journal.session(sessionId);
         const binding = Object.freeze(admitted.binding);
@@ -369,6 +382,8 @@ export class RotomExecutions {
 
         const prepared = this.#prepare?.(binding, sessionId);
         const receipt = this.journal.reserve(sessionId, requestId, prompt, operation);
+
+        hooks.onReserved?.(receipt);
         // Admission is asynchronous: an earlier request may have created the native file while it was pending.
         const session = this.journal.session(sessionId);
 
@@ -489,9 +504,9 @@ export class RotomExecutions {
                 { mode: 0o600, flag: "wx" },
             );
 
-            if (prepared) {
+            if (prepared?.frozen) {
                 contextFile = `${gateFile}.context`;
-                writeFileSync(contextFile, prepared.context, { mode: 0o600, flag: "wx" });
+                writeFileSync(contextFile, prepared.frozen.context, { mode: 0o600, flag: "wx" });
             }
 
             this.#notStopped(running);
@@ -499,7 +514,10 @@ export class RotomExecutions {
                 ...binding,
                 gateFile,
                 sessionFile: session.sessionFile,
-                configuration: prepared && { contextFile: contextFile!, skills: prepared.skills },
+                configuration: prepared?.frozen && {
+                    contextFile: contextFile!,
+                    skills: prepared.frozen.skills,
+                },
             });
             running.kernel = kernel;
             const state = (await kernel.request({ type: "get_state" })) as {
@@ -521,9 +539,33 @@ export class RotomExecutions {
             // Recheck after startup/catalog work, immediately before sending the user request.
             await this.#authorize(binding, "admission", sessionId);
 
-            if (onProvisionalEvent) {
-                kernel.onEvent(onProvisionalEvent);
+            const tail = new NativeTail(state.sessionFile, state.sessionId, binding.workspace);
+            let progressFailure: unknown;
+
+            if (hooks.onEvent) {
+                kernel.onEvent(hooks.onEvent);
             }
+
+            // Message-level durability: each persisted message is journaled as it lands, so a restart loses at most
+            // the message in flight. The final snapshot below remains the authority for the outcome.
+            kernel.onEvent((event) => {
+                if (
+                    event.type !== "message_end" ||
+                    operation !== "prompt" ||
+                    progressFailure !== undefined ||
+                    !existsSync(state.sessionFile)
+                ) {
+                    return;
+                }
+
+                try {
+                    if (this.journal.progress(receipt.id, tail.read()) > 0) {
+                        hooks.onProgress?.();
+                    }
+                } catch (error) {
+                    progressFailure = error;
+                }
+            });
 
             if (running.aborted) {
                 throw new RpcFailure("rejected", "Stopped before prompt dispatch");
@@ -540,12 +582,32 @@ export class RotomExecutions {
 
             await kernel.close();
             closed = true;
-            const entries =
-                disposition === "handled" && !session.sessionFile && !existsSync(state.sessionFile)
-                    ? []
-                    : readNativeEntries(state.sessionFile, state.sessionId, binding.workspace);
 
-            return this.journal.finish(receipt.id, disposition, entries);
+            if (progressFailure !== undefined) {
+                throw progressFailure;
+            }
+
+            let entries: KernelEntry[];
+
+            if (disposition === "handled") {
+                // An extension-handled prompt may never create JSONL; its snapshot decides whether a binding exists.
+                entries =
+                    !session.sessionFile && !existsSync(state.sessionFile)
+                        ? []
+                        : readNativeEntries(state.sessionFile, state.sessionId, binding.workspace);
+            } else {
+                entries = tail.read();
+
+                if (!tail.complete) {
+                    throw new Error("Incomplete native session tail");
+                }
+            }
+
+            const finished = this.journal.finish(receipt.id, disposition, entries);
+
+            hooks.onProgress?.();
+
+            return finished;
         } catch (error) {
             // A rejection is known only if the kernel said so. Timeout, missing disk entries or process loss remain unknown.
             failureStatus =
@@ -598,59 +660,118 @@ export class RotomExecutions {
     }
 }
 
+/** One complete snapshot of a native session file. */
 function readNativeEntries(path: string, sessionId: string, workspace: string): KernelEntry[] {
-    if (realpathSync(path) !== path) {
-        throw new Error("Native session path changed");
+    const tail = new NativeTail(path, sessionId, workspace);
+    const entries = tail.read();
+
+    if (!tail.complete) {
+        throw new Error("Incomplete native session tail");
     }
 
-    const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+    return entries;
+}
 
-    try {
-        const stat = fstatSync(fd);
+/**
+ * Reads an append-only native session file incrementally: complete lines only, each checked once against the header
+ * and the entry tree. A file that shrinks or a malformed line fails; a partial last line waits for the next read.
+ */
+export class NativeTail {
+    readonly #path: string;
+    readonly #sessionId: string;
+    readonly #workspace: string;
+    readonly #ids = new Set<string>();
+    #offset = 0;
+    #pending = Buffer.alloc(0);
+    #header = false;
+    constructor(path: string, sessionId: string, workspace: string) {
+        this.#path = path;
+        this.#sessionId = sessionId;
+        this.#workspace = workspace;
+    }
 
-        if (!stat.isFile() || stat.size > 32 * 1024 * 1024) {
-            throw new Error("Native session requires a bounded streaming importer above 32 MiB");
+    /** True when the last read ended exactly at a line break. */
+    get complete(): boolean {
+        return this.#header && this.#pending.length === 0;
+    }
+
+    read(): KernelEntry[] {
+        if (realpathSync(this.#path) !== this.#path) {
+            throw new Error("Native session path changed");
         }
 
-        const content = readFileSync(fd, "utf8");
+        const fd = openSync(this.#path, constants.O_RDONLY | constants.O_NOFOLLOW);
+        const chunks: Buffer[] = [this.#pending];
 
-        if (!content.endsWith("\n")) {
-            throw new Error("Incomplete native session tail");
+        try {
+            const stat = fstatSync(fd);
+
+            if (!stat.isFile() || stat.size < this.#offset) {
+                throw new Error("Native session file was replaced or truncated");
+            }
+
+            while (this.#offset < stat.size) {
+                const chunk = Buffer.alloc(Math.min(stat.size - this.#offset, 1024 * 1024));
+                const read = readSync(fd, chunk, 0, chunk.length, this.#offset);
+
+                if (read === 0) {
+                    break;
+                }
+
+                chunks.push(chunk.subarray(0, read));
+                this.#offset += read;
+            }
+        } finally {
+            closeSync(fd);
         }
 
-        const entries: KernelEntry[] = content
-            .trimEnd()
-            .split("\n")
-            .map((line) => JSON.parse(line));
-        const header = entries[0];
+        const buffer = Buffer.concat(chunks);
+        const end = buffer.lastIndexOf(0x0a) + 1;
 
-        if (
-            header?.type !== "session" ||
-            header.version !== 3 ||
-            header.id !== sessionId ||
-            header.cwd !== workspace
-        ) {
-            throw new Error("Native session header mismatch");
+        this.#pending = buffer.subarray(end);
+
+        if (this.#pending.length > NATIVE_LINE_LIMIT) {
+            throw new Error("Native session line exceeds the import bound");
         }
 
-        const ids = new Set<string>();
+        const entries: KernelEntry[] = [];
 
-        for (const entry of entries.slice(1)) {
+        for (const line of buffer.subarray(0, end).toString("utf8").split("\n")) {
+            if (line === "") {
+                continue;
+            }
+
+            const entry = JSON.parse(line) as KernelEntry;
+
+            if (!this.#header) {
+                if (
+                    entry.type !== "session" ||
+                    entry.version !== 3 ||
+                    entry.id !== this.#sessionId ||
+                    entry.cwd !== this.#workspace
+                ) {
+                    throw new Error("Native session header mismatch");
+                }
+
+                this.#header = true;
+                entries.push(entry);
+                continue;
+            }
+
             if (
                 entry.type === "session" ||
                 typeof entry.id !== "string" ||
-                ids.has(entry.id) ||
+                this.#ids.has(entry.id) ||
                 (entry.parentId !== null &&
-                    (typeof entry.parentId !== "string" || !ids.has(entry.parentId)))
+                    (typeof entry.parentId !== "string" || !this.#ids.has(entry.parentId)))
             ) {
                 throw new Error("Native session tree is incomplete or inconsistent");
             }
 
-            ids.add(entry.id);
+            this.#ids.add(entry.id);
+            entries.push(entry);
         }
 
         return entries;
-    } finally {
-        closeSync(fd);
     }
 }

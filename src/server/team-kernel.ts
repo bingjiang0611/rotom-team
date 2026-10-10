@@ -1,7 +1,14 @@
 /** Opt-in application boundary: team authorizes and owns credentials; pinned rotom alone executes new native conversations. */
+import { randomUUID } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync } from "node:fs";
 import { join } from "node:path";
-import { defineDoc, type ConversationId, type ModelRef } from "@earendil-works/pi-durable";
+import {
+    defineDoc,
+    type ConversationId,
+    type LiveState,
+    type ModelRef,
+} from "@earendil-works/pi-durable";
+import type { JsonValue } from "@earendil-works/chord";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { TranscriptContext } from "@earendil-works/pi-ai";
 import type { PocketApp } from "./app.ts";
@@ -9,8 +16,14 @@ import type { User } from "./config.ts";
 import type { ConfigurationSnapshot } from "./team-profiles.ts";
 import { accountContext } from "./team-accounts.ts";
 import { HttpError } from "./errors.ts";
-import { RotomExecutions } from "./rotom-executions.ts";
-import type { KernelBinding, KernelReceipt } from "./rotom-journal.ts";
+import { RotomExecutions, type RunHooks } from "./rotom-executions.ts";
+import type { RpcRecord } from "./rotom-rpc.ts";
+import { AuthorsDoc } from "./docs.ts";
+import { THINKING_LEVELS } from "./commands.ts";
+import { KernelProfiles } from "./kernel-profile.ts";
+import { NATIVE_ENTRY } from "./entry-format.ts";
+import { projectLive, type ClientLive } from "./projection.ts";
+import type { KernelBinding, KernelEntry, KernelReceipt } from "./rotom-journal.ts";
 import { verifyRotomKernel } from "./rotom-kernel.ts";
 
 /** App-side creation intent. Never copied from a source conversation or rebuilt from today's account settings. */
@@ -38,6 +51,24 @@ export const NativeSetupDoc = defineDoc<{
     initial: () => ({}),
 });
 
+/** How many journal entries (in `journal.entries` order) are mirrored into the conversation for display. */
+export const NativeMirrorDoc = defineDoc<{ count: number }>({
+    kind: "rotom-team.native-mirror",
+    version: 1,
+    scope: "conversation",
+    history: "latest",
+    fork: "initial",
+    initial: () => ({ count: 0 }),
+});
+
+/** What a running kernel shows before its messages are persisted. Provisional: never billed, never replayed. */
+type NativeLive = {
+    generation?: { message: { content: Record<string, unknown>[] }; ended: boolean };
+    retry?: { at: number; error: string };
+    tools: { callId: string; name: string; status: "running"; output?: string }[];
+    compacting?: string;
+};
+
 type NativeConfigurations = {
     snapshots: Record<string, ConfigurationSnapshot>;
     requests: Record<string, { expectedHead: string; binding: KernelBinding }>;
@@ -51,6 +82,12 @@ export const NativeConfigurationsDoc = defineDoc<NativeConfigurations>({
     initial: () => ({ snapshots: {}, requests: {} }),
 });
 
+/**
+ * The configuration of a session that has no frozen snapshot: rotom loads the project's AGENTS.md and skills from the
+ * workspace and the paying member's own from their private HOME, each run. A legacy session keeps its snapshot digest.
+ */
+export const NATIVE_LAYERS = "native-layers-v1";
+
 export class TeamKernel {
     readonly executions: RotomExecutions;
     readonly #app: PocketApp;
@@ -62,6 +99,10 @@ export class TeamKernel {
     #closing = false;
     readonly #ready = new Set<ConversationId>();
     readonly #configurations = new Map<ConversationId, NativeConfigurations>();
+    /** Each member's personal layer, read by rotom next to the project's own. */
+    readonly profiles = new KernelProfiles((memberId) => this.agentDir(memberId));
+    readonly #live = new Map<ConversationId, NativeLive>();
+    readonly #mirrors = new Map<ConversationId, Promise<void>>();
     readonly #operations = new Map<
         string,
         { operation: string; identity: string; promise: Promise<unknown> }
@@ -109,9 +150,10 @@ export class TeamKernel {
             (binding, sessionId) => {
                 const user = app.config.userById(binding.memberId)!;
                 const model = app.accounts.kernelModel(user, this.#ref(binding));
-                const snapshot = this.#snapshot(binding, this.#id(sessionId));
+                const layered = binding.configurationDigest === NATIVE_LAYERS;
+                const snapshot = layered ? undefined : this.#snapshot(binding, this.#id(sessionId));
 
-                if (!snapshot || snapshot.digest !== binding.configurationDigest) {
+                if (!layered && (!snapshot || snapshot.digest !== binding.configurationDigest)) {
                     throw new HttpError(409, "Frozen configuration changed.");
                 }
 
@@ -134,8 +176,12 @@ export class TeamKernel {
 
                 return {
                     modelDefinition: { ...model },
-                    context: snapshot.context,
-                    skills: snapshot.skills.map((skill) => skill.path),
+                    ...(snapshot && {
+                        frozen: {
+                            context: snapshot.context,
+                            skills: snapshot.skills.map((skill) => skill.path),
+                        },
+                    }),
                 };
             },
         );
@@ -159,6 +205,10 @@ export class TeamKernel {
     }
 
     #snapshot(binding: KernelBinding, id: ConversationId): ConfigurationSnapshot | undefined {
+        if (binding.configurationDigest === NATIVE_LAYERS) {
+            return undefined;
+        }
+
         const snapshot = this.#configurations.get(id)?.snapshots[binding.configurationDigest];
 
         if (snapshot) {
@@ -222,7 +272,10 @@ export class TeamKernel {
             app.profiles.verify(staged);
         }
 
-        if (!configuration || configuration.digest !== binding.configurationDigest) {
+        if (
+            (staged || binding.configurationDigest !== NATIVE_LAYERS) &&
+            (!configuration || configuration.digest !== binding.configurationDigest)
+        ) {
             throw new HttpError(409, "Frozen configuration changed.");
         }
 
@@ -231,13 +284,7 @@ export class TeamKernel {
         return user;
     }
 
-    binding(
-        user: User,
-        cwd: string,
-        snapshot: ConfigurationSnapshot,
-        ref: ModelRef,
-        thinkingLevel: string,
-    ): KernelBinding {
+    binding(user: User, cwd: string, ref: ModelRef, thinkingLevel: string): KernelBinding {
         const model = this.#app.accounts.kernelModel(user, ref);
         const home = this.#home(user.id);
 
@@ -248,10 +295,23 @@ export class TeamKernel {
             provider: model.provider,
             model: model.id,
             thinkingLevel,
-            configurationDigest: snapshot.digest,
+            configurationDigest: NATIVE_LAYERS,
             home,
             workspace: cwd,
         };
+    }
+
+    /** A member's private `HOME/.pi/agent`: where rotom reads their own AGENTS.md and skills. */
+    agentDir(memberId: string): string {
+        const agent = join(this.#home(memberId), ".pi", "agent");
+
+        mkdirSync(agent, { recursive: true, mode: 0o700 });
+
+        if (realpathSync(agent) !== agent || lstatSync(agent).mode & 0o077) {
+            throw new Error("Native agent folder must be canonical and private");
+        }
+
+        return agent;
     }
 
     #home(memberId: string): string {
@@ -338,6 +398,8 @@ export class TeamKernel {
             }
 
             await this.ensureBound(id);
+            // Catch the display up with the journal: entries of runs that ended while the mirror was behind.
+            await this.mirror(id);
         }
     }
 
@@ -440,9 +502,10 @@ export class TeamKernel {
         return promise;
     }
 
-    submit(id: ConversationId, user: User, requestId: string, text: string) {
+    /** `wait: false` answers once the intent is durably reserved; the run continues and shows in the room. */
+    submit(id: ConversationId, user: User, requestId: string, text: string, wait = true) {
         return this.#operation(id, user, requestId, "submit", { text }, () =>
-            this.#submit(id, user, requestId, text),
+            this.#submit(id, user, requestId, text, wait),
         );
     }
     compact(id: ConversationId, user: User, requestId: string, instructions: string) {
@@ -466,7 +529,7 @@ export class TeamKernel {
         );
     }
 
-    async #submit(id: ConversationId, user: User, requestId: string, text: string) {
+    async #submit(id: ConversationId, user: User, requestId: string, text: string, wait: boolean) {
         const key = this.#request(id, user, requestId);
 
         if (
@@ -489,6 +552,10 @@ export class TeamKernel {
 
         if (previous) {
             return this.#receipt(previous);
+        }
+
+        if (this.isRunning(id)) {
+            throw new HttpError(409, "Pi is working. Wait for it to finish or Stop it first.");
         }
 
         const journal = this.executions.journal;
@@ -520,7 +587,326 @@ export class TeamKernel {
             throw new HttpError(409, "Another member took over first; refresh and send again.");
         }
 
-        return this.#track(id, binding, this.executions.run(String(id), key, text));
+        let reserved!: (receipt: KernelReceipt) => void;
+        const admitted = new Promise<KernelReceipt>((resolve) => {
+            reserved = resolve;
+        });
+        const run = this.#track(
+            id,
+            binding,
+            this.executions.run(String(id), key, text, this.#hooks(id, reserved)),
+        );
+
+        if (wait) {
+            return run;
+        }
+
+        // After reservation every outcome is journaled and shown in the room; only a lost child is reported here.
+        run.catch((error) =>
+            this.#app.notice("warning", `Native run ended without a proven outcome: ${error}`),
+        );
+
+        return Promise.race([run, admitted.then((receipt) => this.#receipt(receipt))]);
+    }
+
+    /**
+     * Choosing a model in a native session takes it over on the chooser's account with that model: a new segment with
+     * public history, as any change of payer. The choice is also remembered as the person's default.
+     */
+    async chooseModel(id: ConversationId, user: User, body: unknown) {
+        const request = body as {
+            model?: { provider?: unknown; modelId?: unknown };
+            thinkingLevel?: unknown;
+        } | null;
+
+        if (
+            !request ||
+            typeof request !== "object" ||
+            Object.keys(request).length === 0 ||
+            Object.keys(request).some((key) => key !== "model" && key !== "thinkingLevel") ||
+            (request.model !== undefined &&
+                (typeof request.model?.provider !== "string" ||
+                    typeof request.model.modelId !== "string")) ||
+            (request.thinkingLevel !== undefined &&
+                !THINKING_LEVELS.has(String(request.thinkingLevel)))
+        ) {
+            throw new HttpError(
+                400,
+                "A rotom session changes only its model {provider, modelId} and thinkingLevel; its folder is fixed.",
+            );
+        }
+
+        this.#app.requireSteer(user);
+        await this.#app.accounts.forUser(user);
+        const previous = this.#app.accounts.choice(user);
+        const ref = request.model
+            ? { provider: String(request.model.provider), modelId: String(request.model.modelId) }
+            : (previous ?? this.#app.commands.defaultModel(user).model);
+
+        if (!ref) {
+            throw new HttpError(409, "Connect your own account and choose a model first.");
+        }
+
+        this.#app.accounts.choose(user, {
+            ...ref,
+            thinkingLevel: String(request.thinkingLevel ?? previous?.thinkingLevel ?? "off"),
+        });
+        const chosen = this.#app.commands.defaultModel(user);
+        const { binding, segmentId } = this.executions.journal.session(String(id));
+
+        if (
+            binding.memberId === user.id &&
+            binding.accountGeneration === chosen.model?.provider &&
+            binding.model === chosen.model.modelId &&
+            (binding.thinkingLevel ?? "off") === (chosen.thinkingLevel ?? "off")
+        ) {
+            return { receipt: null };
+        }
+
+        if (this.isRunning(id)) {
+            throw new HttpError(409, "Pi is working. Stop it or wait before switching the model.");
+        }
+
+        return { receipt: await this.handoff(id, user, `model-${randomUUID()}`, segmentId) };
+    }
+
+    #hooks(id: ConversationId, onReserved?: (receipt: KernelReceipt) => void): RunHooks {
+        return {
+            ...(onReserved ? { onReserved } : {}),
+            onEvent: (event) => this.#observe(id, event),
+            // A failed mirror is already a notice, and the run's end mirrors again.
+            onProgress: () => void this.mirror(id).catch(() => undefined),
+        };
+    }
+
+    /** Fold one kernel event into the provisional live view of the conversation. */
+    #observe(id: ConversationId, event: RpcRecord): void {
+        const live = this.#live.get(id) ?? { tools: [] };
+        const message = event.message as { role?: unknown } | undefined;
+
+        this.#live.set(id, live);
+
+        switch (event.type) {
+            case "message_start":
+                if (message?.role !== "assistant") {
+                    return;
+                }
+
+                live.generation = { message: { ...message, content: [] }, ended: false };
+                break;
+
+            case "message_update":
+                if (!live.generation || !applyUpdate(live.generation.message, event)) {
+                    return;
+                }
+
+                break;
+
+            case "message_end":
+                if (message?.role !== "assistant" || !live.generation) {
+                    return;
+                }
+
+                // Shown until its persisted copy is mirrored, so the message never blinks out.
+                live.generation.ended = true;
+                break;
+
+            case "tool_execution_start":
+                live.tools.push({
+                    callId: String(event.toolCallId),
+                    name: String(event.toolName),
+                    status: "running",
+                });
+                break;
+
+            case "tool_execution_update": {
+                const slot = live.tools.find((each) => each.callId === String(event.toolCallId));
+                const content = (event.partialResult as { content?: unknown } | undefined)?.content;
+
+                if (!slot || !Array.isArray(content)) {
+                    return;
+                }
+
+                slot.output = content
+                    .flatMap((part: { type?: unknown; text?: unknown }) =>
+                        part.type === "text" && typeof part.text === "string" ? [part.text] : [],
+                    )
+                    .join("\n");
+                break;
+            }
+
+            case "tool_execution_end":
+                live.tools = live.tools.filter((each) => each.callId !== String(event.toolCallId));
+                break;
+
+            case "auto_retry_start":
+                live.retry = {
+                    at: Date.now() + Number(event.delayMs ?? 0),
+                    error: String(event.errorMessage ?? "Retrying"),
+                };
+                break;
+
+            case "auto_retry_end":
+                delete live.retry;
+                break;
+
+            case "auto_compaction_start":
+                live.compacting = String(event.reason ?? "threshold");
+                break;
+
+            case "auto_compaction_end":
+                delete live.compacting;
+                break;
+
+            default:
+                return;
+        }
+
+        this.#app.roomChanged(id);
+    }
+
+    /** The room's agent line for a native conversation: what the current segment runs on, and for whom. */
+    agentInfo(id: ConversationId) {
+        const cwd = this.#app.sessionMeta(id)?.cwd ?? this.#app.defaultCwd;
+
+        if (!this.executions.journal.hasConversation(String(id))) {
+            return { model: null, thinkingLevel: "off", cwd, available: false };
+        }
+
+        const { binding } = this.executions.journal.session(String(id));
+
+        return {
+            model: { provider: binding.accountGeneration, modelId: binding.model },
+            modelName: binding.model,
+            accountName: this.#app.config.userById(binding.memberId)?.name ?? "A former member",
+            personalAccount: true,
+            thinkingLevel: binding.thinkingLevel ?? "off",
+            cwd: binding.workspace,
+            available: true,
+        };
+    }
+
+    /** What the web app needs to drive a native conversation: the head it acts on, and who pays for it. */
+    roomState(id: ConversationId, viewer: User) {
+        const journal = this.executions.journal;
+
+        if (!journal.hasConversation(String(id))) {
+            return { initializing: true };
+        }
+
+        const { binding, segmentId } = journal.session(String(id));
+        const pending = journal.pendingConversation(String(id));
+
+        return {
+            initializing: !this.#ready.has(id),
+            segmentId,
+            memberId: binding.memberId,
+            memberName: this.#app.config.userById(binding.memberId)?.name ?? "A former member",
+            provider: binding.provider,
+            model: binding.model,
+            thinkingLevel: binding.thinkingLevel ?? "off",
+            kernelVersion: binding.kernelVersion,
+            yours: binding.memberId === viewer.id,
+            ...(pending
+                ? {
+                      pending: {
+                          id: pending.id,
+                          status: pending.status,
+                          operation: pending.operation,
+                          memberId: pending.binding.memberId,
+                      },
+                  }
+                : {}),
+        };
+    }
+
+    /** The live view of a native conversation for the Transcript; `busy` while any native operation runs. */
+    clientLive(id: ConversationId): ClientLive {
+        const live = this.#live.get(id);
+
+        if (!this.isRunning(id)) {
+            return { busy: false };
+        }
+
+        return projectLive({
+            run: { taskId: 0, inputs: [] },
+            ...(live?.generation || live?.retry
+                ? {
+                      generation: {
+                          attempt: 1,
+                          // Unshown parts (reasoning) leave holes in the streamed content.
+                          ...(live.generation
+                              ? {
+                                    message: {
+                                        ...live.generation.message,
+                                        content: live.generation.message.content.filter(Boolean),
+                                    },
+                                }
+                              : {}),
+                          ...(live.retry ? { retry: live.retry } : {}),
+                      },
+                  }
+                : {}),
+            ...(live?.tools.length ? { tools: live.tools } : {}),
+            ...(live?.compacting
+                ? { compactions: [{ reason: live.compacting, blocking: true, attempt: 1 }] }
+                : {}),
+        } as unknown as LiveState);
+    }
+
+    /** Copy newly journaled entries into the conversation for display, once each, in journal order. */
+    mirror(id: ConversationId): Promise<void> {
+        const next = (this.#mirrors.get(id) ?? Promise.resolve()).then(() => this.#mirrorNow(id));
+
+        this.#mirrors.set(
+            id,
+            next.catch((error) =>
+                this.#app.notice("warning", `Native transcript mirror failed: ${error}`),
+            ),
+        );
+
+        return next;
+    }
+
+    async #mirrorNow(id: ConversationId): Promise<void> {
+        const app = this.#app;
+        const rows = this.executions.journal.entries(String(id));
+        const mirrored = (await app.harness.snapshot(NativeMirrorDoc, id, BACKGROUND_CONTEXT))
+            ?.count;
+
+        if (rows.length > (mirrored ?? 0)) {
+            await app.harness.commit(async (tx) => {
+                const doc = await tx.doc(NativeMirrorDoc, id);
+                const authors = await tx.doc(AuthorsDoc, id);
+
+                for (const row of rows.slice(doc.count)) {
+                    const record = await tx.appendEntry(id, {
+                        kind: NATIVE_ENTRY,
+                        data: { entry: publicEntry(row.entry) } as unknown as JsonValue,
+                    });
+                    const message = row.entry.message as { role?: unknown } | undefined;
+
+                    // A person's own prompt; inherited fork history and automatic continuations have no author.
+                    if (
+                        row.operation === "prompt" &&
+                        !row.requestId.includes("#resume") &&
+                        row.entry.type === "message" &&
+                        message?.role === "user"
+                    ) {
+                        authors.entries[String(record.id)] = row.memberId;
+                    }
+                }
+
+                doc.count = rows.length;
+            }, BACKGROUND_CONTEXT);
+        }
+
+        const live = this.#live.get(id);
+
+        if (live?.generation?.ended) {
+            delete live.generation;
+            app.roomChanged(id);
+        }
     }
 
     #request(
@@ -905,10 +1291,18 @@ export class TeamKernel {
         try {
             const receipt = await run.promise;
 
+            await this.mirror(id);
+
             return this.#receipt(receipt);
         } finally {
             this.#active.delete(run);
+
+            if (!this.isRunning(id)) {
+                this.#live.delete(id);
+            }
+
             this.#app.kernelChanged();
+            this.#app.roomChanged(id);
         }
     }
 
@@ -943,5 +1337,108 @@ export class TeamKernel {
 
         await Promise.allSettled([...this.#active].map((run) => run.promise));
         this.executions.close();
+    }
+}
+
+/**
+ * What everyone in the room may see of a native entry: an answer's text and tool calls, without reasoning or provider
+ * signatures, as handoff does. The complete entry stays in the kernel journal.
+ */
+function publicEntry(entry: KernelEntry): KernelEntry {
+    const message = entry.message as
+        { role?: unknown; content?: { type?: unknown; [key: string]: unknown }[] } | undefined;
+
+    if (
+        entry.type !== "message" ||
+        message?.role !== "assistant" ||
+        !Array.isArray(message.content)
+    ) {
+        return entry;
+    }
+
+    return {
+        ...entry,
+        message: {
+            ...message,
+            content: message.content.flatMap((part): Record<string, unknown>[] =>
+                part.type === "text"
+                    ? [{ type: "text", text: part.text }]
+                    : part.type === "toolCall"
+                      ? [
+                            {
+                                type: "toolCall",
+                                id: part.id,
+                                name: part.name,
+                                arguments: part.arguments,
+                            },
+                        ]
+                      : [],
+            ),
+        },
+    };
+}
+
+/**
+ * Apply one streamed delta to the in-flight answer. Rotom's RPC sends deltas, not the whole partial message. Reasoning
+ * is not shown live, as it is not shown once persisted. Returns whether anything visible changed.
+ */
+function applyUpdate(message: { content: Record<string, unknown>[] }, event: RpcRecord): boolean {
+    const update = event.assistantMessageEvent as
+        | {
+              type?: string;
+              contentIndex?: number;
+              delta?: string;
+              content?: string;
+              id?: string;
+              toolName?: string;
+              toolCall?: Record<string, unknown>;
+          }
+        | undefined;
+    const index = update?.contentIndex;
+
+    if (!update || typeof index !== "number" || !Number.isInteger(index) || index < 0) {
+        return false;
+    }
+
+    const content = message.content;
+    const text = typeof content[index]?.text === "string" ? (content[index].text as string) : "";
+
+    switch (update.type) {
+        case "text_start":
+            content[index] = { type: "text", text: "" };
+
+            return true;
+
+        case "text_delta":
+            content[index] = { type: "text", text: text + String(update.delta ?? "") };
+
+            return true;
+
+        case "text_end":
+            content[index] = { type: "text", text: String(update.content ?? text) };
+
+            return true;
+
+        case "toolcall_start":
+            content[index] = {
+                type: "toolCall",
+                id: String(update.id ?? ""),
+                name: String(update.toolName ?? ""),
+                arguments: {},
+            };
+
+            return true;
+
+        case "toolcall_end":
+            if (!update.toolCall) {
+                return false;
+            }
+
+            content[index] = update.toolCall;
+
+            return true;
+
+        default:
+            return false;
     }
 }
