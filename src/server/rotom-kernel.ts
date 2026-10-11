@@ -227,6 +227,29 @@ function refuseMemberResources(home: string): void {
     }
 }
 
+/**
+ * Where a run in the project finds skills besides `.pi/skills`: the paths in the project's settings (relative to
+ * `.pi`), and `.agents/skills` in the workspace and each folder above it, up to the repository root.
+ */
+export function projectSkillPaths(workspace: string): string[] {
+    const listed = settingsOf(join(workspace, ".pi/settings.json")).skills;
+    const paths = Array.isArray(listed)
+        ? listed
+              .filter((path): path is string => typeof path === "string")
+              .map((path) => resolve(workspace, ".pi", path))
+        : [];
+
+    for (let dir = workspace; ; dir = dirname(dir)) {
+        paths.push(join(dir, ".agents/skills"));
+
+        if (existsSync(join(dir, ".git")) || dirname(dir) === dir) {
+            break;
+        }
+    }
+
+    return paths;
+}
+
 /** Packages would install from the network as each run starts. */
 function refuseProjectPackages(workspace: string): void {
     const packages = settingsOf(join(workspace, ".pi/settings.json")).packages;

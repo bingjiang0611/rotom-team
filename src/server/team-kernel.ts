@@ -16,14 +16,15 @@ import type { User } from "./config.ts";
 import type { ConfigurationSnapshot } from "./team-profiles.ts";
 import { accountContext } from "./team-accounts.ts";
 import { HttpError } from "./errors.ts";
-import { NativeTail, RotomExecutions, type RunHooks } from "./rotom-executions.ts";
+import { isTeamPrompt, NativeTail, RotomExecutions, type RunHooks } from "./rotom-executions.ts";
 import { childrenReport, type RpcRecord } from "./rotom-rpc.ts";
 import { AuthorsDoc } from "./docs.ts";
 import { THINKING_LEVELS } from "./commands.ts";
 import { NATIVE_ENTRY, RESUME_PREFIX } from "./entry-format.ts";
 import { projectLive, type ClientLive } from "./projection.ts";
 import type { KernelBinding, KernelEntry, KernelReceipt } from "./rotom-journal.ts";
-import { verifyRotomKernel } from "./rotom-kernel.ts";
+import { projectSkillPaths, verifyRotomKernel } from "./rotom-kernel.ts";
+import { loadSkillCommands, type SkillCommand } from "./prompts.ts";
 import { McpSignIns } from "./mcp-sign-in.ts";
 
 /** App-side creation intent. Never copied from a source conversation or rebuilt from today's account settings. */
@@ -515,10 +516,10 @@ export class TeamKernel {
      * its member, so only they may add to it; anyone else waits for it to end, then their message takes it over.
      */
     async queue(id: ConversationId, user: User, text: string, mode: "steer" | "followUp") {
-        if (typeof text !== "string" || !text.trim() || text.trimStart().startsWith("/")) {
+        if (typeof text !== "string" || !isTeamPrompt(text)) {
             throw new HttpError(
                 400,
-                "Native submissions require ordinary text; slash commands are not supported.",
+                "Rotom sessions take ordinary text or /skill:name; other slash commands are not supported.",
             );
         }
 
@@ -582,10 +583,10 @@ export class TeamKernel {
             throw new HttpError(400, "A stable requestId and text are required.");
         }
 
-        if (!text.trim() || text.trimStart().startsWith("/")) {
+        if (!isTeamPrompt(text)) {
             throw new HttpError(
                 400,
-                "Native submissions require ordinary text; slash commands are not supported.",
+                "Rotom sessions take ordinary text or /skill:name; other slash commands are not supported.",
             );
         }
 
@@ -963,6 +964,32 @@ export class TeamKernel {
             default:
                 throw new HttpError(404, "Unknown MCP action.");
         }
+    }
+
+    /**
+     * The skills to suggest as `/skill:name`: a frozen configuration's, or the project's as this member's runs find
+     * them. Suggestions only: the kernel expands the command itself, with its bundled skills too.
+     */
+    skillCommands(id: ConversationId, user: User): SkillCommand[] {
+        this.#app.requireSee(user, id);
+
+        if (!this.executions.journal.hasConversation(String(id))) {
+            throw new HttpError(409, "This session is still starting.");
+        }
+
+        const snapshot = this.configuration(id);
+
+        if (snapshot) {
+            return snapshot.skills;
+        }
+
+        const { workspace } = this.executions.journal.session(String(id)).binding;
+
+        return loadSkillCommands(
+            workspace,
+            join(this.#home(user.id), ".pi/agent"),
+            projectSkillPaths(workspace),
+        );
     }
 
     /** What the web app needs to drive a native conversation: the head it acts on, and who pays for it. */

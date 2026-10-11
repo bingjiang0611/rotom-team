@@ -122,6 +122,27 @@ export async function nativeUiProof(options: {
             "false",
         );
 
+        // Typing a command offers the project's skills: the kernel runs `/skill:name` for the model.
+        const typeInto = (value: string) =>
+            page.evaluate(`
+                const input = document.querySelector('.composer textarea');
+                input.value = ${JSON.stringify(value)};
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+            `);
+
+        await typeInto("/skill:");
+        await until(
+            async () => (await text(".composer-wrap .commands")).includes("/skill:project-proof"),
+            "the message box offers the project's skills",
+            20000,
+        );
+        const skills = await page.screenshot();
+        const skillsPath = join(options.root, "native-ui-skills.jpg");
+
+        writeFileSync(skillsPath, Buffer.from(skills.data, "base64"), { mode: 0o600, flag: "wx" });
+        screenshots.push(skillsPath);
+        await typeInto("");
+
         await page.evaluate(`document.querySelector('.topbar [aria-label="Menu"]').click()`);
         await until(
             async () => (await page.evaluate(`Boolean(${button("Fork")})`)) === "true",
@@ -185,6 +206,7 @@ export async function nativeUiProof(options: {
 
         return {
             mcpSignIn: true,
+            skillsOffered: true,
             unifiedTranscript: true,
             streamedThenPersisted: true,
             questionAnswered: true,

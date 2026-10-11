@@ -6,6 +6,7 @@ import { pipeline } from "node:stream/promises";
 import type { ConversationId } from "@earendil-works/pi-durable";
 import type { Attachment, SubmitRequest } from "../commands.ts";
 import { HttpError } from "../errors.ts";
+import type { SkillCommand } from "../prompts.ts";
 import { serveImage, TYPES } from "./assets.ts";
 import { type ApiRequest, json, readJson, send } from "./io.ts";
 
@@ -25,6 +26,11 @@ function safeName(name: string): string {
         .trim();
 
     return base === "" || base.startsWith(".") ? `upload${base}` : base.slice(0, 120);
+}
+
+/** A skill as the message box offers it: `/skill:name`, then what to do. */
+function skillSuggestion({ name, description }: SkillCommand) {
+    return { name: `skill:${name}`, description, argumentHint: "[what to do]", skill: true };
 }
 
 export async function conversationRoutes(
@@ -153,6 +159,10 @@ export async function conversationRoutes(
                 200,
                 await app.kernel.mcp(id, user, fourth, await readJson(request)),
             );
+        }
+
+        if (third === "prompts" && method === "GET") {
+            return json(response, 200, app.kernel.skillCommands(id, user).map(skillSuggestion));
         }
 
         if (third === "dialog" && method === "POST" && fourth === undefined) {
@@ -536,12 +546,7 @@ export async function conversationRoutes(
             description,
             ...(argumentHint === undefined ? {} : { argumentHint }),
         }));
-        const skills = app.skillCommands(id).map(({ name, description }) => ({
-            name: `skill:${name}`,
-            description,
-            argumentHint: "[what to do]",
-            skill: true,
-        }));
+        const skills = app.skillCommands(id).map(skillSuggestion);
 
         return json(response, 200, [...templates, ...skills]);
     }

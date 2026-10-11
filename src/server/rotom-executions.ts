@@ -59,6 +59,14 @@ export type KernelLaunchContext = {
     frozen?: { context: string; skills: string[] };
 };
 
+/**
+ * Text a member may send to Pi: ordinary words, or `/skill:name …`, which the kernel expands into that skill's
+ * instructions. Other slash commands run in the kernel instead of reaching the model, outside the run's journal.
+ */
+export function isTeamPrompt(text: string): boolean {
+    return text.trim() !== "" && (!text.trimStart().startsWith("/") || /^\/skill:\S/.test(text));
+}
+
 /** A screenshot-bearing tool result can be large; a single record above this is refused, not truncated. */
 const NATIVE_LINE_LIMIT = 64 * 1024 * 1024;
 
@@ -394,7 +402,7 @@ export class RotomExecutions {
 
         this.#notStopped(running);
 
-        if (operation === "prompt" && (!prompt.trim() || prompt.trimStart().startsWith("/"))) {
+        if (operation === "prompt" && !isTeamPrompt(prompt)) {
             throw new Error(
                 "Kernel execution requires ordinary prompt text; product commands are not team submissions",
             );

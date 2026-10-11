@@ -1980,6 +1980,55 @@ try {
     await continued(crashHost);
     assert.equal(journalOf().receipt(crashHost).status, "interrupted");
     report.crashedKernelInterruptedAndContinued = true;
+
+    // A member runs a project skill by name. The message box offers the project's skills, including those its
+    // settings name (relative to `.pi`), and the kernel expands `/skill:name` into the skill for the model.
+    mkdirSync(join(workspace, "team-skills", "settings-proof"), { recursive: true });
+    writeFileSync(
+        join(workspace, "team-skills", "settings-proof", "SKILL.md"),
+        "---\nname: settings-proof\ndescription: SETTINGS_SKILL_DESCRIPTION\n---\nSETTINGS_SKILL_BODY\n",
+    );
+    writeFileSync(
+        join(workspace, ".pi", "settings.json"),
+        JSON.stringify({ skills: ["../team-skills"] }),
+    );
+    const skillSession = await app.commands.createSession(a, { backend: "rotom" });
+    const offered = (await (await request(aliceToken, `c/${skillSession.id}/prompts`)).json()) as {
+        name: string;
+        skill: boolean;
+    }[];
+
+    assert.deepEqual(
+        offered.map((each) => [each.name, each.skill]),
+        [
+            ["skill:project-proof", true],
+            ["skill:settings-proof", true],
+        ],
+    );
+    const skillRun = await request(aliceToken, `c/${skillSession.id}/submit`, "POST", {
+        text: "/skill:settings-proof SKILL_REQUEST",
+        requestId: "skill",
+    });
+
+    assert.equal(skillRun.status, 200);
+    assert.equal(((await skillRun.json()) as { status: string }).status, "settled");
+    assert.ok(
+        lastBody.includes("SETTINGS_SKILL_DESCRIPTION"),
+        "the kernel loads the settings' skill",
+    );
+    assert.ok(lastBody.includes("SETTINGS_SKILL_BODY"), "the model gets the skill's instructions");
+    assert.ok(lastBody.includes("SKILL_REQUEST"));
+    assert.ok(!lastBody.includes("/skill:settings-proof"), "the command itself is expanded");
+    assert.equal(
+        (
+            await request(aliceToken, `c/${skillSession.id}/submit`, "POST", {
+                text: "/mcp",
+                requestId: "other-command",
+            })
+        ).status,
+        400,
+    );
+    report.projectSkillRunsByName = true;
     // The same project configuration reaches everyone: both members whose runs reached the model got its MCP tool.
     assert.deepEqual(
         [a.id, bob.user.id].filter((id) => !offeredProjectMcp.has(id)),
@@ -2042,7 +2091,7 @@ try {
             });
             // The composer's one message, sent by the owner who pays for it; nothing else dispatched. The subagent runs
             // before it count six: a child and the parent's turn on its result, then a stopped run with its child.
-            assert.equal(calls, 36);
+            assert.equal(calls, 38);
             assert.equal(requestMembers.at(-1), owner(app).id);
             report.webUiVerified = true;
         } else {
