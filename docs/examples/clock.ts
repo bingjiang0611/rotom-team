@@ -1,6 +1,6 @@
 /**
  * A clock tool: the date and time now, in any time zone. An example drop-in extension: copy it into
- * `~/.pi-pocket/extensions/`, then turn it on in Menu → Extensions.
+ * `~/.pi-pocket/extensions/`, then turn it on in Settings → Extensions.
  */
 import { Type } from "@earendil-works/pi-ai";
 import { defineExtension, defineTool } from "@earendil-works/pi-durable";

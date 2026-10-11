@@ -36,5 +36,5 @@ A drop-in extension survives updates to Pi Pocket and can be turned off from the
 
 - **Ask first.** A change to Pi Pocket reaches everyone who uses it, at once. Say what you will change and why, and wait for a yes, unless you were asked for exactly that.
 - **Do not test on the live data.** Check a change on a copy of Pi Pocket with its own data folder ([self-editing.md](self-editing.md#check-it-on-a-copy)), not with the server people are using.
-- **Do not restart while your own tool call runs**, and do not restart without asking. Tell the person to use Menu → Restart server.
+- **Do not restart while your own tool call runs**, and do not restart without asking. Tell the person to use Settings → Restart server.
 - **Do not commit, push, or publish** unless asked.

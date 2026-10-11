@@ -3,8 +3,8 @@
 import DOMPurify from "dompurify";
 import htm from "htm";
 import { marked } from "marked";
-import { Component, h } from "preact";
-import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
+import { Component, createContext, h } from "preact";
+import { useContext, useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { useDragToClose } from "./gestures.js";
 import { highlight, langOf } from "./highlight.js";
 import { actions, filesShown, notify, openSheet, store } from "./store.js";
@@ -728,6 +728,7 @@ const ICONS = {
     palette:
         "M12 3a9 9 0 100 18c1 0 1.5-.8 1.5-1.5 0-.4-.2-.8-.4-1.1-.3-.3-.4-.7-.4-1.1 0-.8.7-1.5 1.5-1.5H16a5 5 0 005-5c0-4.4-4-7.8-9-7.8zM7.5 12.5h.01M9.5 8h.01M14.5 8h.01M17 11.5h.01",
     pulse: "M3 12h4l2-6 4 12 2-6h6",
+    settings: "M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6",
     keyboard: "M3 6h18v12H3zM7 10h.01M11 10h.01M15 10h.01M7 14h10",
     swatch: "M4 4h7v16H4zM11 9l6-4 3 5-9 6M11 16h9v4h-9",
     home: "M3 11l9-7 9 7M5 10v10h14V10",
@@ -976,32 +977,50 @@ export class Boundary extends Component {
 /** Sheets come up from the bottom edge below this width, and drag back down to close; above it they are popups. */
 const BOTTOM_SHEETS = matchMedia("(max-width: 699px)");
 
-/** A bottom sheet on phones, a centered dialog on wide screens. */
-export function Sheet({ title, onClose, children, wide = false, actions = null }) {
-    const ref = useRef(null);
+/** True inside the settings window: a sheet there is one of its pages, and the window around it is the dialog. */
+export const SettingsPage = createContext(false);
 
-    useDragToClose(ref, { dir: "down", onClose, enabled: BOTTOM_SHEETS.matches });
+/** A bottom sheet on phones, a centered dialog on wide screens, or a page of the settings window. */
+export function Sheet({ title, onClose, children, wide = false, actions = null, className = "" }) {
+    const ref = useRef(null);
+    const page = useContext(SettingsPage);
+
+    useDragToClose(ref, { dir: "down", onClose, enabled: BOTTOM_SHEETS.matches && !page });
 
     useEffect(() => {
+        if (page) {
+            return;
+        }
+
         const onKey = (event) => event.key === "Escape" && onClose();
 
         addEventListener("keydown", onKey);
 
         return () => removeEventListener("keydown", onKey);
-    }, [onClose]);
+    }, [onClose, page]);
     // Keys go to the sheet, not the message box behind it, unless something inside already took focus.
     useEffect(() => {
-        if (ref.current && !ref.current.contains(document.activeElement)) {
+        if (!page && ref.current && !ref.current.contains(document.activeElement)) {
             ref.current.focus({ preventScroll: true });
         }
     }, []);
+
+    if (page) {
+        return html`<section class="settings-page" ref=${ref} aria-label=${title}>
+            <header class="sheet-head">
+                <h2>${title}</h2>
+                ${actions}
+            </header>
+            <div class="sheet-body">${children}</div>
+        </section>`;
+    }
 
     return html`<div
         class="overlay"
         onClick=${(event) => event.target === event.currentTarget && onClose()}
     >
         <section
-            class=${`sheet ${wide ? "wide" : ""}`}
+            class=${`sheet ${wide ? "wide" : ""} ${className}`}
             ref=${ref}
             role="dialog"
             aria-modal="true"

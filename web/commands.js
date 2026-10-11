@@ -2,6 +2,7 @@
 import { browserAvailable, openInBrowser, toggleBrowser } from "./browser.js";
 import { filesAvailable, toggleFiles } from "./files-panel.js";
 import { branchAvailable } from "./sheets/branch.js";
+import { openSettings } from "./sheets/settings.js";
 import { togglePeeks } from "./peeks.js";
 import { actions, collab, navigate, notify, openSheet, scoped, store } from "./store.js";
 import { chooseTheme, THEMES } from "./theme.js";
@@ -365,7 +366,7 @@ const COMMANDS = [
         available: () => Boolean(store.state.view.kernel) && store.state.me?.role !== "viewer",
         run: () => openSheet({ type: "mcp" }),
     },
-    { name: "settings", description: "Open the menu", run: () => openSheet({ type: "menu" }) },
+    { name: "settings", description: "Open settings", run: () => openSettings() },
     {
         name: "theme",
         args: "[name]",

@@ -19,6 +19,7 @@ import { ProfileSheet } from "./sheets/profile.js";
 import { ProjectsSheet } from "./sheets/projects.js";
 import { RunningSheet } from "./sheets/running.js";
 import { SchedulesSheet } from "./sheets/schedules.js";
+import { SETTINGS_PAGES, SettingsSheet } from "./sheets/settings.js";
 import { ShortcutsSheet } from "./sheets/shortcuts.js";
 import { SpendSheet } from "./sheets/spend.js";
 import { TextSheet } from "./sheets/text.js";
@@ -30,8 +31,14 @@ import { Boundary, html, usePresence } from "./ui.js";
 
 // ─── Back ─────────────────────────────────────────────────────────────────────────
 
-/** What tells sheets apart: the same one changing (its query, say) stays one step back. */
-const sheetKey = (sheet) => `${sheet.type}:${sheet.entryId ?? sheet.id ?? ""}`;
+/**
+ * What tells sheets apart: the same one changing (its query, say) stays one step back. The settings window is one
+ * sheet whichever page it shows.
+ */
+const sheetKey = (sheet) =>
+    SETTINGS_PAGES.has(sheet.type)
+        ? "settings"
+        : `${sheet.type}:${sheet.entryId ?? sheet.id ?? ""}`;
 
 /**
  * The sheets opened one from another, oldest first (the menu, then the model picker it opened): each is a step back,
@@ -94,10 +101,12 @@ export function Sheets({ state }) {
         return auth;
     }
 
-    const key = `${sheet.type}:${sheet.entryId ?? sheet.id ?? ""}`;
+    const body = sheetBody(sheet);
 
     return html`<div class=${`sheet-host ${leaving ? "leaving" : ""}`} inert=${leaving}>
-        <${Boundary} key=${key} reset=${sheet}>${sheetBody(sheet)}<//>
+        <${Boundary} key=${sheetKey(sheet)} reset=${sheet}>
+            ${SETTINGS_PAGES.has(sheet.type) ? html`<${SettingsSheet} section=${sheet.type}>${body}<//>` : body}
+        <//>
     </div>
     ${auth}`;
 }

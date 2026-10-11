@@ -2483,7 +2483,7 @@ button.chip:hover {
     grid-area: 1 / 1;
 }
 
-.foot-tiles.covered {
+.me-row.covered {
     visibility: hidden;
 }
 
@@ -2554,7 +2554,7 @@ button.chip:hover {
     }
 }
 
-/* The sidebar's foot: tiles for what is beside the sessions, then who is signed in. */
+/* The sidebar's foot: who is signed in, the way into Settings. */
 .sessions-foot {
     border-top: 1px solid var(--line);
     padding-top: 0.5rem;
@@ -2562,55 +2562,6 @@ button.chip:hover {
     flex-direction: column;
     gap: 0.4rem;
     flex: none;
-}
-
-.foot-tiles {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 4px;
-}
-
-.foot-tile {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.2rem;
-    padding: 0.45rem 0.2rem 0.35rem;
-    font-size: 0.62rem;
-    letter-spacing: 0.03em;
-    color: var(--muted);
-    border: 1px solid var(--line);
-    background: var(--card);
-    transition:
-        background-color var(--t-hover) var(--ease-out),
-        border-color var(--t-hover) var(--ease-out),
-        color var(--t-hover) var(--ease-out),
-        transform 90ms var(--ease-out);
-}
-
-.foot-tile:hover {
-    color: var(--text);
-    border-color: var(--edge);
-    background: var(--card-2);
-}
-
-.foot-tile:active {
-    transform: scale(0.96);
-}
-
-.foot-tile .tile-count {
-    position: absolute;
-    top: 3px;
-    right: 4px;
-    font-size: 0.6rem;
-    font-weight: 700;
-    color: var(--accent);
-}
-
-.foot-tile.lit {
-    color: var(--accent);
-    border-color: var(--accent-line);
 }
 
 .me-row {
@@ -2641,6 +2592,150 @@ button.chip:hover {
     color: var(--muted);
     border: 1px solid var(--line);
     padding: 0 0.35rem;
+}
+
+.me-row .me-busy {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.66rem;
+    font-weight: 700;
+    color: var(--accent);
+}
+
+.me-row > svg {
+    color: var(--muted);
+    flex: none;
+}
+
+/* ─── Settings: one window for everything app-wide, its pages listed beside the open one ─── */
+
+.sheet.settings-window {
+    max-width: 880px;
+}
+
+.settings-window > .sheet-body {
+    flex: 1;
+    min-height: 0;
+    padding: 0;
+    overflow: hidden;
+}
+
+.settings {
+    display: grid;
+    grid-template-columns: 13rem minmax(0, 1fr);
+    min-height: 0;
+    height: min(600px, calc(86dvh - 3.5rem));
+}
+
+.settings-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    padding: 0.2rem 0.5rem 0.8rem 1rem;
+    border-right: 1px solid var(--line);
+    overflow-y: auto;
+}
+
+.settings-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    margin-bottom: 0.4rem;
+}
+
+.settings-link {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.38rem 0.55rem;
+    font-size: 0.82rem;
+    color: var(--body);
+    text-align: left;
+    border: 1px solid transparent;
+    transition: background-color var(--t-hover) var(--ease-out);
+}
+
+.settings-link > span:first-child {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.settings-link:hover {
+    background: var(--hover);
+}
+
+.settings-link.on {
+    color: var(--accent);
+    background: var(--accent-soft);
+    border-color: var(--accent-line);
+}
+
+.settings-hint {
+    font-size: 0.68rem;
+    color: var(--muted);
+}
+
+.settings-out {
+    margin-top: auto;
+    color: var(--muted);
+}
+
+.settings-pane {
+    display: flex;
+    min-height: 0;
+    min-width: 0;
+}
+
+.settings-page {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    min-width: 0;
+}
+
+.settings-page > .sheet-body {
+    flex: 1;
+    min-height: 0;
+}
+
+/* Phones: the pages listed in a row above the open one, to scroll sideways. */
+@media (max-width: 699px) {
+    .settings {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: auto minmax(0, 1fr);
+        height: calc(86dvh - 3.5rem);
+    }
+    .settings-nav {
+        flex-direction: row;
+        align-items: center;
+        gap: 0.3rem;
+        padding: 0 1rem 0.5rem;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+        overflow-x: auto;
+        overflow-y: hidden;
+    }
+    .settings-group {
+        flex-direction: row;
+        gap: 0.3rem;
+        margin: 0;
+    }
+    .settings-group .group-title {
+        display: none;
+    }
+    .settings-link {
+        flex: none;
+        min-height: 40px;
+        border-color: var(--line);
+    }
+    .settings-out {
+        margin: 0;
+    }
 }
 
 /* ─── The rail: the sidebar folded to numbered sessions, like Waybar's workspaces ─── */

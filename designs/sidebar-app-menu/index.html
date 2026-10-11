@@ -1,0 +1,722 @@
+<!doctype html>
+<html lang="zh">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>rotom team · 应用入口收进侧边栏（原型）</title>
+        <style>
+            :root {
+                --bg: #1a1b26;
+                --bg-dark: #13141c;
+                --bg-darker: #0e0e14;
+                --card: #1f2130;
+                --card-2: #24283b;
+                --line: #2a2e42;
+                --edge: #3b4261;
+                --text: #c0caf5;
+                --body: #a9b1d6;
+                --muted: #565f89;
+                --accent: #7aa2f7;
+                --accent-soft: rgba(122, 162, 247, 0.12);
+                --accent-line: rgba(122, 162, 247, 0.45);
+                --green: #9ece6a;
+                --red: #f7768e;
+                --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+            }
+            * {
+                box-sizing: border-box;
+            }
+            body {
+                margin: 0;
+                background: var(--bg-darker);
+                color: var(--body);
+                font: 13px/1.55 var(--mono);
+            }
+            button {
+                font: inherit;
+                color: inherit;
+                background: none;
+                border: 0;
+                cursor: pointer;
+                text-align: left;
+            }
+            .top {
+                display: flex;
+                align-items: center;
+                gap: 1rem;
+                padding: 0.8rem 1rem;
+                border-bottom: 1px solid var(--line);
+                flex-wrap: wrap;
+            }
+            .top h1 {
+                font-size: 0.9rem;
+                margin: 0;
+                color: var(--text);
+            }
+            .seg {
+                display: flex;
+                border: 1px solid var(--edge);
+            }
+            .seg button {
+                padding: 0.35rem 0.8rem;
+                color: var(--muted);
+            }
+            .seg button.on {
+                background: var(--accent-soft);
+                color: var(--accent);
+            }
+            .note {
+                color: var(--muted);
+                font-size: 0.75rem;
+            }
+            .stage {
+                display: grid;
+                grid-template-columns: 300px 1fr;
+                gap: 12px;
+                padding: 12px;
+                height: calc(100vh - 56px);
+                min-height: 640px;
+            }
+            .panel {
+                border: 1px solid var(--line);
+                background: var(--bg);
+                position: relative;
+            }
+            .panel.main {
+                border-color: var(--accent);
+            }
+            .sidebar {
+                display: flex;
+                flex-direction: column;
+                padding: 0.7rem;
+                gap: 0.6rem;
+                height: 100%;
+            }
+            .brand {
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+            }
+            .brand b {
+                color: var(--text);
+                flex: 1;
+            }
+            .brand b span {
+                color: var(--red);
+            }
+            .icon {
+                width: 28px;
+                height: 28px;
+                display: grid;
+                place-items: center;
+                color: var(--muted);
+                border: 1px solid transparent;
+            }
+            .icon:hover {
+                color: var(--text);
+                border-color: var(--line);
+            }
+            .new {
+                background: var(--accent);
+                color: var(--bg-darker);
+                padding: 0.25rem 0.6rem;
+                font-weight: 700;
+            }
+            .search {
+                border: 1px solid var(--line);
+                padding: 0.45rem 0.6rem;
+                color: var(--muted);
+            }
+            .tabs {
+                display: flex;
+                justify-content: space-around;
+                border-bottom: 1px solid var(--line);
+                color: var(--muted);
+                font-size: 0.75rem;
+            }
+            .tabs span {
+                padding: 0.3rem 0;
+            }
+            .tabs .on {
+                color: var(--text);
+                border-bottom: 2px solid var(--accent);
+            }
+            .list {
+                flex: 1;
+                overflow: auto;
+                display: flex;
+                flex-direction: column;
+                gap: 0.2rem;
+            }
+            .group-h {
+                font-size: 0.62rem;
+                letter-spacing: 0.08em;
+                color: var(--muted);
+                text-transform: uppercase;
+                padding: 0.5rem 0.2rem 0.2rem;
+            }
+            .sess {
+                padding: 0.35rem 0.5rem;
+            }
+            .sess b {
+                color: var(--text);
+                font-weight: 500;
+                display: block;
+            }
+            .sess small {
+                color: var(--muted);
+            }
+            .sess.cur {
+                background: var(--card-2);
+            }
+            .foot {
+                border-top: 1px solid var(--line);
+                padding-top: 0.5rem;
+                display: flex;
+                flex-direction: column;
+                gap: 0.3rem;
+                position: relative;
+            }
+            .me {
+                display: flex;
+                align-items: center;
+                gap: 0.55rem;
+                padding: 0.4rem;
+                width: 100%;
+            }
+            .me:hover,
+            .me.open {
+                background: var(--card-2);
+            }
+            .avatar {
+                width: 22px;
+                height: 22px;
+                border: 1px solid var(--body);
+                display: grid;
+                place-items: center;
+                font-size: 0.6rem;
+                font-weight: 700;
+                color: var(--text);
+                flex: none;
+            }
+            .me .name {
+                flex: 1;
+                color: var(--text);
+            }
+            .role {
+                font-size: 0.66rem;
+                color: var(--muted);
+                border: 1px solid var(--line);
+                padding: 0 0.35rem;
+            }
+            .chev {
+                color: var(--muted);
+            }
+            .run {
+                display: inline-flex;
+                align-items: center;
+                gap: 0.35rem;
+                font-size: 0.7rem;
+                color: var(--accent);
+                border: 1px solid var(--accent-line);
+                padding: 0 0.35rem;
+            }
+            .pulse {
+                width: 6px;
+                height: 6px;
+                background: var(--green);
+                border-radius: 50%;
+                animation: pulse 1.4s infinite;
+            }
+            @keyframes pulse {
+                50% {
+                    opacity: 0.3;
+                }
+            }
+            /* A: account popover */
+            .pop {
+                position: absolute;
+                left: 0;
+                right: 0;
+                bottom: calc(100% + 6px);
+                background: var(--bg-dark);
+                border: 1px solid var(--edge);
+                box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+                padding: 0.35rem;
+                display: none;
+                z-index: 5;
+            }
+            .pop.show {
+                display: block;
+            }
+            .pop .who {
+                display: flex;
+                gap: 0.55rem;
+                align-items: center;
+                padding: 0.45rem;
+            }
+            .pop .who div {
+                flex: 1;
+            }
+            .pop .who b {
+                color: var(--text);
+                display: block;
+                font-weight: 500;
+            }
+            .pop .who small {
+                color: var(--muted);
+            }
+            .sep {
+                height: 1px;
+                background: var(--line);
+                margin: 0.3rem 0.2rem;
+            }
+            .mi {
+                display: flex;
+                align-items: center;
+                gap: 0.6rem;
+                width: 100%;
+                padding: 0.38rem 0.5rem;
+                color: var(--body);
+            }
+            .mi:hover {
+                background: var(--card-2);
+                color: var(--text);
+            }
+            .mi .i {
+                width: 16px;
+                text-align: center;
+                color: var(--muted);
+            }
+            .mi .v {
+                margin-left: auto;
+                color: var(--muted);
+                font-size: 0.7rem;
+            }
+            .mi .v.acc {
+                color: var(--accent);
+            }
+            .mi.danger {
+                color: var(--red);
+            }
+            .cap {
+                font-size: 0.6rem;
+                letter-spacing: 0.08em;
+                color: var(--muted);
+                text-transform: uppercase;
+                padding: 0.35rem 0.5rem 0.1rem;
+            }
+            /* B: flat nav section */
+            .navsec {
+                display: flex;
+                flex-direction: column;
+            }
+            .navsec .mi {
+                padding: 0.28rem 0.45rem;
+                font-size: 0.78rem;
+            }
+            .navsec summary {
+                list-style: none;
+                cursor: pointer;
+            }
+            .navsec summary::-webkit-details-marker {
+                display: none;
+            }
+            /* C: settings window */
+            .settings {
+                position: absolute;
+                inset: 40px 60px;
+                background: var(--bg-dark);
+                border: 1px solid var(--edge);
+                display: none;
+                grid-template-columns: 210px 1fr;
+                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+                z-index: 6;
+            }
+            .settings.show {
+                display: grid;
+            }
+            .settings nav {
+                border-right: 1px solid var(--line);
+                padding: 0.6rem;
+                display: flex;
+                flex-direction: column;
+            }
+            .settings nav .mi.on {
+                background: var(--accent-soft);
+                color: var(--accent);
+            }
+            .settings section {
+                padding: 1.2rem 1.4rem;
+            }
+            .settings h2 {
+                margin: 0 0 0.8rem;
+                font-size: 0.95rem;
+                color: var(--text);
+            }
+            .row {
+                border: 1px solid var(--line);
+                padding: 0.6rem 0.8rem;
+                margin-bottom: 6px;
+                display: flex;
+                justify-content: space-between;
+            }
+            /* main area */
+            .main-inner {
+                padding: 1rem 1.4rem;
+                height: 100%;
+                display: flex;
+                flex-direction: column;
+            }
+            .head {
+                display: flex;
+                align-items: center;
+                gap: 0.6rem;
+                border-bottom: 1px solid var(--line);
+                padding-bottom: 0.6rem;
+            }
+            .head b {
+                color: var(--text);
+                flex: 1;
+            }
+            .dots {
+                width: 30px;
+                height: 30px;
+                display: grid;
+                place-items: center;
+                border: 1px solid var(--line);
+                color: var(--text);
+            }
+            .dots.open {
+                border-color: var(--accent);
+                color: var(--accent);
+            }
+            .smenu {
+                position: absolute;
+                right: 1.4rem;
+                top: 3.6rem;
+                width: 360px;
+                background: var(--bg-dark);
+                border: 1px solid var(--edge);
+                padding: 0.35rem;
+                display: none;
+                z-index: 4;
+                box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+            }
+            .smenu.show {
+                display: block;
+            }
+            .transcript {
+                flex: 1;
+                padding: 1rem 0;
+                color: var(--muted);
+            }
+            .bubble {
+                border-left: 2px solid var(--accent);
+                padding: 0.4rem 0.8rem;
+                margin-bottom: 0.8rem;
+                color: var(--body);
+                max-width: 680px;
+            }
+            .removed {
+                border: 1px dashed var(--red);
+                color: var(--muted);
+                padding: 0.45rem 0.6rem;
+                font-size: 0.72rem;
+            }
+            .removed b {
+                color: var(--red);
+                font-weight: 500;
+            }
+            .legend {
+                position: absolute;
+                right: 1.4rem;
+                bottom: 1rem;
+                width: 380px;
+                font-size: 0.72rem;
+                color: var(--muted);
+                border: 1px solid var(--line);
+                padding: 0.6rem 0.8rem;
+                background: var(--bg-dark);
+            }
+            .legend b {
+                color: var(--text);
+                font-weight: 500;
+            }
+            .rail {
+                position: absolute;
+                left: 1.4rem;
+                bottom: 1rem;
+                width: 48px;
+                border: 1px solid var(--line);
+                background: var(--bg-dark);
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 6px;
+                padding: 8px 0;
+            }
+            .rail .ws {
+                width: 28px;
+                height: 28px;
+                display: grid;
+                place-items: center;
+                border: 1px solid var(--line);
+                font-size: 0.7rem;
+            }
+            .rail .ws.on {
+                border-color: var(--accent);
+                color: var(--accent);
+            }
+            .rail-cap {
+                position: absolute;
+                left: 4.8rem;
+                bottom: 1rem;
+                font-size: 0.7rem;
+                color: var(--muted);
+                width: 200px;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="top">
+            <h1>应用入口收进左侧边栏 · 原型</h1>
+            <div class="seg" id="seg">
+                <button data-d="A" class="on">A 账户菜单</button>
+                <button data-d="B">B 侧栏平铺</button>
+                <button data-d="C">C 设置窗口</button>
+            </div>
+            <div class="seg" id="role">
+                <button data-r="owner" class="on">owner</button>
+                <button data-r="viewer">viewer</button>
+            </div>
+            <span class="note"
+                >同一份内容对比三种结构；点身份行 / ⋯ 看展开状态。假数据，不连后端。</span
+            >
+        </div>
+
+        <div class="stage">
+            <div class="panel"><div class="sidebar" id="sidebar"></div></div>
+            <div class="panel main">
+                <div class="main-inner">
+                    <div class="head">
+                        <b>New session · rate-native</b>
+                        <span class="note">ultimate · low</span>
+                        <button class="dots" id="dots" title="会话菜单">⋯</button>
+                    </div>
+                    <div class="smenu" id="smenu"></div>
+                    <div class="transcript">
+                        <div class="bubble">template_17933 是什么？</div>
+                        <div class="bubble">追评发布器模板。</div>
+                    </div>
+                    <div class="legend" id="legend"></div>
+                    <div class="rail" id="rail"></div>
+                    <div class="rail-cap" id="railcap"></div>
+                </div>
+                <div class="settings" id="settings"></div>
+            </div>
+        </div>
+
+        <script>
+            const state = {
+                d: "A",
+                role: "owner",
+                pop: false,
+                smenu: false,
+                settings: false,
+                cat: "you",
+            };
+            const busy = 2;
+
+            /** The one inventory of app-level entries, grouped; role rules match web/sheets/menu.js. */
+            function groups(role) {
+                return [
+                    {
+                        id: "you",
+                        cap: "你",
+                        items: [
+                            { i: "✎", t: "Your name", v: "Owner" },
+                            { i: "⚿", t: "My model accounts", v: "ChatGPT / Qoder" },
+                            { i: "⇄", t: "My browser sign-ins", v: "" },
+                            { i: "◔", t: "Notifications", v: "" },
+                            { i: "◐", t: "Appearance", v: "Tokyo Night" },
+                        ],
+                    },
+                    {
+                        id: "team",
+                        cap: "团队",
+                        items: [
+                            { i: "☺", t: "People", v: "" },
+                            { i: "▤", t: "Projects & access", v: "" },
+                            { i: "¤", t: "Spend", v: role === "owner" ? "all" : "yours" },
+                        ],
+                    },
+                    {
+                        id: "system",
+                        cap: "系统",
+                        items: [
+                            { i: "∿", t: "Running now", v: `${busy} running`, acc: true },
+                            { i: "⛨", t: "Extensions", v: "" },
+                            role === "owner" && { i: "↻", t: "Restart server", v: "work resumes" },
+                        ],
+                    },
+                ].map((g) => ({ ...g, items: g.items.filter(Boolean) }));
+            }
+
+            const mi = (x) =>
+                `<button class="mi"><span class="i">${x.i}</span>${x.t}<span class="v ${x.acc ? "acc" : ""}">${x.v}</span></button>`;
+            const signOut = `<button class="mi"><span class="i">⏻</span>Sign out</button>`;
+
+            function sessions() {
+                return `<div class="brand"><b><span>r</span> rotom team</b><span class="icon">⌘</span><span class="icon">▯</span><span class="new">+ New</span></div>
+    <div class="search">⌕ Search sessions</div>
+    <div class="tabs"><span>Recent</span><span class="on">Folders</span><span>Archived</span></div>
+    <div class="list">
+        <div class="group-h">~/IdeaProjects/rate-native · 3</div>
+        <div class="sess cur"><b>New session</b><small>~/IdeaProjects/rate-native · ultimate</small></div>
+        <div class="sess"><b>0.1.19 ultimate 验证</b><small>~/IdeaProjects/rate-native · ultimate</small></div>
+        <div class="sess"><b>CLAUDE.md 验证</b><small>~/IdeaProjects/rate-native · qmodel</small></div>
+        <div class="group-h">~/IdeaProjects/vibecoding/rotom-team-playground · 2</div>
+        <div class="sess"><b>New session · Fork</b><small>~/…/rotom-team-playground · ultimate</small></div>
+        <div class="sess"><b>New session</b><small>~/…/rotom-team-playground · ultimate</small></div>
+    </div>`;
+            }
+
+            const me = (extra = "") => `<button class="me ${state.pop ? "open" : ""}" id="me">
+    <span class="avatar">OW</span><span class="name">Owner</span>${extra}<span class="role">${state.role === "viewer" ? "view only" : "owner"}</span><span class="chev">${state.d === "A" ? "⌃" : ""}</span></button>`;
+            const runChip = `<span class="run"><span class="pulse"></span>${busy}</span>`;
+
+            function footer() {
+                const g = groups(state.role);
+
+                if (state.d === "A") {
+                    return `<div class="foot">
+            <div class="pop ${state.pop ? "show" : ""}">
+                <div class="who"><span class="avatar">OW</span><div><b>Owner</b><small>${state.role === "viewer" ? "view only" : "owner"} · rotom-team</small></div></div>
+                ${g.map((x) => `<div class="sep"></div><div class="cap">${x.cap}</div>${x.items.map(mi).join("")}`).join("")}
+                <div class="sep"></div>${signOut}
+            </div>
+            ${me(runChip)}
+        </div>`;
+                }
+
+                if (state.d === "B") {
+                    return `<div class="foot">
+            <details class="navsec" open><summary class="cap">应用 ▾</summary>
+                ${g
+                    .flatMap((x) => x.items)
+                    .map(mi)
+                    .join("")}
+            </details>
+            ${me()}
+        </div>`;
+                }
+
+                return `<div class="foot">
+        <div style="display:flex;gap:4px">${me(runChip)}<button class="icon" id="gear" title="Settings" style="height:auto;width:34px;border-color:var(--line)">⚙</button></div>
+    </div>`;
+            }
+
+            function settings() {
+                const g = groups(state.role);
+                const cur = g.find((x) => x.id === state.cat) ?? g[0];
+
+                return `<nav>${g.map((x) => `<button class="mi ${x.id === cur.id ? "on" : ""}" data-cat="${x.id}">${x.cap}</button>`).join("")}
+        <div style="flex:1"></div>${signOut}</nav>
+        <section><h2>${cur.cap}</h2>${cur.items.map((x) => `<div class="row"><span>${x.i}  ${x.t}</span><span class="note">${x.v || "打开 ›"}</span></div>`).join("")}
+        <p class="note">右侧直接嵌入现有 sheet 内容（改动最大：每个 sheet 要能内嵌）。</p></section>`;
+            }
+
+            const sessionItems = [
+                ["Rename", ""],
+                ["Instructions for Pi", "off"],
+                ["Compact context", "summarize older messages"],
+                ["New context", "Pi starts fresh; history stays"],
+                ["Fork", "your own copy"],
+                ["Copy link", ""],
+                ["Archive", ""],
+            ];
+
+            const sessionList = () =>
+                state.role === "viewer"
+                    ? sessionItems
+                    : [...sessionItems, ["MCP sign-ins", "this project's servers, your account"]];
+
+            function smenu() {
+                return `<div class="cap">会话</div>${sessionList()
+                    .map(([t, v]) => `<button class="mi">${t}<span class="v">${v}</span></button>`)
+                    .join("")}
+        <div class="sep"></div>
+        <div class="removed"><b>已移除</b>：App 组其余 12 项（MCP sign-ins 依赖本会话项目，留在这里）→ 统一到左侧 ${state.d === "A" ? "身份行菜单" : state.d === "B" ? "“应用”区" : "⚙ 设置窗口"}</div>`;
+            }
+
+            const legends = {
+                A: "<b>A 账户菜单</b>（参考 ChatGPT 左下头像菜单）：底部只剩身份行；点开向上弹出分组菜单。运行中计数挂在身份行上。<br>+ 侧栏最干净；与 ⋯ 菜单同为“点开才见”。<br>− 应用功能平时看不见，要多点一次。",
+                B: "<b>B 侧栏平铺</b>：会话列表下方一个可折叠“应用”区，所有入口常驻可见。<br>+ 零层级，一眼看全。<br>− 12–13 行常驻，压缩会话列表；窄屏和手机抽屉更挤。",
+                C: "<b>C 设置窗口</b>：身份行 + ⚙；⚙ 打开左右分栏的设置窗口。<br>+ 可扩展，适合以后设置变多。<br>− 改动最大（sheet 要能内嵌）；“运行中/花费/成员”不是设置，塞进设置不自然。",
+            };
+
+            function rail() {
+                return `<span class="ws" style="border:0;color:var(--text)">π</span><span class="ws">+</span><span class="ws">⌘</span><span class="ws on">1</span><span class="ws">2</span><span class="ws">3</span>
+        <span style="height:24px"></span><span class="ws" title="${state.d === "C" ? "Settings" : "应用菜单"}">${state.d === "C" ? "⚙" : "OW"}</span>`;
+            }
+
+            function render() {
+                document.getElementById("sidebar").innerHTML = sessions() + footer();
+                document.getElementById("smenu").innerHTML = smenu();
+                document.getElementById("smenu").classList.toggle("show", state.smenu);
+                document.getElementById("dots").classList.toggle("open", state.smenu);
+                document.getElementById("legend").innerHTML = legends[state.d];
+                document.getElementById("rail").innerHTML = rail();
+                document.getElementById("railcap").textContent =
+                    "折叠为 rail 时：底部原来的 Running / Appearance 两个按钮合成这一个入口，打开同一份菜单。";
+                const s = document.getElementById("settings");
+                s.innerHTML = settings();
+                s.classList.toggle("show", state.d === "C" && state.settings);
+                document.getElementById("me")?.addEventListener("click", () => {
+                    if (state.d === "A") {
+                        state.pop = !state.pop;
+                        render();
+                    }
+                });
+                document.getElementById("gear")?.addEventListener("click", () => {
+                    state.settings = !state.settings;
+                    render();
+                });
+                s.querySelectorAll("[data-cat]").forEach((b) =>
+                    b.addEventListener("click", () => {
+                        state.cat = b.dataset.cat;
+                        render();
+                    }),
+                );
+            }
+
+            document.getElementById("seg").addEventListener("click", (e) => {
+                const d = e.target.dataset.d;
+                if (!d) return;
+                state.d = d;
+                state.pop = d === "A";
+                state.settings = d === "C";
+                document
+                    .querySelectorAll("#seg button")
+                    .forEach((b) => b.classList.toggle("on", b.dataset.d === d));
+                render();
+            });
+            document.getElementById("role").addEventListener("click", (e) => {
+                const r = e.target.dataset.r;
+                if (!r) return;
+                state.role = r;
+                document
+                    .querySelectorAll("#role button")
+                    .forEach((b) => b.classList.toggle("on", b.dataset.r === r));
+                render();
+            });
+            document.getElementById("dots").addEventListener("click", () => {
+                state.smenu = !state.smenu;
+                render();
+            });
+            state.pop = true;
+            render();
+        </script>
+    </body>
+</html>

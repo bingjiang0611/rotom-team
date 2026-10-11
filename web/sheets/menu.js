@@ -1,4 +1,4 @@
-// The menu: what can be done in this session and in the app.
+// The menu: what can be done in this session. What is app-wide is in Settings (sheets/settings.js).
 import { browserAvailable, displayUrl, setBrowserOpen } from "../browser.js";
 import { chatUnread } from "../chat.js";
 import { schedulesAvailable } from "../commands.js";
@@ -7,7 +7,6 @@ import { peeksOn, togglePeeks } from "../peeks.js";
 import { setArchived } from "../sessions.js";
 import {
     actions,
-    api,
     attempt,
     canSteer,
     closeSheet,
@@ -18,7 +17,7 @@ import {
     scoped,
     store,
 } from "../store.js";
-import { isPinned, paletteOf, togglePin } from "../theme.js";
+import { isPinned, togglePin } from "../theme.js";
 import { branchAvailable } from "./branch.js";
 import { copyText, html, Icon, item, Sheet, shortPath } from "../ui.js";
 
@@ -127,7 +126,7 @@ export function PlacesSheet() {
 
     return html`<${Sheet} title=${conversation?.title ?? "Open"} onClose=${closeSheet}>
         <${Places} />
-        ${item("Session menu", () => openSheet({ type: "menu" }), "rename, context, settings")}
+        ${item("Session menu", () => openSheet({ type: "menu" }), "rename, context")}
     <//>`;
 }
 
@@ -199,6 +198,7 @@ export function MenuSheet() {
                 <span>Compact context</span>
                 <span class="muted small">summarize older messages</span>
             </button>
+            ${me?.role !== "viewer" && item("MCP sign-ins", () => openSheet({ type: "mcp" }), "this project's servers, your account")}
         </div>`
         }
         ${
@@ -300,39 +300,5 @@ export function MenuSheet() {
                 )}
             </div>`
         }
-        <div class="group">
-            <div class="group-title">App</div>
-            ${item("Appearance", () => openSheet({ type: "appearance" }), paletteOf().name)}
-            ${item("Your name", () => openSheet({ type: "name" }), me?.name)}
-            ${collab() ? item("People", () => openSheet({ type: "people" }), me?.role === "viewer" ? "you can view" : "") : item("Sign in another device", () => openSheet({ type: "invite" }))}
-            ${collab() && item("Notifications", () => openSheet({ type: "notifications" }), "Pi finished, approvals, chat")}
-            ${item("Running now", () => openSheet({ type: "running" }), "everything Pi is doing")}
-            ${item("Spend", () => openSheet({ type: "spend" }), me?.role === "owner" ? "by person and session, limits" : "yours")}
-            ${item("Projects & access", () => openSheet({ type: "projects" }), "view · continue · fork")}
-            ${server?.kernel ? item("My browser sign-ins", () => openSheet({ type: "profile" }), "use your account elsewhere") : item("Configuration & skills", () => openSheet({ type: "profile" }), "frozen into new sessions")}
-            ${item("My model accounts", () => openSheet({ type: "providers" }), "your ChatGPT / Qoder quota")}
-            ${kernel && me?.role !== "viewer" && item("MCP sign-ins", () => openSheet({ type: "mcp" }), "this project's servers, your account")}
-            ${item("Extensions", () => openSheet({ type: "extensions" }), store.state.guard?.enabled ? "Lancet Guard on" : store.state.guard?.available ? "Lancet Guard off" : "")}
-            ${
-                me?.role === "owner" &&
-                server?.supervised &&
-                item(
-                    "Restart server",
-                    () =>
-                        attempt(async () => {
-                            await api("restart", {});
-                            closeSheet();
-                            notify("info", "Restarting. Running work continues after the restart.");
-                        }),
-                    "running work resumes",
-                )
-            }
-            ${item("Sign out", () =>
-                attempt(async () => {
-                    await api("logout", {});
-                    location.href = "/";
-                }),
-            )}
-        </div>
     <//>`;
 }

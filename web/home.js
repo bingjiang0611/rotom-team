@@ -90,9 +90,6 @@ export function Splash() {
             <button class="button" onClick=${() => store.set({ launcher: true })}>
                 <${Icon} name="command" size=${16} /> Launcher <${Keys} keys="Mod K" />
             </button>
-            <button class="button" onClick=${() => openSheet({ type: "appearance" })}>
-                <${Icon} name="palette" size=${16} /> Appearance
-            </button>
         </div>
         ${
             recent.length > 0 &&

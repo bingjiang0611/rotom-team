@@ -113,7 +113,10 @@ before(async () => {
     // Only this isolated Chromium profile receives the synthetic fixture cookie.
     await page.navigate(`${base}/login?token=${encodeURIComponent(app.config.ownerToken)}`);
     await until(
-        async () => (await state()).text.includes("My accounts"),
+        async () =>
+            (await page.evaluate(
+                `String(document.querySelector('.me-row[title="Settings"]') !== null)`,
+            )) === "true",
         "fixture sign-in",
         20_000,
     );

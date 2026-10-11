@@ -15,6 +15,7 @@ import {
     stillMoving,
     store,
 } from "./store.js";
+import { openSettings } from "./sheets/settings.js";
 import { isPinned, prefs, setPrefs, togglePin } from "./theme.js";
 import { html, Icon, Keys, shortPath, Slide, timeAgo, usePresence, useSlide } from "./ui.js";
 
@@ -795,47 +796,25 @@ export function SessionList({ compact = false }) {
         </div>
         <div class="sessions-foot">
             <div class="foot-top">
-                <div class=${`foot-tiles ${chosen.length > 0 ? "covered" : ""}`}>
-                    <button
-                        class=${`foot-tile ${busy > 0 ? "lit" : ""}`}
-                        title="Everything Pi is doing"
-                        onClick=${() => openSheet({ type: "running" })}
-                    >
-                        <${Icon} name="pulse" size=${16} />
-                        Running${busy > 0 && html`<span class="tile-count">${busy}</span>`}
-                    </button>
-                    <button
-                        class="foot-tile"
-                        title="Model providers"
-                        onClick=${() => openSheet({ type: "providers" })}
-                    >
-                        <${Icon} name="key" size=${16} /> My accounts
-                    </button>
+                <button
+                    class=${`me-row ${chosen.length > 0 ? "covered" : ""}`}
+                    title="Settings"
+                    onClick=${openSettings}
+                >
+                    ${me && html`<${Avatar} person=${me} size=${22} />`}
+                    <span class="me-name">${me?.name}</span>
                     ${
-                        collab()
-                            ? html`<button
-                                class="foot-tile"
-                                title=${canStart ? "People and invites" : "People"}
-                                onClick=${() => openSheet({ type: "people" })}
-                            >
-                                <${Icon} name="users" size=${16} /> People
-                            </button>`
-                            : html`<button
-                                class="foot-tile"
-                                title="Sign in another device"
-                                onClick=${() => openSheet({ type: "invite" })}
-                            >
-                                <${Icon} name="users" size=${16} /> Devices
-                            </button>`
+                        busy > 0 &&
+                        html`<span class="me-busy" title="Running now">
+                            <span class="pulse"></span>
+                            ${busy}
+                        </span>`
                     }
-                    <button
-                        class="foot-tile"
-                        title="Theme, tiling, motion"
-                        onClick=${() => openSheet({ type: "appearance" })}
-                    >
-                        <${Icon} name="palette" size=${16} /> Theme
-                    </button>
-                </div>
+                    <span class="me-role">
+                        ${me?.role === "owner" ? "owner" : me?.role === "viewer" ? "view only" : "guest"}
+                    </span>
+                    <${Icon} name="settings" size=${16} />
+                </button>
                 ${
                     chosen.length > 0 &&
                     html`<div class="select-bar" role="group" aria-label="Selected sessions">
@@ -866,13 +845,6 @@ export function SessionList({ compact = false }) {
                     </div>`
                 }
             </div>
-            <button class="me-row" title="Your name" onClick=${() => openSheet({ type: "name" })}>
-                ${me && html`<${Avatar} person=${me} size=${22} />`}
-                <span class="me-name">${me?.name}</span>
-                <span class="me-role">
-                    ${me?.role === "owner" ? "owner" : me?.role === "viewer" ? "view only" : "guest"}
-                </span>
-            </button>
         </div>
     </div>`;
 }
@@ -884,6 +856,7 @@ export function Rail() {
     const items = useRef(null);
     const order = workspaceOrder();
     const indicator = useSlide(items, ".ws.active");
+    const busy = store.state.sessions.filter((session) => session.busy).length;
 
     return html`<div class="rail">
         <button
@@ -930,18 +903,13 @@ export function Rail() {
         </div>
         <div class="rail-foot">
             <button
-                class="icon-button"
-                title="Running now"
-                onClick=${() => openSheet({ type: "running" })}
+                class="icon-button badge-host"
+                title="Settings"
+                aria-label=${busy > 0 ? `Settings, ${busy} running` : "Settings"}
+                onClick=${openSettings}
             >
-                <${Icon} name="pulse" size=${18} />
-            </button>
-            <button
-                class="icon-button"
-                title="Appearance"
-                onClick=${() => openSheet({ type: "appearance" })}
-            >
-                <${Icon} name="palette" size=${18} />
+                <${Icon} name="settings" size=${18} />
+                ${busy > 0 && html`<span class="badge">${busy}</span>`}
             </button>
             <button
                 class="icon-button"

@@ -6,7 +6,7 @@ Extensions are Pi Durable's. Its README covers the parts in depth: `node_modules
 
 ## Drop-in or built-in
 
-- **Drop-in**: a file in `~/.pi-pocket/extensions/` (the data folder's `extensions/`). It survives updates to Pi Pocket, starts off, and the owner turns it on in Menu → Extensions. Use this for anything one person or one machine wants.
+- **Drop-in**: a file in `~/.pi-pocket/extensions/` (the data folder's `extensions/`). It survives updates to Pi Pocket, starts off, and the owner turns it on in Settings → Extensions. Use this for anything one person or one machine wants.
 
 A drop-in runs inside the server, with the owner's rights: it can read `config.json` (the owner's token with it) and every session, and Lancet Guard never sees what its code does. Show the owner the whole file, and say what it does, before you ask them to turn it on.
 
@@ -58,7 +58,7 @@ The file:
 
 ### Names
 
-Installing an extension with a name already installed replaces it, and a tool with the name of another replaces it in every session. So Pi Pocket refuses a drop-in that would take a name it keeps for itself, or one another module already has, and says so in Menu → Extensions:
+Installing an extension with a name already installed replaces it, and a tool with the name of another replaces it in every session. So Pi Pocket refuses a drop-in that would take a name it keeps for itself, or one another module already has, and says so in Settings → Extensions:
 
 - Extension names `coding-tools`, `pocket-core`, and anything starting with `pocket-` (`pocket-prompt`, `pocket-guard`, and the rest), whether that built-in is on or off.
 - The built-in tools: `read`, `write`, `edit`, `bash`, `artifact`, `browser`, `subagent`, `schedule`, and `codemode`.
@@ -68,12 +68,12 @@ Give every extension and tool a name of your own, with a prefix (`example-clock`
 
 ## Loading, reloading, and errors
 
-- A drop-in shows in Menu → Extensions as soon as its file is there, off. Turning it on loads it; turning it off uninstalls what it installed.
+- A drop-in shows in Settings → Extensions as soon as its file is there, off. Turning it on loads it; turning it off uninstalls what it installed.
 - Saving a module that is on reloads it about 300 ms later. A tool call already running finishes on the old code; the next one gets the new code.
 - A module that fails to load (a syntax error, a throw while building) is reported in the app and in the Extensions sheet. An edit that fails keeps the previous version running.
 - A restart installs every module that is on again. Work an extension's tasks left pending resumes once it is installed.
 
-You cannot turn a drop-in on yourself: ask the owner to, in Menu → Extensions.
+You cannot turn a drop-in on yourself: ask the owner to, in Settings → Extensions.
 
 ## Tools
 
@@ -131,7 +131,7 @@ To type it, import the type by the absolute path of `src/server/host.ts`: `impor
 
 Copy the module into a test app's data folder and turn it on, as `test/docs-examples.test.ts` does: `openApp` with a scripted model (`test/helpers.ts`), the file in `<dataDir>/extensions/`, `app.setExtensionEnabled(owner, file, true)`, then a session whose scripted model calls the tool. Nothing reaches a real provider, and nothing touches the live data.
 
-For a drop-in, run the test from Pi Pocket's folder with the module copied in, or check it by hand: turn it on, ask Pi to use it in a session made for the purpose, and watch Menu → Extensions and the app's notices for errors.
+For a drop-in, run the test from Pi Pocket's folder with the module copied in, or check it by hand: turn it on, ask Pi to use it in a session made for the purpose, and watch Settings → Extensions and the app's notices for errors.
 
 ## A built-in extension
 

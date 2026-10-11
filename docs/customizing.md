@@ -33,7 +33,7 @@ Use a template for a message people send often; use a skill for steps Pi should 
 
 ## Models and providers
 
-People sign in to providers from Menu → **Providers**, and pick a model per session from the model chip in the message box. Pi Pocket uses Pi's sign-ins (`~/.pi/agent/auth.json`) and Pi's model list: to add a model or a provider Pi does not know, follow Pi's `models.md` and `custom-provider.md`.
+People sign in to providers from Settings → **My model accounts**, and pick a model per session from the model chip in the message box. Pi Pocket uses Pi's sign-ins (`~/.pi/agent/auth.json`) and Pi's model list: to add a model or a provider Pi does not know, follow Pi's `models.md` and `custom-provider.md`.
 
 ## Other switches people have
 
@@ -42,8 +42,8 @@ These are in the app, not in files. Tell the person where they are rather than c
 - **Plan mode** (the Plan chip): Pi plans and asks before it changes anything.
 - **Done when** (`/until npm test`): Pi keeps working until a check passes.
 - **Scheduled messages** (`/schedule in 2h check the deploy`): a message to Pi later, or on repeat. Pi has a `schedule` tool for its own.
-- **Extensions** (Menu → Extensions, the owner): turn the browser, subagents, codemode, Lancet Guard, a drop-in, and the rest on and off for every session.
-- **Lancet Guard and approvals** (Menu → Extensions): with the guard on, risky commands wait for a person to allow them; "Approvals need someone else" makes that someone other than who asked.
+- **Extensions** (Settings → Extensions, the owner): turn the browser, subagents, codemode, Lancet Guard, a drop-in, and the rest on and off for every session.
+- **Lancet Guard and approvals** (Settings → Extensions): with the guard on, risky commands wait for a person to allow them; "Approvals need someone else" makes that someone other than who asked.
 
 See [features.md](features.md) for each.
 
