@@ -69,6 +69,8 @@ let browserReply: string | undefined;
 let browserAsked = false;
 let mcpReply: string | undefined;
 let mcpAsked = false;
+let desktopReply: string | undefined;
+let desktopAsked = false;
 
 const respond: RequestListener = async (req, res) => {
     try {
@@ -120,6 +122,11 @@ const respond: RequestListener = async (req, res) => {
         const mcpResult = messages.find((m) => m.role === "tool" && m.tool_call_id === "mcp-proof");
 
         mcpReply ??= mcpResult && String(mcpResult.content);
+        const desktopResult = messages.find(
+            (m) => m.role === "tool" && m.tool_call_id === "desktop-proof",
+        );
+
+        desktopReply ??= desktopResult && String(desktopResult.content);
         // A read-only browser call: it lists this session's tabs through the service user's Chrome relay.
         const tool = !hasWrite
             ? {
@@ -141,7 +148,13 @@ const respond: RequestListener = async (req, res) => {
                         name: "mcp__probe__echo",
                         arguments: JSON.stringify({ text: "hello" }),
                     }
-                  : undefined;
+                  : !desktopResult && !desktopAsked
+                    ? {
+                          id: "desktop-proof",
+                          name: "find_roots",
+                          arguments: JSON.stringify({ app: "Finder" }),
+                      }
+                    : undefined;
 
         res.writeHead(200, { "Content-Type": "text/event-stream" });
         const emit = (delta: unknown, finish: string | null = null) =>
@@ -153,6 +166,7 @@ const respond: RequestListener = async (req, res) => {
 
         browserAsked ||= tool?.id === "browser-proof";
         mcpAsked ||= tool?.id === "mcp-proof";
+        desktopAsked ||= tool?.id === "desktop-proof";
 
         if (tool) {
             emit({
@@ -300,12 +314,15 @@ const report: Record<string, unknown> = {
 let kernel: Awaited<ReturnType<typeof startRotomKernel>> | undefined;
 
 try {
+    const startedAt = performance.now();
+
     kernel = await startRotomKernel({
         home,
         workspace,
         provider: "kernel-fixture",
         model: "kernel-fixture",
     });
+    report.kernelStartMs = Math.round(performance.now() - startedAt);
     const events: { type: string; toolName?: unknown }[] = [];
 
     kernel.onEvent((e) =>
@@ -327,7 +344,7 @@ try {
     );
     assert.equal(readFileSync(join(workspace, "proof.txt"), "utf8"), "ROTOM_KERNEL_OK\n");
     assert.equal(toolReadObserved, true);
-    assert.equal(requests, 5);
+    assert.equal(requests, 6);
     assert.ok(offeredTools?.includes("mcp__probe__echo"), "personal MCP tool must be offered");
     assert.ok(
         !offeredTools?.some((name) => name.startsWith("mcp__projectprobe")),
@@ -353,6 +370,18 @@ try {
             /unavailable|ENOENT|EINVAL|连接失败|不可用/i,
             browserReply,
         );
+    }
+
+    // Desktop tools reach the service user's Computer Use helper. The member HOME is too deep for the helper's socket,
+    // so a helper started for it could never be reached (and each session start waited about 3 s for one).
+    const hostHelper = existsSync(
+        join(homedir(), "Applications/pi-computer-use.app/Contents/MacOS/bridge"),
+    );
+
+    assert.ok(desktopReply, "find_roots ran");
+
+    if (hostHelper) {
+        assert.doesNotMatch(desktopReply, /helper app daemon|helper socket/i, desktopReply);
     }
 
     // The team boundary must not reduce rotom to its four core tools.
@@ -389,6 +418,8 @@ try {
         offeredTools,
         nativeWriteAndRead: true,
         browserRelay: hostRelay ? "reached" : "absent-on-host",
+        computerUseHelper: hostHelper ? "reached" : "absent-on-host",
+        desktopReply: desktopReply!.slice(0, 200),
         browserReply: browserReply!.slice(0, 300),
         personalMcp: mcpReply,
         projectMcpLoaded: false,

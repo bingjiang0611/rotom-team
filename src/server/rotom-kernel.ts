@@ -1,9 +1,12 @@
 /** Experimental pinned rotom product boundary. Not yet connected to Pocket's Durable execution backend. */
+import { execFile } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { accessSync, constants, existsSync, lstatSync, readFileSync, realpathSync } from "node:fs";
+import { connect } from "node:net";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { promisify } from "node:util";
 import { RotomRpc } from "./rotom-rpc.ts";
 
 const runtime = fileURLToPath(new URL("../../runtime/rotom/", import.meta.url));
@@ -131,6 +134,45 @@ const relaySocket = join(
     "relay.sock",
 );
 
+/**
+ * The service user's Computer Use helper socket: the helper's own default for the service HOME. A member HOME sits too
+ * deep for a socket (macOS caps the path at 103 bytes): the helper started there could never be reached, and each
+ * session start waited about 3 s for it.
+ */
+const computerUseSocket = join(homedir(), "Library", "Caches", "pi-computer-use", "bridge.sock");
+
+/** Members reach the helper as an external socket, which the extension never starts, so the service starts it. */
+async function startComputerUseHelper(app: string): Promise<void> {
+    const answers = await new Promise<boolean>((resolve) => {
+        const socket = connect(computerUseSocket);
+
+        socket.once("connect", () => {
+            socket.destroy();
+            resolve(true);
+        });
+        socket.once("error", () => resolve(false));
+    });
+
+    if (answers) {
+        return;
+    }
+
+    // The helper holds a lock beside its socket, so a second concurrent launch exits on its own.
+    await promisify(execFile)("open", [
+        "-n",
+        "-g",
+        app,
+        "--args",
+        "serve",
+        "--socket",
+        computerUseSocket,
+    ]).catch((error: Error) =>
+        console.warn(
+            `Computer Use helper did not start, desktop tools are unavailable: ${error.message}`,
+        ),
+    );
+}
+
 /** Caller owns a private HOME and a stopped/authorized session. No ambient credential or user-extension inheritance. */
 export async function startRotomKernel(options: {
     home: string;
@@ -192,6 +234,12 @@ export async function startRotomKernel(options: {
             ),
         ).href
     );
+    const computerUseApp = resolveMacosHelperAppPath({ homeDir: homedir() });
+
+    if (process.platform === "darwin") {
+        await startComputerUseHelper(computerUseApp);
+    }
+
     const client = new RotomRpc(
         executable,
         [
@@ -224,7 +272,8 @@ export async function startRotomKernel(options: {
                 HOME: home,
                 // Coding tools need the service's developer toolchain (git, rg, package managers).
                 PATH: `${dirname(node)}:${process.env.PATH ?? "/usr/bin:/bin"}`,
-                PI_COMPUTER_USE_HELPER_APP_PATH: resolveMacosHelperAppPath({ homeDir: homedir() }),
+                PI_COMPUTER_USE_HELPER_APP_PATH: computerUseApp,
+                PI_CU_SOCKET_PATH: computerUseSocket,
                 // Browser tools drive the service user's Chrome too, through its relay: see rotom-relay.mjs.
                 NODE_OPTIONS: `--import=${new URL("./rotom-relay.mjs", import.meta.url).href}`,
                 ROTOM_TEAM_BROWSER_RELAY: relaySocket,
