@@ -107,8 +107,10 @@ export function MessageSheet({ entryId }) {
         <//>`;
     }
 
-    // Forks are new sessions: who may start one may fork.
-    const canBranch = canSteer() && !scoped() && view.conversation?.kind === "session";
+    // Forks are new sessions: who may start one may fork. A rotom session forks whole, from its menu: its kernel has no
+    // fork from a message, and the server refuses one rather than fall back to Pi Durable.
+    const canBranch =
+        canSteer() && !scoped() && view.conversation?.kind === "session" && !view.kernel;
     // A message to Pi (from anyone), or one of its replies.
     const toPi = entry.kind === "user";
     const text = toPi ? writtenText(entry) : replyText(entry);

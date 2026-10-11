@@ -143,6 +143,20 @@ export async function nativeUiProof(options: {
         screenshots.push(skillsPath);
         await typeInto("");
 
+        // A reply's sheet offers no fork or send again from that message: the kernel has none, and the server refuses it.
+        await page.evaluate(`
+            const { openSheet, store } = await import("/store.js");
+            const { view } = store.state;
+            const reply = view.order.map((id) => view.entries.get(id)).findLast((each) => each?.kind === "assistant");
+            openSheet({ type: "message", entryId: reply.id });
+        `);
+        await until(
+            async () => (await page.evaluate(`Boolean(${button("Copy text")})`)) === "true",
+            "a reply's sheet",
+            20000,
+        );
+        assert.doesNotMatch(await text(".sheet"), /Fork from here|Send again|Edit and send again/);
+        await page.evaluate(`(await import("/store.js")).closeSheet()`);
         await page.evaluate(`document.querySelector('.topbar [aria-label="Menu"]').click()`);
         await until(
             async () => (await page.evaluate(`Boolean(${button("Fork")})`)) === "true",
