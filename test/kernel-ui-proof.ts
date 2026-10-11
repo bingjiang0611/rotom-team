@@ -157,6 +157,35 @@ export async function nativeUiProof(options: {
         );
         assert.doesNotMatch(await text(".sheet"), /Fork from here|Send again|Edit and send again/);
         await page.evaluate(`(await import("/store.js")).closeSheet()`);
+        // Pi Pocket's extensions run in Durable sessions only: a rotom server shows no Extensions page or guard state.
+        await page.evaluate(`(await import("/sheets/settings.js")).openSettings()`);
+        await until(
+            async () => (await text(".settings-nav")).includes("Running now"),
+            "the settings window",
+            20000,
+        );
+        assert.doesNotMatch(await text(".settings-nav"), /Extensions/);
+        assert.doesNotMatch(await text(".composer-wrap"), /guard/);
+        await page.evaluate(`(await import("/store.js")).closeSheet()`);
+
+        const launcherFinds = async (query: string) => {
+            await page.evaluate(`
+                (await import("/store.js")).store.set({ launcher: true });
+                await new Promise((resolve) => setTimeout(resolve, 100));
+                const input = document.querySelector(".launcher-input input");
+                input.value = ${JSON.stringify(query)};
+                input.dispatchEvent(new Event("input", { bubbles: true }));
+                await new Promise((resolve) => setTimeout(resolve, 200));
+            `);
+            const found = await text(".launcher");
+
+            await page.evaluate(`(await import("/store.js")).store.set({ launcher: false })`);
+
+            return found;
+        };
+
+        assert.match(await launcherFinds(">Running"), /Running now/);
+        assert.doesNotMatch(await launcherFinds(">Extensions"), /Extensions/);
         await page.evaluate(`document.querySelector('.topbar [aria-label="Menu"]').click()`);
         await until(
             async () => (await page.evaluate(`Boolean(${button("Fork")})`)) === "true",

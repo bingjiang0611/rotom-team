@@ -1167,7 +1167,9 @@ function PlacesButton() {
 }
 
 function StatusLine() {
-    const { view, connection, guard } = store.state;
+    const { view, connection } = store.state;
+    // Lancet Guard checks Pi Durable's tools; a rotom session's never pass through it, so it shows nothing there.
+    const guard = view.kernel ? null : store.state.guard;
     const stats = view.stats ?? {};
     const window = view.agent?.contextWindow;
     const parts = [];

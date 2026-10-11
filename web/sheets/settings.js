@@ -18,6 +18,12 @@ export const SETTINGS_PAGES = new Set([
     "extensions",
 ]);
 
+/**
+ * Pi Pocket's extensions run in Pi Durable sessions only. A server that starts sessions in rotom has none of those to
+ * change, so it shows no Extensions page: its switches would look like they guard rotom sessions, and do not.
+ */
+export const extensionsShown = () => !store.state.server?.kernel;
+
 /** The page the settings window last showed: where it opens again. */
 let lastPage = "running";
 
@@ -57,7 +63,7 @@ function groups() {
             title: "Server",
             items: [
                 page("running", "Running now", busy > 0 ? String(busy) : ""),
-                page("extensions", "Extensions"),
+                extensionsShown() && page("extensions", "Extensions"),
                 me?.role === "owner" &&
                     server?.supervised &&
                     action("Restart server", () =>

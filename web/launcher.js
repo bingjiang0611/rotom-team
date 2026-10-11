@@ -8,6 +8,7 @@ import { filesAvailable, toggleFiles } from "./files-panel.js";
 import { togglePeeks } from "./peeks.js";
 import { setArchived, workspaceOrder } from "./sessions.js";
 import { branchAvailable, headLabel } from "./sheets/branch.js";
+import { extensionsShown } from "./sheets/settings.js";
 import {
     actions,
     attempt,
@@ -221,7 +222,11 @@ function actionItems() {
             icon: "key",
             run: () => openSheet({ type: "providers" }),
         },
-        { label: "Extensions", icon: "shield", run: () => openSheet({ type: "extensions" }) },
+        extensionsShown() && {
+            label: "Extensions",
+            icon: "shield",
+            run: () => openSheet({ type: "extensions" }),
+        },
         { label: "Spend", icon: "pulse", run: () => openSheet({ type: "spend" }) },
         collab()
             ? {
