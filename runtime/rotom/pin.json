@@ -1,8 +1,8 @@
 {
-    "version": "0.1.18",
-    "integrity": "sha512-ENCKpF4mCmgIejqyVhrGzVXu6+ULRAcHX72kcYfiSrjDR2bXsakzmPF8Scx24J3OwY6QFkVig4QGFTrav7Awxg==",
+    "version": "0.1.19",
+    "integrity": "sha512-VPkaHpPjP4obj7OZohzDWu0r2Ii/yhvdFPFRoxdG+koa4w3q8waGgB6Ic2vWfdfJ1SKYU+/p74k2ly232vEajw==",
     "sha256": {
-        "package.json": "4aa0211012d538d030919e9a78ee62f178914115f7f1998b58638bb089788c81",
+        "package.json": "9abfc8ea725ba2c4f3b5ce3604462e243385301669020d19e562fb712a165b07",
         "bin/rotom": "c9f1dd3df66d995540c006e8f8cd930ab7bb9a8f0741aaf71e44c1bd56f15e80",
         "bin/rotom-launcher": "89c5d505468726df13ebc87232b56e3d506a5c1c1d2cd989bc122d7e0bcb8bcd",
         "runtime/launch-runtime.mjs": "db6881cd60936a01d8a7c323e72741b679a96c5d924448316b419a2317fa0b61",
