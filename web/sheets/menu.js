@@ -311,6 +311,7 @@ export function MenuSheet() {
             ${item("Projects & access", () => openSheet({ type: "projects" }), "view · continue · fork")}
             ${server?.kernel ? item("My browser sign-ins", () => openSheet({ type: "profile" }), "use your account elsewhere") : item("Configuration & skills", () => openSheet({ type: "profile" }), "frozen into new sessions")}
             ${item("My model accounts", () => openSheet({ type: "providers" }), "your ChatGPT / Qoder quota")}
+            ${kernel && me?.role !== "viewer" && item("MCP sign-ins", () => openSheet({ type: "mcp" }), "this project's servers, your account")}
             ${item("Extensions", () => openSheet({ type: "extensions" }), store.state.guard?.enabled ? "Lancet Guard on" : store.state.guard?.available ? "Lancet Guard off" : "")}
             ${
                 me?.role === "owner" &&

@@ -1,0 +1,3 @@
+#!/bin/sh
+# MCP sign-in shows its address to the member instead: see startRotomMcp.
+exit 0

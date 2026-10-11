@@ -21,6 +21,7 @@
         "test:kernel:app": "node test/team-kernel-proof.ts",
         "test:kernel:ui": "node test/team-kernel-proof.ts --ui",
         "test:kernel:history": "node test/rotom-history-proof.ts",
+        "test:kernel:mcp": "node test/mcp-sign-in-proof.ts",
         "test:kernel:qoder": "node --test test/rotom-qoder-unit.ts && node test/rotom-qoder-proof.ts && node test/rotom-qoder-proof.ts qmodel",
         "pretest": "node scripts/prepare-runtime.mjs",
         "pretest:team": "node scripts/prepare-runtime.mjs",

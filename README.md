@@ -4,7 +4,7 @@
 
 **状态：`0.1.0`（v1），原生 macOS / 可信团队预览。不是已完成的企业级产品，也不是安全沙箱。**
 
-**v1：rotom 是执行引擎。** 新会话默认由固定版本 rotom 执行；团队层只负责共享状态、唯一的 Transcript 界面、权限、个人账号和恢复。能力、信任边界、限制和验证见 [docs/V1.md](docs/V1.md)；v1.1（rotom 0.1.18、个人 MCP、子 agent）见 [docs/V1.1.md](docs/V1.1.md)。v1.2 起 AGENTS.md、skills、MCP、扩展全部属于项目，见 [docs/V1.2.md](docs/V1.2.md)。
+**v1：rotom 是执行引擎。** 新会话默认由固定版本 rotom 执行；团队层只负责共享状态、唯一的 Transcript 界面、权限、个人账号和恢复。能力、信任边界、限制和验证见 [docs/V1.md](docs/V1.md)；v1.1（rotom 0.1.18、个人 MCP、子 agent）见 [docs/V1.1.md](docs/V1.1.md)。v1.2 起 AGENTS.md、skills、MCP、扩展全部属于项目；OAuth 型 MCP 由每人在 **MCP sign-ins** 用自己的账号登录。见 [docs/V1.2.md](docs/V1.2.md)。
 
 ## 启动
 

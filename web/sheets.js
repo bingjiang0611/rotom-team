@@ -14,6 +14,7 @@ import { MessageSheet } from "./sheets/message.js";
 import { ModelPicker } from "./sheets/model.js";
 import { InviteSheet, PeopleSheet } from "./sheets/people.js";
 import { AuthDialog, ProvidersSheet } from "./sheets/providers.js";
+import { McpSheet } from "./sheets/mcp.js";
 import { ProfileSheet } from "./sheets/profile.js";
 import { ProjectsSheet } from "./sheets/projects.js";
 import { RunningSheet } from "./sheets/running.js";
@@ -134,6 +135,9 @@ function sheetBody(sheet) {
             break;
         case "profile":
             body = html`<${ProfileSheet} />`;
+            break;
+        case "mcp":
+            body = html`<${McpSheet} />`;
             break;
         case "providers":
             body = html`<${ProvidersSheet} />`;

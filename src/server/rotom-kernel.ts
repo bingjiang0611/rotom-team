@@ -1,7 +1,16 @@
 /** Experimental pinned rotom product boundary. Not yet connected to Pocket's Durable execution backend. */
-import { execFile } from "node:child_process";
+import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { accessSync, constants, existsSync, lstatSync, readFileSync, realpathSync } from "node:fs";
+import {
+    accessSync,
+    constants,
+    existsSync,
+    lstatSync,
+    mkdirSync,
+    readFileSync,
+    realpathSync,
+    writeFileSync,
+} from "node:fs";
 import { connect } from "node:net";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
@@ -229,6 +238,62 @@ function refuseProjectPackages(workspace: string): void {
     }
 }
 
+/** What every rotom process of a member sees: its own HOME, the service's toolchain, and no ambient credential. */
+function memberEnvironment(home: string, node: string): Record<string, string> {
+    return {
+        ...kernelNetworkEnvironment(process.env),
+        HOME: home,
+        // Coding tools need the service's developer toolchain (git, rg, package managers).
+        PATH: `${dirname(node)}:${process.env.PATH ?? "/usr/bin:/bin"}`,
+        PI_CODING_AGENT_DIR: join(home, ".pi/agent"),
+        ROTOM_OBSERVABILITY: "0",
+        LANG: "en_US.UTF-8",
+    };
+}
+
+/**
+ * `rotom mcp <args>` for a member in a project, as their runs see it: their HOME, the project's servers, the scrubbed
+ * environment. `rotom mcp` has no `--approve`, so the project's trust is recorded in the member's `trust.json`.
+ * Signing in never opens a browser on the server: a stand-in `open` shadows the real one, and the member opens the
+ * address in their own browser. Otherwise the server's browser, signed in as the service user, could answer for them.
+ */
+export function startRotomMcp(options: {
+    home: string;
+    workspace: string;
+    args: string[];
+}): ChildProcess {
+    const { executable } = verifyRotomKernel();
+    const home = canonical(options.home, "directory"),
+        workspace = canonical(options.workspace, "directory");
+
+    if (lstatSync(home).mode & 0o077) {
+        throw new Error("Kernel HOME must be private (0700)");
+    }
+
+    refuseMemberResources(home);
+    const trustFile = join(home, ".pi/agent/trust.json");
+    const trust = settingsOf(trustFile);
+
+    if (trust[workspace] !== true) {
+        mkdirSync(dirname(trustFile), { recursive: true, mode: 0o700 });
+        writeFileSync(trustFile, `${JSON.stringify({ ...trust, [workspace]: true }, null, 2)}\n`, {
+            mode: 0o600,
+        });
+    }
+
+    const node = realpathSync(process.execPath);
+    const environment = memberEnvironment(home, node);
+
+    return spawn(executable, ["mcp", ...options.args], {
+        cwd: workspace,
+        env: {
+            ...environment,
+            PATH: `${fileURLToPath(new URL("./no-browser", import.meta.url))}:${environment.PATH}`,
+        },
+        stdio: ["ignore", "pipe", "pipe"],
+    });
+}
+
 /** Caller owns a private HOME and a stopped/authorized session. No ambient credential or user-extension inheritance. */
 export async function startRotomKernel(options: {
     home: string;
@@ -309,6 +374,8 @@ export async function startRotomKernel(options: {
             ...(options.thinkingLevel ? ["--thinking", options.thinkingLevel] : []),
             ...(options.configuration
                 ? [
+                      // A member's stored project trust (MCP sign-in records one) must not reopen the project.
+                      "--no-approve",
                       "--no-context-files",
                       "--no-skills",
                       "--no-prompt-templates",
@@ -328,19 +395,13 @@ export async function startRotomKernel(options: {
         {
             cwd: workspace,
             env: {
-                ...kernelNetworkEnvironment(process.env),
-                HOME: home,
-                // Coding tools need the service's developer toolchain (git, rg, package managers).
-                PATH: `${dirname(node)}:${process.env.PATH ?? "/usr/bin:/bin"}`,
+                ...memberEnvironment(home, node),
                 PI_COMPUTER_USE_HELPER_APP_PATH: computerUseApp,
                 PI_CU_SOCKET_PATH: computerUseSocket,
                 // Browser tools drive the service user's Chrome too, through its relay: see rotom-relay.mjs.
                 NODE_OPTIONS: `--import=${new URL("./rotom-relay.mjs", import.meta.url).href}`,
                 ROTOM_TEAM_BROWSER_RELAY: relaySocket,
                 ROTOM_NODE: node,
-                PI_CODING_AGENT_DIR: join(home, ".pi/agent"),
-                ROTOM_OBSERVABILITY: "0",
-                LANG: "en_US.UTF-8",
                 ...(options.gateFile
                     ? {
                           ROTOM_TEAM_KERNEL_GATE: options.gateFile,

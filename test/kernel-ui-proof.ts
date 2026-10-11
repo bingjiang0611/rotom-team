@@ -135,7 +135,56 @@ export async function nativeUiProof(options: {
         writeFileSync(menuPath, Buffer.from(menu.data, "base64"), { mode: 0o600, flag: "wx" });
         screenshots.push(menuPath);
 
+        // The MCP sheet lists the project's servers as this member's runs reach them. The OAuth one needs the member's
+        // own sign-in: the browser (played here by fetch, as on another machine) ends on a callback it cannot reach,
+        // and its address is pasted back.
+        await page.evaluate(`${button("MCP sign-ins")}.click()`);
+        await until(
+            async () => /team\s*needs your sign-in/.test(await text(".sheet")),
+            "the MCP sheet lists the project's servers",
+            60000,
+        );
+        assert.match(await text(".sheet"), /probe\s*connected · 1 tools/);
+        await page.evaluate(`${button("Sign in")}.click()`);
+        const link = `document.querySelector('.sheet a[target="_blank"]')`;
+
+        await until(
+            async () => (await page.evaluate(`Boolean(${link})`)) === "true",
+            "the sign-in page link",
+            30000,
+        );
+        const signing = await page.screenshot();
+        const signingPath = join(options.root, "native-ui-mcp-sign-in.jpg");
+
+        writeFileSync(signingPath, Buffer.from(signing.data, "base64"), {
+            mode: 0o600,
+            flag: "wx",
+        });
+        screenshots.push(signingPath);
+        const landed = (
+            await fetch(await page.evaluate(`${link}.href`), { redirect: "manual" })
+        ).headers.get("location")!;
+
+        await page.evaluate(`
+            const pasted = document.querySelector('.sheet form input');
+            pasted.value = ${JSON.stringify(landed)};
+            pasted.dispatchEvent(new Event('input', { bubbles: true }));
+        `);
+        await page.evaluate(`${button("Finish sign-in")}.click()`);
+        await until(
+            async () => /team\s*connected · 1 tools/.test(await text(".sheet")),
+            "signed in with the member's own account",
+            60000,
+        );
+        assert.match(await text(".sheet"), /Signed in to MCP server "team"/);
+        const mcp = await page.screenshot();
+        const mcpPath = join(options.root, "native-ui-mcp.jpg");
+
+        writeFileSync(mcpPath, Buffer.from(mcp.data, "base64"), { mode: 0o600, flag: "wx" });
+        screenshots.push(mcpPath);
+
         return {
+            mcpSignIn: true,
             unifiedTranscript: true,
             streamedThenPersisted: true,
             questionAnswered: true,

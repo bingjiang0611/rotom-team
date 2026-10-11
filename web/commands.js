@@ -359,6 +359,12 @@ const COMMANDS = [
         description: "Sign in to a model provider",
         run: () => openSheet({ type: "providers" }),
     },
+    {
+        name: "mcp",
+        description: "This project's MCP servers: sign in with your own account",
+        available: () => Boolean(store.state.view.kernel) && store.state.me?.role !== "viewer",
+        run: () => openSheet({ type: "mcp" }),
+    },
     { name: "settings", description: "Open the menu", run: () => openSheet({ type: "menu" }) },
     {
         name: "theme",

@@ -260,7 +260,7 @@ export function restore(archive, destination) {
             // A snapshot is not refresh-token ownership. Independently sign in again after restore.
             if (
                 /^people\/[^/]+\/auth\.json$/.test(record.path) ||
-                /^kernel-homes\/[^/]+\/\.pi\/agent\/auth\.json$/.test(record.path) ||
+                /^kernel-homes\/[^/]+\/\.pi\/agent\/(mcp-)?auth\.json$/.test(record.path) ||
                 record.path === "kernel.lock" ||
                 record.path.startsWith("kernel-gates/")
             ) {

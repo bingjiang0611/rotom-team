@@ -143,6 +143,18 @@ export async function conversationRoutes(
             );
         }
 
+        if (third === "mcp" && method === "GET" && fourth === undefined) {
+            return json(response, 200, await app.kernel.mcp(id, user, "list"));
+        }
+
+        if (third === "mcp" && method === "POST" && fourth !== undefined) {
+            return json(
+                response,
+                200,
+                await app.kernel.mcp(id, user, fourth, await readJson(request)),
+            );
+        }
+
         if (third === "dialog" && method === "POST" && fourth === undefined) {
             return json(response, 200, app.kernel.answerDialog(id, user, await readJson(request)));
         }

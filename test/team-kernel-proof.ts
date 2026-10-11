@@ -29,8 +29,13 @@ import { projectEntry } from "../src/server/projection.ts";
 import { SessionsDoc } from "../src/server/docs.ts";
 import type { Runtime } from "../src/server/team-accounts.ts";
 import type { User } from "../src/server/config.ts";
+import { startOAuthMcp } from "./fixtures/mcp-oauth.ts";
 
 const folder = join(realpathSync(root), "native-app");
+/** A project server that uses OAuth: each member signs in to it with their own account, in the MCP sheet. */
+const oauth = await startOAuthMcp();
+
+oauth.approving = "owner";
 const workspace = realpathSync(work);
 
 mkdirSync(folder, { mode: 0o700 });
@@ -653,6 +658,7 @@ try {
                     args: [join(import.meta.dirname, "fixtures/mcp-echo.mjs")],
                     exposure: "direct",
                 },
+                team: { url: `${oauth.origin}/mcp`, exposure: "direct" },
             },
         }),
     );
@@ -706,6 +712,21 @@ try {
     hold = false;
 
     assert.deepEqual(requestMembers, [a.id, a.id, a.id, bob.user.id]);
+    // The MCP sheet reports the project's servers as the member's runs reach them. A viewer cannot start them.
+    const servers = await request(aliceToken, `c/${id}/mcp`);
+
+    assert.equal(servers.status, 200);
+    assert.deepEqual(
+        ((await servers.json()) as { servers: { name: string; state: string }[] }).servers.map(
+            (server) => [server.name, server.state],
+        ),
+        [
+            ["probe", "connected"],
+            ["team", "needs-auth"],
+        ],
+    );
+    assert.equal((await request(bob.token, `c/${bobSession.id}/mcp`)).status, 403);
+    report.mcpSheetReportsProjectServers = true;
     const beforeRejected = app.kernel!.executions.journal.receipts(String(id)).length;
 
     for (const invalid of [
@@ -2030,6 +2051,7 @@ try {
     }
 } finally {
     await app.close();
+    oauth.close();
     server.closeAllConnections();
     modelServer.closeAllConnections();
     await Promise.all([

@@ -24,6 +24,7 @@ import { NATIVE_ENTRY, RESUME_PREFIX } from "./entry-format.ts";
 import { projectLive, type ClientLive } from "./projection.ts";
 import type { KernelBinding, KernelEntry, KernelReceipt } from "./rotom-journal.ts";
 import { verifyRotomKernel } from "./rotom-kernel.ts";
+import { McpSignIns } from "./mcp-sign-in.ts";
 
 /** App-side creation intent. Never copied from a source conversation or rebuilt from today's account settings. */
 export type NativeForkPlan = { sourceId: ConversationId; requestId: string; expectedHead: string };
@@ -114,6 +115,7 @@ export class TeamKernel {
     readonly #ready = new Set<ConversationId>();
     readonly #configurations = new Map<ConversationId, NativeConfigurations>();
     readonly #live = new Map<ConversationId, NativeLive>();
+    readonly #mcp = new McpSignIns();
     readonly #mirrors = new Map<ConversationId, Promise<void>>();
     readonly #operations = new Map<
         string,
@@ -920,6 +922,49 @@ export class TeamKernel {
         };
     }
 
+    /**
+     * The project's MCP servers as this member's runs reach them, and sign-in to those that use OAuth. A sign-in is the
+     * member's own: only their runs send its tokens. Reporting starts the project's command servers, as a run does, so
+     * it takes the right to run Pi in the project.
+     */
+    async mcp(id: ConversationId, user: User, action: string, body?: unknown) {
+        const current = this.#app.config.userById(user.id);
+
+        if (!current) {
+            throw new HttpError(403, "Membership ended.");
+        }
+
+        this.#app.requireSee(current, id);
+        this.#app.requireSteer(current);
+        this.#app.projects.require(
+            current,
+            this.#app.sessionMeta(this.#app.rootOf(id))?.projectId,
+            "continue",
+        );
+
+        if (!this.executions.journal.hasConversation(String(id))) {
+            throw new HttpError(409, "This session is still starting.");
+        }
+
+        const { workspace } = this.executions.journal.session(String(id)).binding;
+        const home = this.#home(current.id);
+        const key = JSON.stringify([current.id, workspace]);
+        const request = (body ?? {}) as { server?: unknown; url?: unknown };
+
+        switch (action) {
+            case "list":
+                return this.#mcp.list(home, workspace);
+            case "login":
+                return this.#mcp.start(key, home, workspace, request.server);
+            case "finish":
+                return this.#mcp.finish(key, request.url);
+            case "logout":
+                return this.#mcp.logout(home, workspace, request.server);
+            default:
+                throw new HttpError(404, "Unknown MCP action.");
+        }
+    }
+
     /** What the web app needs to drive a native conversation: the head it acts on, and who pays for it. */
     roomState(id: ConversationId, viewer: User) {
         const journal = this.executions.journal;
@@ -1552,6 +1597,7 @@ export class TeamKernel {
 
     async close(): Promise<void> {
         this.#closing = true;
+        this.#mcp.close();
 
         // A stop cuts prompts off mid-work: plan their continuation before stopping them.
         for (const id of new Set([...this.#active].map((run) => run.id))) {
