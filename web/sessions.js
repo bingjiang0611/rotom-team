@@ -661,14 +661,6 @@ export function SessionList({ compact = false }) {
     return html`<div class=${`sessions ${compact ? "compact" : ""}`}>
         <div class="sessions-head">
             <span class="brand">r <span>rotom team</span></span>
-            <button
-                class="icon-button"
-                title="Launcher"
-                aria-label="Open the launcher"
-                onClick=${() => store.set({ launcher: true, drawer: false })}
-            >
-                <${Icon} name="command" size=${18} />
-            </button>
             ${
                 !compact &&
                 html`<button
@@ -849,7 +841,7 @@ export function SessionList({ compact = false }) {
     </div>`;
 }
 
-/** The sidebar folded: Pi, new, the launcher, then numbered sessions like Waybar's workspaces. */
+/** The sidebar folded: Pi, new, then numbered sessions like Waybar's workspaces. */
 export function Rail() {
     const { conversationId } = store.state;
     const canStart = canSteer() && !scoped();
@@ -878,14 +870,6 @@ export function Rail() {
                 <${Icon} name="plus" size=${18} />
             </button>`
         }
-        <button
-            class="icon-button"
-            title="Launcher"
-            aria-label="Open the launcher"
-            onClick=${() => store.set({ launcher: true })}
-        >
-            <${Icon} name="command" size=${18} />
-        </button>
         <div class="rail-items" ref=${items}>
             <${Slide} box=${indicator} />
             ${order.map(

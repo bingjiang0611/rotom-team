@@ -148,6 +148,7 @@ test(
     async () => {
         await home(VIEWPORTS.desktop);
         assert.equal(await present(".foot-tile"), false, "no tiles beside it");
+        assert.equal(await present('.sessions-head [aria-label="Open the launcher"]'), false);
 
         // The home screen's list and the sidebar each have a foot: one button in each.
         for (const foot of await inPage<string[][]>(
@@ -270,7 +271,12 @@ test("the folded rail has the same one way in", real, async () => {
     await home(VIEWPORTS.desktop);
     await page.evaluate(`(await import("/theme.js")).setPrefs({ sidebar: "rail" })`);
     await until(() => present(".rail"), "the rail");
-    assert.equal(await present('.rail [title="Running now"], .rail [title="Appearance"]'), false);
+    assert.equal(
+        await present(
+            '.rail [title="Running now"], .rail [title="Appearance"], .rail [title="Launcher"]',
+        ),
+        false,
+    );
     await shot("settings-rail");
     await tap('.rail [title="Settings"]');
     await reach(
