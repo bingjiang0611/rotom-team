@@ -36,8 +36,6 @@ const workspace = realpathSync(work);
 mkdirSync(folder, { mode: 0o700 });
 const secret = `synthetic-request-key-${randomUUID()}`;
 const requestMembers: string[] = [];
-/** Each member's personal AGENTS.md text, by member id; only the paying member's may reach the model. */
-const personal = new Map<string, string>();
 let lastBody = "";
 let calls = 0,
     legacyCalls = 0,
@@ -47,8 +45,9 @@ let subagentSearch = "";
 /** Who paid for each subagent request: the gate tells the model server the member. */
 const childMembers: string[] = [];
 const hangingChild = Promise.withResolvers<void>();
-/** The one member whose private mcp.json declares the probe server; nobody else's run may see its tool. */
-let mcpOwner: string | undefined;
+/** Once the project declares its MCP server, every member's live run is offered its tool. */
+let projectMcp = false;
+const offeredProjectMcp = new Set<string>();
 const modelServer = createServer(async (req, res) => {
     try {
         const authorization = req.headers.authorization;
@@ -70,18 +69,17 @@ const modelServer = createServer(async (req, res) => {
         const member = requestMembers.at(-1)!;
 
         if (!compact) {
-            // The project's layer is read live from the workspace, the payer's from their private HOME.
+            // All configuration is the project's, read live from the workspace, the same for every member.
             assert.ok(body.includes("PROJECT_LIVE_CONTEXT"));
+            // A session with a frozen snapshot keeps its pinned configuration and is not offered it.
+            assert.ok(
+                projectMcp || !body.includes("mcp__probe__"),
+                "MCP before the project had it",
+            );
 
-            if (personal.has(member)) {
-                assert.ok(body.includes(personal.get(member)!), `personal layer of ${member}`);
+            if (body.includes("mcp__probe__")) {
+                offeredProjectMcp.add(member);
             }
-
-            assert.ok(!body.includes("mcp__probe__") || member === mcpOwner, `MCP of ${member}`);
-        }
-
-        for (const [other, text] of personal) {
-            assert.ok(other === member || !body.includes(text), `foreign personal layer ${other}`);
         }
 
         calls++;
@@ -423,11 +421,6 @@ try {
 
     await app.hello(bob.user);
 
-    for (const user of [a, bob.user]) {
-        personal.set(user.id, `PERSONAL_LAYER_${user.name.toUpperCase()}`);
-        app.kernel!.profiles.setInstructions(user.id, personal.get(user.id));
-    }
-
     const beforeInvalidBackend = app.sessions().length;
 
     for (const backend of [["rotom"], ["durable"], null, {}, "unsupported"]) {
@@ -645,55 +638,14 @@ try {
     const bobNow = app.config.userById(bob.user.id)!;
     const bobSession = await app.commands.createSession(bobNow, { backend: "rotom" });
 
-    // Personal skills arrive over the API into Bob's private HOME; project skills live in the workspace.
+    // Skills and MCP servers are the project's too, in its `.pi`.
     mkdirSync(join(workspace, ".pi", "skills", "project-proof"), { recursive: true });
     writeFileSync(
         join(workspace, ".pi", "skills", "project-proof", "SKILL.md"),
         "---\nname: project-proof\ndescription: PROJECT_SKILL_DESCRIPTION\n---\nProject skill.\n",
     );
-    const skillPut = await request(bob.token, "kernel-profile/skills/bob-proof", "PUT", {
-        files: {
-            "SKILL.md": {
-                text: "---\nname: bob-proof\ndescription: BOB_SKILL_DESCRIPTION\n---\nBob's skill.\n",
-            },
-            "scripts/run.sh": { base64: Buffer.from("echo bob\n").toString("base64") },
-        },
-    });
-
-    assert.equal(skillPut.status, 200, await skillPut.clone().text());
-    assert.deepEqual(((await skillPut.json()) as { skills: unknown[] }).skills, [
-        { name: "bob-proof", description: "BOB_SKILL_DESCRIPTION", files: 2 },
-    ]);
-
-    for (const bad of [
-        { "SKILL.md": { text: "---\nname: other\ndescription: x\n---\n" } },
-        { "SKILL.md": { text: "---\nname: bob-bad\ndescription: x\n---\n" }, "../x": { text: "" } },
-    ]) {
-        assert.equal(
-            (await request(bob.token, "kernel-profile/skills/bob-bad", "PUT", { files: bad }))
-                .status,
-            400,
-        );
-    }
-
-    assert.deepEqual(
-        ((await (await request(aliceToken, "kernel-profile")).json()) as { skills: unknown[] })
-            .skills,
-        [],
-    );
-    // The CLI pushes a member's local ~/.pi/agent layer with their own sign-in token.
-    const localAgent = join(realpathSync(root), "carol-local-agent");
-
-    mkdirSync(join(localAgent, "skills", "local-proof", "references"), { recursive: true });
-    writeFileSync(join(localAgent, "AGENTS.md"), personal.get(bob.user.id)!);
     writeFileSync(
-        join(localAgent, "skills", "local-proof", "SKILL.md"),
-        "---\nname: local-proof\ndescription: LOCAL_SKILL_DESCRIPTION\n---\nLocal.\n",
-    );
-    writeFileSync(join(localAgent, "skills", "local-proof", "references", "a.md"), "ref\n");
-    // Bob's own MCP server: a stdio command on the server, declared only in his runs.
-    writeFileSync(
-        join(localAgent, "mcp.json"),
+        join(workspace, ".pi", "mcp.json"),
         JSON.stringify({
             mcpServers: {
                 probe: {
@@ -704,35 +656,7 @@ try {
             },
         }),
     );
-    mcpOwner = bob.user.id;
-    mkdirSync(join(localAgent, "skills", "Bad Name"));
-    writeFileSync(join(localAgent, "skills", "Bad Name", "SKILL.md"), "---\nname: x\n---\n");
-    const { pushProfile } = await import("../scripts/profile-push.mjs");
-    const pushed = await pushProfile({ server: base, token: bob.token, agentDir: localAgent });
-
-    assert.equal(pushed.instructions, true);
-    assert.equal(pushed.mcp, true);
-    assert.equal(
-        (await request(bob.token, "kernel-profile", "POST", { mcp: '{"servers":{}}' })).status,
-        400,
-    );
-    assert.equal(
-        ((await (await request(aliceToken, "kernel-profile")).json()) as { mcp: string }).mcp,
-        "",
-    );
-    assert.deepEqual(pushed.skills, ["local-proof"]);
-    assert.deepEqual(
-        pushed.refused.map((each: { name: string }) => each.name),
-        ["Bad Name"],
-    );
-    assert.deepEqual(
-        ((await (await request(bob.token, "kernel-profile")).json()) as { skills: unknown[] })
-            .skills,
-        [
-            { name: "bob-proof", description: "BOB_SKILL_DESCRIPTION", files: 2 },
-            { name: "local-proof", description: "LOCAL_SKILL_DESCRIPTION", files: 2 },
-        ],
-    );
+    projectMcp = true;
     hold = true;
     const inFlight = request(bob.token, `c/${bobSession.id}/submit`, "POST", {
         text: "Wait for revocation",
@@ -742,9 +666,7 @@ try {
     await until(() => calls === 4, "native request began", 30000);
     assert.ok(lastBody.includes("UPDATED_PROJECT_LAYER"));
     assert.ok(lastBody.includes("PROJECT_SKILL_DESCRIPTION"));
-    assert.ok(lastBody.includes("BOB_SKILL_DESCRIPTION"));
-    assert.ok(lastBody.includes("LOCAL_SKILL_DESCRIPTION"));
-    assert.ok(lastBody.includes("mcp__probe__echo"), "Bob's own MCP tool is declared");
+    assert.ok(lastBody.includes("mcp__probe__echo"), "the project's MCP tool is declared");
 
     for (const operation of ["submit", "compact"]) {
         const busyKey = `busy-${operation}`;
@@ -799,8 +721,6 @@ try {
     const carla = app.config.addUser("Carla", "guest");
 
     await app.hello(carla.user);
-    personal.set(carla.user.id, "PERSONAL_LAYER_CARLA");
-    app.kernel!.profiles.setInstructions(carla.user.id, personal.get(carla.user.id));
     let project = app.projects.save(
         owner(app),
         {
@@ -1267,7 +1187,7 @@ try {
     );
     app.profiles.save(owner(app), {
         name: "Activated",
-        instructions: `${personal.get(a.id)}\nACTIVATED_PROFILE_CONTEXT`,
+        instructions: "OWNER_PROFILE\nACTIVATED_PROFILE_CONTEXT",
         skillDirectories: [activationSkill],
     });
     const requireDriver = app.requireDriver.bind(app);
@@ -1404,7 +1324,7 @@ try {
 
     app.profiles.save(owner(app), {
         name: "Not activated",
-        instructions: `${personal.get(a.id)}\nUNACTIVATED_PROFILE_CONTEXT`,
+        instructions: "OWNER_PROFILE\nUNACTIVATED_PROFILE_CONTEXT",
         skillDirectories: [],
     });
     await app.close();
@@ -2039,6 +1959,12 @@ try {
     await continued(crashHost);
     assert.equal(journalOf().receipt(crashHost).status, "interrupted");
     report.crashedKernelInterruptedAndContinued = true;
+    // The same project configuration reaches everyone: both members whose runs reached the model got its MCP tool.
+    assert.deepEqual(
+        [a.id, bob.user.id].filter((id) => !offeredProjectMcp.has(id)),
+        [],
+        "every member gets the project's MCP",
+    );
     Object.assign(report, {
         status: "passed",
         projectViewAndContinue: true,
@@ -2048,7 +1974,7 @@ try {
         disablingCannotBypassUnknownFence: true,
         apiCreateSubmitReadAbort: true,
         roleRevocation: true,
-        layeredContext: true,
+        projectConfiguration: true,
         fixedPayer: true,
         restartIdempotency: true,
         nativeHistoryResume: true,

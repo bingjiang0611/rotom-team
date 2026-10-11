@@ -173,6 +173,62 @@ async function startComputerUseHelper(app: string): Promise<void> {
     );
 }
 
+/**
+ * What rotom would load from a member's own agent folder or HOME. All configuration belongs to the project, so a member
+ * HOME holds none: a run refuses to start rather than quietly apply one member's file to that member's runs.
+ */
+const MEMBER_RESOURCES = [
+    ".pi/agent/AGENTS.override.md",
+    ".pi/agent/AGENTS.md",
+    ".pi/agent/AGENTS.MD",
+    ".pi/agent/CLAUDE.md",
+    ".pi/agent/CLAUDE.MD",
+    ".pi/agent/SYSTEM.md",
+    ".pi/agent/APPEND_SYSTEM.md",
+    ".pi/agent/mcp.json",
+    ".pi/agent/extensions",
+    ".pi/agent/skills",
+    ".pi/agent/prompts",
+    ".pi/agent/themes",
+    ".agents/skills",
+];
+/** Settings that name resources to load. */
+const RESOURCE_SETTINGS = ["extensions", "skills", "prompts", "themes", "packages"];
+
+function settingsOf(file: string): Record<string, unknown> {
+    return existsSync(file)
+        ? (JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>)
+        : {};
+}
+
+function refuseMemberResources(home: string): void {
+    const found = MEMBER_RESOURCES.filter((path) => existsSync(join(home, path)));
+    const settings = settingsOf(join(home, ".pi/agent/settings.json"));
+
+    found.push(
+        ...RESOURCE_SETTINGS.filter((key) => key in settings).map(
+            (key) => `settings.json "${key}"`,
+        ),
+    );
+
+    if (found.length > 0) {
+        throw new Error(
+            `Configuration belongs to the project; remove it from this member's HOME (${home}): ${found.join(", ")}`,
+        );
+    }
+}
+
+/** Packages would install from the network as each run starts. */
+function refuseProjectPackages(workspace: string): void {
+    const packages = settingsOf(join(workspace, ".pi/settings.json")).packages;
+
+    if (Array.isArray(packages) ? packages.length > 0 : packages !== undefined) {
+        throw new Error(
+            'Project packages are not loaded: put the extensions in .pi/extensions instead (.pi/settings.json "packages").',
+        );
+    }
+}
+
 /** Caller owns a private HOME and a stopped/authorized session. No ambient credential or user-extension inheritance. */
 export async function startRotomKernel(options: {
     home: string;
@@ -216,13 +272,14 @@ export async function startRotomKernel(options: {
         }
     }
 
-    // Without a frozen snapshot the kernel reads the project's AGENTS.md itself. Project skills are named explicitly:
-    // trusting the whole project would also run its `.pi` extensions, settings and packages.
-    const projectSkills = options.configuration
-        ? []
-        : [join(workspace, ".pi", "skills"), join(workspace, ".agents", "skills")].filter(
-              (folder) => existsSync(folder) && lstatSync(folder).isDirectory(),
-          );
+    refuseMemberResources(home);
+
+    // Without a frozen snapshot the project's own configuration applies: rotom trusts the project and reads its
+    // AGENTS.md, `.pi` (settings, mcp.json, extensions, skills, prompts, SYSTEM.md) and `.agents/skills` itself.
+    if (!options.configuration) {
+        refuseProjectPackages(workspace);
+    }
+
     const node = realpathSync(process.execPath);
     // Desktop tools run as the service user. The member HOME isolates credentials, not the screen:
     // reuse the service user's installed (and TCC-authorized) Computer Use helper.
@@ -259,7 +316,10 @@ export async function startRotomKernel(options: {
                       options.configuration.contextFile,
                       ...options.configuration.skills.flatMap((path) => ["--skill", path]),
                   ]
-                : projectSkills.flatMap((folder) => ["--skill", folder])),
+                : ["--approve"]),
+            // Sessions stay in the member HOME, whatever a project's `sessionDir` says.
+            "--session-dir",
+            join(home, ".pi/agent/sessions"),
             ...(options.sessionFile ? ["--session", options.sessionFile] : []),
             ...(options.gateFile
                 ? ["--extension", fileURLToPath(new URL("./rotom-policy.mjs", import.meta.url))]

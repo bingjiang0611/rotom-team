@@ -309,7 +309,7 @@ export function MenuSheet() {
             ${item("Running now", () => openSheet({ type: "running" }), "everything Pi is doing")}
             ${item("Spend", () => openSheet({ type: "spend" }), me?.role === "owner" ? "by person and session, limits" : "yours")}
             ${item("Projects & access", () => openSheet({ type: "projects" }), "view · continue · fork")}
-            ${item("My instructions & skills", () => openSheet({ type: "profile" }), "loaded with the project's own")}
+            ${server?.kernel ? item("My browser sign-ins", () => openSheet({ type: "profile" }), "use your account elsewhere") : item("Configuration & skills", () => openSheet({ type: "profile" }), "frozen into new sessions")}
             ${item("My model accounts", () => openSheet({ type: "providers" }), "your ChatGPT / Qoder quota")}
             ${item("Extensions", () => openSheet({ type: "extensions" }), store.state.guard?.enabled ? "Lancet Guard on" : store.state.guard?.available ? "Lancet Guard off" : "")}
             ${

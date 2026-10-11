@@ -1,4 +1,4 @@
-/** Test-only transport interception, installed solely in the disposable native HOME. */
+/** Test-only transport interception, installed solely in the disposable proof workspace. */
 import { existsSync, readFileSync } from "node:fs";
 
 export default function (pi) {

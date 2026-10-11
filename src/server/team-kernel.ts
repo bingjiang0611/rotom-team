@@ -20,7 +20,6 @@ import { NativeTail, RotomExecutions, type RunHooks } from "./rotom-executions.t
 import { childrenReport, type RpcRecord } from "./rotom-rpc.ts";
 import { AuthorsDoc } from "./docs.ts";
 import { THINKING_LEVELS } from "./commands.ts";
-import { KernelProfiles } from "./kernel-profile.ts";
 import { NATIVE_ENTRY, RESUME_PREFIX } from "./entry-format.ts";
 import { projectLive, type ClientLive } from "./projection.ts";
 import type { KernelBinding, KernelEntry, KernelReceipt } from "./rotom-journal.ts";
@@ -114,8 +113,6 @@ export class TeamKernel {
     #closing = false;
     readonly #ready = new Set<ConversationId>();
     readonly #configurations = new Map<ConversationId, NativeConfigurations>();
-    /** Each member's personal layer, read by rotom next to the project's own. */
-    readonly profiles = new KernelProfiles((memberId) => this.agentDir(memberId));
     readonly #live = new Map<ConversationId, NativeLive>();
     readonly #mirrors = new Map<ConversationId, Promise<void>>();
     readonly #operations = new Map<
@@ -314,19 +311,6 @@ export class TeamKernel {
             home,
             workspace: cwd,
         };
-    }
-
-    /** A member's private `HOME/.pi/agent`: where rotom reads their own AGENTS.md and skills. */
-    agentDir(memberId: string): string {
-        const agent = join(this.#home(memberId), ".pi", "agent");
-
-        mkdirSync(agent, { recursive: true, mode: 0o700 });
-
-        if (realpathSync(agent) !== agent || lstatSync(agent).mode & 0o077) {
-            throw new Error("Native agent folder must be canonical and private");
-        }
-
-        return agent;
     }
 
     #home(memberId: string): string {

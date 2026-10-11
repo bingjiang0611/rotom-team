@@ -9,6 +9,7 @@ import {
     mkdirSync,
     readFileSync,
     realpathSync,
+    rmSync,
     writeFileSync,
 } from "node:fs";
 import { homedir, tmpdir } from "node:os";
@@ -65,6 +66,7 @@ let requests = 0,
     toolReadObserved = false,
     rejectStatus = 0;
 let offeredTools: string[] | undefined;
+let systemPrompt: string | undefined;
 let browserReply: string | undefined;
 let browserAsked = false;
 let mcpReply: string | undefined;
@@ -87,6 +89,11 @@ const respond: RequestListener = async (req, res) => {
         requests++;
         offeredTools ??= (input.tools as { function: { name: string } }[]).map(
             (tool) => tool.function.name,
+        );
+        systemPrompt ??= String(
+            (input.messages as { role: string; content?: unknown }[]).find(
+                (m) => m.role === "system",
+            )?.content,
         );
 
         if (rejectStatus) {
@@ -280,8 +287,8 @@ writeFileSync(
     JSON.stringify({ retry: { enabled: false }, compaction: { enabled: false } }),
     { mode: 0o600 },
 );
-// The member's own MCP server lives in their HOME and loads natively. A project server needs project trust, which the
-// team kernel never grants. `${...}` values resolve against the kernel's scrubbed env, so a server that names a service
+// All configuration belongs to the project: rotom trusts it and loads its `.pi`. A secret comes from a command (the
+// keychain, in practice); `${...}` values resolve against the kernel's scrubbed env, so a server that names a service
 // secret fails closed instead of receiving it.
 const mcpServer = (env: Record<string, string> = {}) => ({
     command: process.execPath,
@@ -291,20 +298,58 @@ const mcpServer = (env: Record<string, string> = {}) => ({
 });
 
 process.env.MCP_PROBE_SERVICE_SECRET = "service-secret-must-not-reach-mcp";
+mkdirSync(join(workspace, ".pi/extensions"), { recursive: true });
+mkdirSync(join(workspace, ".pi/skills/project-probe"), { recursive: true });
 writeFileSync(
-    join(home, ".pi/agent/mcp.json"),
+    join(workspace, ".pi/mcp.json"),
     JSON.stringify({
         mcpServers: {
-            probe: mcpServer(),
+            probe: mcpServer({ MCP_PROBE_LEAK: "!printf keychain-stand-in" }),
             leakprobe: mcpServer({ MCP_PROBE_LEAK: "${MCP_PROBE_SERVICE_SECRET}" }),
         },
     }),
-    { mode: 0o600 },
 );
-mkdirSync(join(workspace, ".pi"));
+const extensionMarker = join(root, "project-extension.txt");
+
 writeFileSync(
-    join(workspace, ".pi/mcp.json"),
-    JSON.stringify({ mcpServers: { projectprobe: mcpServer() } }),
+    join(workspace, ".pi/extensions/project-probe.ts"),
+    `import { writeFileSync } from "node:fs";\nexport default function (pi) { pi.on("session_start", () => writeFileSync(${JSON.stringify(extensionMarker)}, "loaded")); }\n`,
+);
+writeFileSync(
+    join(workspace, ".pi/skills/project-probe/SKILL.md"),
+    "---\nname: project-probe\ndescription: PROJECT_SKILL_LOADED\n---\nProbe.\n",
+);
+
+/** A member's own configuration or a project package stops the run before rotom starts. */
+async function refusedStart(path: string, content: string, expected: RegExp): Promise<void> {
+    mkdirSync(join(path, ".."), { recursive: true });
+    writeFileSync(path, content);
+    await assert.rejects(
+        startRotomKernel({ home, workspace, provider: "kernel-fixture", model: "kernel-fixture" }),
+        expected,
+    );
+    rmSync(path);
+}
+
+await refusedStart(
+    join(home, ".pi/agent/mcp.json"),
+    "{}",
+    /Configuration belongs to the project.*\.pi\/agent\/mcp\.json/,
+);
+await refusedStart(
+    join(home, ".pi/agent/settings.json"),
+    JSON.stringify({ extensions: ["/tmp/x.ts"] }),
+    /settings\.json "extensions"/,
+);
+await refusedStart(
+    join(workspace, ".pi/settings.json"),
+    JSON.stringify({ packages: ["npm:some-package"] }),
+    /Project packages are not loaded/,
+);
+writeFileSync(
+    join(home, ".pi/agent/settings.json"),
+    JSON.stringify({ retry: { enabled: false }, compaction: { enabled: false } }),
+    { mode: 0o600 },
 );
 const report: Record<string, unknown> = {
     version: verifyRotomKernel().version,
@@ -345,16 +390,14 @@ try {
     assert.equal(readFileSync(join(workspace, "proof.txt"), "utf8"), "ROTOM_KERNEL_OK\n");
     assert.equal(toolReadObserved, true);
     assert.equal(requests, 6);
-    assert.ok(offeredTools?.includes("mcp__probe__echo"), "personal MCP tool must be offered");
-    assert.ok(
-        !offeredTools?.some((name) => name.startsWith("mcp__projectprobe")),
-        "an untrusted project's MCP server must not load",
-    );
+    assert.ok(offeredTools?.includes("mcp__probe__echo"), "the project's MCP tool must be offered");
+    assert.equal(readFileSync(extensionMarker, "utf8"), "loaded", "the project's extension loads");
+    assert.match(systemPrompt!, /PROJECT_SKILL_LOADED/, "the project's skill loads");
     assert.ok(
         !offeredTools?.some((name) => name.startsWith("mcp__leakprobe")),
         "a server naming a service env var must fail closed",
     );
-    assert.equal(mcpReply, "MCP_ECHO:hello:leak=");
+    assert.equal(mcpReply, "MCP_ECHO:hello:leak=keychain-stand-in");
 
     // The member HOME is not the service user's, yet browser tools reach the service user's relay. Where this machine
     // runs no relay, the call can only show that it looked for one.
@@ -421,8 +464,9 @@ try {
         computerUseHelper: hostHelper ? "reached" : "absent-on-host",
         desktopReply: desktopReply!.slice(0, 200),
         browserReply: browserReply!.slice(0, 300),
-        personalMcp: mcpReply,
-        projectMcpLoaded: false,
+        projectMcp: mcpReply,
+        projectExtensionLoaded: true,
+        projectSkillLoaded: true,
         serviceEnvMcpLoaded: false,
         loopbackRequests: requests,
         settledObserved: events.some((e) => e.type === "agent_settled"),

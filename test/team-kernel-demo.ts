@@ -213,8 +213,6 @@ for (const user of [alice, bob.user, carol.user]) {
     await app.hello(user);
 }
 
-app.kernel!.profiles.setInstructions(bob.user.id, "Bob's own rule: sign answers with — B.\n");
-
 step("The owner creates a rotom session and sends a message");
 const session = (await call(aliceToken, "sessions", "POST", {
     title: "Demo: one task, three members",
