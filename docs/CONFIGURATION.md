@@ -32,9 +32,9 @@ serves streamable HTTP at the same URL needs only `{"url": …}` there.
 
 In one folder Pi reads the first of `AGENTS.md` and `CLAUDE.md`, not both.
 
-## rotom 0.1.19
+## rotom 0.1.21
 
-The runtime pin is rotom 0.1.19 ([`runtime/rotom/pin.json`](../runtime/rotom/pin.json)). In 0.1.18 the Qoder legacy models
+The runtime pin is rotom 0.1.21 ([`runtime/rotom/pin.json`](../runtime/rotom/pin.json)). In 0.1.18 the Qoder legacy models
 (`ultimate`, `qmodel_latest`, `smodel` and the other COSY routes) ran without the system prompt: rotom sent it only in a
 top-level field that Qoder ignores. Such a run did not see `AGENTS.md`, `.pi/APPEND_SYSTEM.md`, the skill list or the
 folder. 0.1.19 also sends it as the first message, as Qoder's own CLI does. Other models were not affected.
