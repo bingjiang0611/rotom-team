@@ -58,55 +58,67 @@ async function answer(flow: string, value: string) {
     await new Promise<void>((resolve) => setImmediate(resolve));
 }
 
-test("OpenAI waits for location and SSH readiness before invoking the SDK", async () => {
-    const flow = await app.providers.startLogin(owner(app), "openai", "oauth");
+/** A login that stays open until it is cancelled or timed out, as one waiting for its callback does. */
+async function pendingLogin() {
+    const { runtime } = await app.accounts.forUser(owner(app));
+    const seen = { aborted: false };
 
-    assert.equal(calls, 0);
-    assert.match(promptEvent(flow).prompt.message, /Where is this browser/);
-    await answer(flow, "ssh");
-    assert.equal(calls, 0);
-    assert.ok(event(flow, "callback-guide"));
-    assert.match(promptEvent(flow).prompt.message, /not an automatic connectivity check/);
-    await answer(flow, "ready");
+    runtime.login = async (_provider, _type, interaction) => {
+        calls++;
+        await new Promise<void>((_resolve, reject) => {
+            interaction.signal!.addEventListener(
+                "abort",
+                () => {
+                    seen.aborted = true;
+                    reject(interaction.signal!.reason);
+                },
+                { once: true },
+            );
+        });
+
+        return {} as never;
+    };
+
+    return seen;
+}
+
+test("OpenAI sign-in goes straight to the SDK: no location or SSH setup is asked first", async () => {
+    for (const provider of ["openai", "openai-codex"]) {
+        const before = calls;
+        const flow = await app.providers.startLogin(owner(app), provider, "oauth");
+
+        assert.equal((await finish(flow)).ok, true);
+        assert.equal(calls, before + 1);
+        assert.equal(event(flow, "prompt"), undefined);
+    }
+});
+
+test("an address pasted into the SDK's prompt reaches the SDK", async () => {
+    const { runtime } = await app.accounts.forUser(owner(app));
+    let pasted: string | undefined;
+
+    runtime.login = async (_provider, _type, interaction) => {
+        pasted = await interaction.prompt({
+            type: "manual_code",
+            message: "paste the redirect URL here:",
+        });
+
+        return {} as never;
+    };
+
+    const flow = await app.providers.startLogin(owner(app), "openai-codex", "oauth");
+
+    await answer(flow, "http://localhost:1455/auth/callback?code=c&state=s");
     assert.equal((await finish(flow)).ok, true);
-    assert.equal(calls, 1);
+    assert.equal(pasted, "http://localhost:1455/auth/callback?code=c&state=s");
 });
 
-test("same-host choice uses the existing SDK login without SSH instructions", async () => {
-    const flow = await app.providers.startLogin(owner(app), "openai", "oauth");
-
-    await answer(flow, "local");
-    assert.equal((await finish(flow)).ok, true);
-    assert.equal(calls, 1);
-    assert.equal(event(flow, "callback-guide"), undefined);
-});
-
-test("cancelling SSH setup neither authorizes nor calls the provider", async () => {
-    const flow = await app.providers.startLogin(owner(app), "openai", "oauth");
-
-    await answer(flow, "ssh");
-    app.providers.cancelLogin(owner(app), flow);
-    assert.equal((await finish(flow)).ok, false);
-    assert.equal(calls, 0);
-    assert.equal(
-        (await app.accounts.forUser(owner(app))).runtime.getProviderAuthStatus("openai").configured,
-        false,
-    );
-    const next = await app.providers.startLogin(owner(app), "openai", "oauth");
-
-    app.providers.cancelLogin(owner(app), next);
-    await finish(next);
-});
-
-test("a different member cannot confirm or cancel this login; callback logins are serialized", async () => {
+test("a different member cannot answer or cancel this login; callback logins are serialized", async () => {
+    const seen = await pendingLogin();
     const other = app.config.addUser("Other", "guest").user;
     const flow = await app.providers.startLogin(owner(app), "openai", "oauth");
-    const prompt = promptEvent(flow);
 
-    assert.throws(
-        () => app.providers.answerLogin(other, flow, prompt.promptId, "local"),
-        /No such login/,
-    );
+    assert.throws(() => app.providers.answerLogin(other, flow, "any-prompt", "x"), /No such login/);
     app.providers.cancelLogin(other, flow);
     await assert.rejects(
         app.providers.startLogin(other, "openai", "oauth"),
@@ -116,77 +128,20 @@ test("a different member cannot confirm or cancel this login; callback logins ar
         app.providers.startLogin(other, "openai-codex", "oauth"),
         /callback port 1455 is shared/,
     );
-    assert.equal(calls, 0);
-    await answer(flow, "local");
-    assert.equal((await finish(flow)).ok, true);
-});
-
-test("invalid location/readiness choices never invoke OAuth", async () => {
-    const local = await app.providers.startLogin(owner(app), "openai", "oauth");
-
-    await answer(local, "invented");
-    assert.equal((await finish(local)).ok, false);
-    const ssh = await app.providers.startLogin(owner(app), "openai", "oauth");
-
-    await answer(ssh, "ssh");
-    await answer(ssh, "invented");
-    assert.equal((await finish(ssh)).ok, false);
-    assert.equal(calls, 0);
-});
-
-test("setup expires after ten minutes and releases admission without invoking OAuth", async (t) => {
-    t.mock.timers.enable({ apis: ["setTimeout"] });
-    const flow = await app.providers.startLogin(owner(app), "openai", "oauth");
-
-    t.mock.timers.tick(10 * 60_000);
-    t.mock.timers.reset();
-    const done = await finish(flow);
-
-    assert.equal(done.ok, false);
-    assert.match(done.error ?? "", /timed out after 10 minutes/);
-    assert.equal(calls, 0);
-    const next = await app.providers.startLogin(owner(app), "openai", "oauth");
-
-    app.providers.cancelLogin(owner(app), next);
-    await finish(next);
+    assert.equal(seen.aborted, false);
+    app.providers.cancelLogin(owner(app), flow);
+    assert.equal((await finish(flow)).ok, false);
+    assert.equal(calls, 1);
 });
 
 test("cancelling during SDK login aborts its signal, not just the browser dialog", async () => {
-    const { runtime } = await app.accounts.forUser(owner(app));
-    let aborted = false;
-
-    runtime.login = async (_provider, _type, interaction) => {
-        calls++;
-        await new Promise<void>((_resolve, reject) => {
-            interaction.signal!.addEventListener(
-                "abort",
-                () => {
-                    aborted = true;
-                    reject(interaction.signal!.reason);
-                },
-                { once: true },
-            );
-        });
-
-        return {} as never;
-    };
-
+    const seen = await pendingLogin();
     const flow = await app.providers.startLogin(owner(app), "openai", "oauth");
 
-    await answer(flow, "local");
     assert.equal(calls, 1);
     app.providers.cancelLogin(owner(app), flow);
     assert.equal((await finish(flow)).ok, false);
-    assert.equal(aborted, true);
-});
-
-test("cancellation between consecutive setup prompts does not leave a stuck flow", async () => {
-    const flow = await app.providers.startLogin(owner(app), "openai", "oauth");
-
-    app.providers.answerLogin(owner(app), flow, promptEvent(flow).promptId, "ssh");
-    app.providers.cancelLogin(owner(app), flow);
-    assert.equal((await finish(flow)).ok, false);
-    assert.equal(calls, 0);
+    assert.equal(seen.aborted, true);
     const next = await app.providers.startLogin(owner(app), "openai", "oauth");
 
     app.providers.cancelLogin(owner(app), next);
@@ -194,29 +149,11 @@ test("cancellation between consecutive setup prompts does not leave a stuck flow
 });
 
 test("timeout during SDK login aborts the attempt without replay", async (t) => {
-    const { runtime } = await app.accounts.forUser(owner(app));
-    let aborted = false;
-
-    runtime.login = async (_provider, _type, interaction) => {
-        calls++;
-        await new Promise<void>((_resolve, reject) => {
-            interaction.signal!.addEventListener(
-                "abort",
-                () => {
-                    aborted = true;
-                    reject(interaction.signal!.reason);
-                },
-                { once: true },
-            );
-        });
-
-        return {} as never;
-    };
+    const seen = await pendingLogin();
 
     t.mock.timers.enable({ apis: ["setTimeout"] });
     const flow = await app.providers.startLogin(owner(app), "openai", "oauth");
 
-    await answer(flow, "local");
     assert.equal(calls, 1);
     t.mock.timers.tick(10 * 60_000);
     t.mock.timers.reset();
@@ -224,11 +161,11 @@ test("timeout during SDK login aborts the attempt without replay", async (t) => 
 
     assert.equal(done.ok, false);
     assert.match(done.error ?? "", /timed out after 10 minutes/);
-    assert.equal(aborted, true);
+    assert.equal(seen.aborted, true);
     assert.equal(calls, 1);
 });
 
-test("API-key login does not ask for callback forwarding", async () => {
+test("API-key login asks nothing before the SDK", async () => {
     const flow = await app.providers.startLogin(owner(app), "openai", "api_key");
 
     assert.equal((await finish(flow)).ok, true);

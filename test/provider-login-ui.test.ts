@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { createServer, type Server } from "node:http";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync } from "node:fs";
 import { join } from "node:path";
 import { cleanUp, openApp, owner, root, scriptedModel, until, type App } from "./helpers.ts";
 import { Browsers } from "../src/server/browser.ts";
@@ -18,6 +18,8 @@ let base: string;
 let sdkCalls = 0;
 let answersCompleted = 0;
 let rejectLogin = false;
+let pasted: string | undefined;
+const CALLBACK = "http://localhost:1455/auth/callback?code=synthetic&state=synthetic";
 
 async function state() {
     return JSON.parse(
@@ -39,21 +41,9 @@ async function click(label: string) {
 
 async function begin() {
     await page.evaluate(
-        `const {api} = await import('/store.js'); await api('providers/openai/login', {type:'oauth'});`,
+        `const {api} = await import('/store.js'); await api('providers/openai-codex/login', {type:'oauth'});`,
     );
-    await until(async () => (await state()).auth?.prompt?.type === "select", "location prompt");
-}
-
-async function readyForSsh() {
-    await begin();
-    const before = answersCompleted;
-
-    await click("On another computer — temporary SSH forwarding");
-    await until(() => answersCompleted > before, "delayed location HTTP answer");
-    await until(
-        async () => (await state()).auth?.prompt?.options?.[0]?.id === "ready",
-        "SSH readiness prompt survives earlier answer",
-    );
+    await until(async () => (await state()).auth?.prompt?.type === "manual_code", "paste prompt");
 }
 
 before(async () => {
@@ -64,12 +54,21 @@ before(async () => {
     app = await openApp(scriptedModel());
     const { runtime } = await app.accounts.forUser(owner(app));
 
-    runtime.login = async () => {
+    // The SDK's own browser login: a link, then a prompt that also takes the pasted callback address.
+    runtime.login = async (_provider, _type, interaction) => {
         sdkCalls++;
+        interaction.notify({ type: "auth_url", url: "https://auth.example.test/authorize" });
 
         if (rejectLogin) {
             throw new Error("Synthetic provider refusal");
         }
+
+        pasted = await interaction.prompt({
+            type: "manual_code",
+            message:
+                "Complete login in your browser, or paste the authorization code / redirect URL here:",
+            placeholder: "http://localhost:1455/auth/callback",
+        });
 
         return {} as never;
     };
@@ -131,84 +130,69 @@ after(async () => {
 });
 
 test(
-    "remote setup is visible before authorization, at 390px and 320px; success retains cleanup",
+    "a browser on another computer pastes the callback address back, at 390px and 320px",
     real,
     async () => {
-        await readyForSsh();
-        const before = await state();
+        await begin();
+        const shown = await state();
 
-        assert.equal(sdkCalls, 0);
-        assert.match(before.text, /ExitOnForwardFailure=yes/);
-        assert.match(before.text, /not an automatic connectivity check/i);
-        assert.ok(!before.text.includes("Open the sign-in page"));
-        assert.ok(before.width <= before.viewport);
-        writeFileSync(
-            "/tmp/rotom-team-oauth-guide-390.jpg",
-            Buffer.from((await page.screenshot()).data, "base64"),
-            { mode: 0o600 },
+        assert.match(shown.text, /Open the sign-in page/);
+        assert.match(
+            shown.text,
+            /copy that page's full address from the address bar and paste it here/,
         );
+        assert.doesNotMatch(shown.text, /SSH|1455 forward/);
+        assert.ok(shown.width <= shown.viewport);
         await page.setViewport({ width: 320, height: 740, scale: 1, mobile: true });
         const narrow = await state();
 
         assert.ok(narrow.width <= narrow.viewport);
-        writeFileSync(
-            "/tmp/rotom-team-oauth-guide-320.jpg",
-            Buffer.from((await page.screenshot()).data, "base64"),
-            { mode: 0o600 },
-        );
+        await page.setViewport({ width: 390, height: 844, scale: 1, mobile: true });
+        await page.evaluate(`
+            const input = document.querySelector('.sheet:not(.leaving) .field input');
+            input.value = ${JSON.stringify(CALLBACK)};
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+        `);
         const answered = answersCompleted;
 
-        await click("My temporary forward is ready — continue to OpenAI");
-        await until(() => answersCompleted > answered, "delayed readiness HTTP answer");
-        await until(
-            async () => (await state()).auth?.done?.ok === true,
-            "success cleanup remains visible",
-        );
-        assert.equal(sdkCalls, 1);
-        assert.match((await state()).text, /Close your temporary port 1455 forward now/);
-        await click("Close");
-        await until(async () => (await state()).auth === null, "close completed login");
-    },
-);
-
-test(
-    "cancel dismisses the flow, hides late completion, and reminds to remove only its forward",
-    real,
-    async () => {
-        await readyForSsh();
-        const flowId = (await state()).auth.flowId;
-
-        await page.evaluate(
-            `document.querySelector('.sheet:not(.leaving) [aria-label="Close"]').click()`,
-        );
-        await until(async () => (await state()).auth === null, "cancel dialog");
-        // Server acknowledgement is a readback, not a replay of the cancellation mutation.
-        await until(async () => {
-            try {
-                app.providers.answerLogin(owner(app), flowId, "not-a-prompt", "local");
-            } catch (error) {
-                return (error as Error).message === "No such login";
-            }
-
-            return false;
-        }, "cancelled flow reservation released");
-        const closed = await state();
-
-        assert.equal(closed.auth, null);
-        assert.match(closed.text, /Close your temporary port 1455 SSH forward now/);
+        await click("Continue");
+        await until(() => answersCompleted > answered, "delayed paste HTTP answer");
+        await until(async () => (await state()).auth === null, "signed in closes the sheet");
+        assert.equal(pasted, CALLBACK);
         assert.equal(sdkCalls, 1);
     },
 );
 
-test("provider failure retains remote cleanup instructions", real, async () => {
-    rejectLogin = true;
-    await readyForSsh();
-    await click("My temporary forward is ready — continue to OpenAI");
-    await until(async () => (await state()).auth?.done?.ok === false, "failed login cleanup");
-    const failed = await state();
+test("cancel dismisses the flow, ends the SDK's wait and releases the login", real, async () => {
+    await begin();
+    const flowId = (await state()).auth.flowId;
 
-    assert.match(failed.text, /Synthetic provider refusal/);
-    assert.match(failed.text, /-O cancel/);
+    await page.evaluate(
+        `document.querySelector('.sheet:not(.leaving) [aria-label="Close"]').click()`,
+    );
+    await until(async () => (await state()).auth === null, "cancel dialog");
+    // Server acknowledgement is a readback, not a replay of the cancellation mutation.
+    await until(async () => {
+        try {
+            app.providers.answerLogin(owner(app), flowId, "not-a-prompt", "x");
+        } catch (error) {
+            return (error as Error).message === "No such login";
+        }
+
+        return false;
+    }, "cancelled flow reservation released");
+    assert.doesNotMatch((await state()).text, /SSH/);
     assert.equal(sdkCalls, 2);
+});
+
+test("provider failure is shown until the member closes it", real, async () => {
+    rejectLogin = true;
+    await page.evaluate(
+        `const {api} = await import('/store.js'); await api('providers/openai-codex/login', {type:'oauth'});`,
+    );
+    await until(async () => (await state()).auth?.done?.ok === false, "failed login");
+    assert.match((await state()).text, /Synthetic provider refusal/);
+    assert.equal(sdkCalls, 3);
     await click("Close");
+    await until(async () => (await state()).auth === null, "close failed login");
 });

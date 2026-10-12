@@ -21,7 +21,7 @@ node bin/rotom-team.js --data /absolute/team-data --cwd /absolute/team-workspace
 
 The first startup prints an owner bearer login link. Keep it private. Invite members with their own accounts; do not distribute the owner's link. Each member selects their own provider/model. The browser sign-ins settings create separately revocable credentials for another browser **with the same member identity and provider accounts**; these are not remote execution workers. There are at most 32 additional browser credentials per member; revoke old ones to add more. Revocation closes that member's established streams so they authenticate again. Owner-token rotation revokes the owner's additional credentials too.
 
-For OpenAI sign-in from another computer, follow [temporary SSH callback forwarding](REMOTE-OPENAI-LOGIN.md). The web forward alone does not deliver the browser's localhost callback. The login now asks for browser location before authorization, requires remote users to confirm their own forwarding setup, and retains cleanup instructions. This does not grant SSH access, auto-detect connectivity, automatically close a client-side tunnel, or implement browser-only remote authorization.
+For OpenAI sign-in from another computer, the member pastes the browser's final `localhost:1455` address back into the sign-in dialog: see [REMOTE-OPENAI-LOGIN.md](REMOTE-OPENAI-LOGIN.md). No SSH access is needed. Only one OpenAI/Codex sign-in uses the server's port 1455 at a time.
 
 Importing existing OAuth material into a separate refresh-capable runtime can race and invalidate the original login. Use independent login for deployed members and keep a unique parent refresh writer. No instruction here authorizes copying the maintainer's grants.
 

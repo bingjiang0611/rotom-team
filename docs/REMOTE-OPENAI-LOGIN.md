@@ -1,64 +1,38 @@
-# OpenAI 远程登录：临时 SSH 回调转发
+# OpenAI 远程登录：把回调地址粘贴回来
 
-适用于 **浏览器与 rotom team 服务不在同一台电脑**、且用户已有服务器 SSH 权限的自用/可信团队环境。不是纯网页远程授权，也不是 OpenAI 官方的远端凭据迁移实现。不应为了模型登录给普通受邀成员增加服务器 SSH 权限。
+适用于**浏览器与 rotom team 服务不在同一台电脑**的情况。成员只需要网页访问权限，不需要服务器 SSH 权限。
 
-## 为什么需要转发
+## 为什么要粘贴
 
-OpenAI 的当前登录回调是 `http://127.0.0.1:1455/auth/callback`。浏览器访问的是浏览器所在电脑的 1455，而登录接收器运行在服务器上。网页的 18787→8787 转发不会顺带转发 1455。
+OpenAI（ChatGPT 订阅与 Codex）登录完成后，会跳转到 `localhost:1455/auth/callback`（ChatGPT 订阅是 `127.0.0.1:1455`）。浏览器访问的是**浏览器所在电脑**的 1455，而登录接收器运行在服务器上。
 
-不能靠浏览器 URL 或服务器看到的 loopback 地址判断是否同机：SSH 转发也会表现为本机连接。因此登录前显式询问用户，不自动猜测。
+- 浏览器就在服务器上：跳转直接到达接收器，自动完成。
+- 浏览器在别的电脑上：跳转后的页面打不开（"This site can't be reached"）。这是预期的。地址栏里的地址带着这次登录的一次性授权码，粘贴回登录弹窗即可完成。
+
+授权请求由服务器发起，PKCE verifier、state 与 ChatGPT 的 host ID 都留在服务器上；浏览器只是把回调地址带回来。服务器校验 state 后自己交换令牌，凭据直接写入该成员的私有存储。
 
 ## 登录步骤
 
-1. 在 **My accounts → OpenAI → Sign in with ChatGPT** 开始登录。
-2. 选择浏览器位于同一台电脑，或位于另一台电脑。
-3. 选择远程时，先在**浏览器所在电脑**建立临时 SSH 转发，再确认准备好。确认前不会调用 OpenAI SDK 登录，也不会生成授权链接。确认是用户声明，不是网页已经检测通道成功。
-4. 点击授权链接，使用当前成员自己的 OpenAI 账号完成登录。保持团队登录弹窗打开。
-5. 成功、失败、取消或超时后关闭临时转发。清理转发不注销已经完成的模型登录。
+1. 在 **Settings → My model accounts** 选择 OpenAI 或 OpenAI Codex，点 Sign in。Codex 先问登录方式，选 **Browser login**。
+2. 点 **Open the sign-in page**，用**自己的** OpenAI 账号授权。保持登录弹窗打开。
+3. 授权后浏览器停在打不开的 `localhost:1455/...` 页面。复制地址栏里的**完整地址**。
+4. 粘贴到登录弹窗的输入框，点 **Continue**。成功后弹窗关闭并提示已登录。
 
-### 普通 SSH：单独开一个终端
-
-把 `SSH_USER@SSH_HOST` 替换成你实际能连接服务器的 SSH 目标，**不是网页地址**：
-
-```sh
-ssh -N -S none -o ExitOnForwardFailure=yes \
-  -L 127.0.0.1:1455:127.0.0.1:1455 SSH_USER@SSH_HOST
-```
-
-`-S none` 禁用连接复用，避免把临时转发留在共享 master 中。保持该命令运行。结束后在这个终端按 Ctrl+C，不停止网页访问通道。
-
-### 已有 Herdr SSH 连接
-
-当直连不可用但 Herdr 的既有连接可用时，用其实际 control socket 和相同 SSH 目标：
-
-```sh
-ssh -S /path/to/control-socket -O forward \
-  -L 127.0.0.1:1455:127.0.0.1:1455 SSH_USER@SSH_HOST
-```
-
-结束后只取消这条转发：
-
-```sh
-ssh -S /path/to/control-socket -O cancel \
-  -L 127.0.0.1:1455:127.0.0.1:1455 SSH_USER@SSH_HOST
-```
-
-路径是占位符，不是可直接照抄的 Herdr 配置。不要停止共享 master，也不要取消网页的转发。
+Codex 也可以选 **Device code login (headless)**：弹窗显示一个代码，在 OpenAI 的设备页输入即可，不需要粘贴。它是否可用取决于 OpenAI 是否为该账号开启了设备码登录；不可用时会直接报错，改用 Browser login。
 
 ## 失败与边界
 
-- SSH 失败或本机 1455 被占用：取消登录，先查明连接或占用者。不要杀掉未知进程，也不要改成监听所有网卡。
-- OpenAI/Codex 登录共用服务器 1455 的可能性存在，因此同一服务一次只接受一个这类 OAuth 登录；其他成员收到 409，不抢占正在进行的登录。API key 与其他服务商不进入这个端口门禁。
-- OpenAI/Codex 登录从开始起最多等待 10 分钟，包含准备时间。超时向 SDK 发送取消；只有任务实际结束才释放登录保留，不把发出取消当成已经结束。
-- 结束页保留远程清理说明；关闭/取消也提醒清理。网页**不能自动删除用户电脑上的 SSH 转发**。
-- 不共享回调 URL、授权码或凭据，不把它们发到聊天中。不重放结果未知的授权请求，也不复用过期回调；先检查账号实际状态。
-- 原有按成员保存授权、SDK 的 state/PKCE 校验和唯一刷新者不变。本改动不复制现用凭据、不替用户完成新授权、不进行付费推理。
-- 若未来要支持没有 SSH 权限的成员，需要另行实现、验证官方远端授权/安全转交流程；不能把本指南当成该能力。
+- 回调地址只能用一次，只属于这一次登录。粘贴到其他登录、过期后重用或 state 不符都会被 SDK 拒绝（"State mismatch"）；重新开始一次登录即可。
+- 不要把回调地址、授权码或凭据发到聊天里。服务使用明文 http 时，粘贴的地址经过网络传输；授权码没有服务器上的 PKCE verifier 无法单独换取令牌，但仍应只在可信网络中使用。
+- 服务器上的 1455 端口同一时间只给一个 OpenAI/Codex 登录使用；其他成员会收到 409，不抢占正在进行的登录。API key 与其他服务商不受这个限制。
+- 登录最多等待 10 分钟。超时或取消会中止 SDK 的等待并释放端口；不复用旧的回调地址。
+- 按成员保存凭据、SDK 的 state/PKCE 校验和服务器作为唯一刷新者的规则不变。
 
-依据：[OpenAI self-hosted VMs](https://developers.openai.com/siwc/token-sharing-open-source/self-hosted-vms)。官方说明明确区分浏览器本机回调与远端主机，并描述本地授权后安全转交的流程；本改动只是可信 SSH 环境的回调引导。
+依据：粘贴入口由 `@earendil-works/pi-ai` 的 OpenAI/Codex 登录提供（`manual_code` 提示），本服务只负责转交与说明。OpenAI 的 [Self-hosted VMs](https://developers.openai.com/siwc/token-sharing-open-source/self-hosted-vms) 描述的是另一条路径：在本机完成授权后，经安全通道转交凭据文件。那份文档没有专门说明粘贴回调地址这种方式。
 
 ## 验证范围
 
-`test/provider-login.test.ts` 验证授权前准备、成员边界、端口登录串行、取消、两次提示之间的取消竞态、超时以及 API key 相邻路径。`test/provider-login-ui.test.ts` 使用隔离 Chromium 和模拟 SDK，验证 320/390 像素布局、SSE 先于 HTTP 返回时不丢失新提示、成功/失败清理说明和取消后不被晚到事件重新打开。
-
-这些不是新的真实 OpenAI 登录证明。用户此前通过临时 SSH 回调转发完成过真实登录；本次不重复使用该授权码或要求重新授权。服务端改动需部署新版本并重启后生效，不能用浏览器刷新替代部署。
+- `test/provider-login.test.ts`：OpenAI/Codex 登录直接进入 SDK，不再有前置问题；粘贴值原样送达 SDK；成员边界、1455 串行、取消与超时。
+- `test/provider-login-ui.test.ts`：隔离 Chromium、模拟 SDK，在 390/320 像素下显示粘贴说明、粘贴后完成、取消释放登录、失败保留错误。
+- 用真实 SDK（不发网络请求）粘贴 state 不符的地址，两个服务商都返回 state mismatch，证明粘贴的地址进入了 SDK 的校验。
+- 未用真实账号验证粘贴后的完整令牌交换。此前一次真实 Codex 登录是通过临时 SSH 转发完成的，不是粘贴。

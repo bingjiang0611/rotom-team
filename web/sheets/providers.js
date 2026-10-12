@@ -1,6 +1,6 @@
 // Model providers: signing in and out, and the dialog a sign-in uses to ask for a code or a key.
 import { useEffect, useState } from "preact/hooks";
-import { api, attempt, closeSheet, notify, store } from "../store.js";
+import { api, attempt, closeSheet, store } from "../store.js";
 import { html, Icon, Loader, Sheet } from "../ui.js";
 
 export function ProvidersSheet() {
@@ -123,45 +123,12 @@ export function AuthDialog() {
             api(`auth/${encodeURIComponent(auth.flowId)}/cancel`, {}).catch(() => {});
         }
 
-        if (auth.remoteCallback) {
-            notify(
-                "info",
-                "Close your temporary port 1455 SSH forward now. Keep the team web connection; do not stop the shared Herdr SSH master.",
-            );
-        }
-
         store.set({ auth: null, dismissedAuthFlowId: auth.flowId });
     };
 
     const prompt = auth.prompt;
 
     return html`<${Sheet} title=${`Sign in: ${auth.providerId}`} onClose=${close}>
-        ${
-            auth.remoteCallback &&
-            html`<div class="auth-event">
-            <h3>Remote OpenAI sign-in</h3>
-            ${
-                !auth.done &&
-                html`<div>
-                <p>You need authorized SSH access to the team server; an invite alone is not enough. This website cannot create or verify your SSH forward.</p>
-                <p>On <strong>this browser's computer</strong>, replace SSH_USER and SSH_HOST with your normal SSH target (not the web address). Run this in a new terminal and keep it open:</p>
-                <pre style="white-space: pre-wrap; overflow-wrap: anywhere">ssh -N -S none -o ExitOnForwardFailure=yes -L 127.0.0.1:1455:127.0.0.1:1455 SSH_USER@SSH_HOST</pre>
-                <details>
-                    <summary>Using an existing Herdr SSH connection?</summary>
-                    <p>Instead, use its actual control socket and the same SSH target:</p>
-                    <pre style="white-space: pre-wrap; overflow-wrap: anywhere">ssh -S /path/to/control-socket -O forward -L 127.0.0.1:1455:127.0.0.1:1455 SSH_USER@SSH_HOST</pre>
-                </details>
-                <p>If SSH fails or port 1455 is busy, cancel here. Do not kill an unknown listener. Keep this dialog open; sign-in expires after 10 minutes including setup. Never share the callback URL.</p>
-            </div>`
-            }
-            <details open=${Boolean(auth.done)}>
-                <summary>Cleanup after success, failure, cancellation or timeout</summary>
-                <p>Press Ctrl+C in the dedicated forwarding terminal. If you used Herdr, remove only this forward:</p>
-                <pre style="white-space: pre-wrap; overflow-wrap: anywhere">ssh -S /path/to/control-socket -O cancel -L 127.0.0.1:1455:127.0.0.1:1455 SSH_USER@SSH_HOST</pre>
-                <p>Do not stop the shared SSH master or the team web forward. Closing this dialog does not close SSH for you.</p>
-            </details>
-        </div>`
-        }
         ${
             !auth.done &&
             auth.events.map((event) => {
@@ -211,6 +178,10 @@ export function AuthDialog() {
                 </div>`
                 : html`<div class="field">
                     <div class="label">${prompt.message}</div>
+                    ${
+                        prompt.type === "manual_code" &&
+                        html`<p class="muted small">On a different computer from the team server? After you approve, the browser ends on a page that cannot be reached. That is expected: copy that page's full address from the address bar and paste it here. It works once, for this sign-in only.</p>`
+                    }
                     <div class="row">
                         <input
                             type=${prompt.type === "secret" ? "password" : "text"}
@@ -227,7 +198,6 @@ export function AuthDialog() {
                 </div>`)
         }
         ${!prompt && !auth.done && html`<${Loader} label="Waiting for the provider" />`}
-        ${auth.done?.ok && html`<p class="ok">Signed in. Close your temporary port 1455 forward now; your model account stays signed in.</p>`}
         ${auth.done && !auth.done.ok && html`<div class="error-box">${auth.done.error}</div>`}
         ${auth.done && html`<button class="button wide" onClick=${close}>Close</button>`}
     <//>`;

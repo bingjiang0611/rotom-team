@@ -144,44 +144,9 @@ export class Providers {
             let result: { ok: boolean; error?: string };
 
             try {
-                if (providerId === "openai" && type === "oauth") {
-                    // Host/Origin cannot distinguish a local browser from an SSH-forwarded one.
-                    // Ask before the SDK registers a client, binds its callback or emits an authorization URL.
-                    const location = await interaction.prompt({
-                        type: "select",
-                        message:
-                            "Where is this browser running? OpenAI returns to this browser's 127.0.0.1:1455, not automatically to the team server.",
-                        options: [
-                            { id: "local", label: "On the same computer as the team server" },
-                            { id: "ssh", label: "On another computer — temporary SSH forwarding" },
-                        ],
-                        signal: flow.abort.signal,
-                    });
-
-                    if (location === "ssh") {
-                        send({ step: "callback-guide" });
-                        const ready = await interaction.prompt({
-                            type: "select",
-                            message:
-                                "Prepare the SSH forward shown here before continuing. This is your confirmation, not an automatic connectivity check.",
-                            options: [
-                                {
-                                    id: "ready",
-                                    label: "My temporary forward is ready — continue to OpenAI",
-                                },
-                            ],
-                            signal: flow.abort.signal,
-                        });
-
-                        if (ready !== "ready") {
-                            throw new Error("Invalid callback readiness choice");
-                        }
-                    } else if (location !== "local") {
-                        throw new Error("Invalid browser location choice");
-                    }
-                }
-
-                flow.abort.signal.throwIfAborted();
+                // OpenAI returns to the browser's own localhost:1455. A browser on the team server reaches the SDK's
+                // callback there; any other browser lands on a page that cannot load, and its member pastes that
+                // address into the SDK's manual-code prompt instead.
                 await runtime.login(providerId, type, interaction, { getDeviceId: () => user.id });
                 result = { ok: true };
             } catch (error) {

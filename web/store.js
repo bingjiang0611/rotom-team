@@ -676,10 +676,6 @@ function handleAuth(data) {
             return { auth: flow.prompt?.id === data.promptId ? { ...flow, prompt: null } : flow };
         }
 
-        if (data.step === "callback-guide") {
-            return { auth: { ...flow, remoteCallback: true } };
-        }
-
         if (data.step === "event") {
             return { auth: { ...flow, events: [...flow.events, data.event] } };
         }
@@ -690,8 +686,7 @@ function handleAuth(data) {
             }
 
             return {
-                auth:
-                    data.ok && !flow.remoteCallback ? null : { ...flow, prompt: null, done: data },
+                auth: data.ok ? null : { ...flow, prompt: null, done: data },
             };
         }
 
