@@ -92,7 +92,8 @@ Do not auto-open or publish login URLs. Logs may contain the startup owner link;
 
 3. Record the current commit and preserve its checkout. Install/check the new fixed checkout separately with `npm ci`, `npm run install:kernel`, `npm run check`, `npm run format:check`, and `npm test`. Do not replace files/node_modules under a live process.
 4. Start the new checkout against the **same absolute data path**. Check owner/member views, model identities, configuration digests, and run receipts before admitting work. Document migrations preserve kind/version contracts; new optional project/configuration/usage documents do not rewrite historical assistant identity.
-5. A failed/unverified external write is not permission to retry it. Inspect its durable task receipt and actual file/service state first. Durable process recovery and known interrupted tool behavior are different from OS/host migration. Never silently move SQLite or pending tool intents to another execution device.
+5. Roll back across the parallel-sessions change only when no member has two sessions running or unknown at once: an older release rebuilds its one-run-per-account index on open and refuses to start otherwise. Let runs finish or reconcile them first.
+6. A failed/unverified external write is not permission to retry it. Inspect its durable task receipt and actual file/service state first. Durable process recovery and known interrupted tool behavior are different from OS/host migration. Never silently move SQLite or pending tool intents to another execution device.
 
 Backups contain provider credentials, login tokens and conversation data. Keep them private; do not attach them to bug reports or recordings. Backup refuses a live writer, symlinks and nonregular files; it records per-file SHA-256, excludes the lock and installed extension `node_modules`, and limits a file to 512 MiB. Larger data files need a separately designed/tested backup strategy; do not bypass the limit.
 

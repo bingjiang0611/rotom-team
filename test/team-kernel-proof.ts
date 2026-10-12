@@ -1540,7 +1540,7 @@ try {
     report.readOnlyExactReceiptLookup = true;
     await assert.rejects(
         app.execution.admit(legacy.id, app.config.userById(bob.user.id)!),
-        /active or unknown/,
+        /still running in session/,
     );
     assert.equal(calls, 8);
     assert.equal(legacyCalls, 0);
@@ -2029,6 +2029,31 @@ try {
         400,
     );
     report.projectSkillRunsByName = true;
+
+    // One member runs several sessions at once: a run held in one session does not keep another from finishing.
+    const heldSession = await app.commands.createSession(a, { backend: "rotom" });
+    const otherSession = await app.commands.createSession(a, { backend: "rotom" });
+    const beforeParallel = calls;
+    const held = request(aliceToken, `c/${heldSession.id}/submit`, "POST", {
+        text: "NATIVE_UI_HOLD in parallel",
+        requestId: "parallel-held",
+    });
+
+    await until(() => calls === beforeParallel + 1, "the held run reached the model", 30000);
+    const other = await request(aliceToken, `c/${otherSession.id}/submit`, "POST", {
+        text: "Write the proof file.",
+        requestId: "parallel-other",
+    });
+
+    assert.equal(other.status, 200, await other.clone().text());
+    assert.equal(((await other.json()) as { status: string }).status, "settled");
+    assert.equal(app.kernel!.isRunning(heldSession.id as never), true, "the first run still goes");
+    // Changing accounts still waits for every run of the member.
+    await assert.rejects(app.execution.accountIdle(a), /still running in session/);
+    assert.equal((await request(aliceToken, `c/${heldSession.id}/abort`, "POST", {})).status, 200);
+    assert.equal(((await (await held).json()) as { status: string }).status, "settled");
+    assert.equal(calls, beforeParallel + 3);
+    report.oneMemberRunsSessionsInParallel = true;
     // The same project configuration reaches everyone: both members whose runs reached the model got its MCP tool.
     assert.deepEqual(
         [a.id, bob.user.id].filter((id) => !offeredProjectMcp.has(id)),
@@ -2091,7 +2116,7 @@ try {
             });
             // The composer's one message, sent by the owner who pays for it; nothing else dispatched. The subagent runs
             // before it count six: a child and the parent's turn on its result, then a stopped run with its child.
-            assert.equal(calls, 38);
+            assert.equal(calls, 41);
             assert.equal(requestMembers.at(-1), owner(app).id);
             report.webUiVerified = true;
         } else {

@@ -294,8 +294,6 @@ export class TeamKernel {
             throw new HttpError(409, "Frozen configuration changed.");
         }
 
-        await app.execution.accountIdle(user, String(id));
-
         return user;
     }
 
@@ -406,13 +404,14 @@ export class TeamKernel {
         }
     }
 
-    requireAccountIdle(user: User, exceptSession?: string): void {
+    /** Account changes wait for every run of the member; starting runs in other sessions does not. */
+    requireAccountIdle(user: User): void {
         const pending = this.executions.journal.pending(user.id);
 
-        if (pending && pending.sessionId !== exceptSession) {
+        if (pending) {
             throw new HttpError(
                 409,
-                "A rotom execution is active or unknown. Reconcile it before using this account again.",
+                `Your account is still running in session ${pending.sessionId}, or its outcome there is unknown. Wait for it to finish or stop it first.`,
             );
         }
     }
@@ -630,8 +629,12 @@ export class TeamKernel {
         }
 
         let reserved!: (receipt: KernelReceipt) => void;
+        let wasReserved = false;
         const admitted = new Promise<KernelReceipt>((resolve) => {
-            reserved = resolve;
+            reserved = (receipt) => {
+                wasReserved = true;
+                resolve(receipt);
+            };
         });
         const run = this.#track(
             id,
@@ -644,9 +647,12 @@ export class TeamKernel {
         }
 
         // After reservation every outcome is journaled and shown in the room; only a lost child is reported here.
-        run.catch((error) =>
-            this.#app.notice("warning", `Native run ended without a proven outcome: ${error}`),
-        );
+        // A refusal before reservation never ran: the race below returns it to the sender.
+        run.catch((error) => {
+            if (wasReserved) {
+                this.#app.notice("warning", `Native run ended without a proven outcome: ${error}`);
+            }
+        });
 
         return Promise.race([run, admitted.then((receipt) => this.#receipt(receipt))]);
     }
@@ -1444,7 +1450,6 @@ export class TeamKernel {
         }
 
         await this.#app.requireDriver(id, user, "rotom");
-        await this.#app.execution.accountIdle(user);
         await this.#app.accounts.forUser(user);
         const { model: choice, thinkingLevel } = this.#app.commands.defaultModel(user);
 

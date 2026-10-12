@@ -105,11 +105,13 @@ test("durable attempt identity: duplicate intent/unknown never dispatches again 
             () => journal.reserve("conversation-1", "request-2", "try again"),
             /unknown attempt/,
         );
+        // Another session of the member runs; the unknown attempt still holds back account changes.
         journal.bind("conversation-2", f.binding);
-        assert.throws(
-            () => journal.reserve("conversation-2", "new-id", "cannot hide unknown"),
-            /unknown attempt/,
+        assert.equal(
+            journal.reserve("conversation-2", "new-id", "other work").status,
+            "dispatch-intent",
         );
+        assert.ok(journal.pending(f.binding.memberId));
     } finally {
         journal.close();
         rmSync(f.root, { recursive: true, force: true });

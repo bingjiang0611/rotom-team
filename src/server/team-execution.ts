@@ -63,8 +63,8 @@ export class TeamExecution {
             );
         }
     }
-    async accountIdle(user: User, exceptKernelSession?: string): Promise<void> {
-        this.#app.kernel?.requireAccountIdle(user, exceptKernelSession);
+    async accountIdle(user: User): Promise<void> {
+        this.#app.kernel?.requireAccountIdle(user);
 
         for (const [id, owner] of this.#owners) {
             if (owner === user.id) {

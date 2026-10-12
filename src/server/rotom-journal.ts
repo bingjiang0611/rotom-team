@@ -158,7 +158,6 @@ export class RotomJournal {
             this.#db.exec(`PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON;
                 CREATE TABLE IF NOT EXISTS kernel_sessions (id TEXT PRIMARY KEY, binding TEXT NOT NULL, session_file TEXT, kernel_session_id TEXT);
                 CREATE TABLE IF NOT EXISTS kernel_attempts (id TEXT PRIMARY KEY, session_id TEXT NOT NULL REFERENCES kernel_sessions(id), request_id TEXT NOT NULL, prompt_hash TEXT NOT NULL, binding TEXT NOT NULL, home TEXT NOT NULL, status TEXT NOT NULL, UNIQUE(session_id, request_id));
-                CREATE UNIQUE INDEX IF NOT EXISTS one_kernel_writer ON kernel_attempts(home) WHERE status IN ('dispatch-intent','unknown');
                 CREATE TABLE IF NOT EXISTS kernel_entries (kernel_session_id TEXT NOT NULL, entry_id TEXT NOT NULL, session_id TEXT NOT NULL, attempt_id TEXT NOT NULL REFERENCES kernel_attempts(id), body TEXT NOT NULL, digest TEXT NOT NULL, PRIMARY KEY(kernel_session_id,entry_id));
                 CREATE TABLE IF NOT EXISTS kernel_usage (kernel_session_id TEXT NOT NULL, entry_id TEXT NOT NULL, attempt_id TEXT NOT NULL, member_id TEXT NOT NULL, raw_usage TEXT, PRIMARY KEY(kernel_session_id,entry_id), FOREIGN KEY(kernel_session_id,entry_id) REFERENCES kernel_entries(kernel_session_id,entry_id));`);
 
@@ -190,6 +189,10 @@ export class RotomJournal {
                     CREATE TABLE kernel_child_usage (attempt_id TEXT NOT NULL REFERENCES kernel_attempts(id), member_id TEXT NOT NULL, raw_usage TEXT NOT NULL);
                     PRAGMA user_version=4; COMMIT;`);
             }
+
+            // One member may run several sessions at once; each conversation keeps its own single writer.
+            // Dropped without a version bump, so an older release still opens this journal.
+            this.#db.exec("DROP INDEX IF EXISTS one_kernel_writer");
 
             // A cleanly released parent lock is not evidence that an unfinished dispatch never happened.
             this.#db.exec(
@@ -464,7 +467,7 @@ export class RotomJournal {
             throw new Error("Fork seed requires a fresh native segment");
         }
 
-        this.#unblocked(sessionId, binding.home);
+        this.#unblocked(sessionId);
 
         return this.#intent(sessionId, segmentId, requestId, prompt, binding, operation);
     }
@@ -497,7 +500,7 @@ export class RotomJournal {
                 );
             }
 
-            this.#unblocked(sessionId, normalized.home);
+            this.#unblocked(sessionId);
             const segmentId = randomUUID();
 
             this.#db
@@ -524,16 +527,16 @@ export class RotomJournal {
         }
     }
 
-    #unblocked(sessionId: string, home: string): void {
+    #unblocked(sessionId: string): void {
         const blocked = this.#db
             .prepare(
-                "SELECT id FROM kernel_attempts WHERE (home=? OR conversation_id=?) AND status IN ('dispatch-intent','unknown')",
+                "SELECT id FROM kernel_attempts WHERE conversation_id=? AND status IN ('dispatch-intent','unknown')",
             )
-            .get(home, sessionId);
+            .get(sessionId);
 
         if (blocked) {
             throw new KernelRequestConflict(
-                "Kernel account has a running or unknown attempt; reconcile it before any new dispatch",
+                "This session has a running or unknown attempt; reconcile it before any new dispatch",
             );
         }
     }

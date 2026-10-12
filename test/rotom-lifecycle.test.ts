@@ -145,6 +145,42 @@ test("busy and unknown fences reject a new identity as a known conflict without 
     }
 });
 
+test("one member runs several sessions at once while each session keeps a single writer", (t) => {
+    const f = setup(t),
+        alice = f.member("alice");
+
+    f.journal.bind("first", alice);
+    f.journal.bind("second", alice);
+    const first = f.journal.reserve("first", "a", "first task");
+
+    f.journal.fail(first.id, "unknown");
+    const second = f.journal.reserve("second", "b", "second task");
+
+    assert.equal(second.status, "dispatch-intent");
+    assert.throws(() => f.journal.reserve("first", "c", "must not run"), KernelRequestConflict);
+    assert.throws(() => f.journal.reserve("second", "d", "must not run"), KernelRequestConflict);
+    // Account changes still wait for every run of the member.
+    assert.ok(f.journal.pending("alice"));
+});
+
+test("a journal written by an older release loses its account-wide writer index", (t) => {
+    const f = setup(t),
+        alice = f.member("alice");
+
+    f.journal.close();
+    const old = new DatabaseSync(join(f.data, "kernel.sqlite"));
+
+    old.exec(
+        "CREATE UNIQUE INDEX one_kernel_writer ON kernel_attempts(home) WHERE status IN ('dispatch-intent','unknown')",
+    );
+    old.close();
+    f.journal = new RotomJournal(f.data);
+    f.journal.bind("first", alice);
+    f.journal.bind("second", alice);
+    f.journal.reserve("first", "a", "first task");
+    assert.equal(f.journal.reserve("second", "b", "second task").status, "dispatch-intent");
+});
+
 test("handoff commits a new head atomically without rewriting receipts or rebilling inherited usage", (t) => {
     const f = setup(t),
         j = f.journal,
@@ -163,7 +199,7 @@ test("handoff commits a new head atomically without rewriting receipts or rebill
     assert.equal(j.session("shared").segmentId, "shared");
     assert.throws(() => j.reserve("shared", "alice:race", "race"), /running or unknown/);
     j.bind("bob-other", bob);
-    assert.throws(() => j.reserve("bob-other", "bob:race", "race"), /running or unknown/);
+    assert.equal(j.reserve("bob-other", "bob:other", "other work").status, "dispatch-intent");
     j.attach(handoff.id, "bob.jsonl", "native-bob");
     const seed = response("inherited", "team-public-history");
 
@@ -197,7 +233,7 @@ test("handoff commits a new head atomically without rewriting receipts or rebill
     );
 });
 
-test("interrupted seed keeps the old head and fences both conversation and destination HOME after restart", (t) => {
+test("interrupted seed keeps the old head and fences its conversation and the destination's account changes after restart", (t) => {
     const f = setup(t),
         alice = f.member("alice"),
         bob = f.member("bob");
@@ -213,7 +249,7 @@ test("interrupted seed keeps the old head and fences both conversation and desti
     assert.equal(f.journal.pending("bob")?.id, receipt.id);
     assert.throws(() => f.journal.reserve("shared", "new-id", "no bypass"), /unknown attempt/);
     f.journal.bind("bob-other", bob);
-    assert.throws(() => f.journal.reserve("bob-other", "new-id", "no bypass"), /unknown attempt/);
+    assert.equal(f.journal.reserve("bob-other", "new-id", "other work").status, "dispatch-intent");
     assert.throws(
         () => f.journal.handoff("shared", "new-handoff", "shared", alice),
         /unknown attempt/,
