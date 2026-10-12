@@ -68,6 +68,8 @@ Run as the dedicated user, not root. Create `~/Library/LaunchAgents/dev.rotom.te
 </dict></plist>
 ```
 
+Behind a TLS-intercepting corporate proxy, `curl` trusts the proxy's root through the macOS keychain but Node does not, and model requests fail with `fetch failed` (`SELF_SIGNED_CERT_IN_CHAIN`). Export that root to a PEM file (`security find-certificate -c "<root name>" -p > root.pem`) and add `NODE_EXTRA_CA_CERTS` with its absolute path to the plist's `EnvironmentVariables`. The server passes it on to every rotom process; check with a Node `fetch` to the provider before admitting members.
+
 ```sh
 plutil -lint ~/Library/LaunchAgents/dev.rotom.team.plist
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.rotom.team.plist
