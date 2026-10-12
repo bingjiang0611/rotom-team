@@ -276,7 +276,9 @@ if (launcher) {
         console.log(`    http://${host}:${options.port}/login?token=${token}`);
     }
 
-    console.log("  Other devices: open the app's menu and use “Sign in another device”.\n");
+    console.log(
+        "  Other devices: Settings → People → Invite someone (tick “Sign in as me” for your own).\n",
+    );
 }
 
 if (stopWhenStarted !== undefined) {

@@ -12,3 +12,18 @@ Pi Pocket is often edited from inside itself, while it runs. [docs/map.md](docs/
 - The server is plain TypeScript run by Node's type stripping: only erasable syntax (no enums, no parameter properties, no namespaces). Imports use `.ts` extensions.
 - Code style is Prettier (`.prettierrc.json`: 4 spaces, 100 columns) plus ESLint's layout rules (`eslint.config.js`): braces on every `if` and loop, and a blank line after declarations, around blocks, and before `return` and `throw`. Run `npm run format` after editing. Prettier leaves the markup in `html` templates alone, so lay it out by hand the same way: 4 spaces per level, and a tag that runs past 100 columns gets one attribute per line and its children on their own lines. In htm a line break is not a space: break only where there is no space, or between tags, never inside running text.
 - Run `npm run check`, `npm run lint`, and `npm test` after server changes.
+
+## Starting it
+
+Always pass `--data` (never use `~/.pi-pocket`). The server binds `127.0.0.1` unless the owner explicitly asks for another `--host`.
+
+- Try a checkout: `npm ci && npm run install:kernel`, then `node bin/rotom-team.js --port 8788 --cwd <workspace> --data <throwaway dir>`. Use a port the team service does not own; a taken port prints "Port … is already in use" and exits, so a browser on that port still shows the old server.
+- The team service on a deployment machine is the launchd agent `dev.rotom.team` (`~/Library/LaunchAgents/dev.rotom.team.plist`, `KeepAlive`), owning port 8787. It runs a fixed release under `~/rotom-team-deployment/releases/<commit>/` with the Node in `~/rotom-team-deployment/toolchains/`, data in `~/rotom-team-deployment/data`. A Git checkout elsewhere on that machine is not what it runs, and killing its process only restarts it.
+- Upgrade it as in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md), in this order:
+    1. `git archive origin/main | tar -x -C ~/rotom-team-deployment/releases/<commit>` into a new directory; keep the old release for rollback.
+    2. There, with the toolchain Node first in `PATH`: `npm ci`, `npm run install:kernel`, `npm run check`, `npm run format:check`, `npm test`.
+    3. `launchctl bootout gui/$(id -u)/dev.rotom.team`; wait until `data/harness.lock` and `data/kernel.lock` are gone.
+    4. `node scripts/data.mjs backup ~/rotom-team-deployment/data ~/rotom-team-deployment/backups/data-before-<commit>`, and copy the plist next to it.
+    5. Point `ProgramArguments` item 1 at the new `bin/rotom-team.js`. `plutil -replace ProgramArguments.1` inserts into the array instead of replacing: follow it with `plutil -remove ProgramArguments.2`, then `plutil -lint` and diff against the copy (only the release path may differ).
+    6. `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.rotom.team.plist`; check `launchctl print gui/$(id -u)/dev.rotom.team` shows `running`, `data/service-error.log` has nothing new, and the served `web/` files are the new ones.
+- Roll back: bootout, copy the saved plist back, bootstrap. Restore data only with `scripts/data.mjs restore` (see DEPLOYMENT.md).
