@@ -1,7 +1,8 @@
-# rotom-team v1.2: configuration belongs to the project
+# Project configuration
 
-v1.2 replaces the personal layer of [v1](V1.md) and [v1.1](V1.1.md). Every member who works in a project gets the same
-configuration: the project's. Model accounts stay personal: whoever sends still pays.
+This is the current configuration contract for new rotom sessions. Every member who works in a project gets the same
+configuration: the project's. Model accounts stay personal: whoever sends still pays. The execution and safety
+contract is [PRODUCT.md](PRODUCT.md); legacy frozen sessions keep their existing configuration.
 
 ```mermaid
 flowchart LR
@@ -33,7 +34,7 @@ In one folder Pi reads the first of `AGENTS.md` and `CLAUDE.md`, not both.
 
 ## rotom 0.1.19
 
-v1.2 pins rotom 0.1.19 ([`runtime/rotom/pin.json`](../runtime/rotom/pin.json)). In 0.1.18 the Qoder legacy models
+The runtime pin is rotom 0.1.19 ([`runtime/rotom/pin.json`](../runtime/rotom/pin.json)). In 0.1.18 the Qoder legacy models
 (`ultimate`, `qmodel_latest`, `smodel` and the other COSY routes) ran without the system prompt: rotom sent it only in a
 top-level field that Qoder ignores. Such a run did not see `AGENTS.md`, `.pi/APPEND_SYSTEM.md`, the skill list or the
 folder. 0.1.19 also sends it as the first message, as Qoder's own CLI does. Other models were not affected.
@@ -41,8 +42,9 @@ folder. 0.1.19 also sends it as the first message, as Qoder's own CLI does. Othe
 ## Running a skill by name
 
 Type `/skill:` in the message box: it offers the project's skills. `/skill:name what to do` sends the skill's
-instructions with the request; the kernel expands it, as rotom does. Other slash commands (`/mcp`, `/compact`, …) are
-still refused: they would run in the kernel outside the run's journal. Prompt templates are not offered or sent, since
+instructions with the request; the kernel expands it, as rotom does. Other slash commands sent directly to the kernel
+(`/mcp`, `/compact`, …) are refused because they would bypass its journal. The browser handles `/mcp` by opening the
+MCP sign-ins sheet, not by submitting that command to the kernel. Prompt templates are not offered or sent, since
 their names can clash with those commands.
 
 The list is computed on the server from `.pi/skills`, the `skills` paths in `.pi/settings.json` (relative to `.pi`),
@@ -126,12 +128,16 @@ itself; leave the address empty and press Finish.
 ## Trust boundary changes
 
 - **The project's extensions and MCP commands run on every member's run**, as the service user. They can read what the
-  service user can read, and an extension can call a model provider of its own outside the gate. This is v1's
-  "Trusted members only", applied to the project's files: only trusted people should change them.
+  service user can read, and an extension can call a model provider of its own outside the gate. The
+  "Trusted members only" boundary applies to the project's files: only trusted people should change them.
 - **Sessions with a frozen configuration** (activated through the upstream configuration API) keep it, with no project
   trust: their pinned AGENTS.md and skills apply, not the project's `.pi`.
 
-## Verification
+## Verification entry points
+
+These opt-in proof scripts describe fixture assertions, not results from the current documentation cleanup.
+Check their inputs and authorization scope before running them; no real account or paid invocation is authorized by
+this guide.
 
 | Check               | Shows                                                                                                                                                                                                                                                                                                                                                                                              |
 | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -142,10 +148,6 @@ itself; leave the address empty and press Finish.
 | `test:kernel:qoder` | The transport fixture loads as a project extension for two members.                                                                                                                                                                                                                                                                                                                                |
 | Negative control    | Without `--approve`, `test:kernel` fails on the project's MCP tool and `test:kernel:app` on the project's skill. Without the stand-in `open`, `test:kernel:mcp` records a browser opened on the server; without `--no-approve`, its frozen session loads the project's MCP. Refusing every slash text fails the `/skill:` run with 400; without the rotom route for the list, the app proof fails. |
 
-On a real Qoder account in rate-native with `ultimate`, asked not to use tools: on 0.1.18 the run had 4592 input tokens
-and found none of the facts that exist only in the system prompt (CLAUDE.md, the skill list, the folder); on 0.1.19 it
-had 20321 and answered all four.
-
-Not verified: a real keychain item (the proof uses `!printf`), a real remote MCP or OAuth server (the proofs use
-loopback fixtures), servers that need a Client ID Metadata Document or step-up scopes, and the mobile layout of the
-sheet.
+The fixtures do not establish acceptance for a real keychain item (`!printf` stands in for it), a remote MCP or OAuth
+server, servers requiring a Client ID Metadata Document or step-up scopes, or the mobile layout. Historical account
+experiments and deployment evidence are not current verification and are kept outside this guide.

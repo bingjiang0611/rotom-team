@@ -1,45 +1,58 @@
 # rotom team 产品合同
 
-共享会话历史，不共享模型账号。谁提交执行，使用谁的个人模型与额度；查看、评论不发起模型推理。当前版本 `0.1.0`（v1）：rotom 执行所有新会话，见 [V1.md](V1.md)。仍是可信团队预览，不宣称正式版完成。
+当前包版本 `0.1.1`，以 [`package.json`](../package.json) 为准。共享会话历史，不共享模型账号。原生 macOS / 完全可信团队预览，不是多租户安全沙箱，也不宣称正式版验收完成。
 
-[rotom 执行内核迁移](ROTOM-KERNEL.md) 的第三阶段基线已接入真实 app 权限、请求 auth broker、持久 receipt 和网页文本/工具结果；`--rotom-kernel` 显式为新会话启用固定产品。后续核心交付增量见 [NATIVE-DELIVERY.md](NATIVE-DELIVERY.md)：Qoder access-only bridge、公开历史接力/fork、原生压缩、配置激活、Credit 投影和恢复已有 synthetic provider / 原生进程验证；真实 ChatGPT 写入、Qoder 接力读取/压缩/重启续接、ChatGPT fork 续接及反向 handoff 也已通过指定场景。**核心 R1–R8 已按验收矩阵完成交付**；首次连接失败的服务接收/费用保留 unknown，后续新验证有用户明确授权。**v1 起新会话默认使用 rotom（`--no-rotom-kernel` 可关闭），旧会话保持原后端；备用机仍在 `e31e9ca`，未部署 0.1.0。** 原生路径尚无附件或完整预算/账本支持，设置美元预算时拒绝执行。下文旧后端证据不自动算给新内核。
+## 当前执行路径
 
-## 信任与部署
+```mermaid
+flowchart LR
+    U[成员提交任务] --> T[TeamKernel: 权限与固定付费人]
+    T --> R[固定版本 rotom: RPC 执行]
+    R --> G[父进程 auth gate: 每次推理检查账号]
+    T --> J[(原生 journal: receipt、用量、恢复)]
+    T --> D[(Durable: 共享会话与 Transcript 镜像)]
+```
 
-原生 macOS、专用系统用户、完全可信成员。模型路由、私有文件及应用权限不是 OS 沙箱：执行代码的人具有服务系统用户的文件权限。默认只监听 loopback；未选择 Tailscale 或公网方案。用户指定备用 MacBook 已通过 SSH 部署、loopback 端口转发和受测恢复验证；TLS、远程执行设备、独占 OS 用户和备用机真实模型/界面仍未完成。
+- 新会话默认由 rotom 执行。`--no-rotom-kernel` 启动仅使用 Pi Durable 的服务；既有 Durable 会话保持原后端，不自动迁移。
+- rotom 版本及文件摘要由 [`runtime/rotom/pin.json`](../runtime/rotom/pin.json) 固定。团队包版本与 rotom 版本不是同一个版本号。
+- Durable 只为 rotom 会话提供共享状态、权限和 Transcript 镜像，不另运行一个 Agent 循环。它自己的会话仍使用旧后端。
+- rotom 的工具、扩展消息和问题进入同一 Transcript。只有本轮付费成员可以回答该轮交互问题。
 
-## 已实现
+## 执行归属与历史
 
-- `team-accounts.ts`：每人成员/账号修订号/Provider 路由，独立凭据与模型缓存，无环境凭据回退。个人模型失效时要求重新选择，不自动借用其他已连接模型。
-- `openai-chatgpt.ts`：SIWC OAuth 使用官方账号 `/v1/models` 与 `/v1/responses`；缓存绑定 client ID **和授权 refresh 摘要**，不是仅绑定工具注册。保留 API-key 静态目录。拒绝将 Codex 凭据重命名为 SIWC。
-- `credential-store.ts`：串行、原子 `0600` 存储、取消检查。复制的验证凭据不能刷新；原生 OpenAI 与 Qoder 刷新在请求前记录一次性尝试，unknown 不重放。
-- `team-execution.ts`：持久执行归属、Provider session 索引和实际分派检查；busy 付费人不变。Durable observer 会吞异常，不能承担授权门禁。
-- `team-profiles.ts`：个人配置档、项目规则和完整技能树快照（含 references/scripts），显式激活版本，重启/接力/fork 保留；8 MiB 上限，拒绝碰撞、服务数据导入、非普通文件及 symlink；读取/分派验证 SHA-256。哈希是检查点检测，不防同一 OS 用户并发修改。
-- `team-projects.ts`：项目 view/continue/fork 独立授权，fork 不扩张范围；撤权关闭订阅并中止未授权执行。原生代码执行仍不是项目目录沙箱。
-- `team-usage.ts` 与 Durable usage patch：响应和实际账号用量原子归属，重启补记不根据最新评论者认领；补记有独立持久去重。
-- 分别可撤销的浏览器登录：同一成员至多 32 个额外 bearer 登录，存储 hash；撤销关闭既有流。这不是远程执行节点。
-- `scripts/data.mjs`：离线私有备份、逐文件摘要、拒绝活跃 writer；只恢复到原 canonical 路径且不覆盖。备份包含秘密，恢复故意不恢复 `people/*/auth.json` 和新内核 `kernel-homes/*/.pi/agent/auth.json`，避免复活旧刷新凭据；新内核 writer/未核清 lease 同样阻止备份。项目工作区另备份。
+- 谁发送任务，使用谁的个人模型账号。空闲会话的下一位发送者接力；fork 使用发起人的账号。运行中付费人不变，不跨账号排队。
+- 运行中的 steer/follow-up 属于当前付费成员。其他成员可以查看、评论、等待、停止后接力或 fork；项目 view/continue/fork 权限分别检查，fork 不扩大权限。
+- 模型凭据由父进程保存和刷新。rotom 每次推理通过本轮 gate 获取授权；失效模型不回退管理员、环境变量或其他成员账号。未知刷新结果不重放。
+- 跨账号历史投影仅包含公开文本及配对工具历史，不携带 thinking、签名、response ID 等私有 Provider 状态。原始记录不改写；这不是对可信协作者隐藏所有原始文件的 OS 访问控制。
+- 子 Agent 通过同一父运行 gate 使用同一付费人和模型；其响应用量独立记录。父 gate 结束后，旧子 Agent 不能继续取得模型授权，也不会由新的父运行自动接管。
 
-## 协作与上下文
+## 配置与工具
 
-同一会话准入串行。忙时其他成员只能评论、等待、停止后接力或 fork；不跨账号排队。失败执行仍有未处理输入时，不能交给新账号自动执行。幂等重试返回原 receipt，不改付费人。
+新会话每次运行读取项目的 `AGENTS.md`、skills、MCP 和扩展，不再使用个人配置层。完整加载、信任及 MCP 登录规则见 [CONFIGURATION.md](CONFIGURATION.md)。
 
-同账号历史保留原始字段；跨账号只发送公开文本与配对工具历史，移除 thinking/signature/response ID 等私有状态，原记录不变。这不是对协作者隐藏原始 thinking 的访问控制。
+- 项目文件由所有成员共享；项目 MCP 命令和扩展以服务 OS 用户执行，只允许可信人员修改这些文件。
+- OAuth 型 MCP 由各成员在 **MCP sign-ins** 独立登录。MCP 授权与模型授权不同；文件分开不构成成员间 OS 隔离。
+- 历史冻结配置会话保留原配置摘要，不自动切换为项目配置。相关配置 API 和 8 MiB 技能快照上限是旧会话路径，不是新会话的配置方式。
+- rotom 使用服务用户的 Chrome Relay 和桌面；不同成员不拥有相互隔离的浏览器登录或屏幕。
 
-已替换 alpha 的跨账号压缩拒绝：hash-bound Durable patch 在转成 user 文本前排除 thinking，当前发起者使用自己的账号压缩。已有持久子 Agent 不自动获得新付费人权限；需要新建子 Agent。
+## 中断、恢复与数据
 
-## 用量与限额
+- 干净停止为运行中的 prompt 记录续跑计划；重启后以原成员继续一次。崩溃后只有确认旧 rotom 进程已结束，才能将 prompt 标为 interrupted 并安排继续。
+- 连续 3 次自动续跑后，下一次中断等待成员手动 **Continue**。仍可能存活的进程、unknown 操作、未核清 lease 不自动重放；compaction、handoff 和 fork 的中断需要对账。
+- Stop 请求、PID 消失、旧 PASS 或 receipt 存在，单独都不能证明工具已关闭或业务成功。操作步骤见 [NATIVE-RECOVERY.md](NATIVE-RECOVERY.md)。
+- 离线备份含秘密，要求停止 writer、核清 lease，并验证逐文件摘要。恢复只能使用原绝对路径且不能覆盖现有目录；模型和 MCP refresh grants 不恢复，须独立重登。项目工作区另行备份。
 
-Token、API 成本估计、订阅额度和财务账单不同。美元零占位不代表免费；ChatGPT 全账号额度与 Qoder credits 不构成完整账本，缺失保持 unknown。美元预算不硬限制订阅 credits，最终额度由 Provider 执行。
+## 信任边界与限制
 
-SIWC 的 4096 `maxTokens` 是本地预算提示，不是服务端输出硬上限；该计划路由不接受 `max_output_tokens`。目录最多 256 条；模型目录/推理档位超出可解析合同需更新 adapter，不猜测映射。只映射 Pi 原生支持的 reasoning levels，未支持的 ultra 不伪装支持。
+- 原生工具具有服务 OS 用户的文件权限，可能读取其他成员的凭据。独立文件、`0700/0600`、worktree 和项目权限都不是 OS 沙箱。使用专用系统账号，只邀请完全可信成员。
+- 默认仅监听 loopback。HTTPS、SSH 转发或其他远程入口由部署者明确配置；不直接暴露给不信任的人。远程 OpenAI 登录规则见 [REMOTE-OPENAI-LOGIN.md](REMOTE-OPENAI-LOGIN.md)。
+- rotom 会话暂不映射附件输入，也不支持可证明的美元预算，设置 USD 预算时拒绝执行。Token、API 成本估计、订阅额度、Qoder credits 与财务账单不同；缺失保持 unknown，不用零费用占位。
+- thinking 不进入公共镜像；运行结果和跨账号投影有意不是逐字无损。旧子 Agent 的恢复、跨机器活跃 SQLite 迁移、个人执行节点、SSO 和多租户隔离不是已交付能力。
+- rotom 运行由其固定产品合同约束；不能把 Durable 的定时任务、Goal、预算页或扩展说明直接套到 rotom 会话。配置加载及原生 UI 边界见 [CONFIGURATION.md](CONFIGURATION.md)。
+- Qoder adapter 是非官方代码；目录、额度或登录成功不证明服务商许可、完整结算或团队托管批准。正式 SIWC 注册/品牌、服务商支持与分发授权见 [PROVIDER-POLICY.md](PROVIDER-POLICY.md)。
 
-个人账号定时任务、自动 Goal 和付费标题生成保持关闭。个人执行节点、SSO、多租户隔离、跨机器 live SQLite、自动账号降级不是已交付能力。
+## 当前文档入口
 
-## 运行时与服务商
+[README](../README.md) 提供启动和使用方式；[CONFIGURATION.md](CONFIGURATION.md) 提供当前项目配置合同；[VERIFICATION.md](VERIFICATION.md) 说明验证范围；[NATIVE-DELIVERY.md](NATIVE-DELIVERY.md) 保留 R1–R8 验收要求；[DELIVERY-CHECKLIST.md](DELIVERY-CHECKLIST.md) 列出正式交付检查；[DEPLOYMENT.md](DEPLOYMENT.md) 与 [NATIVE-RECOVERY.md](NATIVE-RECOVERY.md) 提供运维边界。
 
-Pi npm `1.0.2`，通过 `scripts/prepare-runtime.mjs` 和 `vendor/pi-durable/patches.json` 校验 stock/patched 摘要与包身份：公共压缩、原子归属及 OpenAI SDK `maxRetries:0`。不修改存活 rotom 的安装。保留上游许可/归属。
-
-Qoder 是非官方代码快照，动态目录只开放实测白名单交集；凭据和额度成功不证明上游许可。SIWC 使用 Pi 的原生客户端注册/登录，当前注册显示名沿用 Pi；remote-host session transfer 与客户端品牌审查尚未交付，远端 localhost 回调不能假装到达部署主机。
-
-验收证据见 [VERIFICATION.md](VERIFICATION.md)，部署和恢复见 [DEPLOYMENT.md](DEPLOYMENT.md)，未完成项见 [DELIVERY-CHECKLIST.md](DELIVERY-CHECKLIST.md)。独立 Qoder 登录及隔离本地到期后的刷新已实测；正式版仍须补齐自然到期/撤销/限额、真实跨账号压缩/中断恢复、目标设备真实账号/界面及服务商支持边界，并收口本次冷环境浏览器回归失败。不得把局部通过写成全目标完成。
+旧迁移计划、阶段合同和实验验收记录不作为当前产品依据；需要追溯时从 Git 历史查看。私有账号、部署记录和原始日志不进入仓库。代码级检查不替代真实账号、目标设备或正式版验收。
