@@ -2265,6 +2265,7 @@ try {
                 root: realpathSync(root),
                 base: `http://127.0.0.1:${(server.address() as { port: number }).port}`,
                 id: Number(id),
+                unseenId: Number(imageId),
                 memberName: owner(app).name,
             });
             // The composer's one message, sent by the owner who pays for it; nothing else dispatched. The subagent runs

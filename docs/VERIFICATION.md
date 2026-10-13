@@ -17,6 +17,13 @@ The automated suite uses synthetic providers, local fixtures and isolated test d
 
 For every check, record the exact source commit, exit status, inspected scope and any failure. Do not treat an older passing result as evidence for the current artifact.
 
+## Per-member finished markers
+
+`test/sessions.test.ts` checks that two members independently receive the same finished marker, one member can clear
+only their own marker, and a client cannot acknowledge a future run it has not viewed. `npm run test:kernel:ui`
+checks the sidebar marker renders for a finished native session and clears after that member opens the session.
+The marker means the run ended and a result is available to inspect; it does not assert task success.
+
 ## Native attachments and Qoder context budgets
 
 `npm run test:kernel:app` verifies upload → native RPC → loopback model image bytes, attachment paths,

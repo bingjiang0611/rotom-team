@@ -1582,10 +1582,15 @@ export class TeamKernel {
         this.#active.add(run);
         this.#app.kernelChanged();
 
+        let finished = false;
+
         try {
             const receipt = await run.promise;
 
             await this.mirror(id);
+            finished =
+                receipt.operation === "prompt" &&
+                ["settled", "interrupted"].includes(receipt.status);
 
             return this.#receipt(receipt);
         } finally {
@@ -1593,6 +1598,10 @@ export class TeamKernel {
 
             if (!this.isRunning(id)) {
                 this.#live.delete(id);
+            }
+
+            if (finished) {
+                await this.#app.recordRunFinished(id);
             }
 
             this.#app.kernelChanged();

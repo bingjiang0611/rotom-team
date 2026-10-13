@@ -13,6 +13,7 @@ export async function nativeUiProof(options: {
     root: string;
     base: string;
     id: number;
+    unseenId: number;
     memberName: string;
 }) {
     assert.ok(findBrowser(), "Chromium is required; native UI verification cannot be skipped");
@@ -34,6 +35,40 @@ export async function nativeUiProof(options: {
         await until(
             async () => (await text(".transcript")).includes("Write the proof file."),
             "persisted native history in the Transcript",
+            20000,
+        );
+        // Completion attention is personal: another finished session remains marked until this member opens it.
+        const unseen = `.session-row[data-id="${options.unseenId}"]`;
+
+        await until(
+            async () =>
+                (await page.evaluate(
+                    `Boolean(document.querySelector('${unseen} .state-finished'))`,
+                )) === "true",
+            "finished but unviewed marker",
+            20000,
+        );
+        const finishedScreenshot = await page.screenshot();
+        const finishedPath = join(options.root, "native-ui-finished-unseen.jpg");
+
+        writeFileSync(finishedPath, Buffer.from(finishedScreenshot.data, "base64"), {
+            mode: 0o600,
+            flag: "wx",
+        });
+        screenshots.push(finishedPath);
+        await page.evaluate(`document.querySelector('${unseen} .session').click()`);
+        await until(
+            async () =>
+                (await page.evaluate(
+                    `Boolean(document.querySelector('${unseen} .state-finished'))`,
+                )) === "false",
+            "this member viewing clears only their marker",
+            20000,
+        );
+        await page.navigate(`${options.base}/s/${options.id}`);
+        await until(
+            async () => (await text(".transcript")).includes("Write the proof file."),
+            "return to original session",
             20000,
         );
         // Whoever's account ran it last is named; the owner's message below takes it over to their own.
@@ -284,6 +319,7 @@ export async function nativeUiProof(options: {
         );
 
         return {
+            finishedMarkerClearedOnView: true,
             imagePastedAndSent: true,
             mcpSignIn: true,
             skillsOffered: true,

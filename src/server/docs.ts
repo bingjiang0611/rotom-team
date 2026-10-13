@@ -23,6 +23,8 @@ export type SessionMeta = {
     cwd: string;
     createdAt: number;
     updatedAt: number;
+    /** The newest run that ended. Each member separately records whether they have viewed it. */
+    finishedAt?: number;
     createdBy?: string;
     archived?: boolean;
     /** The session this one was forked from, and the last entry it inherited; no entry: forked before the first message. */

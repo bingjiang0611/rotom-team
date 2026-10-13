@@ -23,6 +23,8 @@ export interface User {
     tokenHash: string;
     createdAt: number;
     lastSeen?: number;
+    /** Newest finished run viewed in each session. This member's state never marks another member's view. */
+    finishedSeen?: Record<string, number>;
     /** Conversation ids of the only sessions this person may open; absent means every session. */
     sessions?: string[];
     /**
@@ -244,6 +246,23 @@ export class ConfigStore {
 
     userById(id: string): User | undefined {
         return this.#config.users.find((user) => user.id === id);
+    }
+
+    markFinishedSeen(id: string, sessionId: string, finishedAt: number): void {
+        const user = this.userById(id);
+
+        if (!user || !Number.isSafeInteger(finishedAt) || finishedAt <= 0) {
+            return;
+        }
+
+        const previous = user.finishedSeen?.[sessionId] ?? 0;
+
+        if (finishedAt <= previous) {
+            return;
+        }
+
+        user.finishedSeen = { ...user.finishedSeen, [sessionId]: finishedAt };
+        this.save();
     }
 
     addUser(name: string, role: Role, sessions?: string[]): { user: User; token: string } {

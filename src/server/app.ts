@@ -565,10 +565,7 @@ export class PocketApp {
 
                 if (!busy) {
                     this.spend.runEnded(id);
-
-                    if (this.#sessions[String(id)] !== undefined) {
-                        this.#endedAt.set(id, Date.now());
-                    }
+                    void this.recordRunFinished(id);
                 }
 
                 // A parent shows its subagents' busy state.
@@ -1272,6 +1269,51 @@ export class PocketApp {
         this.#scheduleSessions();
     }
 
+    /** Persist a finished run once, so each member can independently acknowledge its result. */
+    async recordRunFinished(id: ConversationId): Promise<void> {
+        if (this.#sessions[String(id)] === undefined) {
+            return;
+        }
+
+        const finishedAt = Date.now();
+
+        this.#endedAt.set(id, finishedAt);
+
+        try {
+            await this.harness.commit(async (tx) => {
+                const session = (await tx.doc(SessionsDoc)).items[String(id)];
+
+                if (session) {
+                    session.finishedAt = finishedAt;
+                }
+            }, context);
+        } catch (error) {
+            this.notice("warning", `The finished marker could not be saved: ${error}`);
+        }
+    }
+
+    markRunSeen(id: ConversationId, user: User, finishedAt: number): void {
+        this.requireSee(user, id);
+        const current = this.#sessions[String(id)]?.finishedAt;
+
+        if (
+            !Number.isSafeInteger(finishedAt) ||
+            finishedAt <= 0 ||
+            current === undefined ||
+            finishedAt > current
+        ) {
+            throw new HttpError(400, "A current finishedAt value is required.");
+        }
+
+        this.config.markFinishedSeen(user.id, String(id), finishedAt);
+
+        for (const client of this.#clients) {
+            if (client.user.id === user.id) {
+                client.send("sessions", this.sessions(client.user));
+            }
+        }
+    }
+
     #scheduleSessions(): void {
         if (this.#sessionsTimer !== undefined) {
             return;
@@ -1279,15 +1321,9 @@ export class PocketApp {
 
         this.#sessionsTimer = setTimeout(() => {
             this.#sessionsTimer = undefined;
-            const all = this.sessions();
 
             for (const client of this.#clients) {
-                client.send(
-                    "sessions",
-                    all.filter((session) =>
-                        this.canSee(client.user, Number(session.id) as unknown as ConversationId),
-                    ),
-                );
+                client.send("sessions", this.sessions(client.user));
             }
         }, 400);
     }
@@ -1324,7 +1360,12 @@ export class PocketApp {
                     ([userId, name]) => ({ id: userId, name }),
                 );
                 const chat = this.#lastChat.get(id);
-                const endedAt = this.#endedAt.get(Number(id) as unknown as ConversationId);
+                const endedAt =
+                    meta.finishedAt ?? this.#endedAt.get(Number(id) as unknown as ConversationId);
+                const finishedUnread =
+                    user !== undefined &&
+                    meta.finishedAt !== undefined &&
+                    meta.finishedAt > (user.finishedSeen?.[id] ?? 0);
 
                 return {
                     id: Number(id),
@@ -1332,6 +1373,7 @@ export class PocketApp {
                     busy,
                     waiting: waiting.has(id),
                     ...(endedAt === undefined ? {} : { endedAt }),
+                    ...(finishedUnread ? { finishedUnread: true } : {}),
                     ...(model === undefined ? {} : { model: model.modelId }),
                     ...(here.length === 0 ? {} : { people: here }),
                     ...(chat === undefined ? {} : { chatAt: chat.at, chatBy: chat.userId }),
@@ -1385,6 +1427,7 @@ export class PocketApp {
                 (meta === undefined ? `Conversation ${String(room.id)}` : "New session"),
             cwd: agent.cwd ?? meta?.cwd ?? this.defaultCwd,
             archived: meta?.archived === true,
+            ...(meta?.finishedAt === undefined ? {} : { finishedAt: meta.finishedAt }),
             ...(room.parent === undefined ? {} : { parent: room.parent }),
             ...(room.subagentName === undefined ? {} : { subagentName: room.subagentName }),
             // Each browser finds the source's title in its own session list, so only people who can open it get a link.

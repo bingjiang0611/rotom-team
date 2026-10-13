@@ -158,6 +158,11 @@ export function sessionUnread(session, state = store.state) {
     return session.chatAt !== undefined && session.chatBy !== state.me?.id && session.chatAt > read;
 }
 
+/** A finished round awaiting this member's view, never another member's shared read state. */
+export function sessionFinishedUnread(session) {
+    return session.finishedUnread === true && !session.busy;
+}
+
 /** Server features the web app may use. `collab` 2 adds roles, take turns, reactions, pins, notes, mentions, push. */
 export const collab = () => (store.state.server?.collab ?? 0) >= 2;
 /** Viewers read and chat; they never steer Pi. */
@@ -314,6 +319,35 @@ export async function attempt(action) {
 
 let source;
 
+const markingFinished = new Set();
+
+/** Mark only the current visible member's loaded result. A newer finish keeps its own unread marker. */
+function markOpenFinished() {
+    const state = store.state;
+    const id = state.conversationId;
+    const session = state.sessions.find((each) => each.id === id);
+
+    if (
+        id === null ||
+        document.visibilityState !== "visible" ||
+        state.view.conversation?.id !== id ||
+        state.view.live?.busy ||
+        state.view.conversation.finishedAt !== session?.finishedAt ||
+        !sessionFinishedUnread(session ?? {}) ||
+        markingFinished.has(`${id}:${session.finishedAt}`)
+    ) {
+        return;
+    }
+
+    const key = `${id}:${session.finishedAt}`;
+
+    markingFinished.add(key);
+    actions
+        .markRunSeen(id, session.finishedAt)
+        .catch(() => {})
+        .finally(() => markingFinished.delete(key));
+}
+
 function applyView(data) {
     store.set((state) => {
         const base =
@@ -370,6 +404,7 @@ function applyView(data) {
             missing: null,
         };
     });
+    markOpenFinished();
 }
 
 /** The `moving` marks that a session list has not caught up with yet: it still shows those sessions where they were. */
@@ -397,12 +432,14 @@ const handlers = {
             // This connection's id, which peek lists name (`peeks.js`). `GET /api/me` answers without one.
             ...(data.connection === undefined ? {} : { streamId: data.connection }),
         }),
-    sessions: (sessions) =>
+    sessions: (sessions) => {
         store.set((state) => ({
             sessions,
             sessionsLoaded: true,
             moving: stillMoving(state.moving, sessions),
-        })),
+        }));
+        markOpenFinished();
+    },
     models: (models) => store.set({ models }),
     view: applyView,
     chat: applyChat,
@@ -855,6 +892,16 @@ export const actions = {
         }),
     updateSession: (id, patch) => api(`sessions/${id}`, patch),
     upload: (file) => api(`c/${current()}/upload?name=${encodeURIComponent(file.name)}`, file),
+    markRunSeen: (id, finishedAt) =>
+        api(`c/${id}/seen`, { finishedAt }).then(() => {
+            store.set((state) => ({
+                sessions: state.sessions.map((session) =>
+                    session.id === id && session.finishedAt <= finishedAt
+                        ? { ...session, finishedUnread: false }
+                        : session,
+                ),
+            }));
+        }),
     fullEntry: (entryId) => api(`c/${current()}/entry/${entryId}`),
     history: (before) => api(`c/${current()}/history?before=${before}`),
 };
@@ -1026,7 +1073,10 @@ function reportVisibility() {
     api("visibility", { tab: TAB, visible }).catch(() => {});
 }
 
-document.addEventListener("visibilitychange", reportVisibility);
+document.addEventListener("visibilitychange", () => {
+    reportVisibility();
+    markOpenFinished();
+});
 store.subscribe((state) => {
     // Report again after each (re)connect: the server starts every new connection as visible.
     if (state.connection !== "open") {

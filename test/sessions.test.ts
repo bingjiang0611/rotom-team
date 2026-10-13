@@ -21,6 +21,7 @@ import type { FauxResponseStep } from "@earendil-works/pi-ai";
 import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai/providers/faux";
 import type { ConversationId, EntryRecord } from "@earendil-works/pi-durable";
 import { ChatDoc, NotesDoc, PinsDoc, PlanDoc, SessionsDoc } from "../src/server/docs.ts";
+import { ConfigStore } from "../src/server/config.ts";
 
 /** What each model request saw: the model, the system prompt's sections, and the newest message. */
 const requests: { model: string; sections: Record<string, string>; text: string }[] = [];
@@ -87,6 +88,61 @@ const ofKind = async (id: ConversationId, kind: string) =>
 /** A guest with steering rights, signed in as `name`. */
 const guest = (name: string, sessions?: string[]) =>
     app.config.addUser(name, "guest", sessions).user;
+
+test("a finished run stays unread independently for every member", async () => {
+    const id = await newSession(app);
+    const bob = guest("Finished Bob");
+
+    await app.recordRunFinished(id);
+    const ownerSession = app.sessions(owner(app)).find((session) => session.id === Number(id))!;
+    const bobSession = app.sessions(bob).find((session) => session.id === Number(id))!;
+
+    assert.equal(ownerSession.finishedUnread, true);
+    assert.equal(bobSession.finishedUnread, true);
+    const finishedAt = ownerSession.finishedAt;
+
+    assert.ok(finishedAt);
+    const ownerTab = fakeTab(undefined, owner(app));
+    const bobTab = fakeTab(undefined, bob);
+
+    await app.attach(ownerTab.client);
+    await app.attach(bobTab.client);
+    ownerTab.events.length = 0;
+    bobTab.events.length = 0;
+    app.markRunSeen(id, owner(app), finishedAt);
+    assert.equal(ownerTab.events.filter((event) => event.event === "sessions").length, 1);
+    assert.equal(bobTab.events.filter((event) => event.event === "sessions").length, 0);
+    app.detach(ownerTab.client);
+    app.detach(bobTab.client);
+    assert.equal(
+        app.sessions(owner(app)).find((session) => session.id === Number(id))!.finishedUnread,
+        undefined,
+    );
+    assert.equal(
+        app.sessions(bob).find((session) => session.id === Number(id))!.finishedUnread,
+        true,
+        "one member looking never marks another member's result viewed",
+    );
+    const restartedConfig = new ConfigStore(app.dataDir);
+
+    assert.equal(restartedConfig.userById(owner(app).id)?.finishedSeen?.[String(id)], finishedAt);
+    assert.equal(restartedConfig.userById(bob.id)?.finishedSeen?.[String(id)], undefined);
+    assert.equal(
+        (await app.harness.snapshot(SessionsDoc, context))?.items[String(id)]?.finishedAt,
+        finishedAt,
+    );
+    assert.throws(() => app.markRunSeen(id, bob, finishedAt + 1), /current finishedAt/);
+    await app.recordRunFinished(id);
+    const newer = app.sessions(owner(app)).find((session) => session.id === Number(id))!;
+
+    assert.ok(newer.finishedAt! > finishedAt);
+    app.markRunSeen(id, owner(app), finishedAt);
+    assert.equal(
+        app.sessions(owner(app)).find((session) => session.id === Number(id))!.finishedUnread,
+        true,
+        "a delayed acknowledgement of the old result cannot clear a newer result",
+    );
+});
 
 test("a fork keeps the history through the chosen message, then goes its own way", async () => {
     const id = await newSession(app);

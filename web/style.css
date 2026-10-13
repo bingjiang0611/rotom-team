@@ -2264,6 +2264,15 @@ button.chip:hover {
     border-color: var(--accent);
 }
 
+.state-finished {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+    animation: popin var(--t-in) var(--ease-out);
+}
+
 .state-warn {
     display: grid;
     place-items: center;

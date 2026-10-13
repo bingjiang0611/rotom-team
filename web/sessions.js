@@ -12,6 +12,7 @@ import {
     openSheet,
     scoped,
     sessionUnread,
+    sessionFinishedUnread,
     stillMoving,
     store,
 } from "./store.js";
@@ -209,6 +210,7 @@ function SessionRow({ session, index, number, needle, selected, onPick, onSelect
     const { conversationId, server, me } = store.state;
     const pinned = isPinned(session.id);
     const unread = collab() && sessionUnread(session);
+    const finishedUnread = sessionFinishedUnread(session);
     const moving = store.state.moving[session.id] !== undefined;
     const state = selected
         ? html`<span class="state-check" role="img" aria-label="Selected" title="Selected">
@@ -218,7 +220,9 @@ function SessionRow({ session, index, number, needle, selected, onPick, onSelect
           ? html`<span class="state-warn" title="Waiting for approval">!</span>`
           : session.busy
             ? html`<span class="mini-sweep" title="Working"><i></i><i></i><i></i></span>`
-            : html`<span class="state-idle"></span>`;
+            : finishedUnread
+              ? html`<span class="state-finished" role="img" aria-label="Run finished, not yet viewed" title="Run finished · not yet viewed by you"></span>`
+              : html`<span class="state-idle"></span>`;
     const people = collab()
         ? (session.people ?? []).filter((person) => person.id !== me?.id).slice(0, 4)
         : [];

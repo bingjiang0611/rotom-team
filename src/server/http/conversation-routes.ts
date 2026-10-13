@@ -43,6 +43,18 @@ export async function conversationRoutes(
     const method = request.method ?? "GET";
     const [, , third, fourth] = parts;
 
+    if (third === "seen" && method === "POST" && fourth === undefined) {
+        const body = await readJson<{ finishedAt: number }>(request);
+
+        if (!body || typeof body !== "object" || Array.isArray(body)) {
+            throw new HttpError(400, "A finishedAt value is required.");
+        }
+
+        app.markRunSeen(id, user, body.finishedAt);
+
+        return json(response, 200, { seen: true });
+    }
+
     if (app.sessionMeta(id)?.backend === "rotom") {
         if (!app.kernel) {
             throw new HttpError(
