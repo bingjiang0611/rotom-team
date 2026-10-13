@@ -34,6 +34,7 @@ import type { KernelBinding, KernelEntry, KernelReceipt } from "./rotom-journal.
 import { projectSkillPaths, verifyRotomKernel } from "./rotom-kernel.ts";
 import { loadSkillCommands, type SkillCommand } from "./prompts.ts";
 import { McpSignIns } from "./mcp-sign-in.ts";
+import { touchSession } from "./titles.ts";
 
 /** App-side creation intent. Never copied from a source conversation or rebuilt from today's account settings. */
 export type NativeForkPlan = { sourceId: ConversationId; requestId: string; expectedHead: string };
@@ -703,7 +704,27 @@ export class TeamKernel {
         const run = this.#track(
             id,
             binding,
-            this.executions.run(String(id), key, prompt, this.#hooks(id, reserved), images),
+            this.executions.run(
+                String(id),
+                key,
+                prompt,
+                this.#hooks(id, async (receipt) => {
+                    if (!requestId.startsWith("#resume-")) {
+                        try {
+                            await touchSession(this.#app, id, text);
+                        } catch (error) {
+                            this.#app.notice(
+                                "warning",
+                                `The session name could not be saved: ${error}`,
+                                id,
+                            );
+                        }
+                    }
+
+                    reserved(receipt);
+                }),
+                images,
+            ),
         );
 
         if (wait) {
@@ -782,7 +803,10 @@ export class TeamKernel {
         return { receipt: await this.handoff(id, user, `model-${randomUUID()}`, segmentId) };
     }
 
-    #hooks(id: ConversationId, onReserved?: (receipt: KernelReceipt) => void): RunHooks {
+    #hooks(
+        id: ConversationId,
+        onReserved?: (receipt: KernelReceipt) => void | Promise<void>,
+    ): RunHooks {
         return {
             ...(onReserved ? { onReserved } : {}),
             onEvent: (event) => this.#observe(id, event),

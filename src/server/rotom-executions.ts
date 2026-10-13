@@ -79,7 +79,7 @@ const NATIVE_LINE_LIMIT = 64 * 1024 * 1024;
 /** Observers of one prompt: none may change its outcome, and a failing observer cannot authorize work. */
 export type RunHooks = {
     /** The intent is durably committed: the request can no longer be lost, only end unknown. */
-    onReserved?: (receipt: KernelReceipt) => void;
+    onReserved?: (receipt: KernelReceipt) => void | Promise<void>;
     /** Every kernel event, for provisional display only. */
     onEvent?: (event: RpcRecord) => void;
     /** New persisted entries were journaled mid-run. */
@@ -435,7 +435,7 @@ export class RotomExecutions {
         const prepared = this.#prepare?.(binding, sessionId);
         const receipt = this.journal.reserve(sessionId, requestId, identity, operation);
 
-        hooks.onReserved?.(receipt);
+        await hooks.onReserved?.(receipt);
         // Admission is asynchronous: an earlier request may have created the native file while it was pending.
         const session = this.journal.session(sessionId);
 

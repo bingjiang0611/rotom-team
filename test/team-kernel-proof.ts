@@ -543,6 +543,11 @@ try {
     assert.equal(receipt.status, "settled", JSON.stringify(receipt));
     assert.equal(calls, 2);
     assert.equal(legacyCalls, 0);
+    assert.equal(
+        app.sessionMeta(id as never)?.title,
+        "Native app proof",
+        "explicit names are preserved",
+    );
     assert.equal(readFileSync(join(workspace, "native-app.txt"), "utf8"), "APP_NATIVE_OK\n");
     const shared = await request(viewer.token, `c/${id}/kernel`);
 
@@ -2066,6 +2071,11 @@ try {
     });
 
     await until(() => calls === beforeParallel + 1, "the held run reached the model", 30000);
+    assert.equal(
+        app.sessionMeta(heldSession.id)?.title,
+        "NATIVE_UI_HOLD in parallel",
+        "the name is saved before the response finishes",
+    );
     const other = await request(aliceToken, `c/${otherSession.id}/submit`, "POST", {
         text: "Write the proof file.",
         requestId: "parallel-other",
@@ -2107,6 +2117,21 @@ try {
     // Actual upload -> RPC -> loopback model -> mirrored history -> restart/handoff, without real credentials.
     const imageSession = await app.commands.createSession(a, { backend: "rotom" });
     const imageId = imageSession.id;
+
+    assert.equal(
+        (
+            await request(aliceToken, `c/${imageId}/submit`, "POST", {
+                text: "/compact",
+                requestId: "untitled-rejected-command",
+            })
+        ).status,
+        400,
+    );
+    assert.equal(
+        app.sessionMeta(imageId)?.title,
+        undefined,
+        "rejected input does not name a session",
+    );
     const png = Buffer.from(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
         "base64",
@@ -2132,6 +2157,7 @@ try {
 
     assert.equal(sent.status, 200);
     assert.equal((await sent.json()).status, "settled");
+    assert.equal(app.sessionMeta(imageId)?.title, "NATIVE_IMAGE_PROOF");
     assert.ok(
         JSON.stringify(await app.transcripts.allEntries(imageId, true)).includes(
             "NATIVE_IMAGE_SEEN",
@@ -2202,6 +2228,11 @@ try {
     });
 
     assert.equal(textSent.status, 200);
+    assert.equal(
+        app.sessionMeta(imageId)?.title,
+        "NATIVE_IMAGE_PROOF",
+        "later prompts do not overwrite the name",
+    );
     assert.ok(
         lastBody.includes(textAttachment.path),
         "non-image files are actual readable upload paths",
@@ -2212,6 +2243,11 @@ try {
     const afterRestart = await app.transcripts.entryImage(imageId, projectedImages[0]!.id, 0);
 
     assert.deepEqual(afterRestart, picture);
+    assert.equal(
+        app.sessionMeta(imageId)?.title,
+        "NATIVE_IMAGE_PROOF",
+        "the name survives restart",
+    );
     const imageHead = app.kernel!.executions.journal.session(String(imageId)).segmentId;
 
     await app.kernel!.handoff(imageId, app.config.userById(a.id)!, "image-handoff", imageHead);
@@ -2228,6 +2264,7 @@ try {
 
     assert.ok(JSON.stringify(restoredContent.at(-1)).includes("NATIVE_IMAGE_SEEN"));
     report.nativeAttachmentsImagesAndHistory = true;
+    report.firstMessageNamesSession = true;
 
     if (process.argv.includes("--serve") || process.argv.includes("--ui")) {
         // Exercise real native compaction on a small UI fixture, without changing product defaults.

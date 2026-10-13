@@ -41,6 +41,11 @@ export async function nativeUiProof(options: {
         const unseen = `.session-row[data-id="${options.unseenId}"]`;
 
         await until(
+            async () => (await text(`${unseen} .session-title`)).includes("NATIVE_IMAGE_PROOF"),
+            "the sidebar shows the first message as the session name",
+            20000,
+        );
+        await until(
             async () =>
                 (await page.evaluate(
                     `Boolean(document.querySelector('${unseen} .state-finished'))`,
@@ -319,6 +324,7 @@ export async function nativeUiProof(options: {
         );
 
         return {
+            firstMessageNameInSidebar: true,
             finishedMarkerClearedOnView: true,
             imagePastedAndSent: true,
             mcpSignIn: true,

@@ -22,6 +22,7 @@ import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi
 import type { ConversationId, EntryRecord } from "@earendil-works/pi-durable";
 import { ChatDoc, NotesDoc, PinsDoc, PlanDoc, SessionsDoc } from "../src/server/docs.ts";
 import { ConfigStore } from "../src/server/config.ts";
+import { touchSession } from "../src/server/titles.ts";
 
 /** What each model request saw: the model, the system prompt's sections, and the newest message. */
 const requests: { model: string; sections: Record<string, string>; text: string }[] = [];
@@ -88,6 +89,27 @@ const ofKind = async (id: ConversationId, kind: string) =>
 /** A guest with steering rights, signed in as `name`. */
 const guest = (name: string, sessions?: string[]) =>
     app.config.addUser(name, "guest", sessions).user;
+
+test("the first accepted message names an untitled session atomically and leaves explicit names alone", async () => {
+    const id = await newSession(app);
+
+    await Promise.all([
+        touchSession(app, id, "  首条消息\n  帮我排查   登录问题  "),
+        touchSession(app, id, "第二条消息"),
+    ]);
+    assert.equal(app.sessionMeta(id)?.title, "首条消息 帮我排查 登录问题");
+    await touchSession(app, id, "后续内容");
+    assert.equal(app.sessionMeta(id)?.title, "首条消息 帮我排查 登录问题");
+    await app.commands.updateSession(id, owner(app), { title: "手动命名" });
+    await touchSession(app, id, "不要替换我的标题");
+    assert.equal(app.sessionMeta(id)?.title, "手动命名");
+    const blank = await newSession(app);
+
+    await touchSession(app, blank, " \n ");
+    assert.equal(app.sessionMeta(blank)?.title, undefined);
+    await touchSession(app, blank, "长".repeat(100));
+    assert.equal(app.sessionMeta(blank)?.title, "长".repeat(80));
+});
 
 test("a finished run stays unread independently for every member", async () => {
     const id = await newSession(app);

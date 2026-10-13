@@ -17,6 +17,13 @@ The automated suite uses synthetic providers, local fixtures and isolated test d
 
 For every check, record the exact source commit, exit status, inspected scope and any failure. Do not treat an older passing result as evidence for the current artifact.
 
+## First-message session names
+
+`test/sessions.test.ts` checks atomic first-message naming, whitespace normalization, the 80-character limit,
+empty text, and preservation of explicit names. `npm run test:kernel:app` checks native admission rejection,
+first-text naming without a separate inference call, later-message preservation, and persistence after restart.
+`npm run test:kernel:ui` checks that the generated name appears in the sidebar.
+
 ## Per-member finished markers
 
 `test/sessions.test.ts` checks that two members independently receive the same finished marker, one member can clear

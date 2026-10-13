@@ -1,7 +1,7 @@
 /**
- * Session titles. A session is named after its first message at once; when that message is long, a small model of the
- * session's provider writes a short title in its place, unless someone renamed the session first. What it costs counts
- * as the session's spend, like Pi's own requests.
+ * Session titles. The first accepted message names an untitled session at once. Native titles use only its text;
+ * legacy Durable sessions may ask a small model of the same provider for a shorter title, unless someone renamed it.
+ * What that costs counts as the session's spend, like Pi's own requests.
  */
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { Api, Model, Usage } from "@earendil-works/pi-ai";
@@ -11,6 +11,41 @@ import { SessionsDoc } from "./docs.ts";
 import { describe } from "./errors.ts";
 
 const context = BACKGROUND_CONTEXT;
+
+/** An accepted user message moves the session up and atomically names an untitled session. */
+export async function touchSession(
+    app: PocketApp,
+    id: ConversationId,
+    text: string,
+): Promise<void> {
+    if (app.sessionMeta(id) === undefined) {
+        return;
+    }
+
+    let provisional: string | undefined;
+    let native = false;
+
+    await app.harness.commit(async (tx) => {
+        const meta = (await tx.doc(SessionsDoc)).items[String(id)];
+
+        if (meta === undefined) {
+            return;
+        }
+
+        meta.updatedAt = Date.now();
+        native = meta.backend === "rotom";
+        const title = text.replace(/\s+/g, " ").trim().slice(0, 80);
+
+        if (meta.title === undefined && title !== "") {
+            meta.title = provisional = title;
+        }
+    }, context);
+
+    // Native titles are deterministic text, never an extra model request outside the personal inference gate.
+    if (!native && provisional !== undefined && wantsTitle(text)) {
+        void writeTitle(app, id, text, provisional);
+    }
+}
 
 /** First messages this long or longer get a written title; shorter ones are a title already. */
 const LONG_WORDS = 9;

@@ -46,7 +46,7 @@ import { snippet } from "./projection.ts";
 import { expandPromptTemplate, expandSkillCommand } from "./prompts.ts";
 import { clientKey, ownRequest } from "./requests.ts";
 import { type Resend, resendContent, resendRequest, ResendTask, userContent } from "./resend.ts";
-import { wantsTitle, writeTitle } from "./titles.ts";
+import { touchSession } from "./titles.ts";
 import { describeMoment, describeRepeat, knownZone } from "./when.ts";
 import {
     createWorktree,
@@ -550,7 +550,7 @@ export class Commands {
         );
 
         app.collab.setTyping(id, user, null);
-        await this.#touched(id, typed);
+        await touchSession(app, id, typed);
         this.#reportUnanswered(id, submission.wait(context));
 
         return { submissionId: submission.id };
@@ -634,36 +634,6 @@ export class Commands {
         return this.#app.config.users.length > 1
             ? `[from: ${user.name.replace(/[[\]]/g, "")}] ${text}`
             : text;
-    }
-
-    /**
-     * A session just got a message: it moves up the list, and its first message names it. A long first message gets a
-     * short title written for it afterwards (`titles.ts`).
-     */
-    async #touched(id: ConversationId, text: string): Promise<void> {
-        if (this.#app.sessionMeta(id) === undefined) {
-            return;
-        }
-
-        let provisional: string | undefined;
-
-        await this.#app.harness.commit(async (tx) => {
-            const meta = (await tx.doc(SessionsDoc)).items[String(id)];
-
-            if (meta === undefined) {
-                return;
-            }
-
-            meta.updatedAt = Date.now();
-
-            if (meta.title === undefined && text !== "") {
-                meta.title = provisional = text.replace(/\s+/g, " ").slice(0, 80);
-            }
-        }, context);
-
-        if (provisional !== undefined && wantsTitle(text)) {
-            void writeTitle(this.#app, id, text, provisional);
-        }
     }
 
     /**
