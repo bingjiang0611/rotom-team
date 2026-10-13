@@ -8,7 +8,7 @@ import type { Attachment, SubmitRequest } from "../commands.ts";
 import { HttpError } from "../errors.ts";
 import type { SkillCommand } from "../prompts.ts";
 import { uploadedAttachments } from "../attachments.ts";
-import { serveImage, TYPES } from "./assets.ts";
+import { serveDownload, serveImage, TYPES } from "./assets.ts";
 import { type ApiRequest, json, readJson, send } from "./io.ts";
 
 const MAX_UPLOAD = 50 * 1024 * 1024;
@@ -516,6 +516,16 @@ export async function conversationRoutes(
         }
 
         return serveImage(request, response, app.workspace.conversationFile(user, id, requested));
+    }
+
+    if (third === "download" && method === "GET") {
+        const requested = url.searchParams.get("path") ?? "";
+
+        if (requested.trim() === "") {
+            throw new HttpError(400, "path is required");
+        }
+
+        return serveDownload(response, app.workspace.readableFile(user, id, requested));
     }
 
     if (third === "entry" && fourth !== undefined && method === "GET") {

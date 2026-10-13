@@ -56,6 +56,16 @@ configuration, project settings skills, history and restart. These checks use on
 
 Existing `unknown` receipts are not rewritten or replayed by this change.
 
+## Delivered file links
+
+`test/delivered-files.test.ts` uses an isolated server and synthetic accounts. It checks PDF inline responses,
+HTML/Markdown/binary downloads, unchanged image-only serving, sign-in/session permissions, realpath traversal
+and symlink rejection, and private configuration protection. Its real Chromium check renders ordinary Markdown
+links, activates a file link with Enter, and verifies the Markdown viewer, script-disabled HTML preview and PDF
+open action. Web URLs, anchors and application routes retain their addresses; supplied `data-path` marks are removed.
+Browser checks skip explicitly when Chromium is unavailable. PDF byte delivery does not establish rendering in every
+browser's PDF viewer. HTML downloads do not run in the application's origin.
+
 ## Acceptance boundaries
 
 - Type checking and automated tests do not establish real-account authorization, provider approval, complete billing or target-device readiness.

@@ -293,6 +293,11 @@ export async function viewFile(file: string): Promise<FileView> {
         return { kind: "image", size: info.size };
     }
 
+    // A PDF may contain only ASCII near its beginning; it is not source text for the viewer.
+    if (/\.pdf$/i.test(file)) {
+        return { kind: "binary", size: info.size };
+    }
+
     const handle = await open(file, "r");
 
     try {

@@ -9,6 +9,7 @@ import { RunFrame } from "../run-frame.js";
 import { actions, canSteer, closeSheet, insertIntoComposer, notify, store } from "../store.js";
 import {
     copyText,
+    downloadUrl,
     fileUrl,
     formatBytes,
     html,
@@ -124,7 +125,13 @@ export function FileView({ path, line, onOpen = openFile, onLoad }) {
         }
         ${
             file?.kind === "binary" &&
-            html`<p class="muted">A binary file: nothing to show as text.</p>`
+            html`<p class="muted">
+                ${
+                    /\.pdf$/i.test(file.path)
+                        ? "A PDF: open it in the browser to preview."
+                        : "A binary file: nothing to show as text."
+                }
+            </p>`
         }
         ${
             file?.kind === "other" &&
@@ -248,6 +255,18 @@ function FileActions({ file, shown, previewable, preview, onPreview, running, on
         >
             ⧉
         </button>`
+    }
+    ${
+        file &&
+        ["text", "image", "binary"].includes(file.kind) &&
+        html`<a
+            class="button small"
+            href=${downloadUrl(file.path)}
+            target="_blank"
+            rel="noopener noreferrer"
+        >
+            ${/\.pdf$/i.test(file.path) ? "Open PDF" : "Download"}
+        </a>`
     }
     ${
         file &&

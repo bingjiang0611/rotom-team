@@ -1,5 +1,10 @@
 # Architecture
 
+Local Markdown file links use `/api/c/:id/download`, not relative session-page routes. The route checks session
+visibility and `workspace.readableFile` before streaming regular files. PDFs are inline; all other types use
+attachment/octet-stream responses with a sandbox policy. The image route remains image-only. For steering members,
+ordinary non-PDF link clicks open the existing file viewer; new-tab links and viewers use the download href.
+
 Native skill loading is project-only: the parent and child CLIs use `--no-skills`, then `rotom-skills.mjs` supplies
 project resources using the pinned package resolver. Bundled parent skills and explicit frozen skills still load.
 Personal skill directories and personal `skills` settings are ignored, not removed; other personal configuration

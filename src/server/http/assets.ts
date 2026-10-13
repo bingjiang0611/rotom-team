@@ -2,7 +2,7 @@
 import { createHash } from "node:crypto";
 import { closeSync, createReadStream, openSync, readFileSync, readSync, statSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { extname, join } from "node:path";
+import { basename, extname, join } from "node:path";
 import { APP_ROOT } from "../config.ts";
 import { HttpError } from "../errors.ts";
 import { send } from "./io.ts";
@@ -165,6 +165,40 @@ export function serveFile(response: ServerResponse, file: string, fallbackType?:
             "cache-control": "no-cache",
         },
     );
+}
+
+/** A delivered regular file. Only PDFs open inline; HTML and all other files download, never run as app pages. */
+export function serveDownload(response: ServerResponse, file: string): void {
+    let size: number;
+
+    try {
+        const stats = statSync(file);
+
+        if (!stats.isFile()) {
+            throw new Error("not a file");
+        }
+
+        size = stats.size;
+    } catch {
+        throw new HttpError(404, "File not found");
+    }
+
+    const pdf = extname(file).toLowerCase() === ".pdf";
+    const name = encodeURIComponent(basename(file)).replace(
+        /['()*]/g,
+        (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`,
+    );
+
+    response.writeHead(200, {
+        "content-type": pdf ? "application/pdf" : "application/octet-stream",
+        "content-length": String(size),
+        "content-disposition": `${pdf ? "inline" : "attachment"}; filename*=UTF-8''${name}`,
+        "cache-control": "private, no-store",
+        "content-security-policy": "sandbox; default-src 'none'",
+    });
+    createReadStream(file)
+        .on("error", () => response.destroy())
+        .pipe(response);
 }
 
 /** An image file from this machine, for `![alt](path)` in replies and for uploaded attachments. */

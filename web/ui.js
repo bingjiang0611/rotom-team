@@ -19,6 +19,10 @@ const currentConversation = () => store.state.view.conversation?.id;
 export const fileUrl = (path, conversationId = currentConversation()) =>
     `/api/c/${conversationId}/file?path=${encodeURIComponent(path)}`;
 
+/** A delivered file: PDFs open inline; other types download without executing in the app's origin. */
+export const downloadUrl = (path, conversationId = currentConversation()) =>
+    `/api/c/${conversationId}/download?path=${encodeURIComponent(path)}`;
+
 /** The `index`th image stored in a message: a pasted image or one a tool returned. */
 export const entryImageUrl = (entryId, index, conversationId = currentConversation()) =>
     `/api/c/${conversationId}/image/${entryId}/${index}`;
@@ -43,8 +47,13 @@ function imageSource(src, conversationId) {
         return value;
     }
 
+    return fileUrl(localPath(value), conversationId);
+}
+
+/** URL-encoded local paths and file:// URLs as filesystem paths, shared by images and delivery links. */
+function localPath(value) {
     // file:///C:/shot.png names C:/shot.png.
-    let path = file
+    let path = /^file:\/\//i.test(value)
         ? value.replace(/^file:\/\/(localhost)?/i, "").replace(/^\/([a-z]:)/i, "$1")
         : value;
 
@@ -54,7 +63,7 @@ function imageSource(src, conversationId) {
         // keep it as written
     }
 
-    return fileUrl(path, conversationId);
+    return path;
 }
 
 /** A tappable image thumbnail that opens full screen, or a chip when the image cannot load. */
@@ -253,6 +262,20 @@ function sanitize(html, fold) {
         }
     }
 
+    // Local text/page links use the existing viewer when the member may open it. The href remains usable for
+    // opening in a new tab, copying the address, and viewers who cannot steer.
+    for (const link of fragment.querySelectorAll("a[href]")) {
+        const href = link.getAttribute("href");
+
+        if (href.startsWith(`/api/c/${rendering}/download?`)) {
+            const path = new URL(href, location.origin).searchParams.get("path");
+
+            if (path && !/\.pdf$/i.test(path)) {
+                link.dataset.path = path;
+            }
+        }
+    }
+
     for (const pre of fragment.querySelectorAll("pre")) {
         codeBlock(pre, fold);
     }
@@ -345,13 +368,26 @@ function fencePage(text) {
     return `${fence}html\n${text.trim()}\n${fence}`;
 }
 
-/** The conversation whose markdown is being sanitized, for image paths relative to its folder. */
+/** The conversation whose markdown is being sanitized, for file paths relative to its folder. */
 let rendering = null;
 
 DOMPurify.addHook("uponSanitizeAttribute", (node, data) => {
     // Before the URL check, so file:// and plain paths become app URLs instead of being dropped.
     if (node.nodeName === "IMG" && data.attrName === "src") {
         data.attrValue = imageSource(data.attrValue, rendering);
+    } else if (node.nodeName === "A" && data.attrName === "href" && rendering !== null) {
+        const href = data.attrValue.trim();
+
+        // Web/scheme URLs, anchors and the app's own routes are not workspace files.
+        if (
+            href === "" ||
+            /^(?:[#?]|\/\/|\/(?:api|a|s)(?:\/|$))/i.test(href) ||
+            (!/^file:\/\//i.test(href) && /^([a-z][a-z0-9+.-]*:)/i.test(href))
+        ) {
+            return;
+        }
+
+        data.attrValue = downloadUrl(localPath(href), rendering);
     }
 });
 
@@ -492,14 +528,26 @@ export function openFile(path) {
 
 /** File paths in rendered markdown open in the viewer. */
 document.addEventListener("click", (event) => {
-    const code = event.target.closest?.(".md code[data-path]");
+    const target = event.target.closest?.(".md code[data-path], .md a[data-path]");
 
-    if (!code || getSelection()?.toString()) {
+    if (!target || getSelection()?.toString()) {
         return;
     }
 
+    if (
+        target.tagName === "A" &&
+        (store.state.me?.role === "viewer" ||
+            event.ctrlKey ||
+            event.metaKey ||
+            event.shiftKey ||
+            event.altKey)
+    ) {
+        return;
+    }
+
+    event.preventDefault();
     event.stopPropagation();
-    openFile(code.dataset.path);
+    openFile(target.dataset.path);
 });
 
 /** Images in rendered markdown open full screen, unless they are links. */

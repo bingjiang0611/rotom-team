@@ -82,7 +82,7 @@ A module split into parts keeps its name for the part others import, with the re
 | `http/browser-routes.ts`      | `/api/c/:id/browser`: the Browser panel's frames, console, and input                                                                                            |
 | `http/push-routes.ts`         | `/api/push`: this device's subscription, what to notify about, a test                                                                                           |
 | `http/events.ts`              | Each tab's events: the event stream (`/api/events`), or long polling (`/api/poll`) where a tunnel holds streams back                                            |
-| `http/assets.ts`              | The web app's files, the vendored modules, the app's content security policy, and image files                                                                   |
+| `http/assets.ts`              | The web app's files, vendored modules, content security policies, images and streamed delivery downloads                                                        |
 | `http/sign-in.ts`             | `/login`, `/join/:code`, and `/share` before the service worker takes shares                                                                                    |
 | `http/artifacts.ts`           | `/a/…`: an artifact as its own page, in a sandbox; `/a/frame`, the page a reply's HTML runs in once someone taps Run                                            |
 | `http/io.ts`                  | What every route uses: reading a body, writing JSON, `ApiRequest`                                                                                               |
