@@ -38,10 +38,18 @@ flowchart LR
 - 未显式命名的会话在首条带正文的消息被原生 journal 接受后，以正文作为名称：合并空白、最多 80 个字符，不额外调用模型。后续消息和自动续跑不覆盖名称，拒绝入场的请求不占用名称；仅图片消息等待首条正文命名。不追溯已存在的无名会话历史。
 - 会话列表用状态点提示“本轮已结束、当前成员尚未查看”。查看状态按成员独立保存并同步到该成员的浏览器；一个成员查看不会替其他成员清除提示。它只表示运行结束并产生了可查看结果，不证明任务或外部操作成功。
 
+## 原生 slash 命令
+
+- `/` 菜单来自固定版本的原生注册表。GET 只读；首次动态发现由成员明确启动，沿用权限和 lease，但拒绝 Team 模型推理。缓存按成员、segment 和固定绑定隔离。未知命令不作为模型输入。
+- 模型选择走 Team 接力，不改写运行中的付费人/模型。原生 fork/tree 选择恢复编辑草稿，不自动提交；tree 的可选原生摘要使用当前成员和模型，记录真实持久化用量。共享 Transcript 是含废弃分支的审计历史，不等于当前模型上下文。
+- 原生 JSONL 导出使用当前分支序列化；HTML 使用原生 exporter。原始导出只交付给该 segment 的成员。跨成员 fork/clone/import 仍只传公开历史。
+- `/mcp` 复用成员自己的浏览器外置登录桥。Qoder catalog/credits 调用成员 provider API，结果不向会话广播。
+- 本次明确排除的命令只有 `/share` 和 `/bug`：不提供可执行建议，手动输入在原生启动、推理及上传前拒绝。其余权限、账户、运行状态限制仍生效。详见 [CONFIGURATION.md](CONFIGURATION.md)。
+
 ## 中断、恢复与数据
 
 - 干净停止为运行中的 prompt 记录续跑计划；重启后以原成员继续一次。崩溃后只有确认旧 rotom 进程已结束，才能将 prompt 标为 interrupted 并安排继续。
-- 连续 3 次自动续跑后，下一次中断等待成员手动 **Continue**。仍可能存活的进程、unknown 操作、未核清 lease 不自动重放；compaction、handoff 和 fork 的中断需要对账。
+- 连续 3 次普通 prompt 自动续跑后，下一次中断等待成员手动 **Continue**。副作用型原生命令使用 `command` receipt；unknown 后不按普通 prompt 自动续跑。只有原生注册表确认的 prompt template/skill 展开才保留普通 prompt 恢复行为。既有 receipt 不改写。仍可能存活的进程、unknown 操作、未核清 lease 不自动重放；compaction、handoff、fork 和 discovery 的中断需要对账。
 - Stop 请求、PID 消失、旧 PASS 或 receipt 存在，单独都不能证明工具已关闭或业务成功。操作步骤见 [NATIVE-RECOVERY.md](NATIVE-RECOVERY.md)。
 - 离线备份含秘密，要求停止 writer、核清 lease，并验证逐文件摘要。恢复只能使用原绝对路径且不能覆盖现有目录；模型和 MCP refresh grants 不恢复，须独立重登。项目工作区另行备份。
 

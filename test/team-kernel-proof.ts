@@ -762,7 +762,7 @@ try {
     const beforeRejected = app.kernel!.executions.journal.receipts(String(id)).length;
 
     for (const invalid of [
-        { text: "/compact", requestId: "slash" },
+        { text: "/share", requestId: "slash" },
         { text: "hello", requestId: "x".repeat(128) },
     ]) {
         assert.equal((await request(aliceToken, `c/${id}/submit`, "POST", invalid)).status, 400);
@@ -2036,17 +2036,24 @@ try {
         JSON.stringify({ skills: ["../team-skills"] }),
     );
     const skillSession = await app.commands.createSession(a, { backend: "rotom" });
-    const offered = (await (await request(aliceToken, `c/${skillSession.id}/prompts`)).json()) as {
-        name: string;
-        skill: boolean;
-    }[];
+    const beforeDiscovery = calls;
+    const catalog = await request(aliceToken, `c/${skillSession.id}/prompts`, "POST", {
+        requestId: "skill-discovery",
+    });
+    const offered = (await catalog.json()) as {
+        receipt: { status: string };
+        commands: { name: string; source: string }[];
+    };
 
+    assert.equal(catalog.status, 200);
+    assert.equal(offered.receipt.status, "handled");
+    assert.equal(calls, beforeDiscovery, "discovery does not need a model prompt");
     assert.deepEqual(
-        offered.map((each) => [each.name, each.skill]),
-        [
-            ["skill:project-proof", true],
-            ["skill:settings-proof", true],
-        ],
+        offered.commands
+            .filter((each) => each.source === "skill")
+            .map((each) => each.name)
+            .sort(),
+        ["skill:pi-subagents", "skill:project-proof", "skill:settings-proof"],
     );
     const skillRun = await request(aliceToken, `c/${skillSession.id}/submit`, "POST", {
         text: "/skill:settings-proof SKILL_REQUEST",
@@ -2054,7 +2061,14 @@ try {
     });
 
     assert.equal(skillRun.status, 200);
-    assert.equal(((await skillRun.json()) as { status: string }).status, "settled");
+    const skillReceipt = (await skillRun.json()) as { status: string; operation: string };
+
+    assert.equal(skillReceipt.status, "settled");
+    assert.equal(
+        skillReceipt.operation,
+        "prompt",
+        "native skill expansions retain ordinary prompt recovery",
+    );
     assert.ok(
         lastBody.includes("SETTINGS_SKILL_DESCRIPTION"),
         "the kernel loads the settings' skill",
@@ -2062,14 +2076,15 @@ try {
     assert.ok(lastBody.includes("SETTINGS_SKILL_BODY"), "the model gets the skill's instructions");
     assert.ok(lastBody.includes("SKILL_REQUEST"));
     assert.ok(!lastBody.includes("/skill:settings-proof"), "the command itself is expanded");
+    const mcpCommand = await request(aliceToken, `c/${skillSession.id}/submit`, "POST", {
+        text: "/mcp",
+        requestId: "other-command",
+    });
+
+    assert.equal(mcpCommand.status, 200);
     assert.equal(
-        (
-            await request(aliceToken, `c/${skillSession.id}/submit`, "POST", {
-                text: "/mcp",
-                requestId: "other-command",
-            })
-        ).status,
-        400,
+        ((await mcpCommand.json()) as { interaction: { type: string } }).interaction.type,
+        "mcp",
     );
     report.projectSkillRunsByName = true;
 
@@ -2113,7 +2128,7 @@ try {
         projectViewAndContinue: true,
         accountGenerationChecked: true,
         budgetNotBypassed: true,
-        slashAndLongRequestRejectedBeforeIntent: true,
+        excludedSlashAndLongRequestRejectedBeforeIntent: true,
         disablingCannotBypassUnknownFence: true,
         apiCreateSubmitReadAbort: true,
         roleRevocation: true,
@@ -2133,7 +2148,7 @@ try {
     assert.equal(
         (
             await request(aliceToken, `c/${imageId}/submit`, "POST", {
-                text: "/compact",
+                text: "/unknown-before-title",
                 requestId: "untitled-rejected-command",
             })
         ).status,

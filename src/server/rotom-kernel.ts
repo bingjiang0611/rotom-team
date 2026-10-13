@@ -47,6 +47,38 @@ function canonical(path: string, kind: "file" | "directory"): string {
 }
 
 /** Session data operations only: load the pinned fork, never a second Agent execution loop. */
+export async function nativeBuiltinCommands(): Promise<
+    Array<{ name: string; description?: string; argumentHint?: string }>
+> {
+    verifyRotomKernel();
+    const { resolveInstalledPi } = await import(
+        pathToFileURL(join(product, "runtime/resolve-installed-pi.mjs")).href
+    );
+
+    await resolveInstalledPi(product);
+    const entry = canonical(
+        join(
+            product,
+            "runtime/pi/node_modules/@earendil-works/pi-coding-agent/dist/core/slash-commands.js",
+        ),
+        "file",
+    );
+    const module = (await import(pathToFileURL(entry).href)) as {
+        BUILTIN_SLASH_COMMANDS?: Array<{
+            name?: unknown;
+            description?: unknown;
+            argumentHint?: unknown;
+        }>;
+    };
+
+    return (module.BUILTIN_SLASH_COMMANDS ?? []).filter(
+        (command): command is { name: string; description?: string; argumentHint?: string } =>
+            typeof command.name === "string" &&
+            (command.description === undefined || typeof command.description === "string") &&
+            (command.argumentHint === undefined || typeof command.argumentHint === "string"),
+    );
+}
+
 export async function nativeSessionManager() {
     verifyRotomKernel();
     const { resolveInstalledPi } = await import(
@@ -62,7 +94,60 @@ export async function nativeSessionManager() {
         "file",
     );
 
-    return import(pathToFileURL(entry).href);
+    const manager = await import(pathToFileURL(entry).href);
+    const ai = await import(
+        pathToFileURL(
+            canonical(
+                join(product, "runtime/pi/node_modules/@earendil-works/pi-ai/dist/index.js"),
+                "file",
+            ),
+        ).href
+    );
+
+    return { ...manager, contentText: ai.contentText };
+}
+
+/** Pinned native serializers, without starting extensions or a model process. */
+export async function nativeSessionExports() {
+    await nativeSessionManager();
+    const core = join(product, "runtime/pi/node_modules/@earendil-works/pi-coding-agent/dist/core");
+    const jsonl = await import(
+        pathToFileURL(canonical(join(core, "session-export.js"), "file")).href
+    );
+    const html = await import(
+        pathToFileURL(canonical(join(core, "export-html/index.js"), "file")).href
+    );
+
+    return {
+        serializeSessionBranch: jsonl.serializeSessionBranch,
+        exportFromFile: html.exportFromFile,
+    };
+}
+
+export async function nativeConfigurationApi() {
+    await nativeSessionManager();
+    const root = join(product, "runtime/pi/node_modules/@earendil-works/pi-coding-agent/dist");
+    const settings = await import(
+        pathToFileURL(canonical(join(root, "core/settings-manager.js"), "file")).href
+    );
+    const trust = await import(
+        pathToFileURL(canonical(join(root, "core/trust-manager.js"), "file")).href
+    );
+    const productInfo = await import(
+        pathToFileURL(canonical(join(root, "utils/rotom-product.js"), "file")).href
+    );
+    const models = await import(
+        pathToFileURL(canonical(join(root, "core/model-resolver.js"), "file")).href
+    );
+
+    return {
+        SettingsManager: settings.SettingsManager,
+        ProjectTrustStore: trust.ProjectTrustStore,
+        getProjectTrustOptions: trust.getProjectTrustOptions,
+        resolveModelScopeFromModels: models.resolveModelScopeFromModels,
+        packageUrl: productInfo.ROTOM_PACKAGE_URL,
+        updateGuidance: productInfo.ROTOM_UPDATE_GUIDANCE,
+    };
 }
 
 export function verifyRotomKernel(): { version: string; executable: string } {

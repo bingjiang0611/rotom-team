@@ -23,6 +23,12 @@ import { SETTINGS_PAGES, SettingsSheet } from "./sheets/settings.js";
 import { ShortcutsSheet } from "./sheets/shortcuts.js";
 import { SpendSheet } from "./sheets/spend.js";
 import { TextSheet } from "./sheets/text.js";
+import {
+    NativeCommandSheet,
+    NativeInfoSheet,
+    NativeSettingsSheet,
+    showNativeResult,
+} from "./sheets/native-command.js";
 import { ArtifactsSheet, ArtifactViewer, ImageViewer } from "./sheets/viewers.js";
 import { WorktreeSheet } from "./sheets/worktree.js";
 import { addLayer, removeLayer } from "./back.js";
@@ -174,6 +180,34 @@ function sheetBody(sheet) {
             break;
         case "chat":
             body = view.conversation ? html`<${ChatSheet} />` : null;
+            break;
+        case "native-settings":
+            body = html`<${NativeSettingsSheet} />`;
+            break;
+        case "native-models":
+            body = html`<${NativeSettingsSheet} scope=${true} />`;
+            break;
+        case "native-info":
+            body = html`<${NativeInfoSheet} />`;
+            break;
+        case "native-import":
+            body = html`<${TextSheet}
+                title="Import native JSONL"
+                label="Path in this project or session uploads"
+                hint="Creates a new Team session on your account. Foreign provider-private state is removed. The original file is unchanged."
+                submit=${async (value) => showNativeResult(await actions.submit(`/import ${value}`, [], "steer", false, true))}
+            />`;
+            break;
+        case "native-command":
+            body = html`<${NativeCommandSheet} />`;
+            break;
+        case "native-name":
+            body = html`<${TextSheet}
+                title="Native session name"
+                label="Session title"
+                initial=${view.conversation?.title ?? ""}
+                submit=${(value) => actions.submit(`/name ${value}`, [], "steer", false, true)}
+            />`;
             break;
         case "rename":
             body = html`<${TextSheet}

@@ -95,6 +95,21 @@ test("native-sized RPC accepts image commands and readback above the old 1/8 MiB
     }
 });
 
+test("handled Goal follow-up reaches the explicit Team barrier before the next operation", async () => {
+    const rpc = await client("handled-followup");
+
+    try {
+        assert.equal(await rpc.prompt("/goal run"), "handled");
+        await rpc.barrier();
+        assert.deepEqual(await rpc.request({ type: "get_state" }), {
+            cleanEnvironment: true,
+            cwd: process.cwd(),
+        });
+    } finally {
+        await rpc.close();
+    }
+});
+
 test("handled commands do not wait for a nonexistent run; explicit rejection stays rejected", async () => {
     const handled = await client("handled");
 
@@ -161,6 +176,22 @@ test("raw prompt/queue/model/session mutations cannot bypass the runner", async 
             rpc.request({ type: "set_auto_retry", enabled: true }),
             /unsupported kernel command/,
         );
+    } finally {
+        await rpc.close();
+    }
+});
+
+test("native compact adapter uses structured RPC rather than sending /compact as a prompt", async () => {
+    const rpc = await client("compact-record");
+
+    try {
+        await rpc.compact("keep the decisions");
+        assert.deepEqual(await rpc.request({ type: "get_state" }), {
+            cleanEnvironment: true,
+            cwd: process.cwd(),
+            compactCount: 1,
+            promptMessages: [],
+        });
     } finally {
         await rpc.close();
     }

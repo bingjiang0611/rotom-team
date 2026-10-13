@@ -5,7 +5,10 @@ import { chatGPTPayload } from "./openai-chatgpt-payload.ts";
 import { qoderRequestProvider } from "./rotom-qoder.mjs";
 import { bindSessionAccount } from "../../runtime/rotom/node_modules/@bingjiang0611/rotom/extensions/qoder/session-policy.mjs";
 import { CREDIT_ENTRY } from "../../runtime/rotom/node_modules/@bingjiang0611/rotom/extensions/qoder/credits.mjs";
-import { lazyStream } from "../../runtime/rotom/node_modules/@bingjiang0611/rotom/runtime/pi/node_modules/@earendil-works/pi-ai/dist/index.js";
+import {
+    contentText,
+    lazyStream,
+} from "../../runtime/rotom/node_modules/@bingjiang0611/rotom/runtime/pi/node_modules/@earendil-works/pi-ai/dist/index.js";
 
 export default function (pi) {
     const config = JSON.parse(readFileSync(process.env.ROTOM_TEAM_KERNEL_GATE, "utf8"));
@@ -112,6 +115,61 @@ export default function (pi) {
                     params: { id },
                 });
             }
+        },
+    });
+
+    pi.registerCommand("team-kernel-tree", {
+        description: "Private Team branch navigation",
+        handler: async (args, ctx) => {
+            const { nonce, entryId, summarize } = JSON.parse(args);
+
+            await ctx.waitForIdle();
+            const oldLeafId = ctx.sessionManager.getLeafId();
+            const target = ctx.sessionManager.getEntry(entryId);
+            const before = new Set(ctx.sessionManager.getEntries().map((entry) => entry.id));
+            const result = await ctx.navigateTree(entryId, { summarize });
+
+            if (!result.cancelled && entryId !== oldLeafId) {
+                // Pinned RPC returns only cancelled. Reuse native's text extraction, not a fabricated RPC field.
+                if (target.type === "message" && target.message.role === "user") {
+                    result.editorText = contentText(target.message.content, "");
+                } else if (target.type === "custom_message") {
+                    result.editorText = contentText(target.content, "");
+                }
+
+                const summary = ctx.sessionManager
+                    .getEntries()
+                    .findLast((entry) => entry.type === "branch_summary" && !before.has(entry.id));
+
+                if (summary) {
+                    result.summaryEntry = summary;
+                }
+
+                // Persist the new leaf even when navigation did not need a generated summary.
+                pi.appendEntry("team-kernel-branch", { targetId: entryId });
+            }
+
+            ctx.ui.notify(JSON.stringify({ kind: "team-kernel-tree-v1", nonce, result }), "info");
+        },
+    });
+    pi.registerCommand("team-kernel-reload", {
+        description: "Private Team resource reload",
+        handler: async (_args, ctx) => {
+            await ctx.reload();
+        },
+    });
+    pi.registerCommand("team-kernel-barrier", {
+        description: "Private: wait for native follow-up work before Team snapshots state",
+        handler: async (args, ctx) => {
+            await ctx.waitForIdle();
+            ui?.notify(
+                JSON.stringify({
+                    kind: "team-kernel-barrier-v1",
+                    nonce: String(args ?? ""),
+                    ok: true,
+                }),
+                "info",
+            );
         },
     });
 

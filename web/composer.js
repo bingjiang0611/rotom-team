@@ -5,8 +5,8 @@ import { Avatar } from "./avatar.js";
 import { chatUnread, TypingLine } from "./chat.js";
 import {
     loadTemplates,
+    discoverCommands,
     parseCommand,
-    parseTemplate,
     planAvailable,
     suggestCommands,
 } from "./commands.js";
@@ -25,6 +25,7 @@ import {
     uid,
 } from "./store.js";
 import { branchAvailable, headLabel } from "./sheets/branch.js";
+import { nativeCommandAccepted, showNativeResult } from "./sheets/native-command.js";
 import { formatBytes, formatTokens, html, Icon, Marked, modelLabel, Spinner } from "./ui.js";
 
 const coarse = matchMedia("(pointer: coarse)").matches;
@@ -178,10 +179,41 @@ function PlanBar({ blocked }) {
 
 /** Done when: the check Pi works toward, how many checks it took, and a way to drop it. */
 function GoalBar() {
-    const { goal } = store.state.view;
+    const { goal, nativeGoal } = store.state.view;
+    const native = nativeGoal?.goal;
 
-    if (!goal) {
+    if (!goal && !native) {
         return null;
+    }
+
+    if (!goal && native) {
+        const command = html`<span class="mono">${native.text ?? native.id}</span>`;
+        const status = native.waiting ? "Waiting" : native.status;
+        const detail = native.waiting?.reason ?? native.stopReason ?? "";
+        const own = store.state.view.kernel?.memberId === store.state.me?.id;
+        const control = (action) =>
+            attempt(async () =>
+                showNativeResult(await actions.submit(`/goal ${action}`, [], "steer", false, true)),
+            );
+
+        return html`<div class=${`goal-bar ${native.status}`}>
+            <span class="grow"><strong>${status}:</strong> ${command}${detail ? ` · ${detail}` : ""}</span>
+            ${
+                own &&
+                canSteer() &&
+                html`
+                <button class="link small" onClick=${() => control("status")}>Status</button>
+                ${native.status === "active" && html`<button class="link small" onClick=${() => control("pause")}>Pause</button>`}
+                ${
+                    (["paused", "blocked", "budget_limited", "usage_limited"].includes(
+                        native.status,
+                    ) ||
+                        native.waiting) &&
+                    html`<button class="link small" onClick=${() => control("resume")}>Resume</button>`
+                }
+            `
+            }
+        </div>`;
     }
 
     const command = html`<span class="mono">${goal.command}</span>`;
@@ -209,6 +241,7 @@ export function Composer() {
     const [files, setFiles] = useState([]);
     const [steer, setSteer] = useState(true);
     const [sending, setSending] = useState(false);
+    const [discovering, setDiscovering] = useState(false);
     // Slash command suggestions: the highlighted one, and whether Escape hid the list.
     const [pick, setPick] = useState(0);
     const [hideCommands, setHideCommands] = useState(false);
@@ -253,14 +286,14 @@ export function Composer() {
             addFiles(insert.files);
         }
 
-        if (insert.text === "") {
+        if (insert.text === "" && !insert.replace) {
             return;
         }
 
         const current = drafts.get(conversationId);
 
         update(
-            current.trim() === ""
+            insert.replace || current.trim() === ""
                 ? insert.text
                 : `${current.replace(/\s+$/, "")}${insert.inline ? " " : "\n\n"}${insert.text}`,
         );
@@ -310,7 +343,6 @@ export function Composer() {
     const suggestions = hideCommands || searching ? [] : suggestCommands(text);
     const chosen = suggestions[Math.min(pick, suggestions.length - 1)];
     const parsed = parseCommand(text);
-    const template = parsed ? null : parseTemplate(text);
     // `!command` runs in the session's folder and Pi sees it; `!!command`, only the people here.
     const shell = text.startsWith("!")
         ? { context: !text.startsWith("!!"), command: text.replace(/^!!?/, "").trim() }
@@ -355,20 +387,28 @@ export function Composer() {
             element.setSelectionRange(element.value.length, element.value.length);
         });
 
-    /** Run a slash command. The text goes away once it worked; attached files stay for the next message. */
+    /** Dispatch a native slash command through the same team journal as an ordinary prompt. */
     const runCommand = async ({ command, arg }) => {
         setSending(true);
-        const ok = await attempt(async () => {
-            await command.run(arg);
+        await attempt(async () => {
+            const result = await actions.submit(
+                `/${command.name}${arg === "" ? "" : ` ${arg}`}`,
+                [],
+                "steer",
+                false,
+                command.name !== "goal" || ["status", "pause", "cancel"].includes(arg.trim()),
+            );
+
+            if (nativeCommandAccepted(result)) {
+                update("");
+            }
+
+            showNativeResult(result);
 
             return true;
         });
 
         setSending(false);
-
-        if (ok) {
-            update("");
-        }
     };
 
     /**
@@ -396,7 +436,7 @@ export function Composer() {
 
     /** A tapped suggestion: commands that take text, and prompt templates, fill the box; the others run at once. */
     const choose = (command) => {
-        if (command.args || command.template) {
+        if (command.args || command.source === "prompt" || command.source === "skill") {
             update(`/${command.name} `);
             focusEnd();
         } else {
@@ -482,14 +522,25 @@ export function Composer() {
         const attachments = files
             .filter((file) => file.state === "done")
             .map((file) => file.attachment);
-        const ok = await attempt(() =>
-            actions.submit(
+        let nativeResult;
+        const ok = await attempt(async () => {
+            // A catalog snapshot can expire while typing. The server still owns slash validation and results.
+            const slash = store.state.view.kernel && full.trimStart().startsWith("/");
+            const goal =
+                /^\s*\/goal(?:\s|$)/.test(full) &&
+                !/^\s*\/goal\s+(status|pause|cancel)\s*$/.test(full);
+            const result = await actions.submit(
                 full,
                 attachments,
                 busy && steer ? "steer" : "followUp",
                 inlineFiles && mentionsFiles,
-            ),
-        );
+                slash ? !goal : undefined,
+            );
+
+            nativeResult = slash ? result : undefined;
+
+            return nativeCommandAccepted(result) ? result : false;
+        });
 
         setSending(false);
 
@@ -501,6 +552,10 @@ export function Composer() {
             if (!coarse) {
                 box.current?.focus();
             }
+        }
+
+        if (nativeResult) {
+            showNativeResult(nativeResult);
         }
     };
 
@@ -834,7 +889,12 @@ export function Composer() {
         }
         ${collab() && html`<${DriverBar} />`}
         <${PlanBar} blocked=${blocked} />
+        ${view.kernel?.hasBranchedHistory && html`<p class="command-hint wraps native-audit-notice">Audit transcript: abandoned branches remain visible. /tree marks the active native branch; native JSONL exports that branch only.</p>`}
         <${GoalBar} />
+        <${NativeWidgets} placement="aboveEditor" />
+        <div class="native-status" role="status">
+            ${Object.entries(view.kernel?.statuses ?? {}).map(([key, value]) => html`<div key=${key} data-status-key=${key} class="command-hint wraps">${value}</div>`)}
+        </div>
         ${
             blocked
                 ? html`${
@@ -961,6 +1021,25 @@ export function Composer() {
                     </div>`
                 }
                 ${
+                    text.startsWith("/") &&
+                    store.state.view.kernel &&
+                    canSteer() &&
+                    html`
+                    <div class="command-hint wraps">
+                        <button
+                            class="link small"
+                            disabled=${discovering || store.state.view.live?.busy}
+                            onClick=${async () => {
+                                setDiscovering(true);
+                                await attempt(discoverCommands);
+                                setDiscovering(false);
+                            }}
+                        >${discovering ? "Loading native commands…" : "Load / refresh project commands on my account"}</button>
+                        <span class="muted">Runs trusted project startup; Team model inference is disabled. Takes over an idle session if needed.</span>
+                    </div>
+                `
+                }
+                ${
                     suggestions.length > 0 &&
                     html`<div class="commands" role="listbox" ref=${list}>
                         ${suggestions.map(
@@ -989,18 +1068,7 @@ export function Composer() {
                         ${
                             parsed.command.args &&
                             html` <span class="command-args">${parsed.command.args}</span>`
-                        } <span class="muted">· ${parsed.command.description} · not sent to Pi</span>
-                    </div>`
-                }
-                ${
-                    suggestions.length === 0 &&
-                    template &&
-                    html`<div class="command-hint">
-                        <span class="command-name">/${template.name}</span>
-                        ${
-                            template.args &&
-                            html` <span class="command-args">${template.args}</span>`
-                        } <span class="muted">· ${template.skill ? "skill · Pi gets its instructions with your request" : "prompt template · Pi gets it filled in"}</span>
+                        } <span class="muted">· ${parsed.command.description} · native command</span>
                     </div>`
                 }
                 <div
@@ -1141,8 +1209,22 @@ export function Composer() {
                     </div>
                 </div>`
         }
+        <${NativeWidgets} placement="belowEditor" />
         <${StatusLine} />
     </footer>`;
+}
+
+function NativeWidgets({ placement }) {
+    const widgets = store.state.view.kernel?.widgets ?? {};
+
+    return html`<div class="native-widgets">
+        ${Object.entries(widgets)
+            .filter(([, widget]) => widget.placement === placement)
+            .map(
+                ([key, widget]) =>
+                    html`<div key=${key} data-widget-key=${key} class="command-hint wraps">${widget.lines.map((line) => html`<div>${line}</div>`)}</div>`,
+            )}
+    </div>`;
 }
 
 /**

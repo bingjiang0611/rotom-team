@@ -2,6 +2,7 @@
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { StringDecoder } from "node:string_decoder";
+import type { ImageContent } from "@earendil-works/pi-ai";
 
 export type RpcRecord = { type: string; [key: string]: unknown };
 export class RpcFailure extends Error {
@@ -24,7 +25,7 @@ export class RotomRpc {
             command: string;
             resolve: (data: unknown) => void;
             reject: (error: Error) => void;
-            timer: NodeJS.Timeout;
+            timer: NodeJS.Timeout | undefined;
         }
     >();
     readonly #listeners = new Set<(record: RpcRecord) => void>();
@@ -42,6 +43,8 @@ export class RotomRpc {
     #stopping = false;
     /** Ends the running prompt if it is only waiting for children. */
     #stopWaiting?: () => void;
+    readonly #activityWaiters = new Set<() => void>();
+    #activityRevision = 0;
 
     constructor(
         command: string,
@@ -76,6 +79,10 @@ export class RotomRpc {
     /** The kernel's process id, recorded so a later startup can tell a dead run from a live one. */
     get pid(): number | undefined {
         return this.#child.pid;
+    }
+
+    get activityRevision(): number {
+        return this.#activityRevision;
     }
 
     onEvent(listener: (record: RpcRecord) => void): () => void {
@@ -116,6 +123,11 @@ export class RotomRpc {
         }
 
         this.#pending.clear();
+        this.#activityRevision++;
+
+        for (const wake of this.#activityWaiters) {
+            wake();
+        }
 
         for (const listener of this.#listeners) {
             listener({ type: "transport_unknown" });
@@ -205,6 +217,24 @@ export class RotomRpc {
                     }
                 }
 
+                if (
+                    [
+                        "agent_start",
+                        "agent_end",
+                        "agent_settled",
+                        "message_end",
+                        "entry_appended",
+                        "extension_error",
+                        "transport_unknown",
+                    ].includes(value.type)
+                ) {
+                    this.#activityRevision++;
+
+                    for (const wake of this.#activityWaiters) {
+                        wake();
+                    }
+                }
+
                 for (const listener of this.#listeners) {
                     listener(value);
                 }
@@ -250,7 +280,11 @@ export class RotomRpc {
         return this.#send(command);
     }
 
-    #send(command: RpcRecord, timeoutMs = this.#timeout): Promise<unknown> {
+    setSessionName(name: string): Promise<unknown> {
+        return this.#send({ type: "set_session_name", name });
+    }
+
+    #send(command: RpcRecord, timeoutMs: number | null = this.#timeout): Promise<unknown> {
         if (this.#failure) {
             return Promise.reject(this.#failure);
         }
@@ -270,10 +304,13 @@ export class RotomRpc {
         const id = randomUUID();
 
         return new Promise((resolve, reject) => {
-            const timer = setTimeout(
-                () => this.#fail("RPC acknowledgement deadline exceeded"),
-                timeoutMs,
-            );
+            const timer =
+                timeoutMs === null
+                    ? undefined
+                    : setTimeout(
+                          () => this.#fail("RPC acknowledgement deadline exceeded"),
+                          timeoutMs,
+                      );
 
             this.#pending.set(id, { command: command.type, resolve, reject, timer });
             this.#write({ ...command, id });
@@ -345,11 +382,14 @@ export class RotomRpc {
                 : setTimeout(() => this.#fail("kernel run deadline exceeded"), timeoutMs);
 
         try {
-            const data = (await this.#send({
-                type: "prompt",
-                message,
-                ...(images.length ? { images } : {}),
-            })) as {
+            const data = (await this.#send(
+                {
+                    type: "prompt",
+                    message,
+                    ...(images.length ? { images } : {}),
+                },
+                message.startsWith("/") ? null : undefined,
+            )) as {
                 disposition?: string;
             };
 
@@ -383,10 +423,194 @@ export class RotomRpc {
         }
     }
 
+    /** Wait for a native turn or transport event without polling the kernel. */
+    waitForActivity(since = this.#activityRevision): Promise<void> {
+        if (this.#failure) {
+            return Promise.reject(this.#failure);
+        }
+
+        if (this.#activityRevision !== since) {
+            return Promise.resolve();
+        }
+
+        return new Promise((resolve, reject) => {
+            const finish = () => {
+                this.#activityWaiters.delete(finish);
+
+                if (this.#failure) {
+                    reject(this.#failure);
+                } else {
+                    resolve();
+                }
+            };
+
+            this.#activityWaiters.add(finish);
+        });
+    }
+
+    /** Submit an authorized workflow wake through native prompt handling, not steer/followUp. */
+    async wake(
+        message: string,
+        images: ImageContent[] = [],
+        mode: "steer" | "followUp" = "followUp",
+    ): Promise<"handled" | "started" | "queued"> {
+        const result = (await this.#send({
+            type: "prompt",
+            message,
+            ...(images.length ? { images } : {}),
+            streamingBehavior: mode,
+        })) as { disposition?: unknown };
+
+        if (!["handled", "started", "queued"].includes(String(result.disposition))) {
+            throw new RpcFailure("unknown", "native workflow wake disposition is unknown");
+        }
+
+        return result.disposition as "handled" | "started" | "queued";
+    }
+
+    /** Dispatch one native extension command while another agent turn is streaming. */
+    async command(message: string): Promise<void> {
+        const result = (await this.#send({ type: "prompt", message }, null)) as {
+            disposition?: unknown;
+        };
+
+        if (result.disposition !== "handled") {
+            throw new RpcFailure(
+                "unknown",
+                "native command was not handled; work may have started",
+            );
+        }
+    }
+
+    /** Forward native cancellation, canonical draft text and persisted summary evidence through the Team bridge. */
+    async navigateTree(
+        entryId: string,
+        summarize: boolean,
+    ): Promise<{
+        cancelled: boolean;
+        editorText?: string;
+        summaryEntry?: RpcRecord;
+    }> {
+        const nonce = randomUUID();
+        let result:
+            | {
+                  cancelled: boolean;
+                  editorText?: string;
+                  summaryEntry?: RpcRecord;
+              }
+            | undefined;
+        const detach = this.onEvent((event) => {
+            if (
+                event.type !== "extension_ui_request" ||
+                event.method !== "notify" ||
+                typeof event.message !== "string"
+            ) {
+                return;
+            }
+
+            let value;
+
+            try {
+                value = JSON.parse(event.message);
+            } catch {
+                return;
+            }
+
+            if (
+                value?.kind === "team-kernel-tree-v1" &&
+                value.nonce === nonce &&
+                typeof value.result?.cancelled === "boolean"
+            ) {
+                result = value.result;
+            }
+        });
+
+        try {
+            await this.command(
+                `/team-kernel-tree ${JSON.stringify({ nonce, entryId, summarize })}`,
+            );
+        } finally {
+            detach();
+        }
+
+        if (!result) {
+            throw new RpcFailure("unknown", "Native tree navigation did not return its outcome");
+        }
+
+        return result;
+    }
+
+    /** Wait for native extension follow-up work to become idle through the Team-owned barrier command. */
+    async barrier(): Promise<void> {
+        const nonce = randomUUID();
+        let acknowledged = false;
+        let extensionError: RpcRecord | undefined;
+        const detach = this.onEvent((event) => {
+            if (event.type === "extension_error") {
+                extensionError = event;
+            }
+
+            if (
+                event.type === "extension_ui_request" &&
+                event.method === "notify" &&
+                typeof event.message === "string"
+            ) {
+                try {
+                    const marker = JSON.parse(event.message) as {
+                        kind?: unknown;
+                        nonce?: unknown;
+                        ok?: unknown;
+                    };
+
+                    if (
+                        marker.kind === "team-kernel-barrier-v1" &&
+                        marker.nonce === nonce &&
+                        marker.ok === true
+                    ) {
+                        acknowledged = true;
+                    }
+                } catch {}
+            }
+        });
+
+        try {
+            const message = `/team-kernel-barrier ${nonce}`;
+
+            if (this.#busy) {
+                await this.command(message);
+            } else {
+                await this.prompt(message);
+            }
+        } finally {
+            detach();
+        }
+
+        if (extensionError) {
+            throw new RpcFailure(
+                "unknown",
+                `Native barrier failed: ${String(extensionError.error ?? "unknown error")}`,
+            );
+        }
+
+        if (!acknowledged) {
+            throw new RpcFailure("unknown", "Native barrier acknowledgement was not observed");
+        }
+    }
+
     /** Stop the running prompt and the background subagents it started. It does not wait for their results. */
     async abort(): Promise<void> {
         this.#stopping = true;
+
+        for (const id of this.#dialogs ?? []) {
+            this.#write({ type: "extension_ui_response", id, cancelled: true });
+        }
+
+        this.#dialogs = null;
         await this.#send({ type: "abort" });
+
+        for (const wake of this.#activityWaiters) {
+            wake();
+        }
 
         if (this.#children > 0) {
             // An extension command runs at once, even while a turn streams.

@@ -242,14 +242,28 @@ export async function nativeUiProof(options: {
         // The MCP sheet lists the project's servers as this member's runs reach them. The OAuth one needs the member's
         // own sign-in: the browser (played here by fetch, as on another machine) ends on a callback it cannot reach,
         // and its address is pasted back.
-        await page.evaluate(`${button("MCP sign-ins")}.click()`);
+        await page.evaluate(`(await import("/store.js")).closeSheet()`);
+        await typeInto("/mcp");
+        await until(
+            async () => (await page.evaluate(`Boolean(${send} && !${send}.disabled)`)) === "true",
+            "MCP slash command ready",
+            20_000,
+        );
+        await page.evaluate(`${send}.click()`);
         await until(
             async () => /team\s*needs your sign-in/.test(await text(".sheet")),
             "the MCP sheet lists the project's servers",
             60000,
         );
         assert.match(await text(".sheet"), /probe\s*connected · 1 tools/);
-        await page.evaluate(`${button("Sign in")}.click()`);
+        await page.evaluate(`(await import("/store.js")).closeSheet()`);
+        await typeInto("/mcp login team");
+        await until(
+            async () => (await page.evaluate(`Boolean(${send} && !${send}.disabled)`)) === "true",
+            "MCP login slash command ready",
+            20_000,
+        );
+        await page.evaluate(`${send}.click()`);
         const link = `document.querySelector('.sheet a[target="_blank"]')`;
 
         await until(

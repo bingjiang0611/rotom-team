@@ -40,7 +40,7 @@ export type KernelBinding = {
 /** A confirmed pre-dispatch identity conflict, not an uncertain external outcome. */
 export class KernelRequestConflict extends Error {}
 
-export type KernelOperation = "prompt" | "handoff" | "fork" | "compact";
+export type KernelOperation = "prompt" | "handoff" | "fork" | "compact" | "discover" | "command";
 export type KernelReceipt = {
     id: string;
     sessionId: string;
@@ -436,7 +436,11 @@ export class RotomJournal {
             return undefined;
         }
 
-        if (row.prompt_hash !== digest(prompt) || row.operation !== operation) {
+        // Slash expansions are conservatively reserved as commands until the native registry identifies
+        // a prompt template or skill. Legacy slash receipts also remain readable without rewriting history.
+        const expansion = operation === "command" && row.operation === "prompt";
+
+        if (row.prompt_hash !== digest(prompt) || (row.operation !== operation && !expansion)) {
             throw new KernelRequestConflict(
                 "Request identity cannot be reused with different content",
             );
@@ -449,7 +453,7 @@ export class RotomJournal {
         sessionId: string,
         requestId: string,
         prompt: string,
-        operation: "prompt" | "compact" | "fork" = "prompt",
+        operation: "prompt" | "compact" | "fork" | "discover" | "command" = "prompt",
     ): KernelReceipt {
         const existing = this.existing(sessionId, requestId, prompt, operation);
 
@@ -470,6 +474,19 @@ export class RotomJournal {
         this.#unblocked(sessionId);
 
         return this.#intent(sessionId, segmentId, requestId, prompt, binding, operation);
+    }
+
+    /** Only authoritative native prompt/skill discovery may make a reserved slash eligible for prompt recovery. */
+    classifyPromptExpansion(id: string): void {
+        const result = this.#db
+            .prepare(
+                "UPDATE kernel_attempts SET operation='prompt' WHERE id=? AND operation='command' AND status='dispatch-intent'",
+            )
+            .run(id);
+
+        if (result.changes !== 1) {
+            throw new Error("Only an undispatched native command may become a prompt expansion");
+        }
     }
 
     /** Keep the old head until a new immutable segment's public seed is committed. */
@@ -705,7 +722,10 @@ export class RotomJournal {
         const attempt = this.receipt(id),
             session = this.segment(attempt.segmentId);
 
-        if (attempt.status !== "dispatch-intent" || attempt.operation !== "prompt") {
+        if (
+            attempt.status !== "dispatch-intent" ||
+            !["prompt", "command"].includes(attempt.operation)
+        ) {
             throw new Error("Attempt is not an active prompt");
         }
 
@@ -861,6 +881,22 @@ export class RotomJournal {
                     );
             }
 
+            if (attempt.operation === "command" && entry.type === "branch_summary") {
+                if (typeof entry.summary !== "string" || !entry.summary.trim()) {
+                    throw new Error("Invalid persisted native branch summary");
+                }
+
+                this.#db
+                    .prepare("INSERT INTO kernel_usage VALUES (?,?,?,?,?)")
+                    .run(
+                        kernelSessionId,
+                        entry.id,
+                        attempt.id,
+                        attempt.binding.memberId,
+                        entry.usage ? JSON.stringify(entry.usage) : null,
+                    );
+            }
+
             const message = entry.message as
                 { role?: string; provider?: string; model?: string; usage?: unknown } | undefined;
 
@@ -908,7 +944,7 @@ export class RotomJournal {
 
             if (entry.type === "message" && message?.role === "assistant") {
                 terminal =
-                    attempt.operation === "prompt" &&
+                    ["prompt", "command"].includes(attempt.operation) &&
                     ["stop", "error", "aborted", "length"].includes(String(message.stopReason));
             }
         }
@@ -1080,7 +1116,7 @@ export class RotomJournal {
                 `SELECT a.id,a.session_id,a.binding,a.status,s.kernel_session_id,e.body
             FROM kernel_attempts a JOIN kernel_sessions s ON s.id=a.session_id
             LEFT JOIN kernel_entries e ON e.attempt_id=a.id AND json_extract(e.body,'$.customType')=?
-            WHERE a.conversation_id=? AND a.operation IN ('prompt','compact') ORDER BY a.rowid,e.rowid`,
+            WHERE a.conversation_id=? AND a.operation IN ('prompt','compact','command') ORDER BY a.rowid,e.rowid`,
             )
             .all(CREDIT_ENTRY, sessionId);
 

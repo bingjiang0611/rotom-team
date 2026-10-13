@@ -26,10 +26,10 @@ function Server({ server, busy, onSignIn, onSignOut }) {
 export function McpSheet() {
     const id = store.state.conversationId;
     const [report, setReport] = useState(null);
-    const [signIn, setSignIn] = useState(null);
+    const [signIn, setSignIn] = useState(store.state.sheet?.signIn ?? null);
     const [pasted, setPasted] = useState("");
     const [busy, setBusy] = useState(false);
-    const [message, setMessage] = useState("");
+    const [message, setMessage] = useState(store.state.sheet?.message ?? "");
     const [error, setError] = useState("");
 
     const load = () =>

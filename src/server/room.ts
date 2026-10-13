@@ -436,6 +436,9 @@ export class Room {
                           max: this.goal.max,
                           ...(this.goal.last === undefined ? {} : { last: this.goal.last }),
                       },
+            ...(this.#native()
+                ? { nativeGoal: this.#app.kernel!.nativeGoal(this.id) ?? null }
+                : {}),
         };
 
         for (const [key, value] of Object.entries(fields)) {

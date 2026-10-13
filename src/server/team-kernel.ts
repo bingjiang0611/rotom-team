@@ -1,7 +1,16 @@
 /** Opt-in application boundary: team authorizes and owns credentials; pinned rotom alone executes new native conversations. */
-import { randomUUID } from "node:crypto";
-import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync } from "node:fs";
-import { join } from "node:path";
+import { createHash, randomUUID } from "node:crypto";
+import {
+    existsSync,
+    lstatSync,
+    mkdirSync,
+    mkdtempSync,
+    readFileSync,
+    realpathSync,
+    rmSync,
+    writeFileSync,
+} from "node:fs";
+import { join, sep } from "node:path";
 import {
     defineDoc,
     type ConversationId,
@@ -10,7 +19,11 @@ import {
 } from "@earendil-works/pi-durable";
 import type { JsonValue } from "@earendil-works/chord";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import type { TranscriptContext } from "@earendil-works/pi-ai";
+import {
+    clampThinkingLevel,
+    type ModelThinkingLevel,
+    type TranscriptContext,
+} from "@earendil-works/pi-ai";
 import type { PocketApp } from "./app.ts";
 import type { User } from "./config.ts";
 import type { ConfigurationSnapshot } from "./team-profiles.ts";
@@ -18,28 +31,66 @@ import { accountContext } from "./team-accounts.ts";
 import { HttpError } from "./errors.ts";
 import {
     isTeamPrompt,
+    currentBranchGoalState,
     nativePromptIdentity,
+    nativePromptOperation,
+    nativeCommandName,
+    nativeCommandArgs,
     NativeTail,
+    normalizeNativePrompt,
     RotomExecutions,
     type RunHooks,
 } from "./rotom-executions.ts";
 import { attachmentImages, attachmentText } from "./attachments.ts";
 import type { Attachment } from "./commands.ts";
-import { childrenReport, type RpcRecord } from "./rotom-rpc.ts";
-import { AuthorsDoc } from "./docs.ts";
+import { childrenReport, RpcFailure, type RpcRecord } from "./rotom-rpc.ts";
+import { AuthorsDoc, SessionsDoc } from "./docs.ts";
 import { THINKING_LEVELS } from "./commands.ts";
 import { NATIVE_ENTRY, RESUME_PREFIX } from "./entry-format.ts";
 import { projectLive, type ClientLive } from "./projection.ts";
 import type { KernelBinding, KernelEntry, KernelReceipt } from "./rotom-journal.ts";
-import { projectSkillPaths, verifyRotomKernel } from "./rotom-kernel.ts";
+import {
+    nativeBuiltinCommands,
+    nativeConfigurationApi,
+    nativeSessionManager,
+    nativeSessionExports,
+    projectSkillPaths,
+    verifyRotomKernel,
+} from "./rotom-kernel.ts";
 import { loadSkillCommands, type SkillCommand } from "./prompts.ts";
 import { McpSignIns } from "./mcp-sign-in.ts";
 import { touchSession } from "./titles.ts";
 
+export type NativeCreation = {
+    sourceId: ConversationId;
+    requestId: string;
+    identity: string;
+    seed?: boolean;
+};
+export const NativeCreationsDoc = defineDoc<{
+    items: Record<string, { id: ConversationId; identity: string }>;
+}>({
+    kind: "rotom-team.native-creations",
+    version: 1,
+    scope: "conversation",
+    history: "latest",
+    fork: "initial",
+    initial: () => ({ items: {} }),
+});
+
 /** App-side creation intent. Never copied from a source conversation or rebuilt from today's account settings. */
-export type NativeForkPlan = { sourceId: ConversationId; requestId: string; expectedHead: string };
+export type NativeForkPlan = {
+    sourceId: ConversationId;
+    requestId: string;
+    expectedHead: string;
+    entryId?: string;
+    clone?: boolean;
+};
 export const NativeForksDoc = defineDoc<{
-    items: Record<string, { id: ConversationId; expectedHead: string }>;
+    items: Record<
+        string,
+        { id: ConversationId; expectedHead: string; entryId?: string; clone?: boolean }
+    >;
 }>({
     kind: "rotom-team.native-forks",
     version: 1,
@@ -51,7 +102,7 @@ export const NativeForksDoc = defineDoc<{
 export const NativeSetupDoc = defineDoc<{
     binding?: KernelBinding;
     bound?: true;
-    seed?: NativeForkPlan;
+    seed?: NativeForkPlan | { requestId: string };
 }>({
     kind: "rotom-team.native-setup",
     version: 1,
@@ -71,6 +122,16 @@ export const NativeMirrorDoc = defineDoc<{ count: number }>({
     initial: () => ({ count: 0 }),
 });
 
+/** Preserve native tree cancellation/draft outcomes for receipt readback without replaying navigation. */
+const NativeCommandResultsDoc = defineDoc<{ items: Record<string, JsonValue> }>({
+    kind: "rotom-team.native-command-results",
+    version: 1,
+    scope: "conversation",
+    history: "latest",
+    fork: "initial",
+    initial: () => ({ items: {} }),
+});
+
 /** What a running kernel shows before its messages are persisted. Provisional: never billed, never replayed. */
 type NativeLive = {
     generation?: { message: { content: Record<string, unknown>[] }; ended: boolean };
@@ -81,6 +142,8 @@ type NativeLive = {
     dialogs?: NativeDialog[];
     /** Background subagents whose results the run still waits for. */
     subagents?: number;
+    statuses?: Record<string, string>;
+    widgets?: Record<string, { lines: string[]; placement: string }>;
 };
 /** A dialog a rotom extension opened during a run, such as ask_user_question's choices. */
 export type NativeDialog = {
@@ -125,6 +188,23 @@ export class TeamKernel {
     readonly #ready = new Set<ConversationId>();
     readonly #configurations = new Map<ConversationId, NativeConfigurations>();
     readonly #live = new Map<ConversationId, NativeLive>();
+    readonly #commands = new Map<
+        ConversationId,
+        {
+            memberId: string;
+            segmentId: string;
+            binding: string;
+            capturedAt: number;
+            commands: Array<{
+                name: string;
+                description: string;
+                argumentHint?: string;
+                source?: string;
+            }>;
+        }
+    >();
+    readonly #nativeGoal = new Map<ConversationId, unknown>();
+    readonly #branchedHistory = new Set<ConversationId>();
     readonly #mcp = new McpSignIns();
     readonly #mirrors = new Map<ConversationId, Promise<void>>();
     readonly #operations = new Map<
@@ -454,6 +534,7 @@ export class TeamKernel {
 
         return {
             backend: "rotom",
+            history: "immutable-audit",
             initializing: !this.#ready.has(id),
             segmentId,
             memberId: binding.memberId,
@@ -522,7 +603,15 @@ export class TeamKernel {
         wait = true,
         attachments: Attachment[] = [],
     ) {
-        return this.#operation(id, user, requestId, "submit", { text, attachments }, () =>
+        const command = nativeCommandName(text);
+        const operation =
+            command === "clone" || command === "fork"
+                ? "fork"
+                : command === "compact"
+                  ? "compact"
+                  : "submit";
+
+        return this.#operation(id, user, requestId, operation, { text, attachments }, () =>
             this.#submit(id, user, requestId, text, wait, attachments),
         );
     }
@@ -538,10 +627,7 @@ export class TeamKernel {
         attachments: Attachment[] = [],
     ) {
         if (typeof text !== "string" || !isTeamPrompt(attachmentText(text, attachments))) {
-            throw new HttpError(
-                400,
-                "Rotom sessions take ordinary text or /skill:name; other slash commands are not supported.",
-            );
+            throw new HttpError(400, "Enter ordinary text or a native slash command.");
         }
 
         if (text.length > 100_000) {
@@ -550,6 +636,35 @@ export class TeamKernel {
 
         this.#app.requireSteer(user);
         this.#app.requireSee(user, id);
+
+        if (["share", "bug"].includes(nativeCommandName(text) ?? "")) {
+            throw new HttpError(
+                400,
+                `/${nativeCommandName(text)} is excluded from this Team release. No external upload was started.`,
+            );
+        }
+
+        if (nativeCommandName(text) === "quit") {
+            await this.abort(id, user);
+
+            return { status: "handled" as const, conversationId: null };
+        }
+
+        if (["qoder-models", "qoder-credits"].includes(nativeCommandName(text) ?? "")) {
+            await this.#requireDynamicAdapter(id, user, nativeCommandName(text)!);
+
+            throw new HttpError(
+                409,
+                "Wait for your account's runs to finish before requesting private Qoder account data.",
+            );
+        }
+
+        const mcp = await this.#mcpCommand(id, user, text);
+
+        if (mcp) {
+            return mcp;
+        }
+
         const { binding } = this.executions.journal.session(String(id));
 
         if (binding.memberId !== user.id) {
@@ -563,19 +678,39 @@ export class TeamKernel {
 
         const model = this.#app.accounts.kernelModel(user, this.#ref(binding));
         const images = await attachmentImages(attachments, model.input.includes("image"));
+        const goal = (this.nativeGoal(id) as { goal?: { waiting?: unknown } } | undefined)?.goal;
 
-        if (
-            !(await this.executions.queue(
-                String(id),
-                attachmentText(text, attachments),
-                mode,
-                images,
-            ))
-        ) {
-            throw new HttpError(
-                409,
-                "Pi is not running a prompt now (it finished, or is compacting). Send again.",
-            );
+        try {
+            if (
+                goal?.waiting &&
+                !nativeCommandName(text) &&
+                (await this.executions.wake(String(id), attachmentText(text, attachments), images))
+            ) {
+                return { queued: mode };
+            }
+
+            if (
+                !(await this.executions.queue(
+                    String(id),
+                    normalizeNativePrompt(attachmentText(text, attachments)),
+                    mode,
+                    images,
+                ))
+            ) {
+                throw new HttpError(
+                    409,
+                    "Pi is not running a prompt now (it finished, or is compacting). Send again.",
+                );
+            }
+        } catch (error) {
+            if (error instanceof RpcFailure) {
+                throw new HttpError(
+                    409,
+                    `Native command outcome is ${error.outcome}: ${error.message}`,
+                );
+            }
+
+            throw error;
         }
 
         return { queued: mode };
@@ -591,9 +726,15 @@ export class TeamKernel {
             this.#handoff(id, user, requestId, expectedHead),
         );
     }
-    fork(id: ConversationId, user: User, requestId: string, expectedHead: string) {
-        return this.#operation(id, user, requestId, "fork", { expectedHead }, () =>
-            this.#fork(id, user, requestId, expectedHead),
+    fork(
+        id: ConversationId,
+        user: User,
+        requestId: string,
+        expectedHead: string,
+        entryId?: string,
+    ) {
+        return this.#operation(id, user, requestId, "fork", { expectedHead, entryId }, () =>
+            this.#fork(id, user, requestId, expectedHead, entryId),
         );
     }
     configure(id: ConversationId, user: User, requestId: string, expectedHead: string) {
@@ -623,22 +764,423 @@ export class TeamKernel {
             throw new HttpError(400, "A stable requestId and text are required.");
         }
 
-        const prompt = attachmentText(text, attachments);
+        const prompt = normalizeNativePrompt(attachmentText(text, attachments));
 
         if (!isTeamPrompt(prompt)) {
+            throw new HttpError(400, "Enter ordinary text or a native slash command.");
+        }
+
+        const command = nativeCommandName(prompt);
+        const args = nativeCommandArgs(prompt);
+        const mcp = await this.#mcpCommand(id, user, prompt, requestId);
+
+        if (mcp) {
+            return mcp;
+        }
+
+        if (command === "qoder-models" || command === "qoder-credits") {
+            await this.#requireDynamicAdapter(id, user, command, requestId);
+            this.requireAccountIdle(user);
+            const result = await this.#app.accounts.nativeQoder(
+                user,
+                command === "qoder-models" ? "models" : "credits",
+            );
+
+            return { status: "handled" as const, nativeResult: result };
+        }
+
+        const sheets: Record<string, string> = {
+            login: "providers",
+            logout: "providers",
+            hotkeys: "shortcuts",
+            settings: "native-settings",
+            "scoped-models": "native-models",
+        };
+
+        if (command && sheets[command]) {
+            return { status: "handled" as const, interaction: { type: sheets[command] } };
+        }
+
+        if (command === "changelog") {
+            const info = await nativeConfigurationApi();
+
+            return {
+                status: "handled" as const,
+                nativeResult: {
+                    version: `rotom ${verifyRotomKernel().version}`,
+                    package: info.packageUrl,
+                    update: info.updateGuidance,
+                },
+            };
+        }
+
+        if (command === "trust") {
+            const api = await nativeConfigurationApi();
+            const options = api.getProjectTrustOptions(this.#app.cwdOf(id), {
+                includeSessionOnly: false,
+            }) as Array<{
+                label: string;
+                updates: Array<{ path: string; decision: boolean | null }>;
+            }>;
+
+            if (!args) {
+                return {
+                    status: "handled" as const,
+                    interaction: {
+                        type: "native-command",
+                        title: "Save native project trust (Team runs explicitly approve this project)",
+                        options: options.map((option, index) => ({
+                            label: option.label,
+                            text: `/trust ${index}`,
+                        })),
+                    },
+                };
+            }
+
+            const option = options[Number(args)];
+
+            if (!option || !/^\d+$/.test(args)) {
+                throw new HttpError(400, "Choose a native project trust option.");
+            }
+
+            this.requireAccountIdle(user);
+            new api.ProjectTrustStore(join(this.#home(user.id), ".pi/agent")).setMany(
+                option.updates,
+            );
+
+            return {
+                status: "handled" as const,
+                nativeResult: {
+                    trust: option.label,
+                    note: "Team runs retain their explicit project approval.",
+                },
+            };
+        }
+
+        if (command === "quit") {
+            await this.abort(id, user);
+
+            return { status: "handled" as const, conversationId: null };
+        }
+
+        if (command === "share" || command === "bug") {
             throw new HttpError(
                 400,
-                "Rotom sessions take ordinary text or /skill:name; other slash commands are not supported.",
+                `/${command} is excluded from this Team release. No external upload was started.`,
             );
+        }
+
+        if (command === "compact") {
+            return this.#compact(id, user, requestId, args);
+        }
+
+        if (command === "model" || command === "thinking") {
+            if (!args) {
+                return { status: "handled" as const, interaction: { type: "model" } };
+            }
+
+            const separator = args.indexOf("/");
+
+            if (command === "model" && separator <= 0) {
+                return { status: "handled" as const, interaction: { type: "model", query: args } };
+            }
+
+            const result = await this.chooseModel(
+                id,
+                user,
+                command === "model"
+                    ? {
+                          model: {
+                              provider: args.slice(0, separator),
+                              modelId: args.slice(separator + 1),
+                          },
+                      }
+                    : { thinkingLevel: args },
+                requestId,
+            );
+
+            return result.receipt ?? { status: "handled" as const };
+        }
+
+        if (command === "new") {
+            return this.#app.execution.exclusive(id, async () => {
+                const prior = (
+                    await this.#app.harness.snapshot(NativeCreationsDoc, id, BACKGROUND_CONTEXT)
+                )?.items[key];
+
+                if (prior && prior.identity !== prompt) {
+                    throw new HttpError(409, "Native creation request changed.");
+                }
+
+                const target =
+                    prior ??
+                    (await this.#app.commands.createSession(
+                        user,
+                        {
+                            backend: "rotom",
+                            cwd: this.#app.cwdOf(id),
+                        },
+                        undefined,
+                        { sourceId: id, requestId: key, identity: prompt },
+                    ));
+
+                this.#app.requireSee(user, target.id);
+
+                return { status: "handled" as const, conversationId: target.id };
+            });
+        }
+
+        if (command === "import") {
+            if (!args) {
+                return { status: "handled" as const, interaction: { type: "native-import" } };
+            }
+
+            const path = realpathSync(this.#app.workspace.readableFile(user, id, args));
+            const workspace = realpathSync(this.#app.cwdOf(id));
+            const uploads = this.#app.workspace.uploadDirectory(id);
+            const inside = (root: string) => path.startsWith(root + sep);
+
+            if (
+                (!inside(workspace) && !inside(uploads)) ||
+                (inside(this.#app.dataDir) && !inside(uploads))
+            ) {
+                throw new HttpError(
+                    403,
+                    "Import a JSONL file from this project's workspace or this session's uploads.",
+                );
+            }
+
+            if (!lstatSync(path).isFile() || lstatSync(path).size > 50 * 1024 * 1024) {
+                throw new HttpError(400, "Native JSONL import is limited to a 50 MiB file.");
+            }
+
+            const bytes = readFileSync(path);
+            const identity = `${prompt}:${createHash("sha256").update(bytes).digest("hex")}`;
+            const native = await nativeSessionManager();
+            const records = native.parseSessionEntries(bytes.toString("utf8")) as KernelEntry[];
+
+            if (records[0]?.type !== "session") {
+                throw new HttpError(400, "A native JSONL session header is required.");
+            }
+
+            native.migrateSessionEntries(records);
+
+            return this.#app.execution.exclusive(id, async () => {
+                const prior = (
+                    await this.#app.harness.snapshot(NativeCreationsDoc, id, BACKGROUND_CONTEXT)
+                )?.items[key];
+
+                if (prior) {
+                    if (prior.identity !== identity) {
+                        throw new HttpError(409, "Native import request changed.");
+                    }
+
+                    this.#app.requireSee(user, prior.id);
+                    const receipt = this.executions.journal.request(String(prior.id), key);
+
+                    return receipt
+                        ? { ...this.#receipt(receipt), conversationId: prior.id }
+                        : { status: "unknown" as const, conversationId: prior.id };
+                }
+
+                const target = await this.#app.commands.createSession(
+                    user,
+                    {
+                        backend: "rotom",
+                        cwd: this.#app.cwdOf(id),
+                        title: "Imported native session",
+                    },
+                    undefined,
+                    { sourceId: id, requestId: key, identity, seed: true },
+                );
+                const binding = this.executions.journal.session(String(target.id)).binding;
+                const receipt = await this.#track(
+                    target.id,
+                    binding,
+                    this.executions.importHistory(
+                        String(target.id),
+                        key,
+                        identity,
+                        records.slice(1),
+                    ),
+                );
+
+                if (receipt.status === "settled") {
+                    this.#ready.add(target.id);
+                }
+
+                return { ...receipt, conversationId: target.id };
+            });
+        }
+
+        if (command === "resume") {
+            if (!args) {
+                return {
+                    status: "handled" as const,
+                    interaction: {
+                        type: "native-command",
+                        title: "Resume a Team native session",
+                        options: this.#app
+                            .sessions(user)
+                            .filter((session) => session.backend === "rotom")
+                            .map((session) => ({
+                                label: session.title ?? `Session ${session.id}`,
+                                text: `/resume ${session.id}`,
+                            })),
+                    },
+                };
+            }
+
+            const target = this.#id(args);
+
+            this.#app.requireSee(user, target);
+
+            if (this.#app.sessionMeta(target)?.backend !== "rotom") {
+                throw new HttpError(400, "Choose a Team native session.");
+            }
+
+            return { status: "handled" as const, conversationId: target };
+        }
+
+        if ((command === "fork" || command === "tree") && !args) {
+            const source = this.executions.journal.session(String(id));
+
+            if (command === "tree" && source.binding.memberId !== user.id) {
+                const receipt = await this.#handoff(
+                    id,
+                    user,
+                    `tree-handoff-${createHash("sha256").update(requestId).digest("hex").slice(0, 40)}`,
+                    source.segmentId,
+                );
+
+                if (receipt.status !== "settled") {
+                    return receipt;
+                }
+            }
+
+            const { segmentId } = this.executions.journal.session(String(id));
+            const entries = this.executions.journal.segmentEntries(segmentId);
+            const native = await nativeSessionManager();
+            const active = new Set<string>();
+            const byId = new Map(entries.map((entry) => [entry.id, entry]));
+            let leaf = entries.at(-1);
+
+            while (leaf && !active.has(leaf.id!)) {
+                active.add(leaf.id!);
+                leaf = typeof leaf.parentId === "string" ? byId.get(leaf.parentId) : undefined;
+            }
+
+            const options = entries.flatMap((entry) => {
+                const message = entry.message as { role?: string; content?: unknown } | undefined;
+
+                if (
+                    command === "fork"
+                        ? entry.type !== "message" || message?.role !== "user"
+                        : !["message", "custom_message", "branch_summary", "compaction"].includes(
+                              String(entry.type),
+                          )
+                ) {
+                    return [];
+                }
+
+                const selectedText = native.contentText(
+                    message?.content ?? entry.content ?? entry.summary,
+                    "",
+                ) as string;
+
+                // Native fork selectors omit user entries with no text (including image-only input).
+                if (command === "fork" && !selectedText) {
+                    return [];
+                }
+
+                return [
+                    {
+                        entryId: entry.id,
+                        label: `${message?.role ?? entry.type}: ${selectedText.slice(0, 160) || "(no text)"}${command === "tree" ? (active.has(entry.id!) ? " · active branch" : " · abandoned branch") : ""}`,
+                        text: `/${command} ${entry.id}`,
+                    },
+                ];
+            });
+
+            return {
+                status: "handled" as const,
+                interaction: {
+                    type: "native-command",
+                    title:
+                        command === "fork" ? "Fork before a user message" : "Navigate native tree",
+                    command,
+                    options,
+                },
+            };
+        }
+
+        if (command === "clone" || command === "fork") {
+            const { segmentId } = this.executions.journal.session(String(id));
+            const target = await this.#fork(
+                id,
+                user,
+                requestId,
+                segmentId,
+                command === "fork" ? args : undefined,
+                command === "clone",
+            );
+
+            let editorText: string | undefined;
+
+            if (command === "fork" && target.receipt?.status === "settled") {
+                const selected = this.executions.journal
+                    .segmentEntries(segmentId)
+                    .find((entry) => entry.id === args);
+                const native = await nativeSessionManager();
+
+                editorText = native.contentText(
+                    (selected!.message as { content: unknown }).content,
+                    "",
+                );
+            }
+
+            return target.receipt
+                ? {
+                      ...target.receipt,
+                      conversationId: target.id,
+                      receipt: target.receipt,
+                      editorText,
+                  }
+                : { status: "unknown" as const, conversationId: target.id, receipt: null };
+        }
+
+        if (command === "export") {
+            const format = args.endsWith(".jsonl") ? "jsonl" : "html";
+
+            return {
+                status: "handled" as const,
+                download: `/api/c/${id}/native-export?format=${format}`,
+            };
+        }
+
+        if (command === "name" && !args) {
+            return { status: "handled" as const, interaction: { type: "native-name" } };
         }
 
         // Identity readback must not need a still-connected account or today's model capabilities.
         const images = await attachmentImages(attachments, true);
         const identity = nativePromptIdentity(prompt, images);
-        const previous = this.executions.journal.existing(String(id), key, identity);
+        const previous = this.executions.journal.existing(
+            String(id),
+            key,
+            identity,
+            nativePromptOperation(prompt),
+        );
 
         if (previous) {
-            return this.#receipt(previous);
+            const saved = (
+                await this.#app.harness.snapshot(NativeCommandResultsDoc, id, BACKGROUND_CONTEXT)
+            )?.items[key];
+
+            return {
+                ...this.#receipt(previous),
+                ...(saved === undefined ? {} : { nativeResult: saved }),
+            };
         }
 
         if (this.isRunning(id)) {
@@ -693,6 +1235,7 @@ export class TeamKernel {
             throw new HttpError(409, "Another member took over first; refresh and send again.");
         }
 
+        let nativeResult: unknown;
         let reserved!: (receipt: KernelReceipt) => void;
         let wasReserved = false;
         const admitted = new Promise<KernelReceipt>((resolve) => {
@@ -701,6 +1244,21 @@ export class TeamKernel {
                 resolve(receipt);
             };
         });
+
+        const nameAcceptedPrompt = async () => {
+            if (!requestId.startsWith("#resume-")) {
+                try {
+                    await touchSession(this.#app, id, text);
+                } catch (error) {
+                    this.#app.notice(
+                        "warning",
+                        `The session name could not be saved: ${error}`,
+                        id,
+                    );
+                }
+            }
+        };
+
         const run = this.#track(
             id,
             binding,
@@ -708,27 +1266,34 @@ export class TeamKernel {
                 String(id),
                 key,
                 prompt,
-                this.#hooks(id, async (receipt) => {
-                    if (!requestId.startsWith("#resume-")) {
-                        try {
-                            await touchSession(this.#app, id, text);
-                        } catch (error) {
-                            this.#app.notice(
-                                "warning",
-                                `The session name could not be saved: ${error}`,
-                                id,
-                            );
+                {
+                    ...this.#hooks(id, async (receipt) => {
+                        if (nativeCommandName(text) === undefined) {
+                            await nameAcceptedPrompt();
                         }
-                    }
 
-                    reserved(receipt);
-                }),
+                        reserved(receipt);
+                    }),
+                    onCommandAdmitted: nameAcceptedPrompt,
+                    onNativeResult: async (result) => {
+                        nativeResult = result;
+
+                        if (result && typeof result === "object" && "navigation" in result) {
+                            await this.#app.harness.commit(async (tx) => {
+                                (await tx.doc(NativeCommandResultsDoc, id)).items[key] =
+                                    result as JsonValue;
+                            }, BACKGROUND_CONTEXT);
+                        }
+                    },
+                },
                 images,
             ),
         );
 
         if (wait) {
-            return run;
+            const receipt = await run;
+
+            return { ...receipt, ...(nativeResult === undefined ? {} : { nativeResult }) };
         }
 
         // After reservation every outcome is journaled and shown in the room; only a lost child is reported here.
@@ -746,7 +1311,7 @@ export class TeamKernel {
      * Choosing a model in a native session takes it over on the chooser's account with that model: a new segment with
      * public history, as any change of payer. The choice is also remembered as the person's default.
      */
-    async chooseModel(id: ConversationId, user: User, body: unknown) {
+    async chooseModel(id: ConversationId, user: User, body: unknown, requestId?: string) {
         const request = body as {
             model?: { provider?: unknown; modelId?: unknown };
             thinkingLevel?: unknown;
@@ -770,29 +1335,96 @@ export class TeamKernel {
         }
 
         this.#app.requireSteer(user);
+        this.#app.requireSee(user, id);
+
+        const prior = requestId
+            ? this.executions.journal.request(String(id), this.#request(id, user, requestId))
+            : undefined;
+
+        if (prior) {
+            const model = request.model;
+            const matches =
+                prior.operation === "handoff" &&
+                (!model ||
+                    ((model.provider === prior.binding.provider ||
+                        model.provider === prior.binding.accountGeneration) &&
+                        model.modelId === prior.binding.model)) &&
+                (request.thinkingLevel === undefined ||
+                    request.thinkingLevel === prior.binding.thinkingLevel);
+
+            if (!matches) {
+                throw new HttpError(409, "Model command request identity changed.");
+            }
+
+            return { receipt: this.#receipt(prior) };
+        }
+
+        if (this.isRunning(id) || this.executions.journal.pendingConversation(String(id))) {
+            throw new HttpError(
+                409,
+                "Pi is working or has an unknown operation. Reconcile it before switching the model.",
+            );
+        }
+
         await this.#app.accounts.forUser(user);
-        const previous = this.#app.accounts.choice(user);
-        const ref = request.model
+        const bindingBefore = this.executions.journal.session(String(id)).binding;
+        const previous =
+            bindingBefore.memberId === user.id
+                ? {
+                      ...this.#ref(bindingBefore),
+                      thinkingLevel: bindingBefore.thinkingLevel ?? "off",
+                  }
+                : this.#app.accounts.choice(user);
+        let ref = request.model
             ? { provider: String(request.model.provider), modelId: String(request.model.modelId) }
             : (previous ?? this.#app.commands.defaultModel(user).model);
+
+        if (request.model) {
+            const matches = this.#app.accounts.available(user).filter((model) => {
+                const native = this.#app.accounts.kernelModel(user, {
+                    provider: model.provider,
+                    modelId: model.id,
+                });
+
+                return (
+                    model.id === request.model!.modelId &&
+                    (model.provider === request.model!.provider ||
+                        native.provider === request.model!.provider)
+                );
+            });
+
+            if (matches.length !== 1) {
+                throw new HttpError(400, "Choose one available model on your own account.");
+            }
+
+            ref = { provider: matches[0]!.provider, modelId: matches[0]!.id };
+        }
 
         if (!ref) {
             throw new HttpError(409, "Connect your own account and choose a model first.");
         }
 
-        this.#app.accounts.choose(user, {
-            ...ref,
-            thinkingLevel: String(request.thinkingLevel ?? previous?.thinkingLevel ?? "off"),
-        });
-        const chosen = this.#app.commands.defaultModel(user);
+        const model = this.#app.accounts.kernelModel(user, ref);
+        const chosen = {
+            model: ref,
+            thinkingLevel: clampThinkingLevel(
+                model,
+                String(
+                    request.thinkingLevel ?? previous?.thinkingLevel ?? "off",
+                ) as ModelThinkingLevel,
+            ),
+        };
         const { binding, segmentId } = this.executions.journal.session(String(id));
 
         if (
+            requestId === undefined &&
             binding.memberId === user.id &&
             binding.accountGeneration === chosen.model?.provider &&
             binding.model === chosen.model.modelId &&
             (binding.thinkingLevel ?? "off") === (chosen.thinkingLevel ?? "off")
         ) {
+            this.#app.accounts.choose(user, { ...ref, thinkingLevel: chosen.thinkingLevel });
+
             return { receipt: null };
         }
 
@@ -800,7 +1432,19 @@ export class TeamKernel {
             throw new HttpError(409, "Pi is working. Stop it or wait before switching the model.");
         }
 
-        return { receipt: await this.handoff(id, user, `model-${randomUUID()}`, segmentId) };
+        const receipt = await this.#handoff(
+            id,
+            user,
+            requestId ?? `model-${randomUUID()}`,
+            segmentId,
+            chosen,
+        );
+
+        if (receipt.status === "settled") {
+            this.#app.accounts.choose(user, { ...ref, thinkingLevel: chosen.thinkingLevel });
+        }
+
+        return { receipt };
     }
 
     #hooks(
@@ -809,7 +1453,62 @@ export class TeamKernel {
     ): RunHooks {
         return {
             ...(onReserved ? { onReserved } : {}),
+            sessionName: () => this.#app.sessionMeta(id)?.title,
+            onSessionName: async (name) => {
+                await this.#app.harness.commit(async (tx) => {
+                    const meta = (await tx.doc(SessionsDoc)).items[String(id)];
+
+                    if (meta) {
+                        meta.title = name;
+                        meta.updatedAt = Date.now();
+                    }
+                }, BACKGROUND_CONTEXT);
+                this.#app.roomChanged(id);
+            },
             onEvent: (event) => this.#observe(id, event),
+            onCommands: (commands) => {
+                const session = this.executions.journal.session(String(id));
+
+                this.#commands.set(id, {
+                    memberId: session.binding.memberId,
+                    segmentId: session.segmentId,
+                    binding: JSON.stringify(session.binding),
+                    capturedAt: Date.now(),
+                    commands: commands
+                        .filter(
+                            (command) =>
+                                typeof command.name === "string" &&
+                                !command.name.startsWith("team-kernel-"),
+                        )
+                        .map((command) => ({
+                            name: command.name as string,
+                            description:
+                                typeof command.description === "string" ? command.description : "",
+                            ...(typeof command.argumentHint === "string"
+                                ? { argumentHint: command.argumentHint }
+                                : {}),
+                            ...(typeof command.source === "string"
+                                ? { source: command.source }
+                                : {}),
+                        })),
+                });
+                this.#app.roomChanged(id);
+            },
+            onNativeGoalState: (state) => {
+                this.#nativeGoal.set(id, state);
+                this.#app.roomChanged(id);
+            },
+            onNativeResult: (result) => {
+                const nativeResult = result as { path?: unknown } | undefined;
+                const path =
+                    nativeResult && typeof nativeResult.path === "string" ? nativeResult.path : "";
+
+                this.#app.notice(
+                    "info",
+                    path === "" ? "Native command completed." : `Native command wrote ${path}`,
+                    id,
+                );
+            },
             // A failed mirror is already a notice, and the run's end mirrors again.
             onProgress: () => void this.mirror(id).catch(() => undefined),
         };
@@ -894,6 +1593,14 @@ export class TeamKernel {
                 delete live.compacting;
                 break;
 
+            case "extension_error":
+                this.#app.notice(
+                    "warning",
+                    `Native extension error (${String(event.extensionPath ?? "unknown")}): ${String(event.error ?? "unknown error")}`,
+                    id,
+                );
+                break;
+
             case "extension_ui_request": {
                 const subagents = childrenReport(event);
 
@@ -902,13 +1609,81 @@ export class TeamKernel {
                     break;
                 }
 
-                // Status lines, widgets and toasts are for a terminal; only dialogs need a person.
-                if (!DIALOG_METHODS.has(String(event.method))) {
+                const method = String(event.method);
+                const text = (value: unknown) =>
+                    typeof value === "string" ? value.slice(0, 16_000) : undefined;
+
+                // Native notifications are notices; statuses/widgets are keyed live replace/clear slots.
+                // Dialogs remain interactive live state for the paying member.
+                if (method === "notify") {
+                    const message = text(event.message);
+
+                    if (message) {
+                        let control: { kind?: unknown } | undefined;
+
+                        try {
+                            control = JSON.parse(message) as { kind?: unknown };
+                        } catch {}
+
+                        if (
+                            ["team-kernel-barrier-v1", "team-kernel-tree-v1"].includes(
+                                String(control?.kind),
+                            )
+                        ) {
+                            return;
+                        }
+
+                        const level = ["warning", "error"].includes(String(event.notifyType))
+                            ? (String(event.notifyType) as "warning" | "error")
+                            : "info";
+
+                        this.#app.notice(level, message, id);
+                    }
+
                     return;
                 }
 
-                const text = (value: unknown) =>
-                    typeof value === "string" ? value.slice(0, 16_000) : undefined;
+                if (method === "setStatus") {
+                    const key = String(event.statusKey);
+                    const message = text(event.statusText);
+
+                    live.statuses ??= Object.create(null) as Record<string, string>;
+
+                    if (message === undefined) {
+                        delete live.statuses[key];
+                    } else {
+                        live.statuses[key] = message;
+                    }
+
+                    break;
+                }
+
+                if (method === "setWidget") {
+                    const lines = Array.isArray(event.widgetLines)
+                        ? event.widgetLines.filter(
+                              (line): line is string => typeof line === "string",
+                          )
+                        : [];
+
+                    const key = String(event.widgetKey);
+
+                    live.widgets ??= Object.create(null) as NonNullable<NativeLive["widgets"]>;
+
+                    if (event.widgetLines === undefined) {
+                        delete live.widgets[key];
+                    } else {
+                        live.widgets[key] = {
+                            lines,
+                            placement: String(event.widgetPlacement ?? "aboveEditor"),
+                        };
+                    }
+
+                    break;
+                }
+
+                if (!DIALOG_METHODS.has(method)) {
+                    return;
+                }
 
                 live.dialogs = [
                     ...(live.dialogs ?? []),
@@ -1022,6 +1797,41 @@ export class TeamKernel {
      * member's own: only their runs send its tokens. Reporting starts the project's command servers, as a run does, so
      * it takes the right to run Pi in the project.
      */
+    async #mcpCommand(id: ConversationId, user: User, text: string, requestId?: string) {
+        if (nativeCommandName(text) !== "mcp") {
+            return undefined;
+        }
+
+        const args = nativeCommandArgs(text);
+        const [action, server, ...extra] = args.split(/\s+/);
+
+        if (action && action !== "login" && action !== "logout") {
+            return undefined;
+        }
+
+        if (extra.length) {
+            throw new HttpError(400, "Use /mcp login <server> or /mcp logout <server>.");
+        }
+
+        await this.#requireDynamicAdapter(id, user, "mcp", requestId);
+
+        if (!action || !server) {
+            return { status: "handled" as const, interaction: { type: "mcp" } };
+        }
+
+        const result = await this.mcp(id, user, action, { server });
+
+        return {
+            status: "handled" as const,
+            interaction: {
+                type: "mcp",
+                ...("status" in result && result.status === "open"
+                    ? { signIn: { ...result, server } }
+                    : { message: "message" in result ? result.message : "MCP command completed." }),
+            },
+        };
+    }
+
     async mcp(id: ConversationId, user: User, action: string, body?: unknown) {
         const current = this.#app.config.userById(user.id);
 
@@ -1058,6 +1868,321 @@ export class TeamKernel {
             default:
                 throw new HttpError(404, "Unknown MCP action.");
         }
+    }
+
+    async nativeSettings(id: ConversationId, user: User, patch?: Record<string, unknown>) {
+        this.#app.requireSee(user, id);
+        this.#app.requireSteer(user);
+        this.#app.projects.require(user, this.#app.sessionMeta(id)?.projectId, "continue");
+        await this.#app.accounts.forUser(user);
+        const api = await nativeConfigurationApi();
+        const manager = api.SettingsManager.create(
+            this.#app.cwdOf(id),
+            join(this.#home(user.id), ".pi/agent"),
+            { projectTrusted: true },
+        );
+
+        if (patch) {
+            this.requireAccountIdle(user);
+            const allowed = [
+                "steeringMode",
+                "followUpMode",
+                "imageAutoResize",
+                "blockImages",
+                "enableSkillCommands",
+                "enabledModels",
+            ];
+
+            if (Object.keys(patch).some((key) => !allowed.includes(key))) {
+                throw new HttpError(400, "Unknown native execution setting.");
+            }
+
+            for (const key of ["steeringMode", "followUpMode"]) {
+                if (
+                    patch[key] !== undefined &&
+                    !["all", "one-at-a-time"].includes(String(patch[key]))
+                ) {
+                    throw new HttpError(400, "Queue mode must be all or one-at-a-time.");
+                }
+            }
+
+            for (const key of ["imageAutoResize", "blockImages", "enableSkillCommands"]) {
+                if (patch[key] !== undefined && typeof patch[key] !== "boolean") {
+                    throw new HttpError(400, `${key} must be boolean.`);
+                }
+            }
+
+            if (
+                patch.enabledModels !== undefined &&
+                (!Array.isArray(patch.enabledModels) ||
+                    !patch.enabledModels.every((item) => typeof item === "string"))
+            ) {
+                throw new HttpError(400, "enabledModels must be a list of native model patterns.");
+            }
+
+            if (patch.steeringMode !== undefined) {
+                manager.setSteeringMode(patch.steeringMode);
+            }
+
+            if (patch.followUpMode !== undefined) {
+                manager.setFollowUpMode(patch.followUpMode);
+            }
+
+            if (patch.imageAutoResize !== undefined) {
+                manager.setImageAutoResize(patch.imageAutoResize);
+            }
+
+            if (patch.blockImages !== undefined) {
+                manager.setBlockImages(patch.blockImages);
+            }
+
+            if (patch.enableSkillCommands !== undefined) {
+                manager.setEnableSkillCommands(patch.enableSkillCommands);
+            }
+
+            if (patch.enabledModels !== undefined) {
+                manager.setEnabledModels(patch.enabledModels);
+            }
+
+            await manager.flush();
+
+            for (const [sessionId, cached] of this.#commands) {
+                if (cached.memberId === user.id) {
+                    this.#commands.delete(sessionId);
+                    this.#app.roomChanged(sessionId);
+                }
+            }
+
+            const errors = manager.drainErrors();
+
+            if (errors.length) {
+                throw new HttpError(409, "Native settings could not be saved.");
+            }
+        }
+
+        const available = this.#app.accounts.available(user);
+        const nativeModels = available.map((model) =>
+            this.#app.accounts.kernelModel(user, { provider: model.provider, modelId: model.id }),
+        );
+        const scope = api.resolveModelScopeFromModels(
+            manager.getEnabledModels() ?? [],
+            nativeModels,
+        ) as {
+            scopedModels: Array<{
+                model: { provider: string; id: string };
+                thinkingLevel?: string;
+            }>;
+            diagnostics: Array<{ message: string }>;
+        };
+
+        return {
+            steeringMode: manager.getSteeringMode(),
+            followUpMode: manager.getFollowUpMode(),
+            imageAutoResize: manager.getImageAutoResize(),
+            blockImages: manager.getBlockImages(),
+            enableSkillCommands: manager.getEnableSkillCommands(),
+            enabledModels: manager.getEnabledModels() ?? [],
+            autoRetry: false,
+            autoCompaction: false,
+            scopeWarnings: scope.diagnostics.map((item) => item.message),
+            models: available.map((model) => {
+                const native = this.#app.accounts.kernelModel(user, {
+                    provider: model.provider,
+                    modelId: model.id,
+                });
+
+                const scoped = scope.scopedModels.find(
+                    (item) =>
+                        item.model.provider === native.provider && item.model.id === native.id,
+                );
+
+                return {
+                    provider: model.provider,
+                    id: model.id,
+                    name: model.name,
+                    nativeName: `${native.provider}/${native.id}`,
+                    selected: scoped !== undefined,
+                    thinkingLevel: scoped?.thinkingLevel,
+                };
+            }),
+        };
+    }
+
+    /** Raw native export is a private download for the segment's member, never a shared artifact. */
+    async nativeExport(id: ConversationId, user: User, format: string) {
+        this.#app.requireSee(user, id);
+
+        if (format !== "jsonl" && format !== "html") {
+            throw new HttpError(400, "Choose html or jsonl.");
+        }
+
+        const segment = this.executions.journal.session(String(id));
+
+        if (segment.binding.memberId !== user.id) {
+            throw new HttpError(
+                403,
+                "Raw native exports belong to the member who owns this segment.",
+            );
+        }
+
+        if (this.executions.journal.pendingConversation(String(id))) {
+            throw new HttpError(409, "Wait for the native operation to settle before exporting.");
+        }
+
+        if (!segment.sessionFile) {
+            throw new HttpError(409, "This session has no native history yet.");
+        }
+
+        // Snapshot before yielding: a later run must not change the downloaded branch mid-export.
+        const bytes = readFileSync(segment.sessionFile);
+        const folder = mkdtempSync(join(segment.binding.home, "export-"));
+
+        try {
+            const input = join(folder, "session.jsonl");
+
+            writeFileSync(input, bytes, { mode: 0o600 });
+            const native = await nativeSessionManager();
+            const exports = await nativeSessionExports();
+            const manager = native.SessionManager.open(input);
+
+            if (format === "jsonl") {
+                return Buffer.from(exports.serializeSessionBranch(manager));
+            }
+
+            const path = join(folder, "session.html");
+
+            await exports.exportFromFile(input, { outputPath: path });
+
+            return readFileSync(path);
+        } finally {
+            rmSync(folder, { recursive: true, force: true });
+        }
+    }
+
+    /** Explicit discovery is a non-inference native operation under the requesting member's lease. */
+    discoverCommands(id: ConversationId, user: User, requestId: string) {
+        return this.#operation(id, user, requestId, "discover", {}, async () => {
+            this.#app.requireSteer(user);
+            await this.#app.requireDriver(id, user, "rotom");
+
+            if (this.isRunning(id)) {
+                throw new HttpError(409, "Wait for this run before refreshing native commands.");
+            }
+
+            const source = this.executions.journal.session(String(id));
+
+            if (
+                source.binding.memberId !== user.id ||
+                source.binding.kernelVersion !== verifyRotomKernel().version
+            ) {
+                const takeover = await this.#handoff(
+                    id,
+                    user,
+                    `discover-handoff-${createHash("sha256").update(requestId).digest("hex").slice(0, 40)}`,
+                    source.segmentId,
+                );
+
+                if (takeover.status !== "settled") {
+                    throw new HttpError(
+                        409,
+                        `Discovery handoff ended ${takeover.status}; no startup was replayed.`,
+                    );
+                }
+            }
+
+            const binding = this.executions.journal.session(String(id)).binding;
+            const receipt = await this.#track(
+                id,
+                binding,
+                this.executions.discover(
+                    String(id),
+                    this.#request(id, user, requestId),
+                    this.#hooks(id),
+                ),
+            );
+
+            return { receipt, ...(await this.nativeCommands(id, user)) };
+        });
+    }
+
+    async #requireDynamicAdapter(id: ConversationId, user: User, name: string, requestId?: string) {
+        if (!this.isRunning(id)) {
+            if (!requestId) {
+                throw new HttpError(409, "The run finished; submit this command again while idle.");
+            }
+
+            const discovery = await this.discoverCommands(
+                id,
+                user,
+                `registry-${createHash("sha256").update(requestId).digest("hex").slice(0, 40)}`,
+            );
+
+            if (discovery.receipt.status !== "handled") {
+                throw new HttpError(
+                    409,
+                    `Native command discovery ended ${discovery.receipt.status}.`,
+                );
+            }
+        }
+
+        const registry = await this.nativeCommands(id, user);
+
+        if (!registry.dynamicReady || !registry.commands.some((command) => command.name === name)) {
+            throw new HttpError(
+                400,
+                `Native command /${name} is not registered for your selected runtime.`,
+            );
+        }
+    }
+
+    #commandSnapshot(id: ConversationId, memberId: string) {
+        const cached = this.#commands.get(id);
+        const session = this.executions.journal.session(String(id));
+
+        if (
+            cached?.memberId === memberId &&
+            cached.segmentId === session.segmentId &&
+            cached.binding === JSON.stringify(session.binding) &&
+            (this.isRunning(id) || Date.now() - cached.capturedAt < 30_000)
+        ) {
+            return cached;
+        }
+    }
+
+    /** Read-only snapshots; another member's native command descriptions are never returned. */
+    async nativeCommands(id: ConversationId, user: User) {
+        this.#app.requireSee(user, id);
+
+        const builtins = await nativeBuiltinCommands();
+        const cached = this.#commandSnapshot(id, user.id);
+        const dynamic = cached?.commands ?? [];
+        const names = new Set(builtins.map((command) => command.name));
+
+        return {
+            commands: [
+                ...builtins.filter((command) => !["share", "bug"].includes(command.name)),
+                ...dynamic.filter((command) => !names.has(command.name)),
+            ],
+            dynamicReady: Boolean(cached),
+            capturedAt: cached?.capturedAt ?? null,
+        };
+    }
+
+    /** Canonical Goal snapshot captured after the native command barrier, if one has been observed. */
+    nativeGoal(id: ConversationId): unknown {
+        if (this.#nativeGoal.has(id)) {
+            return this.#nativeGoal.get(id);
+        }
+
+        if (!this.executions.journal.hasConversation(String(id))) {
+            return undefined;
+        }
+
+        const { segmentId } = this.executions.journal.session(String(id));
+
+        const entries = this.executions.journal.segmentEntries(segmentId);
+
+        return currentBranchGoalState({ entries, leafId: entries.at(-1)?.id });
     }
 
     /**
@@ -1108,7 +2233,11 @@ export class TeamKernel {
             thinkingLevel: binding.thinkingLevel ?? "off",
             kernelVersion: binding.kernelVersion,
             yours: binding.memberId === viewer.id,
+            commandsRevision: this.#commandSnapshot(id, viewer.id)?.capturedAt ?? null,
+            hasBranchedHistory: this.#branchedHistory.has(id),
             dialogs: this.#live.get(id)?.dialogs ?? [],
+            statuses: this.#live.get(id)?.statuses ?? {},
+            widgets: this.#live.get(id)?.widgets ?? {},
             subagents: this.#live.get(id)?.subagents ?? 0,
             ...(this.#cutOff(id) ? { cutOff: true } : {}),
             ...(pending
@@ -1191,6 +2320,11 @@ export class TeamKernel {
     async #mirrorNow(id: ConversationId): Promise<void> {
         const app = this.#app;
         const rows = this.executions.journal.entries(String(id));
+
+        if (rows.some((row) => row.entry.customType === "team-kernel-branch")) {
+            this.#branchedHistory.add(id);
+        }
+
         const mirrored = (await app.harness.snapshot(NativeMirrorDoc, id, BACKGROUND_CONTEXT))
             ?.count;
 
@@ -1200,6 +2334,15 @@ export class TeamKernel {
                 const authors = await tx.doc(AuthorsDoc, id);
 
                 for (const row of rows.slice(doc.count)) {
+                    if (row.entry.type === "session_info" && typeof row.entry.name === "string") {
+                        const meta = (await tx.doc(SessionsDoc)).items[String(id)];
+
+                        if (meta) {
+                            meta.title = row.entry.name;
+                            meta.updatedAt = Date.now();
+                        }
+                    }
+
                     const record = await tx.appendEntry(id, {
                         kind: NATIVE_ENTRY,
                         data: { entry: publicEntry(row.entry) } as unknown as JsonValue,
@@ -1208,7 +2351,7 @@ export class TeamKernel {
 
                     // A person's own prompt; inherited fork history and automatic continuations have no author.
                     if (
-                        row.operation === "prompt" &&
+                        ["prompt", "command"].includes(row.operation) &&
                         !row.requestId.includes("#resume") &&
                         row.entry.type === "message" &&
                         message?.role === "user"
@@ -1281,7 +2424,11 @@ export class TeamKernel {
     async lookup(id: ConversationId, user: User, requestId: string, operation: string) {
         const key = this.#request(id, user, requestId, false, operation);
 
-        if (!["submit", "handoff", "compact", "fork", "configuration"].includes(operation)) {
+        if (
+            !["submit", "handoff", "compact", "fork", "configuration", "discover"].includes(
+                operation,
+            )
+        ) {
             throw new HttpError(400, "Unknown native operation.");
         }
 
@@ -1308,12 +2455,9 @@ export class TeamKernel {
 
         if (
             receipt &&
-            receipt.operation !==
-                (operation === "submit"
-                    ? "prompt"
-                    : operation === "configuration"
-                      ? "handoff"
-                      : operation)
+            (operation === "submit"
+                ? !["prompt", "command", "compact"].includes(receipt.operation)
+                : receipt.operation !== (operation === "configuration" ? "handoff" : operation))
         ) {
             throw new HttpError(409, "Request belongs to another operation.");
         }
@@ -1324,9 +2468,21 @@ export class TeamKernel {
             !receipt &&
             !this.#operations.has(JSON.stringify([id, key]));
 
+        const nativeResult =
+            operation === "submit"
+                ? (
+                      await this.#app.harness.snapshot(
+                          NativeCommandResultsDoc,
+                          id,
+                          BACKGROUND_CONTEXT,
+                      )
+                  )?.items[key]
+                : undefined;
+
         return {
             targetId,
             receipt: receipt ? this.#receipt(receipt) : null,
+            ...(nativeResult === undefined ? {} : { nativeResult }),
             ...(preparedOnly ? { preparedOnly: true } : {}),
         };
     }
@@ -1437,7 +2593,14 @@ export class TeamKernel {
         return this.#track(id, binding, this.executions.compact(String(id), key, instructions));
     }
 
-    async #fork(id: ConversationId, user: User, requestId: string, expectedHead: string) {
+    async #fork(
+        id: ConversationId,
+        user: User,
+        requestId: string,
+        expectedHead: string,
+        entryId?: string,
+        clone = false,
+    ) {
         const key = this.#request(id, user, requestId);
 
         if (typeof expectedHead !== "string" || !expectedHead) {
@@ -1458,7 +2621,11 @@ export class TeamKernel {
                 ?.items[key];
 
             if (prior) {
-                if (prior.expectedHead !== expectedHead) {
+                if (
+                    prior.expectedHead !== expectedHead ||
+                    prior.entryId !== entryId ||
+                    Boolean(prior.clone) !== clone
+                ) {
                     throw new HttpError(409, "Fork request identity changed.");
                 }
 
@@ -1480,17 +2647,43 @@ export class TeamKernel {
                 );
             }
 
+            if (entryId) {
+                const selected = journal
+                    .segmentEntries(expectedHead)
+                    .find((entry) => entry.id === entryId);
+
+                if (
+                    selected?.type !== "message" ||
+                    (selected.message as { role?: unknown } | undefined)?.role !== "user"
+                ) {
+                    throw new HttpError(400, "Select a user message from this native segment.");
+                }
+            }
+
             const meta = app.sessionMeta(id)!;
             const target = await app.commands.createSession(
                 current,
                 { backend: "rotom", cwd: meta.cwd, title: `${meta.title ?? "New session"} · Fork` },
-                { sourceId: id, requestId: key, expectedHead },
+                {
+                    sourceId: id,
+                    requestId: key,
+                    expectedHead,
+                    ...(entryId ? { entryId } : {}),
+                    ...(clone ? { clone: true } : {}),
+                },
             );
             const binding = journal.session(String(target.id)).binding;
             const receipt = await this.#track(
                 target.id,
                 binding,
-                this.executions.fork(String(id), String(target.id), key, expectedHead),
+                this.executions.fork(
+                    String(id),
+                    String(target.id),
+                    key,
+                    expectedHead,
+                    entryId,
+                    clone,
+                ),
             );
 
             if (receipt.status === "settled") {
@@ -1503,7 +2696,13 @@ export class TeamKernel {
         });
     }
 
-    async #handoff(id: ConversationId, user: User, requestId: string, expectedHead: string) {
+    async #handoff(
+        id: ConversationId,
+        user: User,
+        requestId: string,
+        expectedHead: string,
+        selected?: { model: ModelRef; thinkingLevel: ModelThinkingLevel },
+    ) {
         const key = this.#request(id, user, requestId);
 
         if (typeof expectedHead !== "string" || !expectedHead || expectedHead.length > 128) {
@@ -1540,7 +2739,7 @@ export class TeamKernel {
 
         await this.#app.requireDriver(id, user, "rotom");
         await this.#app.accounts.forUser(user);
-        const { model: choice, thinkingLevel } = this.#app.commands.defaultModel(user);
+        const { model: choice, thinkingLevel } = selected ?? this.#app.commands.defaultModel(user);
 
         if (!choice) {
             throw new HttpError(409, "Choose a model from your own connected account first.");
@@ -1604,6 +2803,7 @@ export class TeamKernel {
     async #track(id: ConversationId, binding: KernelBinding, promise: Promise<KernelReceipt>) {
         const run = { id, binding, promise };
 
+        this.#nativeGoal.delete(id);
         this.#active.add(run);
         this.#app.kernelChanged();
 
@@ -1611,6 +2811,10 @@ export class TeamKernel {
 
         try {
             const receipt = await run.promise;
+
+            if (["unknown", "rejected", "interrupted"].includes(receipt.status)) {
+                this.#commands.delete(id);
+            }
 
             await this.mirror(id);
             finished =
@@ -1623,6 +2827,7 @@ export class TeamKernel {
 
             if (!this.isRunning(id)) {
                 this.#live.delete(id);
+                this.#nativeGoal.delete(id);
             }
 
             if (finished) {

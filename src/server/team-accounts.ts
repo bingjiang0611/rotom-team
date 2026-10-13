@@ -376,7 +376,71 @@ export class TeamAccounts {
         renameSync(temporary, path);
     }
 
-    async refresh(user: User, rotateProvider?: string): Promise<void> {
+    /** Native Qoder account commands stay in the credential-owning parent, not the broker HOME. */
+    async nativeQoder(user: User, action: "models" | "credits"): Promise<unknown> {
+        const account = await this.forUser(user);
+
+        if (user.role === "viewer" || this.#changing.has(user.id)) {
+            throw new HttpError(403, "This personal account is unavailable for commands.");
+        }
+
+        const generation = account.profile.generations.qoder;
+        const provider = account.runtime.getProvider("qoder") as
+            | (ai.Provider & {
+                  getCatalogStatus(): unknown;
+                  getQuotaUsage(options: { apiKey: string; signal: AbortSignal }): Promise<unknown>;
+              })
+            | undefined;
+
+        if (!provider || !account.runtime.hasConfiguredAuth("qoder")) {
+            throw new HttpError(409, "Sign in to your own Qoder account first.");
+        }
+
+        if (action === "models") {
+            await this.refresh(user, undefined, true);
+
+            if (account.runtime.getProviderAuthStatus("qoder").catalogError) {
+                throw new HttpError(
+                    409,
+                    "Personal Qoder catalog refresh is unavailable; it was not retried.",
+                );
+            }
+        }
+
+        const check = () => {
+            if (
+                this.#config.userById(user.id)?.role === "viewer" ||
+                !this.#config.userById(user.id) ||
+                this.#changing.has(user.id) ||
+                account.profile.generations.qoder !== generation
+            ) {
+                throw new HttpError(409, "Personal account changed during the native command.");
+            }
+        };
+
+        check();
+
+        if (action === "models") {
+            return { catalog: provider.getCatalogStatus() };
+        }
+
+        const signal = AbortSignal.timeout(15_000);
+        const auth = await account.runtime.getAuth("qoder", { signal });
+
+        check();
+
+        if (!auth?.auth.apiKey) {
+            throw new HttpError(409, "Personal Qoder request authorization is unavailable.");
+        }
+
+        const credits = await provider.getQuotaUsage({ apiKey: auth.auth.apiKey, signal });
+
+        check();
+
+        return { credits, note: "Account snapshot only, not per-request debit or USD cost." };
+    }
+
+    async refresh(user: User, rotateProvider?: string, forceQoder = false): Promise<void> {
         const account = this.#accounts.get(user.id)!;
 
         if (rotateProvider === "qoder") {
@@ -395,7 +459,10 @@ export class TeamAccounts {
         }
 
         // OAuth model choices are account-specific. Catalog failure never exposes the static API-key directory.
-        await account.runtime.refresh({ providers: ["openai", "qoder"] });
+        await account.runtime.refresh({
+            providers: forceQoder ? ["qoder"] : ["openai", "qoder"],
+            force: forceQoder,
+        });
         await account.runtime.getAvailable();
 
         for (const alias of account.aliases) {

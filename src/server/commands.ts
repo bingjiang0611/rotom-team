@@ -26,7 +26,13 @@ import type {
 import type { PocketApp } from "./app.ts";
 import { TeamRunDoc } from "./team-execution.ts";
 import { ConfigurationDoc } from "./team-profiles.ts";
-import { NativeForksDoc, NativeSetupDoc, type NativeForkPlan } from "./team-kernel.ts";
+import {
+    NativeCreationsDoc,
+    NativeForksDoc,
+    NativeSetupDoc,
+    type NativeCreation,
+    type NativeForkPlan,
+} from "./team-kernel.ts";
 import type { User } from "./config.ts";
 import {
     AuthorsDoc,
@@ -132,6 +138,7 @@ export class Commands {
         user: User,
         request: { cwd?: string; title?: string; worktree?: unknown; backend?: unknown },
         fork?: NativeForkPlan,
+        creation?: NativeCreation,
     ): Promise<{ id: ConversationId }> {
         const app = this.#app;
 
@@ -220,6 +227,32 @@ export class Commands {
                                 );
                             }
 
+                            if (creation) {
+                                app.requireSee(user, creation.sourceId);
+                                const creations = await tx.doc(
+                                    NativeCreationsDoc,
+                                    creation.sourceId,
+                                );
+
+                                if (creations.items[creation.requestId]) {
+                                    throw new HttpError(
+                                        409,
+                                        "Native creation request already allocated.",
+                                    );
+                                }
+
+                                creations.items[creation.requestId] = {
+                                    id,
+                                    identity: creation.identity,
+                                };
+
+                                if (creation.seed) {
+                                    (await tx.doc(NativeSetupDoc, id)).seed = {
+                                        requestId: creation.requestId,
+                                    };
+                                }
+                            }
+
                             if (fork) {
                                 this.requireForkable(fork.sourceId, user, "rotom");
                                 const requests = await tx.doc(NativeForksDoc, fork.sourceId);
@@ -234,6 +267,8 @@ export class Commands {
                                 requests.items[fork.requestId] = {
                                     id,
                                     expectedHead: fork.expectedHead,
+                                    ...(fork.entryId ? { entryId: fork.entryId } : {}),
+                                    ...(fork.clone ? { clone: true } : {}),
                                 };
                                 (await tx.doc(NativeSetupDoc, id)).seed = fork;
                             }

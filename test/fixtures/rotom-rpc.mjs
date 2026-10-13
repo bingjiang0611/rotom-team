@@ -6,6 +6,9 @@ const emit = (value) => process.stdout.write(JSON.stringify(value) + "\n");
 const input = createInterface({ input: process.stdin });
 let cancelCompact;
 let promptImages = [];
+let compactCount = 0;
+let promptMessages = [];
+let followupDone = Promise.resolve();
 
 // Keep process startup outside the protocol deadlines measured by the tests.
 emit({ type: "fixture_ready" });
@@ -28,6 +31,7 @@ for await (const line of input) {
     }
 
     if (command.type === "compact") {
+        compactCount++;
         cancelCompact = () => response({}, false);
 
         if (mode === "compact-hang") {
@@ -60,12 +64,42 @@ for await (const line of input) {
         response({
             cleanEnvironment: !process.env.OPENAI_API_KEY,
             cwd: process.cwd(),
+            ...(mode === "compact-record" ? { compactCount, promptMessages } : {}),
             ...(mode.startsWith("images") ? { promptImages } : {}),
         });
         continue;
     }
 
     promptImages = command.images ?? [];
+    promptMessages.push(command.message);
+
+    if (mode === "handled-followup" && command.message === "/goal run") {
+        let finish;
+
+        followupDone = new Promise((resolve) => {
+            finish = resolve;
+        });
+        response({ disposition: "handled" });
+        setTimeout(() => {
+            emit({ type: "agent_start" });
+            emit({ type: "agent_settled" });
+            finish();
+        }, 20);
+        continue;
+    }
+
+    if (mode === "handled-followup" && command.message.startsWith("/team-kernel-barrier")) {
+        await followupDone;
+        const nonce = command.message.slice("/team-kernel-barrier ".length);
+
+        emit({
+            type: "extension_ui_request",
+            method: "notify",
+            message: JSON.stringify({ kind: "team-kernel-barrier-v1", nonce, ok: true }),
+        });
+        response({ disposition: "handled" });
+        continue;
+    }
 
     if (mode === "exit") {
         process.exit(0);

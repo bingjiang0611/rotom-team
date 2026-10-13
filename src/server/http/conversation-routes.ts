@@ -6,7 +6,6 @@ import { pipeline } from "node:stream/promises";
 import type { ConversationId } from "@earendil-works/pi-durable";
 import type { Attachment, SubmitRequest } from "../commands.ts";
 import { HttpError } from "../errors.ts";
-import type { SkillCommand } from "../prompts.ts";
 import { uploadedAttachments } from "../attachments.ts";
 import { serveDownload, serveImage, TYPES } from "./assets.ts";
 import { type ApiRequest, json, readJson, send } from "./io.ts";
@@ -27,11 +26,6 @@ function safeName(name: string): string {
         .trim();
 
     return base === "" || base.startsWith(".") ? `upload${base}` : base.slice(0, 120);
-}
-
-/** A skill as the message box offers it: `/skill:name`, then what to do. */
-function skillSuggestion({ name, description }: SkillCommand) {
-    return { name: `skill:${name}`, description, argumentHint: "[what to do]", skill: true };
 }
 
 export async function conversationRoutes(
@@ -61,6 +55,41 @@ export async function conversationRoutes(
                 409,
                 "This native session is paused: rotom backend disabled. It will not run on Durable.",
             );
+        }
+
+        if (
+            third === "native-settings" &&
+            fourth === undefined &&
+            (method === "GET" || method === "POST")
+        ) {
+            const patch =
+                method === "POST" ? await readJson<Record<string, unknown>>(request) : undefined;
+
+            if (
+                patch !== undefined &&
+                (!patch || typeof patch !== "object" || Array.isArray(patch))
+            ) {
+                throw new HttpError(400, "A settings object is required.");
+            }
+
+            return json(response, 200, await app.kernel.nativeSettings(id, user, patch));
+        }
+
+        if (third === "native-export" && method === "GET" && fourth === undefined) {
+            const format = url.searchParams.get("format") ?? "html";
+            const bytes = await app.kernel.nativeExport(id, user, format);
+
+            response.writeHead(200, {
+                "Content-Type":
+                    format === "jsonl" ? "application/x-ndjson" : "text/html; charset=utf-8",
+                "Content-Disposition": `attachment; filename="session-${id}.${format}"`,
+                "Cache-Control": "private, no-store",
+                "X-Content-Type-Options": "nosniff",
+                "Content-Security-Policy": "sandbox",
+            });
+            response.end(bytes);
+
+            return;
         }
 
         if (third === "kernel" && method === "GET" && fourth === undefined) {
@@ -163,18 +192,20 @@ export async function conversationRoutes(
                 );
             }
 
-            return json(
-                response,
-                200,
-                await app.kernel.submit(
-                    id,
-                    user,
-                    body.requestId,
-                    body.text,
-                    body.wait !== false,
-                    attachments,
-                ),
+            const result = await app.kernel.submit(
+                id,
+                user,
+                body.requestId,
+                body.text,
+                body.wait !== false,
+                attachments,
             );
+
+            if (result.status === "rejected" && body.text.trimStart().startsWith("/")) {
+                throw new HttpError(400, "Unknown or unavailable native slash command.");
+            }
+
+            return json(response, 200, result);
         }
 
         if (third === "mcp" && method === "GET" && fourth === undefined) {
@@ -189,8 +220,14 @@ export async function conversationRoutes(
             );
         }
 
+        if (third === "prompts" && method === "POST" && fourth === undefined) {
+            const body = await readJson<{ requestId: string }>(request);
+
+            return json(response, 200, await app.kernel.discoverCommands(id, user, body.requestId));
+        }
+
         if (third === "prompts" && method === "GET") {
-            return json(response, 200, app.kernel.skillCommands(id, user).map(skillSuggestion));
+            return json(response, 200, await app.kernel.nativeCommands(id, user));
         }
 
         if (third === "dialog" && method === "POST" && fourth === undefined) {
@@ -579,16 +616,13 @@ export async function conversationRoutes(
         });
     }
 
-    // Prompt templates and skills, for the message box's slash commands.
+    // The pinned native registry is the source of truth for slash-command suggestions.
     if (third === "prompts" && method === "GET") {
-        const templates = app.promptTemplates(id).map(({ name, description, argumentHint }) => ({
-            name,
-            description,
-            ...(argumentHint === undefined ? {} : { argumentHint }),
-        }));
-        const skills = app.skillCommands(id).map(skillSuggestion);
+        if (app.kernel) {
+            return json(response, 200, await app.kernel.nativeCommands(id, user));
+        }
 
-        return json(response, 200, [...templates, ...skills]);
+        return json(response, 200, []);
     }
 
     if (third === "view" && method === "GET") {

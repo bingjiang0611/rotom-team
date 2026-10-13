@@ -46,6 +46,7 @@ const emptyView = () => ({
     plan: { on: false },
     schedules: [],
     goal: null,
+    nativeGoal: null,
     branch: null,
     /** A rotom session's segment, payer, and pending receipt; null for a Durable session. */
     kernel: null,
@@ -373,6 +374,10 @@ function applyView(data) {
         }
 
         return {
+            ...(state.view.kernel?.segmentId !== data.kernel?.segmentId ||
+            (state.templates?.capturedAt ?? null) !== (data.kernel?.commandsRevision ?? null)
+                ? { templates: null }
+                : {}),
             view: {
                 ...base,
                 conversation: data.conversation,
@@ -397,6 +402,7 @@ function applyView(data) {
                 schedules: data.schedules ?? base.schedules,
                 // No goal is null, which the server sends too: only a missing field keeps the last value.
                 goal: data.goal === undefined ? base.goal : data.goal,
+                nativeGoal: data.nativeGoal === undefined ? base.nativeGoal : data.nativeGoal,
                 // What the folder has checked out: `{ branch }` or `{ detached }`, and null outside a repository.
                 branch: data.branch === undefined ? base.branch : data.branch,
                 kernel: data.kernel ?? null,
@@ -808,16 +814,17 @@ const current = () => store.state.conversationId;
 
 export const actions = {
     /** `inlineFiles`: the files the message mentions with @ go along with it. */
-    submit: (text, attachments, mode, inlineFiles = false) =>
+    submit: (text, attachments, mode, inlineFiles = false, wait) =>
         api(`c/${current()}/submit`, {
             text,
             attachments,
             mode,
             requestId: uid(),
             ...(inlineFiles ? { inlineFiles } : {}),
-            // A rotom run answers once its intent is recorded; it streams into the transcript from there.
-            ...(store.state.view.kernel ? { wait: false } : {}),
+            // Ordinary rotom prompts answer once intent is recorded; native commands wait for handler rejection.
+            ...(store.state.view.kernel ? { wait: wait ?? false } : {}),
         }),
+    nativeSettings: (patch) => api(`c/${current()}/native-settings`, patch),
     /** A rotom session operation on the head this browser last saw. A lost answer is never resent. */
     kernel: (operation, extra = {}) =>
         api(`c/${current()}/${operation}`, {
@@ -868,6 +875,7 @@ export const actions = {
     setPlan: (on) => api(`c/${current()}/plan`, { on }),
     approvePlan: () => api(`c/${current()}/plan`, { approve: true }),
     prompts: () => api(`c/${current()}/prompts`),
+    discoverCommands: () => api(`c/${current()}/prompts`, { requestId: uid() }),
     /** `when` says when, then what Pi gets: `in 2h check the deploy`. Clock times are this device's. */
     schedule: (when) =>
         api(`c/${current()}/schedules`, {
@@ -1043,10 +1051,10 @@ export function openSheet(sheet) {
  * Put text into the message box to Pi (after what is there: on a new paragraph, or with `inline`, after a space), and
  * files to attach, and close any sheet so it shows.
  */
-export function insertIntoComposer(text, files = [], { inline = false } = {}) {
+export function insertIntoComposer(text, files = [], { inline = false, replace = false } = {}) {
     store.set((state) => ({
         sheet: null,
-        composerInsert: { text, files, inline, n: (state.composerInsert?.n ?? 0) + 1 },
+        composerInsert: { text, files, inline, replace, n: (state.composerInsert?.n ?? 0) + 1 },
     }));
 }
 

@@ -84,3 +84,39 @@ not establish rendering in every browser's PDF viewer. HTML downloads do not run
 - Keep account identities, request/session records, SSH addresses, device names and private operational logs outside Git.
 
 See [NATIVE-DELIVERY.md](NATIVE-DELIVERY.md) for R1–R8, [NATIVE-RECOVERY.md](NATIVE-RECOVERY.md) for recovery rules, and [PROVIDER-POLICY.md](PROVIDER-POLICY.md) for provider and distribution constraints.
+
+## Native command adapters and Goal
+
+```sh
+node --test test/rotom-commands.test.ts test/rotom-rpc.test.ts
+node test/native-commands-proof.ts --ui
+node test/rotom-goal-proof.ts
+npm run test:kernel:ui
+```
+
+These scripts use the actual pinned runtime, isolated member HOMEs, loopback model/OAuth fixtures and Chromium.
+`native-commands-proof` writes `native-commands/report.json` and screenshots under its printed temporary data root.
+It checks first-session discovery without inference; viewer/other-member catalog privacy; model A→B and later payer/model
+requests; confirmed names before the first conversation and across handoff; native branch JSONL/HTML export; positive
+owner-private reasoning before cross-member clone/import filtering; earlier SECOND-entry fork/tree with THIRD absent
+from the new branch and later inference; request replay/conflicts; native settings and slash compaction with persisted summary/usage; and explicit share/bug rejection
+without starting native operations. Personal Qoder API fixtures assert credential ownership and private result delivery;
+they are not real-account billing evidence.
+
+The browser proof chooses native entry IDs, restores fork/tree drafts without submitting them, invokes an authorized
+native branch summary and checks persisted usage, preserves a draft on actual native extension cancellation, and checks
+custom-message text extraction. HTTP coverage also checks native no-op navigation. Native RPC exposes cancellation but
+not its reason; summary-abort reason discrimination is not verified or claimed. Audit transcript records remain visible
+while native branch checks exclude the abandoned user entries.
+
+A fixture appends a real native effect and then throws. The command remains `unknown`; restart and same-request retry
+add neither inference nor native bytes. The separate Team proof retains ordinary prompt clean-stop/crash continuation
+checks and asserts that native skill expansion receipts remain `prompt`, not non-recoverable extension handlers.
+
+The browser sends 20 native status/widget updates and verifies one keyed slot per key, followed by removal while the
+handler is still live. Goal waiting controls remain usable without a status-toast pile-up; plain composer input wakes
+the same workflow. The low-level Goal proof verifies a real timer wake, Stop with unknown outcome, pause, explicit wake and queued native skill expansion/wake, retaining one receipt/member. These are distinct from merely receiving a command acknowledgement.
+
+No real account, external sharing upload, deployment, target-device/mobile layout, financial reconciliation or arbitrary
+third-party extension is accepted by these fixtures. Run the commands on the final artifact; older logs are not evidence
+for a later edit.

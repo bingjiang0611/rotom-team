@@ -26,7 +26,12 @@ import {
     type KernelEntry,
     type KernelReceipt,
 } from "./rotom-journal.ts";
-import { startRotomKernel, verifyRotomKernel, nativeSessionManager } from "./rotom-kernel.ts";
+import {
+    nativeBuiltinCommands,
+    startRotomKernel,
+    verifyRotomKernel,
+    nativeSessionManager,
+} from "./rotom-kernel.ts";
 import { publicNativeHistory } from "./rotom-history.ts";
 import { type RotomRpc, type RpcRecord, RpcFailure } from "./rotom-rpc.ts";
 
@@ -64,8 +69,49 @@ export type KernelLaunchContext = {
  * Text a member may send to Pi: ordinary words, or `/skill:name …`, which the kernel expands into that skill's
  * instructions. Other slash commands run in the kernel instead of reaching the model, outside the run's journal.
  */
+export function nativeCommandName(text: string): string | undefined {
+    return /^\/([^\s]+)(?:\s|$)/.exec(text.trimStart())?.[1];
+}
+
+/** Native extension dispatch requires `/` at byte zero and a literal space before arguments. */
+export function normalizeNativePrompt(text: string): string {
+    return text.trimStart().startsWith("/") ? text.trimStart().replace(/^(\/\S+)\s+/, "$1 ") : text;
+}
+
+export function nativeCommandArgs(text: string): string {
+    const normalized = normalizeNativePrompt(text);
+    const name = nativeCommandName(normalized);
+
+    return name === undefined ? "" : normalized.slice(name.length + 1).trim();
+}
+
+export function isKnownNativeCommand(
+    text: string,
+    commands: ReadonlyArray<{ name?: unknown }>,
+): boolean {
+    if (!text.trimStart().startsWith("/")) {
+        return true;
+    }
+
+    const name = nativeCommandName(text);
+
+    return (
+        name !== undefined &&
+        commands.some((command) => command.name === name && !name.startsWith("team-kernel-"))
+    );
+}
+
 export function isTeamPrompt(text: string): boolean {
-    return text.trim() !== "" && (!text.trimStart().startsWith("/") || /^\/skill:\S/.test(text));
+    const trimmed = text.trim();
+
+    // Native commands are admitted here and validated against the runtime registry after the
+    // team journal has reserved the attempt. This keeps an unknown slash from becoming model text.
+    return trimmed !== "" && (!trimmed.startsWith("/") || nativeCommandName(trimmed) !== undefined);
+}
+
+/** Slash handlers are not restartable prompts until native discovery proves a prompt/skill expansion. */
+export function nativePromptOperation(text: string): "prompt" | "command" {
+    return text.trimStart().startsWith("/") ? "command" : "prompt";
 }
 
 /** Text-only receipts keep their existing identity; image bytes are part of request identity. */
@@ -80,8 +126,19 @@ const NATIVE_LINE_LIMIT = 64 * 1024 * 1024;
 export type RunHooks = {
     /** The intent is durably committed: the request can no longer be lost, only end unknown. */
     onReserved?: (receipt: KernelReceipt) => void | Promise<void>;
+    /** A native dynamic slash name has passed runtime registry validation. */
+    onCommandAdmitted?: () => void | Promise<void>;
     /** Every kernel event, for provisional display only. */
     onEvent?: (event: RpcRecord) => void;
+    /** The registry captured from this authorized kernel process. */
+    onCommands?: (commands: Array<Record<string, unknown>>) => void;
+    /** Canonical Goal state read from the current native branch after a handled barrier. */
+    onNativeGoalState?: (state: unknown) => void;
+    /** Team title after reservation; native handoff seeds do not carry session metadata. */
+    sessionName?: () => string | undefined;
+    onSessionName?: (name: string) => Promise<void>;
+    /** Result from a structured native command adapter. */
+    onNativeResult?: (result: unknown) => void | Promise<void>;
     /** New persisted entries were journaled mid-run. */
     onProgress?: () => void;
 };
@@ -93,6 +150,73 @@ type Running = {
     /** Its prompt was dispatched: messages may join it. */
     prompting?: boolean;
 };
+
+function goalIsActive(value: unknown): boolean {
+    if (!value || typeof value !== "object") {
+        return false;
+    }
+
+    const goal = (value as { goal?: unknown }).goal;
+
+    return (
+        goal !== null &&
+        typeof goal === "object" &&
+        ["active", "queued"].includes(String((goal as { status?: unknown }).status))
+    );
+}
+
+export function currentBranchGoalState(value: unknown): unknown {
+    if (!value || typeof value !== "object") {
+        return undefined;
+    }
+
+    const data = value as { entries?: unknown; leafId?: unknown };
+
+    if (!Array.isArray(data.entries) || typeof data.leafId !== "string") {
+        return undefined;
+    }
+
+    const byId = new Map<
+        string,
+        { id?: unknown; parentId?: unknown; customType?: unknown; data?: unknown }
+    >();
+
+    for (const entry of data.entries) {
+        if (entry && typeof entry === "object") {
+            const item = entry as {
+                id?: unknown;
+                parentId?: unknown;
+                customType?: unknown;
+                data?: unknown;
+            };
+
+            if (typeof item.id === "string") {
+                byId.set(item.id, item);
+            }
+        }
+    }
+
+    const branch: Array<{
+        id?: unknown;
+        parentId?: unknown;
+        customType?: unknown;
+        data?: unknown;
+    }> = [];
+    let id: string | undefined = data.leafId;
+
+    while (id !== undefined) {
+        const entry = byId.get(id);
+
+        if (!entry) {
+            break;
+        }
+
+        branch.push(entry);
+        id = typeof entry.parentId === "string" ? entry.parentId : undefined;
+    }
+
+    return branch.find((entry) => entry.customType === "goal-state")?.data;
+}
 
 export class RotomExecutions {
     readonly journal: RotomJournal;
@@ -144,7 +268,85 @@ export class RotomExecutions {
     ): Promise<boolean> {
         for (const run of this.#running.get(sessionId) ?? []) {
             if (run.prompting && run.kernel) {
-                await run.kernel.queue(text, mode, images);
+                const slash = text.trimStart().startsWith("/");
+                const name = nativeCommandName(text);
+
+                const queueInput = async () => {
+                    const goal = currentBranchGoalState(
+                        await run.kernel!.request({ type: "get_entries" }),
+                    );
+
+                    if (goalIsActive(goal)) {
+                        await run.kernel!.wake(normalizeNativePrompt(text), images, mode);
+                    } else {
+                        await run.kernel!.queue(normalizeNativePrompt(text), mode, images);
+                    }
+                };
+
+                if (slash) {
+                    const catalog = (await run.kernel.request({ type: "get_commands" })) as {
+                        commands?: Array<{ name?: unknown; source?: unknown }>;
+                    };
+                    const builtins = await nativeBuiltinCommands();
+                    const dynamic = catalog.commands ?? [];
+
+                    if (!isKnownNativeCommand(text, [...dynamic, ...builtins])) {
+                        throw new RpcFailure("rejected", `Unknown native command: /${name ?? ""}`);
+                    }
+
+                    if (builtins.some((command) => command.name === name)) {
+                        throw new RpcFailure(
+                            "rejected",
+                            "Native builtin commands require the Team command adapter; they cannot mutate an active run",
+                        );
+                    }
+
+                    const source = dynamic.find((command) => command.name === name)?.source;
+
+                    if (source === "prompt" || source === "skill") {
+                        await queueInput();
+
+                        return true;
+                    }
+
+                    let extensionError: RpcRecord | undefined;
+                    const detach = run.kernel.onEvent((event) => {
+                        if (event.type === "extension_error") {
+                            extensionError = event;
+                        }
+                    });
+
+                    try {
+                        await run.kernel.command(normalizeNativePrompt(text));
+                        await run.kernel.barrier();
+                    } finally {
+                        detach();
+                    }
+
+                    if (extensionError) {
+                        throw new RpcFailure(
+                            "unknown",
+                            `Native extension command failed: ${String(extensionError.error ?? "unknown error")}`,
+                        );
+                    }
+
+                    return true;
+                }
+
+                await queueInput();
+
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** Wake the current workflow through native prompt admission, retaining its receipt and payer. */
+    async wake(sessionId: string, text: string, images: ImageContent[] = []): Promise<boolean> {
+        for (const run of this.#running.get(sessionId) ?? []) {
+            if (run.prompting && run.kernel) {
+                await run.kernel.wake(normalizeNativePrompt(text), images);
 
                 return true;
             }
@@ -241,6 +443,8 @@ export class RotomExecutions {
         sessionId: string,
         requestId: string,
         expectedHead: string,
+        entryId?: string,
+        clone = false,
     ): Promise<KernelReceipt> {
         return this.#track(sessionId, async (running) => {
             if (sourceId === sessionId) {
@@ -257,7 +461,12 @@ export class RotomExecutions {
 
             await authorize();
             this.#notStopped(running);
-            const identity = JSON.stringify({ sourceId, expectedHead });
+            const identity = JSON.stringify({
+                sourceId,
+                expectedHead,
+                ...(entryId ? { entryId } : {}),
+                ...(clone ? { clone: true } : {}),
+            });
             const existing = this.journal.existing(sessionId, requestId, identity, "fork");
 
             if (existing) {
@@ -287,9 +496,94 @@ export class RotomExecutions {
                 );
             }
 
+            const entries = this.journal.segmentEntries(expectedHead);
+            const selected = entryId ? entries.find((entry) => entry.id === entryId) : undefined;
+
+            if (
+                entryId &&
+                (!selected ||
+                    selected.type !== "message" ||
+                    (selected.message as { role?: unknown } | undefined)?.role !== "user")
+            ) {
+                throw new KernelRequestConflict(
+                    "Fork requires a selected user message in this segment",
+                );
+            }
+
             const messages = publicNativeHistory(
-                native.buildSessionProjection(this.journal.segmentEntries(expectedHead)).messages,
+                native.buildSessionProjection(entries, selected ? selected.parentId : undefined)
+                    .messages,
             );
+            const receipt = this.journal.reserve(sessionId, requestId, identity, "fork");
+
+            const source = this.journal.segment(expectedHead);
+
+            if (clone && source.binding.memberId === binding.memberId && source.sessionFile) {
+                let materializing = false;
+
+                try {
+                    const folder = join(binding.home, ".pi/agent/sessions/team-seeds");
+
+                    mkdirSync(folder, { recursive: true, mode: 0o700 });
+
+                    if (realpathSync(folder) !== folder || lstatSync(folder).mode & 0o077) {
+                        throw new Error("Native clone directory must be canonical and private");
+                    }
+
+                    const manager = native.SessionManager.open(source.sessionFile, folder);
+                    const leafId = manager.getLeafId();
+
+                    if (!leafId) {
+                        throw new Error("Native clone requires a current entry");
+                    }
+
+                    materializing = true;
+                    const path = manager.createBranchedSession(leafId);
+
+                    this.journal.attach(receipt.id, path, manager.getSessionId());
+                    chmodSync(path, 0o600);
+                    const entries = readNativeEntries(
+                        path,
+                        manager.getSessionId(),
+                        binding.workspace,
+                    );
+
+                    await authorize();
+                    this.#notStopped(running);
+
+                    return this.journal.finish(receipt.id, "settled", entries);
+                } catch {
+                    return this.journal.fail(receipt.id, materializing ? "unknown" : "rejected");
+                }
+            }
+
+            return this.#seed(receipt, messages, native.SessionManager, running, authorize);
+        });
+    }
+
+    /** Import foreign history through the existing public-history seed boundary. */
+    async importHistory(
+        sessionId: string,
+        requestId: string,
+        identity: string,
+        entries: KernelEntry[],
+    ): Promise<KernelReceipt> {
+        return this.#track(sessionId, async (running) => {
+            const binding = this.journal.session(sessionId).binding;
+
+            const authorize = () => this.#authorize(binding, "fork", sessionId);
+
+            await authorize();
+            this.#notStopped(running);
+            const previous = this.journal.existing(sessionId, requestId, identity, "fork");
+
+            if (previous) {
+                return previous;
+            }
+
+            this.#prepare?.(binding, sessionId);
+            const native = await nativeSessionManager();
+            const messages = publicNativeHistory(native.buildSessionProjection(entries).messages);
             const receipt = this.journal.reserve(sessionId, requestId, identity, "fork");
 
             return this.#seed(receipt, messages, native.SessionManager, running, authorize);
@@ -383,7 +677,29 @@ export class RotomExecutions {
         images: ImageContent[] = [],
     ): Promise<KernelReceipt> {
         return this.#track(sessionId, (running) =>
-            this.#execute(sessionId, requestId, prompt, "prompt", running, hooks, images),
+            this.#execute(
+                sessionId,
+                requestId,
+                normalizeNativePrompt(prompt),
+                nativePromptOperation(prompt),
+                running,
+                hooks,
+                images,
+            ),
+        );
+    }
+
+    /** Authorized startup discovery uses a normal owned lease, but its gate denies all inference. */
+    discover(sessionId: string, requestId: string, hooks: RunHooks): Promise<KernelReceipt> {
+        return this.#track(sessionId, (running) =>
+            this.#execute(
+                sessionId,
+                requestId,
+                "native-command-discovery",
+                "discover",
+                running,
+                hooks,
+            ),
         );
     }
 
@@ -397,7 +713,7 @@ export class RotomExecutions {
         sessionId: string,
         requestId: string,
         prompt: string,
-        operation: "prompt" | "compact",
+        operation: "prompt" | "compact" | "discover" | "command",
         running: Running,
         hooks: RunHooks = {},
         images: ImageContent[] = [],
@@ -416,7 +732,7 @@ export class RotomExecutions {
 
         this.#notStopped(running);
 
-        if (operation === "prompt" && !isTeamPrompt(prompt)) {
+        if (["prompt", "command"].includes(operation) && !isTeamPrompt(prompt)) {
             throw new Error(
                 "Kernel execution requires ordinary prompt text; product commands are not team submissions",
             );
@@ -474,6 +790,12 @@ export class RotomExecutions {
                 }
 
                 const value = JSON.parse(body);
+
+                if (operation === "discover") {
+                    throw new Error(
+                        "Command discovery does not authorize inference or credential refresh",
+                    );
+                }
 
                 if (
                     !["inference", "refresh", "usage"].includes(value.operation) ||
@@ -587,6 +909,7 @@ export class RotomExecutions {
             const state = (await kernel.request({ type: "get_state" })) as {
                 sessionFile: string;
                 sessionId: string;
+                sessionName?: string;
             };
             const prefix = join(binding.home, ".pi/agent/sessions") + "/";
 
@@ -605,6 +928,12 @@ export class RotomExecutions {
 
             const tail = new NativeTail(state.sessionFile, state.sessionId, binding.workspace);
             let progressFailure: unknown;
+            let extensionError: RpcRecord | undefined;
+            const detachExtensionErrors = kernel.onEvent((event) => {
+                if (event.type === "extension_error") {
+                    extensionError = event;
+                }
+            });
 
             if (hooks.onEvent) {
                 kernel.onEvent(hooks.onEvent);
@@ -617,7 +946,7 @@ export class RotomExecutions {
             kernel.onEvent((event) => {
                 if (
                     event.type !== "message_end" ||
-                    operation !== "prompt" ||
+                    !["prompt", "command"].includes(operation) ||
                     progressFailure !== undefined ||
                     !existsSync(state.sessionFile)
                 ) {
@@ -637,16 +966,196 @@ export class RotomExecutions {
                 throw new RpcFailure("rejected", "Stopped before prompt dispatch");
             }
 
+            const catalog = (await kernel.request({ type: "get_commands" })) as {
+                commands?: Array<Record<string, unknown> & { name?: unknown }>;
+            };
+
+            hooks.onCommands?.(catalog.commands ?? []);
+
+            const builtins = await nativeBuiltinCommands();
+
+            if (operation === "command") {
+                const name = nativeCommandName(prompt);
+                const dynamic = catalog.commands ?? [];
+
+                if (!isKnownNativeCommand(prompt, [...dynamic, ...builtins])) {
+                    throw new RpcFailure("rejected", `Unknown native command: /${name ?? ""}`);
+                }
+
+                if (!builtins.some((command) => command.name === name)) {
+                    const source = dynamic.find((command) => command.name === name)?.source;
+
+                    if (source === "prompt" || source === "skill") {
+                        this.journal.classifyPromptExpansion(receipt.id);
+                        operation = "prompt";
+                    }
+
+                    await hooks.onCommandAdmitted?.();
+                }
+            }
+
+            const sessionName = hooks.sessionName?.();
+
+            if (
+                operation !== "discover" &&
+                sessionName &&
+                state.sessionName !== sessionName &&
+                nativeCommandName(prompt) !== "name"
+            ) {
+                await kernel.setSessionName(sessionName);
+            }
+
             let disposition: "settled" | "handled";
 
-            if (operation === "compact") {
+            if (operation === "discover") {
+                await kernel.barrier();
+
+                if (extensionError) {
+                    throw new RpcFailure(
+                        "unknown",
+                        "Native startup discovery failed after extension execution",
+                    );
+                }
+
+                disposition = "handled";
+            } else if (operation === "compact") {
                 await kernel.compact(prompt);
                 disposition = "settled";
+            } else if (nativeCommandName(prompt) === "tree") {
+                const [entryId, option, ...extra] = nativeCommandArgs(prompt).split(/\s+/);
+
+                if (extra.length || (option !== undefined && option !== "--summarize")) {
+                    throw new RpcFailure("rejected", "Use /tree <entryId> [--summarize]");
+                }
+
+                if (
+                    !this.journal
+                        .segmentEntries(receipt.segmentId)
+                        .some((entry) => entry.id === entryId)
+                ) {
+                    throw new RpcFailure(
+                        "rejected",
+                        "Select an entry from the current native segment.",
+                    );
+                }
+
+                const navigation = await kernel.navigateTree(entryId!, option === "--summarize");
+
+                await hooks.onNativeResult?.({ navigation });
+                disposition = "handled";
+            } else if (nativeCommandName(prompt) === "reload") {
+                await kernel.command("/team-kernel-reload");
+                disposition = "handled";
+            } else if (nativeCommandName(prompt) === "name") {
+                const name = nativeCommandArgs(prompt);
+
+                if (!name) {
+                    throw new RpcFailure("rejected", "Native /name requires a session name");
+                }
+
+                await kernel.setSessionName(name);
+                disposition = "handled";
+            } else if (nativeCommandName(prompt) === "copy") {
+                const result = (await kernel.request({ type: "get_last_assistant_text" })) as {
+                    text?: string;
+                };
+
+                await hooks.onNativeResult?.({ clipboard: result.text ?? "" });
+                disposition = "handled";
+            } else if (nativeCommandName(prompt) === "session") {
+                const [state, stats] = await Promise.all([
+                    kernel.request({ type: "get_state" }),
+                    kernel.request({ type: "get_session_stats" }),
+                ]);
+
+                await hooks.onNativeResult?.({ state, stats });
+                disposition = "handled";
+            } else if (builtins.some((command) => command.name === nativeCommandName(prompt))) {
+                throw new RpcFailure(
+                    "rejected",
+                    "Native builtin requires the Team command adapter",
+                );
             } else {
                 running.prompting = true;
                 disposition = await kernel.prompt(prompt, undefined, images);
             }
 
+            if (["prompt", "command"].includes(operation)) {
+                // A handled native command may own an active Goal even though it did not start an agent turn.
+                running.prompting = true;
+                let revision = kernel.activityRevision;
+
+                await kernel.barrier();
+                let goalState = currentBranchGoalState(
+                    await kernel.request({ type: "get_entries" }),
+                );
+
+                hooks.onNativeGoalState?.(goalState);
+
+                if (extensionError) {
+                    throw new Error(
+                        `Native extension command failed: ${String(extensionError.error ?? "unknown error")}`,
+                    );
+                }
+
+                // Goal owns the same native process and gate while active. Waiting/recovery has
+                // no agent turn to settle, so wake on native activity instead of polling/relaunching.
+                while (goalIsActive(goalState)) {
+                    if (kernel.activityRevision === revision) {
+                        await kernel.waitForActivity(revision);
+                    }
+
+                    revision = kernel.activityRevision;
+
+                    if (running.aborted) {
+                        throw new RpcFailure(
+                            "unknown",
+                            "Goal workflow stopped before terminal state",
+                        );
+                    }
+
+                    await kernel.barrier();
+
+                    if (extensionError) {
+                        throw new RpcFailure(
+                            "unknown",
+                            "Native extension failed during the Goal workflow",
+                        );
+                    }
+
+                    goalState = currentBranchGoalState(
+                        await kernel.request({ type: "get_entries" }),
+                    );
+                    hooks.onNativeGoalState?.(goalState);
+                }
+            }
+
+            const finalState = (await kernel.request({ type: "get_state" })) as {
+                sessionId?: unknown;
+                sessionFile?: unknown;
+                sessionName?: unknown;
+            };
+
+            if (
+                finalState.sessionId !== state.sessionId ||
+                finalState.sessionFile !== state.sessionFile
+            ) {
+                throw new RpcFailure(
+                    "unknown",
+                    "An extension changed native session identity outside the Team session adapter",
+                );
+            }
+
+            // Native delays JSONL creation until the first conversation. Preserve confirmed /name readback now,
+            // then restore it through set_session_name when the next native process starts.
+            if (
+                nativeCommandName(prompt) === "name" &&
+                typeof finalState.sessionName === "string"
+            ) {
+                await hooks.onSessionName?.(finalState.sessionName);
+            }
+
+            detachExtensionErrors();
             await kernel.close();
             closed = true;
 
