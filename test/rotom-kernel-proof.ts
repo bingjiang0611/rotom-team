@@ -348,8 +348,36 @@ await refusedStart(
 );
 writeFileSync(
     join(home, ".pi/agent/settings.json"),
-    JSON.stringify({ retry: { enabled: false }, compaction: { enabled: false } }),
+    JSON.stringify({
+        retry: { enabled: false },
+        compaction: { enabled: false },
+        skills: ["skills/member-pi"],
+    }),
     { mode: 0o600 },
+);
+
+for (const folder of [".agents/skills/member-agents", ".pi/agent/skills/member-pi"]) {
+    mkdirSync(join(home, folder), { recursive: true });
+    writeFileSync(
+        join(home, folder, "SKILL.md"),
+        `---\nname: ${folder.endsWith("member-pi") ? "member-pi" : "member-agents"}\ndescription: PERSONAL_SKILL_MUST_NOT_LOAD\n---\nPersonal skill.\n`,
+    );
+}
+
+for (const [base, folder, name] of [
+    [root, ".agents/skills/ancestor-probe", "ancestor-probe"],
+    [workspace, ".pi/skills/excluded-probe", "excluded-probe"],
+] as const) {
+    mkdirSync(join(base, folder), { recursive: true });
+    writeFileSync(
+        join(base, folder, "SKILL.md"),
+        `---\nname: ${name}\ndescription: PROJECT_ADDITIONAL_SKILL\n---\nProject skill.\n`,
+    );
+}
+
+writeFileSync(
+    join(workspace, ".pi/settings.json"),
+    JSON.stringify({ skills: ["!skills/excluded-probe/**"] }),
 );
 const report: Record<string, unknown> = {
     version: verifyRotomKernel().version,
@@ -381,6 +409,11 @@ try {
         commands.commands.some((c) => c.name === "qoder-credits"),
         "Product extensions must load; raw upstream Pi is not sufficient",
     );
+    assert.ok(commands.commands.some((c) => c.name === "skill:project-probe"));
+    assert.ok(commands.commands.some((c) => c.name === "skill:pi-subagents"));
+    assert.ok(commands.commands.some((c) => c.name === "skill:ancestor-probe"));
+    assert.ok(!commands.commands.some((c) => c.name === "skill:excluded-probe"));
+    assert.ok(!commands.commands.some((c) => c.name.startsWith("skill:member-")));
     assert.equal(
         await kernel.prompt(
             "Write ROTOM_KERNEL_OK to proof.txt, read it back, then reply KERNEL_FINISHED.",
@@ -393,6 +426,8 @@ try {
     assert.ok(offeredTools?.includes("mcp__probe__echo"), "the project's MCP tool must be offered");
     assert.equal(readFileSync(extensionMarker, "utf8"), "loaded", "the project's extension loads");
     assert.match(systemPrompt!, /PROJECT_SKILL_LOADED/, "the project's skill loads");
+    assert.doesNotMatch(systemPrompt!, /PERSONAL_SKILL_MUST_NOT_LOAD/);
+    report.personalSkillsIgnored = true;
     assert.ok(
         !offeredTools?.some((name) => name.startsWith("mcp__leakprobe")),
         "a server naming a service env var must fail closed",
@@ -675,7 +710,7 @@ try {
         const oversized = await executions.run(
             "oversized-first",
             "oversized",
-            "x".repeat(1024 * 1024),
+            "x".repeat(64 * 1024 * 1024),
         );
 
         assert.equal(oversized.status, "rejected");

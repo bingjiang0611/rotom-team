@@ -183,8 +183,8 @@ async function startComputerUseHelper(app: string): Promise<void> {
 }
 
 /**
- * What rotom would load from a member's own agent folder or HOME. All configuration belongs to the project, so a member
- * HOME holds none: a run refuses to start rather than quietly apply one member's file to that member's runs.
+ * Personal configuration is refused, except skill files: they may stay in the member HOME but are not autoloaded.
+ * Project skills are discovered separately, with the pinned resolver, after --no-skills disables defaults.
  */
 const MEMBER_RESOURCES = [
     ".pi/agent/AGENTS.override.md",
@@ -196,13 +196,11 @@ const MEMBER_RESOURCES = [
     ".pi/agent/APPEND_SYSTEM.md",
     ".pi/agent/mcp.json",
     ".pi/agent/extensions",
-    ".pi/agent/skills",
     ".pi/agent/prompts",
     ".pi/agent/themes",
-    ".agents/skills",
 ];
 /** Settings that name resources to load. */
-const RESOURCE_SETTINGS = ["extensions", "skills", "prompts", "themes", "packages"];
+const RESOURCE_SETTINGS = ["extensions", "prompts", "themes", "packages"];
 
 function settingsOf(file: string): Record<string, unknown> {
     return existsSync(file)
@@ -228,16 +226,19 @@ function refuseMemberResources(home: string): void {
 }
 
 /**
- * Where a run in the project finds skills besides `.pi/skills`: the paths in the project's settings (relative to
- * `.pi`), and `.agents/skills` in the workspace and each folder above it, up to the repository root.
+ * Project skill suggestions: `.pi/skills`, settings paths (relative to `.pi`), and `.agents/skills` in the workspace
+ * and its parents up to the repository root. Native loading uses the pinned resolver, including override patterns.
  */
 export function projectSkillPaths(workspace: string): string[] {
     const listed = settingsOf(join(workspace, ".pi/settings.json")).skills;
-    const paths = Array.isArray(listed)
-        ? listed
-              .filter((path): path is string => typeof path === "string")
-              .map((path) => resolve(workspace, ".pi", path))
-        : [];
+    const paths = [
+        join(workspace, ".pi/skills"),
+        ...(Array.isArray(listed)
+            ? listed
+                  .filter((path): path is string => typeof path === "string")
+                  .map((path) => resolve(workspace, ".pi", path))
+            : []),
+    ];
 
     for (let dir = workspace; ; dir = dirname(dir)) {
         paths.push(join(dir, ".agents/skills"));
@@ -395,18 +396,22 @@ export async function startRotomKernel(options: {
             "--model",
             options.model,
             ...(options.thinkingLevel ? ["--thinking", options.thinkingLevel] : []),
+            "--no-skills",
             ...(options.configuration
                 ? [
                       // A member's stored project trust (MCP sign-in records one) must not reopen the project.
                       "--no-approve",
                       "--no-context-files",
-                      "--no-skills",
                       "--no-prompt-templates",
                       "--append-system-prompt",
                       options.configuration.contextFile,
                       ...options.configuration.skills.flatMap((path) => ["--skill", path]),
                   ]
-                : ["--approve"]),
+                : [
+                      "--approve",
+                      "--extension",
+                      fileURLToPath(new URL("./rotom-skills.mjs", import.meta.url)),
+                  ]),
             // Sessions stay in the member HOME, whatever a project's `sessionDir` says.
             "--session-dir",
             join(home, ".pi/agent/sessions"),
@@ -436,6 +441,9 @@ export async function startRotomKernel(options: {
                           ),
                           ROTOM_TEAM_POLICY: fileURLToPath(
                               new URL("./rotom-policy.mjs", import.meta.url),
+                          ),
+                          ROTOM_TEAM_SKILLS: fileURLToPath(
+                              new URL("./rotom-skills.mjs", import.meta.url),
                           ),
                       }
                     : {}),

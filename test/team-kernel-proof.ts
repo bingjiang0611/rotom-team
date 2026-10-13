@@ -66,6 +66,7 @@ const modelServer = createServer(async (req, res) => {
         }
 
         assert.ok(!body.includes(secret));
+        assert.ok(!body.includes("PERSONAL_SKILL_MUST_NOT_LOAD"));
         lastBody = body;
         const input = JSON.parse(body);
 
@@ -1821,6 +1822,16 @@ try {
     assert.equal(calls, 20);
     report.messagesJoinTheRunningPrompt = true;
 
+    for (const skill of [".agents/skills/member-agents", ".pi/agent/skills/member-pi"]) {
+        const directory = join(folder, "kernel-homes", a.id, skill);
+
+        mkdirSync(directory, { recursive: true });
+        writeFileSync(
+            join(directory, "SKILL.md"),
+            `---\nname: ${skill.endsWith("member-pi") ? "member-pi" : "member-agents"}\ndescription: PERSONAL_SKILL_MUST_NOT_LOAD\n---\nPersonal skill.\n`,
+        );
+    }
+
     // A subagent is a separate rotom process in the member HOME, which holds no credential. It starts through the team
     // wrapper, so its requests pass the run's own gate: same payer, same model, only while the run is active. The run
     // stays active, and the session busy, until the child's result is back and the parent's turn on it has settled.
@@ -1836,6 +1847,7 @@ try {
         JSON.stringify("Loaded specialized tools: subagent, subagent_wait"),
     );
     assert.equal(childRequests, 1, "the child reached the model once");
+    report.personalSkillsIgnoredByParentAndChild = true;
     const subagentRuns = join(
         folder,
         "kernel-homes",

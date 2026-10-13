@@ -1,5 +1,9 @@
 # Project map
 
+Native skills: `rotom-kernel.ts` and `rotom-child.sh` disable default skill discovery. The
+`rotom-skills.mjs` extension reuses the pinned resolver to load project skills only. Personal skill files may remain
+in a member HOME without blocking runs. `TeamKernel.skillCommands` likewise excludes personal defaults.
+
 **rotom team additions:** `bin/rotom-team.js` isolates deployment resources; `src/server/team-accounts.ts`, `credential-store.ts`, and `team-execution.ts` implement personal provider routing, private storage and durable authorization; `vendor/qoder/` pins the Qoder provider. `test/team.test.ts` and `test/team-serve.ts` validate/demo this fork. [PRODUCT.md](PRODUCT.md) is the current product contract; the inherited map below documents upstream components, including features not enabled for personal accounts.
 
 Where things are in Pi Pocket, for agents working on it. [index.md](index.md) lists every guide; [AGENTS.md](../AGENTS.md) and [self-editing.md](self-editing.md) have the rules for editing it while it runs; [architecture.md](architecture.md) explains how the parts depend on each other and the orderings they rely on; [features.md](features.md) says what each feature does.

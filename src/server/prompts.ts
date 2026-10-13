@@ -226,13 +226,14 @@ export function loadSkillCommands(
     cwd: string,
     agentDir: string,
     paths: readonly string[],
+    includeDefaults = true,
 ): SkillCommand[] {
     try {
         const { skills } = loadSkills({
             cwd,
             agentDir,
             skillPaths: [...paths],
-            includeDefaults: true,
+            includeDefaults,
         });
 
         return skills.map((skill) => ({

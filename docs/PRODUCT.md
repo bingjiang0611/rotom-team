@@ -29,7 +29,7 @@ flowchart LR
 
 ## 配置与工具
 
-新会话每次运行读取项目的 `AGENTS.md`、skills、MCP 和扩展，不再使用个人配置层。完整加载、信任及 MCP 登录规则见 [CONFIGURATION.md](CONFIGURATION.md)。
+新会话每次运行读取项目的 `AGENTS.md`、skills、MCP 和扩展，不再使用个人配置层。成员 HOME 中已安装的 skills 可以保留，但默认不加载，也不阻塞运行。完整加载、信任及 MCP 登录规则见 [CONFIGURATION.md](CONFIGURATION.md)。
 
 - 项目文件由所有成员共享；项目 MCP 命令和扩展以服务 OS 用户执行，只允许可信人员修改这些文件。
 - OAuth 型 MCP 由各成员在 **MCP sign-ins** 独立登录。MCP 授权与模型授权不同；文件分开不构成成员间 OS 隔离。

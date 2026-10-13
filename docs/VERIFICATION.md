@@ -46,6 +46,16 @@ Uploads are limited to 50 MiB each and 10 files per message. Direct model images
 The fixtures do not establish image understanding on every real provider, image-specific interrupted-run recovery,
 or an OS sandbox between trusted members.
 
+## Personal skills do not block native runs
+
+`npm run test:kernel` keeps skills in both member-HOME directories and a personal `skills` setting. It verifies that
+startup succeeds, personal skill commands/descriptions are absent, and project, ancestor and bundled skills still
+load. Project exclusion patterns remain effective. `npm run test:kernel:app` verifies parent/child requests with
+personal skills installed and that slash-command suggestions exclude them. The app fixture also covers frozen
+configuration, project settings skills, history and restart. These checks use only synthetic credentials.
+
+Existing `unknown` receipts are not rewritten or replayed by this change.
+
 ## Acceptance boundaries
 
 - Type checking and automated tests do not establish real-account authorization, provider approval, complete billing or target-device readiness.

@@ -1,5 +1,10 @@
 # Architecture
 
+Native skill loading is project-only: the parent and child CLIs use `--no-skills`, then `rotom-skills.mjs` supplies
+project resources using the pinned package resolver. Bundled parent skills and explicit frozen skills still load.
+Personal skill directories and personal `skills` settings are ignored, not removed; other personal configuration
+continues to fail closed. This is a loading policy, not an OS restriction on reading skill files.
+
 **rotom team fork:** [PRODUCT.md](PRODUCT.md) supersedes the shared-provider and last-author billing assumptions below. `TeamAccounts` supplies personal model routes; `TeamExecution` persists ownership and authorizes provider dispatch. Its owner/provider-session indexes are restored before spend recovery and Harness resume. The upstream mechanics below remain reference material.
 
 How Pi Pocket's parts depend on each other, and the orderings the code relies on. [map.md](map.md) says where things are; this says what to keep when changing them.

@@ -18,6 +18,7 @@ import {
     expandPromptTemplate,
     fillTemplate,
     loadPromptTemplates,
+    loadSkillCommands,
     parseArguments,
 } from "../src/server/prompts.ts";
 
@@ -92,6 +93,32 @@ test("templates load from Pi's folder, the project, and Pi's settings, first of 
         ],
     );
     assert.equal(templates[0]!.content, "Review $1 carefully.");
+});
+
+test("native skill suggestions omit personal defaults while Durable keeps them", () => {
+    const agentDir = join(root, "skill-command-agent");
+    const project = join(root, "skill-command-project");
+    const projectSkills = join(project, ".pi/skills");
+
+    for (const [directory, name] of [
+        [join(agentDir, "skills/personal"), "personal"],
+        [join(projectSkills, "project"), "project"],
+    ] as const) {
+        mkdirSync(directory, { recursive: true });
+        writeFileSync(
+            join(directory, "SKILL.md"),
+            `---\nname: ${name}\ndescription: ${name} skill\n---\nSkill instructions.\n`,
+        );
+    }
+
+    assert.deepEqual(
+        loadSkillCommands(project, agentDir, []).map((skill) => skill.name),
+        ["personal", "project"],
+    );
+    assert.deepEqual(
+        loadSkillCommands(project, agentDir, [projectSkills], false).map((skill) => skill.name),
+        ["project"],
+    );
 });
 
 let app: App;

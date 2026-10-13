@@ -108,8 +108,8 @@ export const NativeConfigurationsDoc = defineDoc<NativeConfigurations>({
 });
 
 /**
- * The configuration of a session that has no frozen snapshot: rotom loads the project's AGENTS.md and skills from the
- * workspace and the paying member's own from their private HOME, each run. A legacy session keeps its snapshot digest.
+ * The configuration of a session that has no frozen snapshot: rotom loads the project's AGENTS.md and skills each
+ * run. Personal skill files are ignored. A legacy session keeps its snapshot digest.
  */
 export const NATIVE_LAYERS = "native-layers-v1";
 
@@ -1083,6 +1083,7 @@ export class TeamKernel {
             workspace,
             join(this.#home(user.id), ".pi/agent"),
             projectSkillPaths(workspace),
+            false,
         );
     }
 
