@@ -2249,6 +2249,18 @@ try {
         lastBody.includes(textAttachment.path),
         "non-image files are actual readable upload paths",
     );
+    const beforeDownload = calls;
+    const delivered = await request(
+        aliceToken,
+        `c/${imageId}/download?path=${encodeURIComponent(textAttachment.path)}`,
+        "GET",
+    );
+
+    assert.equal(delivered.status, 200, await delivered.clone().text());
+    assert.equal(await delivered.text(), "native attachment contents");
+    assert.match(delivered.headers.get("content-disposition") ?? "", /^attachment;/);
+    assert.equal(calls, beforeDownload, "reading a delivered file does not run the model");
+    report.nativeDeliveredFileReadback = true;
     await app.close();
     app = await open();
     handler = createHandler({ app, listen: { host: "127.0.0.1", port: 0 }, restart: () => {} });

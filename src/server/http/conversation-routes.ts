@@ -213,6 +213,7 @@ export async function conversationRoutes(
                     "entry",
                     "export",
                     "file",
+                    "download",
                     "files",
                     "view",
                     "changes",

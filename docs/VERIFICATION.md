@@ -63,8 +63,9 @@ HTML/Markdown/binary downloads, unchanged image-only serving, sign-in/session pe
 and symlink rejection, and private configuration protection. Its real Chromium check renders ordinary Markdown
 links, activates a file link with Enter, and verifies the Markdown viewer, script-disabled HTML preview and PDF
 open action. Web URLs, anchors and application routes retain their addresses; supplied `data-path` marks are removed.
-Browser checks skip explicitly when Chromium is unavailable. PDF byte delivery does not establish rendering in every
-browser's PDF viewer. HTML downloads do not run in the application's origin.
+Browser checks skip explicitly when Chromium is unavailable. `npm run test:kernel:ui` also reads a delivered upload
+through an actual native session, proving the download route is admitted without a model call. PDF byte delivery does
+not establish rendering in every browser's PDF viewer. HTML downloads do not run in the application's origin.
 
 ## Acceptance boundaries
 
