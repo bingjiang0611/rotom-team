@@ -47,7 +47,8 @@ flowchart LR
 
 - 原生工具具有服务 OS 用户的文件权限，可能读取其他成员的凭据。独立文件、`0700/0600`、worktree 和项目权限都不是 OS 沙箱。使用专用系统账号，只邀请完全可信成员。
 - 默认仅监听 loopback。HTTPS、SSH 转发或其他远程入口由部署者明确配置；不直接暴露给不信任的人。远程 OpenAI 登录规则见 [REMOTE-OPENAI-LOGIN.md](REMOTE-OPENAI-LOGIN.md)。
-- rotom 会话暂不映射附件输入，也不支持可证明的美元预算，设置 USD 预算时拒绝执行。Token、API 成本估计、订阅额度、Qoder credits 与财务账单不同；缺失保持 unknown，不用零费用占位。
+- rotom 会话支持上传文件，以及在输入框中粘贴、拖入图片；支持图片的模型直接接收压缩后的图片输入，其他附件以该会话可读的上传路径交给 Agent。单个上传仍受 50 MiB 限制，直接送入模型的图片最多 5 MiB/张、20 MiB/条消息。美元预算仍不可证明，设置 USD 预算时拒绝执行。Token、API 成本估计、订阅额度、Qoder credits 与财务账单不同；缺失保持 unknown，不用零费用占位。
+- Qoder 在历史已耗尽已验证上下文窗口时拒绝推理，并提示显式压缩历史或选择更大窗口的模型；不得把剩余输出预算静默压成一个 token 后发送。
 - thinking 不进入公共镜像；运行结果和跨账号投影有意不是逐字无损。旧子 Agent 的恢复、跨机器活跃 SQLite 迁移、个人执行节点、SSO 和多租户隔离不是已交付能力。
 - rotom 运行由其固定产品合同约束；不能把 Durable 的定时任务、Goal、预算页或扩展说明直接套到 rotom 会话。配置加载及原生 UI 边界见 [CONFIGURATION.md](CONFIGURATION.md)。
 - Qoder adapter 是非官方代码；目录、额度或登录成功不证明服务商许可、完整结算或团队托管批准。正式 SIWC 注册/品牌、服务商支持与分发授权见 [PROVIDER-POLICY.md](PROVIDER-POLICY.md)。

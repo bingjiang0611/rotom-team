@@ -9,10 +9,11 @@
     "legacy.mjs": "49eadc0be9f0883eb664a2420323b1add2260da1a8f58c4cc079e00136876999",
     "messages.mjs": "d8aeb2500484c6c4f53a2dcb28ccb1e11f60b5e825ecc041a988f5cc9cf57fe1",
     "oauth.mjs": "62a7f570e1d4cb3712d0a4b7f4e13a5705d715b7f74c93eed535098e2353b40e",
-    "provider.mjs": "99c4deb3dac865f09bbddbb17b6264a2593dfc9f3fd71e685c57838548ddff2d",
+    "provider.mjs": "eb5ee0532be4d794bbdb60b1af054e61271426d3083817898ce42a738c745f48",
     "refresh-guard.mjs": "fcc3e02771917c90f7760b598b6c360ca5d3257adfd9a732a6b98dc1dab751e3",
     "translate.mjs": "ac2ccea9ef9ce2d260a3bbbac1cf1bfc4c3f4a4ba685818046aef421b3050e12",
     "transport.mjs": "3483d6b9f8150d912f3ded2ce950897cb56e023b9be88630995f3ef781cdff95"
   },
-  "sourceCommit": "f6d83d86d3f21df740b03da414eaded20ac914eb"
+  "sourceCommit": "f6d83d86d3f21df740b03da414eaded20ac914eb",
+  "localChanges": ["provider.mjs: refuse exhausted native output budgets before dispatch"]
 }

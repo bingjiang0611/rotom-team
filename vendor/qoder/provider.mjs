@@ -174,7 +174,11 @@ export async function createQoderProvider({ piAI, clampMaxTokens, getToken, getC
     // in-house here.
     const nativeModel = { ...model, contextWindow: input.contextWindow, input: input.images ? ['text', 'image'] : ['text'], ...(controls ? { thinkingLevelMap: thinkingMap(controls.levels), compat: { ...MODEL.compat, supportsReasoningEffort: true } } : {}) };
     clampMaxTokens ??= await nativeOutputBudget();
-    const maxTokens = clampMaxTokens(nativeModel, context, Math.min(options.maxTokens ?? MODEL.maxTokens, MODEL.maxTokens));
+    const requestedMaxTokens = Math.min(options.maxTokens ?? MODEL.maxTokens, MODEL.maxTokens);
+    const maxTokens = clampMaxTokens(nativeModel, context, requestedMaxTokens);
+    // Pi floors exhausted context space to one token. Probe two tokens even for an explicit one-token request:
+    // intentional short output with available room is valid; a collapsed context budget must never dispatch.
+    if (maxTokens === 1 && clampMaxTokens(nativeModel, context, 2) === 1) throw new QoderError('context_budget_exhausted_compact_or_choose_larger_model');
     let payload = buildQoderPayload(nativeModel, context, { maxTokens, reasoningMode });
     // Preserve Pi's BeforeProviderRequest hook: an extension may rewrite the
     // payload, but openQoderStream re-validates the result against the bound

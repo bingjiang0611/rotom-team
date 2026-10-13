@@ -5,7 +5,7 @@
  * command checks who may do it, and changes others should know about become activity lines in the session's chat.
  */
 import { randomUUID } from "node:crypto";
-import { readFileSync, statSync } from "node:fs";
+import { statSync } from "node:fs";
 import { basename, extname, join } from "node:path";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import {
@@ -14,7 +14,7 @@ import {
     type ModelThinkingLevel,
     type TextContent,
 } from "@earendil-works/pi-ai";
-import { resizeImage } from "@earendil-works/pi-coding-agent";
+import { modelImage, IMAGE_TYPES, MAX_INLINE_IMAGE } from "./attachments.ts";
 import type {
     AgentChange,
     ConversationCreateOptions,
@@ -73,9 +73,6 @@ export interface SubmitRequest {
 }
 
 export const THINKING_LEVELS = new Set(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
-/** Attached images that also go to the model itself, when it takes images. */
-const IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
-const MAX_INLINE_IMAGE = 5 * 1024 * 1024;
 /** How many `@` mentioned files go along with a message, and how much of them. */
 const MAX_MENTIONED = 10;
 const MAX_MENTIONED_FILE = 100_000;
@@ -108,20 +105,6 @@ function entryIdOf(value: unknown): number {
     }
 
     return id;
-}
-
-/**
- * An image file for the model, at most 2000 pixels a side as Pi's read tool sends images: models refuse bigger ones once
- * a conversation holds many, and then every request fails until they leave its context.
- */
-async function modelImage(path: string, mimeType: string): Promise<ImageContent> {
-    const image = await resizeImage(readFileSync(path), mimeType);
-
-    if (image === null) {
-        throw new Error("it could not be made small enough for the model");
-    }
-
-    return { type: "image", mimeType: image.mimeType, data: image.data };
 }
 
 /** A request's model, when it names one, must name a provider and a model id. */

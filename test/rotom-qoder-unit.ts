@@ -175,6 +175,56 @@ test("native Qoder errors never retry and absent metering stays unknown", async 
     );
 });
 
+test("native Qoder refuses a one-token budget collapse before network but keeps explicit one-token requests", async (t) => {
+    let calls = 0;
+
+    t.mock.method(globalThis, "fetch", async () => {
+        calls++;
+
+        return sse();
+    });
+    const provider = await qoderRequestProvider(requestAuth());
+    const model = provider.getModels()[0];
+
+    assert.ok(model);
+    const oversized = normalizeContext({
+        messages: [
+            {
+                role: "user",
+                content: [{ type: "text", text: "history ".repeat(40_000) }],
+                timestamp: Date.now(),
+            },
+        ],
+    });
+    const refused = await provider.streamSimple(model, oversized).result();
+
+    assert.equal(refused.stopReason, "error");
+    assert.match(
+        refused.errorMessage ?? "",
+        /context_budget_exhausted_compact_or_choose_larger_model/,
+    );
+    assert.equal(calls, 0);
+    const refusedStream = await provider.stream(model, oversized).result();
+
+    assert.equal(refusedStream.stopReason, "error");
+    assert.equal(calls, 0);
+    const explicitOversized = await provider
+        .streamSimple(model, oversized, { maxTokens: 1 })
+        .result();
+
+    assert.equal(explicitOversized.stopReason, "error");
+    assert.equal(calls, 0);
+    const small = normalizeContext({
+        messages: [
+            { role: "user", content: [{ type: "text", text: "one" }], timestamp: Date.now() },
+        ],
+    });
+    const explicit = await provider.streamSimple(model, small, { maxTokens: 1 }).result();
+
+    assert.equal(explicit.stopReason, "stop", explicit.errorMessage ?? "");
+    assert.equal(calls, 1);
+});
+
 test("team broker exports only refreshed-account access fields and the bound catalog", async (t) => {
     let catalogCalls = 0;
     let refreshCalls = 0;

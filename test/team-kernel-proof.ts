@@ -96,6 +96,32 @@ const modelServer = createServer(async (req, res) => {
 
         emit({ role: "assistant" });
 
+        const expectsImage = body.includes("NATIVE_IMAGE_PROOF");
+        const imageMessage = input.messages.findLast(
+            (message: { role: string; content: unknown }) =>
+                message.role === "user" && JSON.stringify(message.content).includes("image_url"),
+        );
+
+        if (expectsImage && !compact) {
+            assert.ok(imageMessage, "NATIVE_IMAGE_PROOF must include actual model image input");
+        }
+
+        if (imageMessage && !compact && (expectsImage || body.includes("pasted.png"))) {
+            assert.ok(
+                imageMessage.content.some(
+                    (part: { type: string; image_url?: { url: string } }) =>
+                        part.type === "image_url" &&
+                        part.image_url?.url.startsWith("data:image/png;base64,"),
+                ),
+                "the model receives actual image bytes, not just an uploaded file path",
+            );
+            emit({ content: expectsImage ? "NATIVE_IMAGE_SEEN" : "NATIVE_PASTED_IMAGE_SEEN" });
+            emit({}, "stop");
+            res.end("data: [DONE]\n\n");
+
+            return;
+        }
+
         if (compact) {
             emit({ content: "APP_NATIVE_COMPACT: preserved the native-app.txt outcome" });
             emit({}, "stop");
@@ -352,7 +378,7 @@ const configureUserModels = (models: Runtime, user: User) =>
                 provider: "openai",
                 baseUrl,
                 reasoning: false,
-                input: ["text"],
+                input: ["text", "image"],
                 contextWindow: 32000,
                 maxTokens: 1024,
                 cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
@@ -2078,6 +2104,131 @@ try {
         loopbackRequests: calls,
     });
 
+    // Actual upload -> RPC -> loopback model -> mirrored history -> restart/handoff, without real credentials.
+    const imageSession = await app.commands.createSession(a, { backend: "rotom" });
+    const imageId = imageSession.id;
+    const png = Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+        "base64",
+    );
+    const upload = await fetch(`${base}/api/c/${imageId}/upload?name=pasted.png`, {
+        method: "POST",
+        headers: {
+            authorization: `Bearer ${aliceToken}`,
+            "x-pocket": "1",
+            "content-type": "image/png",
+        },
+        body: png,
+    });
+
+    assert.equal(upload.status, 200);
+    const attachment = await upload.json();
+    const imageSend = {
+        requestId: "image-proof",
+        text: "NATIVE_IMAGE_PROOF",
+        attachments: [attachment],
+    };
+    const sent = await request(aliceToken, `c/${imageId}/submit`, "POST", imageSend);
+
+    assert.equal(sent.status, 200);
+    assert.equal((await sent.json()).status, "settled");
+    assert.ok(
+        JSON.stringify(await app.transcripts.allEntries(imageId, true)).includes(
+            "NATIVE_IMAGE_SEEN",
+        ),
+    );
+    const beforeDuplicate = calls;
+    const duplicateImage = await request(aliceToken, `c/${imageId}/submit`, "POST", imageSend);
+
+    assert.equal(duplicateImage.status, 200);
+    assert.equal(calls, beforeDuplicate, "a retried image POST must not run again");
+    const kernelModelForRetry = app.accounts.kernelModel;
+
+    app.accounts.kernelModel = () => {
+        throw new Error("Fixture account/model is unavailable after the settled request");
+    };
+
+    try {
+        const offlineDuplicate = await request(
+            aliceToken,
+            `c/${imageId}/submit`,
+            "POST",
+            imageSend,
+        );
+
+        assert.equal(
+            offlineDuplicate.status,
+            200,
+            "receipt lookup does not require today's account",
+        );
+        assert.equal(calls, beforeDuplicate);
+    } finally {
+        app.accounts.kernelModel = kernelModelForRetry;
+    }
+
+    const projectedImages = (await app.transcripts.allEntries(imageId, true)).filter(
+        (entry) => entry.kind === "user" && entry.images > 0,
+    );
+
+    assert.equal(projectedImages.length, 1);
+    const picture = await app.transcripts.entryImage(imageId, projectedImages[0]!.id, 0);
+
+    assert.equal(picture?.mimeType, "image/png");
+    assert.ok(picture?.data.length);
+    const denied = await request(aliceToken, `c/${imageId}/submit`, "POST", {
+        requestId: "foreign-attachment",
+        text: "Do not run",
+        attachments: [{ ...attachment, path: join(workspace, "AGENTS.md") }],
+    });
+
+    assert.equal(denied.status, 400);
+    assert.equal(calls, beforeDuplicate);
+    const textUpload = await fetch(`${base}/api/c/${imageId}/upload?name=notes.txt`, {
+        method: "POST",
+        headers: {
+            authorization: `Bearer ${aliceToken}`,
+            "x-pocket": "1",
+            "content-type": "text/plain",
+        },
+        body: "native attachment contents",
+    });
+
+    assert.equal(textUpload.status, 200);
+    const textAttachment = await textUpload.json();
+    const textSent = await request(aliceToken, `c/${imageId}/submit`, "POST", {
+        requestId: "file-proof",
+        text: "NATIVE_IMAGE_PROOF also see notes",
+        attachments: [textAttachment],
+    });
+
+    assert.equal(textSent.status, 200);
+    assert.ok(
+        lastBody.includes(textAttachment.path),
+        "non-image files are actual readable upload paths",
+    );
+    await app.close();
+    app = await open();
+    handler = createHandler({ app, listen: { host: "127.0.0.1", port: 0 }, restart: () => {} });
+    const afterRestart = await app.transcripts.entryImage(imageId, projectedImages[0]!.id, 0);
+
+    assert.deepEqual(afterRestart, picture);
+    const imageHead = app.kernel!.executions.journal.session(String(imageId)).segmentId;
+
+    await app.kernel!.handoff(imageId, app.config.userById(a.id)!, "image-handoff", imageHead);
+    const afterHandoff = app.kernel!.snapshot(imageId, app.config.userById(a.id)!);
+
+    assert.ok(JSON.stringify(afterHandoff.messages).includes('"type":"image"'));
+    const continuedImage = await request(aliceToken, `c/${imageId}/submit`, "POST", {
+        requestId: "image-restored",
+        text: "NATIVE_IMAGE_PROOF continue after restart and handoff",
+    });
+
+    assert.equal(continuedImage.status, 200);
+    const restoredContent = app.kernel!.snapshot(imageId, app.config.userById(a.id)!).messages;
+
+    assert.ok(JSON.stringify(restoredContent.at(-1)).includes("NATIVE_IMAGE_SEEN"));
+    report.nativeAttachmentsImagesAndHistory = true;
+
     if (process.argv.includes("--serve") || process.argv.includes("--ui")) {
         // Exercise real native compaction on a small UI fixture, without changing product defaults.
         const uiSettingsPath = join(
@@ -2108,6 +2259,8 @@ try {
         if (process.argv.includes("--ui")) {
             const { nativeUiProof } = await import("./kernel-ui-proof.ts");
 
+            const callsBeforeUi = calls;
+
             report.nativeUi = await nativeUiProof({
                 root: realpathSync(root),
                 base: `http://127.0.0.1:${(server.address() as { port: number }).port}`,
@@ -2116,7 +2269,7 @@ try {
             });
             // The composer's one message, sent by the owner who pays for it; nothing else dispatched. The subagent runs
             // before it count six: a child and the parent's turn on its result, then a stopped run with its child.
-            assert.equal(calls, 41);
+            assert.equal(calls - callsBeforeUi, 4);
             assert.equal(requestMembers.at(-1), owner(app).id);
             report.webUiVerified = true;
         } else {

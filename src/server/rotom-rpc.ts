@@ -16,6 +16,7 @@ export class RpcFailure extends Error {
 export class RotomRpc {
     readonly #child: ChildProcessWithoutNullStreams;
     readonly #timeout: number;
+    readonly #recordLimit: number;
     readonly #closed: Promise<void>;
     readonly #pending = new Map<
         string,
@@ -45,9 +46,10 @@ export class RotomRpc {
     constructor(
         command: string,
         args: string[],
-        options: { cwd: string; env: NodeJS.ProcessEnv; timeoutMs?: number },
+        options: { cwd: string; env: NodeJS.ProcessEnv; timeoutMs?: number; recordLimit?: number },
     ) {
         this.#timeout = options.timeoutMs ?? 30_000;
+        this.#recordLimit = options.recordLimit ?? 8 * 1024 * 1024;
         this.#child = spawn(command, args, {
             cwd: options.cwd,
             env: options.env,
@@ -135,8 +137,8 @@ export class RotomRpc {
 
             this.#buffer = this.#buffer.slice(end + 1);
 
-            if (Buffer.byteLength(line) > 8 * 1024 * 1024) {
-                this.#fail("RPC record exceeds 8 MiB");
+            if (Buffer.byteLength(line) > this.#recordLimit) {
+                this.#fail(`RPC record exceeds ${this.#recordLimit / 1024 / 1024} MiB`);
 
                 return;
             }
@@ -209,8 +211,8 @@ export class RotomRpc {
             }
         }
 
-        if (Buffer.byteLength(this.#buffer) > 8 * 1024 * 1024) {
-            this.#fail("RPC record exceeds 8 MiB");
+        if (Buffer.byteLength(this.#buffer) > this.#recordLimit) {
+            this.#fail(`RPC record exceeds ${this.#recordLimit / 1024 / 1024} MiB`);
         }
     }
 
@@ -258,7 +260,10 @@ export class RotomRpc {
         }
 
         // Bounded pending writes also bound stdin buffering. There is no unbounded prompt queue.
-        if (this.#pending.size >= 16 || Buffer.byteLength(JSON.stringify(command)) > 1024 * 1024) {
+        if (
+            this.#pending.size >= 16 ||
+            Buffer.byteLength(JSON.stringify(command)) > this.#recordLimit
+        ) {
             return Promise.reject(new RpcFailure("rejected", "RPC admission limit"));
         }
 
@@ -276,7 +281,11 @@ export class RotomRpc {
     }
 
     /** Coding runs have no natural length: without timeoutMs only Stop or process loss ends a run. */
-    async prompt(message: string, timeoutMs?: number): Promise<"settled" | "handled"> {
+    async prompt(
+        message: string,
+        timeoutMs?: number,
+        images: import("@earendil-works/pi-ai").ImageContent[] = [],
+    ): Promise<"settled" | "handled"> {
         if (this.#busy) {
             throw new RpcFailure("rejected", "kernel busy; no implicit queue or payer change");
         }
@@ -336,7 +345,11 @@ export class RotomRpc {
                 : setTimeout(() => this.#fail("kernel run deadline exceeded"), timeoutMs);
 
         try {
-            const data = (await this.#send({ type: "prompt", message })) as {
+            const data = (await this.#send({
+                type: "prompt",
+                message,
+                ...(images.length ? { images } : {}),
+            })) as {
                 disposition?: string;
             };
 
@@ -386,12 +399,20 @@ export class RotomRpc {
      * Add a message to the running prompt: `steer` joins the current turn, `followUp` waits for it. The same run, the
      * same payer; nothing is queued when no prompt runs.
      */
-    async queue(message: string, mode: "steer" | "followUp"): Promise<void> {
+    async queue(
+        message: string,
+        mode: "steer" | "followUp",
+        images: import("@earendil-works/pi-ai").ImageContent[] = [],
+    ): Promise<void> {
         if (!this.#prompting) {
             throw new RpcFailure("rejected", "no running prompt to add a message to");
         }
 
-        await this.#send({ type: mode === "steer" ? "steer" : "follow_up", message });
+        await this.#send({
+            type: mode === "steer" ? "steer" : "follow_up",
+            message,
+            ...(images.length ? { images } : {}),
+        });
     }
 
     /** Unlike prompt admission, compact's RPC response arrives after the model operation finishes. */

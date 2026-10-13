@@ -16,7 +16,15 @@ import type { User } from "./config.ts";
 import type { ConfigurationSnapshot } from "./team-profiles.ts";
 import { accountContext } from "./team-accounts.ts";
 import { HttpError } from "./errors.ts";
-import { isTeamPrompt, NativeTail, RotomExecutions, type RunHooks } from "./rotom-executions.ts";
+import {
+    isTeamPrompt,
+    nativePromptIdentity,
+    NativeTail,
+    RotomExecutions,
+    type RunHooks,
+} from "./rotom-executions.ts";
+import { attachmentImages, attachmentText } from "./attachments.ts";
+import type { Attachment } from "./commands.ts";
 import { childrenReport, type RpcRecord } from "./rotom-rpc.ts";
 import { AuthorsDoc } from "./docs.ts";
 import { THINKING_LEVELS } from "./commands.ts";
@@ -505,17 +513,30 @@ export class TeamKernel {
     }
 
     /** `wait: false` answers once the intent is durably reserved; the run continues and shows in the room. */
-    submit(id: ConversationId, user: User, requestId: string, text: string, wait = true) {
-        return this.#operation(id, user, requestId, "submit", { text }, () =>
-            this.#submit(id, user, requestId, text, wait),
+    submit(
+        id: ConversationId,
+        user: User,
+        requestId: string,
+        text: string,
+        wait = true,
+        attachments: Attachment[] = [],
+    ) {
+        return this.#operation(id, user, requestId, "submit", { text, attachments }, () =>
+            this.#submit(id, user, requestId, text, wait, attachments),
         );
     }
     /**
      * A message sent while a prompt runs joins that run (steer) or waits for its turn (followUp). The run is paid by
      * its member, so only they may add to it; anyone else waits for it to end, then their message takes it over.
      */
-    async queue(id: ConversationId, user: User, text: string, mode: "steer" | "followUp") {
-        if (typeof text !== "string" || !isTeamPrompt(text)) {
+    async queue(
+        id: ConversationId,
+        user: User,
+        text: string,
+        mode: "steer" | "followUp",
+        attachments: Attachment[] = [],
+    ) {
+        if (typeof text !== "string" || !isTeamPrompt(attachmentText(text, attachments))) {
             throw new HttpError(
                 400,
                 "Rotom sessions take ordinary text or /skill:name; other slash commands are not supported.",
@@ -539,7 +560,17 @@ export class TeamKernel {
             );
         }
 
-        if (!(await this.executions.queue(String(id), text, mode))) {
+        const model = this.#app.accounts.kernelModel(user, this.#ref(binding));
+        const images = await attachmentImages(attachments, model.input.includes("image"));
+
+        if (
+            !(await this.executions.queue(
+                String(id),
+                attachmentText(text, attachments),
+                mode,
+                images,
+            ))
+        ) {
             throw new HttpError(
                 409,
                 "Pi is not running a prompt now (it finished, or is compacting). Send again.",
@@ -570,8 +601,17 @@ export class TeamKernel {
         );
     }
 
-    async #submit(id: ConversationId, user: User, requestId: string, text: string, wait: boolean) {
+    async #submit(
+        id: ConversationId,
+        user: User,
+        requestId: string,
+        text: string,
+        wait: boolean,
+        attachments: Attachment[],
+    ) {
         const key = this.#request(id, user, requestId);
+
+        this.#app.requireSteer(user);
 
         if (
             typeof requestId !== "string" ||
@@ -582,14 +622,19 @@ export class TeamKernel {
             throw new HttpError(400, "A stable requestId and text are required.");
         }
 
-        if (!isTeamPrompt(text)) {
+        const prompt = attachmentText(text, attachments);
+
+        if (!isTeamPrompt(prompt)) {
             throw new HttpError(
                 400,
                 "Rotom sessions take ordinary text or /skill:name; other slash commands are not supported.",
             );
         }
 
-        const previous = this.executions.journal.existing(String(id), key, text);
+        // Identity readback must not need a still-connected account or today's model capabilities.
+        const images = await attachmentImages(attachments, true);
+        const identity = nativePromptIdentity(prompt, images);
+        const previous = this.executions.journal.existing(String(id), key, identity);
 
         if (previous) {
             return this.#receipt(previous);
@@ -601,6 +646,25 @@ export class TeamKernel {
 
         const journal = this.executions.journal;
         const source = journal.session(String(id));
+
+        if (images.length > 0) {
+            await this.#app.accounts.forUser(user);
+            const ref =
+                source.binding.memberId === user.id
+                    ? this.#ref(source.binding)
+                    : this.#app.commands.defaultModel(user).model;
+
+            if (!ref) {
+                throw new HttpError(409, "Connect your own account and choose a model first.");
+            }
+
+            if (!this.#app.accounts.kernelModel(user, ref).input.includes("image")) {
+                throw new HttpError(
+                    400,
+                    "This model does not accept images. Choose an image-capable model.",
+                );
+            }
+        }
 
         // Whoever sends pays: take over with the sender's own account, on the pinned kernel, before running.
         if (
@@ -639,7 +703,7 @@ export class TeamKernel {
         const run = this.#track(
             id,
             binding,
-            this.executions.run(String(id), key, text, this.#hooks(id, reserved)),
+            this.executions.run(String(id), key, prompt, this.#hooks(id, reserved), images),
         );
 
         if (wait) {

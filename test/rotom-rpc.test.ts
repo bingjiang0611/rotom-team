@@ -9,6 +9,7 @@ const client = async (mode: string) => {
         cwd: process.cwd(),
         env: {},
         timeoutMs: 1000,
+        ...(mode === "images-large" ? { recordLimit: 64 * 1024 * 1024 } : {}),
     });
     const ready = Promise.withResolvers<void>();
     const detach = rpc.onEvent((event) => {
@@ -57,6 +58,42 @@ for (const mode of ["normal", "fast", "unicode"]) {
         }
     });
 }
+
+test("RPC forwards prompt images without putting their bytes in the text", async () => {
+    const rpc = await client("images");
+    const image = { type: "image" as const, data: "cGl4ZWw=", mimeType: "image/png" };
+
+    try {
+        assert.equal(await rpc.prompt("describe", undefined, [image]), "settled");
+        assert.deepEqual(await rpc.request({ type: "get_state" }), {
+            cleanEnvironment: true,
+            cwd: process.cwd(),
+            promptImages: [image],
+        });
+    } finally {
+        await rpc.close();
+    }
+});
+
+test("native-sized RPC accepts image commands and readback above the old 1/8 MiB bounds", async () => {
+    const rpc = await client("images-large");
+    const image = {
+        type: "image" as const,
+        data: "A".repeat(9 * 1024 * 1024),
+        mimeType: "image/png",
+    };
+
+    try {
+        assert.equal(await rpc.prompt("describe", undefined, [image]), "settled");
+        const state = (await rpc.request({ type: "get_state" })) as {
+            promptImages: (typeof image)[];
+        };
+
+        assert.equal(state.promptImages[0]?.data.length, image.data.length);
+    } finally {
+        await rpc.close();
+    }
+});
 
 test("handled commands do not wait for a nonexistent run; explicit rejection stays rejected", async () => {
     const handled = await client("handled");

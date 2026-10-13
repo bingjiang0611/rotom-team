@@ -5,6 +5,7 @@ const emit = (value) => process.stdout.write(JSON.stringify(value) + "\n");
 
 const input = createInterface({ input: process.stdin });
 let cancelCompact;
+let promptImages = [];
 
 // Keep process startup outside the protocol deadlines measured by the tests.
 emit({ type: "fixture_ready" });
@@ -56,9 +57,15 @@ for await (const line of input) {
     }
 
     if (command.type !== "prompt") {
-        response({ cleanEnvironment: !process.env.OPENAI_API_KEY, cwd: process.cwd() });
+        response({
+            cleanEnvironment: !process.env.OPENAI_API_KEY,
+            cwd: process.cwd(),
+            ...(mode.startsWith("images") ? { promptImages } : {}),
+        });
         continue;
     }
+
+    promptImages = command.images ?? [];
 
     if (mode === "exit") {
         process.exit(0);

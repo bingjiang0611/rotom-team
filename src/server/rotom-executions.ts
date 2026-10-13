@@ -1,5 +1,6 @@
 /** Non-replayable team-owned execution journal around the real rotom loop. Not a model-provider adapter. */
 import { createServer } from "node:http";
+import type { ImageContent } from "@earendil-works/pi-ai";
 import { once } from "node:events";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import {
@@ -67,6 +68,11 @@ export function isTeamPrompt(text: string): boolean {
     return text.trim() !== "" && (!text.trimStart().startsWith("/") || /^\/skill:\S/.test(text));
 }
 
+/** Text-only receipts keep their existing identity; image bytes are part of request identity. */
+export function nativePromptIdentity(text: string, images: ImageContent[] = []): string {
+    return images.length === 0 ? text : JSON.stringify({ text, images });
+}
+
 /** A screenshot-bearing tool result can be large; a single record above this is refused, not truncated. */
 const NATIVE_LINE_LIMIT = 64 * 1024 * 1024;
 
@@ -130,10 +136,15 @@ export class RotomExecutions {
     }
 
     /** Add a message to the session's running prompt. False when none is running. */
-    async queue(sessionId: string, text: string, mode: "steer" | "followUp"): Promise<boolean> {
+    async queue(
+        sessionId: string,
+        text: string,
+        mode: "steer" | "followUp",
+        images: ImageContent[] = [],
+    ): Promise<boolean> {
         for (const run of this.#running.get(sessionId) ?? []) {
             if (run.prompting && run.kernel) {
-                await run.kernel.queue(text, mode);
+                await run.kernel.queue(text, mode, images);
 
                 return true;
             }
@@ -369,9 +380,10 @@ export class RotomExecutions {
         requestId: string,
         prompt: string,
         hooks: RunHooks = {},
+        images: ImageContent[] = [],
     ): Promise<KernelReceipt> {
         return this.#track(sessionId, (running) =>
-            this.#execute(sessionId, requestId, prompt, "prompt", running, hooks),
+            this.#execute(sessionId, requestId, prompt, "prompt", running, hooks, images),
         );
     }
 
@@ -388,13 +400,15 @@ export class RotomExecutions {
         operation: "prompt" | "compact",
         running: Running,
         hooks: RunHooks = {},
+        images: ImageContent[] = [],
     ): Promise<KernelReceipt> {
+        const identity = nativePromptIdentity(prompt, images);
         const admitted = this.journal.session(sessionId);
         const binding = Object.freeze(admitted.binding);
 
         // Old receipts are returned, never fed to a new subprocess. Even unknown is a durable result of admission.
         await this.#authorize(binding, "admission", sessionId);
-        const previous = this.journal.existing(sessionId, requestId, prompt, operation);
+        const previous = this.journal.existing(sessionId, requestId, identity, operation);
 
         if (previous) {
             return previous;
@@ -419,7 +433,7 @@ export class RotomExecutions {
         }
 
         const prepared = this.#prepare?.(binding, sessionId);
-        const receipt = this.journal.reserve(sessionId, requestId, prompt, operation);
+        const receipt = this.journal.reserve(sessionId, requestId, identity, operation);
 
         hooks.onReserved?.(receipt);
         // Admission is asynchronous: an earlier request may have created the native file while it was pending.
@@ -630,7 +644,7 @@ export class RotomExecutions {
                 disposition = "settled";
             } else {
                 running.prompting = true;
-                disposition = await kernel.prompt(prompt);
+                disposition = await kernel.prompt(prompt, undefined, images);
             }
 
             await kernel.close();

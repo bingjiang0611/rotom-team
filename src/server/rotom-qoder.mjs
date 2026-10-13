@@ -1,7 +1,7 @@
 /** Access-only bridge into the pinned product's Qoder transport; never an Agent loop or refresh writer. */
 import * as piAI from "../../runtime/rotom/node_modules/@bingjiang0611/rotom/runtime/pi/node_modules/@earendil-works/pi-ai/dist/compat.js";
 import { clampMaxTokensToContext } from "../../runtime/rotom/node_modules/@bingjiang0611/rotom/runtime/pi/node_modules/@earendil-works/pi-ai/dist/api/simple-options.js";
-import { createQoderProvider } from "../../runtime/rotom/node_modules/@bingjiang0611/rotom/extensions/qoder/provider.mjs";
+import { createQoderProvider } from "../../vendor/qoder/provider.mjs";
 import {
     CATALOG_TTL_MS,
     parseCatalogMetadata,

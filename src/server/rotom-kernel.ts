@@ -417,6 +417,8 @@ export async function startRotomKernel(options: {
         ],
         {
             cwd: workspace,
+            // Image-bearing user/tool messages use the journal's same bounded record size.
+            recordLimit: 64 * 1024 * 1024,
             env: {
                 ...memberEnvironment(home, node),
                 PI_COMPUTER_USE_HELPER_APP_PATH: computerUseApp,

@@ -246,8 +246,45 @@ export async function nativeUiProof(options: {
 
         writeFileSync(mcpPath, Buffer.from(mcp.data, "base64"), { mode: 0o600, flag: "wx" });
         screenshots.push(mcpPath);
+        await page.evaluate(`document.querySelector('.sheet [aria-label="Close"]')?.click()`);
+        await page.navigate(`${options.base}/s/${options.id}`);
+        await until(
+            async () =>
+                (await page.evaluate("Boolean(document.querySelector('.composer textarea'))")) ===
+                "true",
+            "composer available for image paste",
+            20000,
+        );
+        await page.evaluate(`
+            const bytes = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='), c => c.charCodeAt(0));
+            const clipboardData = new DataTransfer();
+            clipboardData.items.add(new File([bytes], 'pasted.png', { type: 'image/png' }));
+            document.querySelector('.composer textarea').dispatchEvent(new ClipboardEvent('paste', { clipboardData, bubbles: true, cancelable: true }));
+        `);
+        await until(
+            async () =>
+                (await text(".composer .files")).includes("pasted.png") &&
+                (await page.evaluate(`Boolean(${send} && !${send}.disabled)`)) === "true",
+            "pasted image uploaded and ready to send without typed text",
+            20000,
+        );
+        await page.evaluate(`${send}.click()`);
+        await until(
+            async () => (await text(".transcript")).includes("NATIVE_PASTED_IMAGE_SEEN"),
+            "pasted image reaches the model and answer is shown",
+            20000,
+        );
+        await until(
+            async () =>
+                (await page.evaluate(
+                    "document.querySelectorAll('.transcript .thumbs img').length",
+                )) !== "0",
+            "pasted image shown in history",
+            20000,
+        );
 
         return {
+            imagePastedAndSent: true,
             mcpSignIn: true,
             skillsOffered: true,
             unifiedTranscript: true,

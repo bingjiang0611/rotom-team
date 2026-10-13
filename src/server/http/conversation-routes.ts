@@ -7,6 +7,7 @@ import type { ConversationId } from "@earendil-works/pi-durable";
 import type { Attachment, SubmitRequest } from "../commands.ts";
 import { HttpError } from "../errors.ts";
 import type { SkillCommand } from "../prompts.ts";
+import { uploadedAttachments } from "../attachments.ts";
 import { serveImage, TYPES } from "./assets.ts";
 import { type ApiRequest, json, readJson, send } from "./io.ts";
 
@@ -122,8 +123,7 @@ export async function conversationRoutes(
                             "wait",
                         ].includes(key),
                 ) ||
-                (body.attachments !== undefined &&
-                    !(Array.isArray(body.attachments) && body.attachments.length === 0)) ||
+                (body.attachments !== undefined && !Array.isArray(body.attachments)) ||
                 (body.inlineFiles !== undefined && body.inlineFiles !== false) ||
                 (body.wait !== undefined && typeof body.wait !== "boolean")
             ) {
@@ -137,15 +137,31 @@ export async function conversationRoutes(
                 throw new HttpError(400, "Request ids starting with # belong to the server.");
             }
 
+            const attachments = uploadedAttachments(
+                app.workspace.uploadDirectory(id),
+                body.attachments,
+            );
+
             // While Pi works, the composer's message joins the run (steer) or waits for it (followUp).
             if (app.kernel.isRunning(id) && (body.mode === "steer" || body.mode === "followUp")) {
-                return json(response, 200, await app.kernel.queue(id, user, body.text, body.mode));
+                return json(
+                    response,
+                    200,
+                    await app.kernel.queue(id, user, body.text, body.mode, attachments),
+                );
             }
 
             return json(
                 response,
                 200,
-                await app.kernel.submit(id, user, body.requestId, body.text, body.wait !== false),
+                await app.kernel.submit(
+                    id,
+                    user,
+                    body.requestId,
+                    body.text,
+                    body.wait !== false,
+                    attachments,
+                ),
             );
         }
 
@@ -190,7 +206,8 @@ export async function conversationRoutes(
                     "changes",
                     "branches",
                 ].includes(third ?? "")) ||
-            (method === "POST" && ["chat", "react", "pin", "typing"].includes(third ?? ""));
+            (method === "POST" &&
+                ["chat", "react", "pin", "typing", "upload"].includes(third ?? ""));
 
         if (
             (third === "handoff" || third === "compact" || third === "fork") &&

@@ -17,6 +17,21 @@ The automated suite uses synthetic providers, local fixtures and isolated test d
 
 For every check, record the exact source commit, exit status, inspected scope and any failure. Do not treat an older passing result as evidence for the current artifact.
 
+## Native attachments and Qoder context budgets
+
+`npm run test:kernel:app` verifies upload → native RPC → loopback model image bytes, attachment paths,
+image-only input, receipt idempotency, permission/path rejection, mirrored image readback, restart and handoff.
+`npm run test:kernel:ui` additionally dispatches a browser clipboard image into the composer and sends it without
+text, then checks the answer and image in the transcript. These use synthetic credentials, not real model accounts.
+`node --test test/rotom-qoder-unit.ts` checks exhausted-context refusal before HTTP dispatch and valid explicit
+one-token requests. The adapter preserves the pinned native context estimator and the verified model window;
+it does not automatically compact, retry or enlarge that window.
+
+Uploads are limited to 50 MiB each and 10 files per message. Direct model images are limited to 5 MiB each and
+20 MiB total before resizing; native RPC records are bounded to 64 MiB. Larger input must be compressed or split.
+The fixtures do not establish image understanding on every real provider, image-specific interrupted-run recovery,
+or an OS sandbox between trusted members.
+
 ## Acceptance boundaries
 
 - Type checking and automated tests do not establish real-account authorization, provider approval, complete billing or target-device readiness.
