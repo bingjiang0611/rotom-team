@@ -7,7 +7,7 @@ contract is [PRODUCT.md](PRODUCT.md); legacy frozen sessions keep their existing
 ```mermaid
 flowchart LR
     P["project folder (--cwd)"] -- AGENTS.md, .pi/*, .agents/skills --> R[rotom run]
-    H["kernel-homes/member"] -- sessions, subagent store; no configuration --> R
+    H["kernel-homes/member"] -- sessions, subagent store, team role defaults --> R
     R -- inference --> G[gate: the paying member's model account]
 ```
 
@@ -38,6 +38,19 @@ The runtime pin is rotom 0.1.21 ([`runtime/rotom/pin.json`](../runtime/rotom/pin
 (`ultimate`, `qmodel_latest`, `smodel` and the other COSY routes) ran without the system prompt: rotom sent it only in a
 top-level field that Qoder ignores. Such a run did not see `AGENTS.md`, `.pi/APPEND_SYSTEM.md`, the skill list or the
 folder. 0.1.19 also sends it as the first message, as Qoder's own CLI does. Other models were not affected.
+
+## Team subagent defaults
+
+Every native kernel start, including frozen sessions, sets `subagents.agentOverrides` for `delegate`, `oracle`
+(and its `advisor` alias), and `researcher` to `disabled: true` in the member's `.pi/agent/settings.json`.
+The remaining builtins are `scout`, `worker`, and `reviewer`, whose bundled profiles declare explicit extensions
+and fresh context. Disabled roles are absent from the executable list and cannot be selected for a new task.
+Other settings and role fields are preserved; these defaults do not alter an already-running kernel or replay work.
+
+These are team defaults, not an enforcement boundary. Native project overrides in `.pi/settings.json` take
+precedence, and custom project agents are unchanged. A project override for one of these roles replaces its member
+HOME override, so even an override that only sets a model can restore it. Restoring a role does not adapt it to scoped
+execution: the native extension, context, tool and launch-mode checks still apply. No bundled dependency is modified.
 
 ## Running a skill by name
 

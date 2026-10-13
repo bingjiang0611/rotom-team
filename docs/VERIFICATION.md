@@ -56,6 +56,14 @@ configuration, project settings skills, history and restart. These checks use on
 
 Existing `unknown` receipts are not rewritten or replayed by this change.
 
+## Team subagent defaults
+
+`test/rotom-subagents.test.ts` checks fresh and existing settings for two isolated member HOMEs, preservation of
+unrelated settings, private file permissions and no rewrite when defaults already match. `npm run test:kernel`
+uses the actual pinned subagent tool against a loopback model: its executable list contains only `scout`, `worker`
+and `reviewer`, and new tasks naming `delegate`, `oracle`, `advisor` or `researcher` are rejected as unknown agents.
+This does not use real accounts or establish that an explicitly re-enabled project role can run under scoped rules.
+
 ## Delivered file links
 
 `test/delivered-files.test.ts` uses an isolated server and synthetic accounts. It checks PDF inline responses,

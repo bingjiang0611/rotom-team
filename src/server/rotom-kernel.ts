@@ -9,6 +9,7 @@ import {
     mkdirSync,
     readFileSync,
     realpathSync,
+    renameSync,
     writeFileSync,
 } from "node:fs";
 import { connect } from "node:net";
@@ -208,6 +209,32 @@ function settingsOf(file: string): Record<string, unknown> {
         : {};
 }
 
+/** Team-managed defaults; native project overrides retain their normal precedence. */
+export function configureTeamSubagents(home: string): void {
+    const file = join(home, ".pi/agent/settings.json");
+    const settings = settingsOf(file);
+    const subagents = (settings.subagents ?? {}) as {
+        agentOverrides?: Record<string, Record<string, unknown>>;
+    };
+    const overrides = { ...subagents.agentOverrides };
+    const disabled = ["delegate", "oracle", "researcher"];
+
+    if (disabled.every((name) => overrides[name]?.disabled === true)) {
+        return;
+    }
+
+    for (const name of disabled) {
+        overrides[name] = { ...overrides[name], disabled: true };
+    }
+
+    settings.subagents = { ...subagents, agentOverrides: overrides };
+    mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
+    const temporary = `${file}.${randomUUID()}.tmp`;
+
+    writeFileSync(temporary, `${JSON.stringify(settings, null, 2)}\n`, { mode: 0o600 });
+    renameSync(temporary, file);
+}
+
 function refuseMemberResources(home: string): void {
     const found = MEMBER_RESOURCES.filter((path) => existsSync(join(home, path)));
     const settings = settingsOf(join(home, ".pi/agent/settings.json"));
@@ -369,6 +396,7 @@ export async function startRotomKernel(options: {
         refuseProjectPackages(workspace);
     }
 
+    configureTeamSubagents(home);
     const node = realpathSync(process.execPath);
     // Desktop tools run as the service user. The member HOME isolates credentials, not the screen:
     // reuse the service user's installed (and TCC-authorized) Computer Use helper.

@@ -73,6 +73,16 @@ let mcpReply: string | undefined;
 let mcpAsked = false;
 let desktopReply: string | undefined;
 let desktopAsked = false;
+const subagentChecks = [
+    { id: "subagent-search", name: "search_tools", arguments: { query: "subagent", limit: 1 } },
+    { id: "subagent-list", name: "subagent", arguments: { action: "list" } },
+    ...["delegate", "oracle", "advisor", "researcher"].map((agent) => ({
+        id: `subagent-denied-${agent}`,
+        name: "subagent",
+        arguments: { agent, task: "Must not start", async: true, context: "fresh" },
+    })),
+];
+const subagentReplies = new Map<string, string>();
 
 const respond: RequestListener = async (req, res) => {
     try {
@@ -134,6 +144,18 @@ const respond: RequestListener = async (req, res) => {
         );
 
         desktopReply ??= desktopResult && String(desktopResult.content);
+
+        for (const check of subagentChecks) {
+            const result = messages.find(
+                (message) => message.role === "tool" && message.tool_call_id === check.id,
+            );
+
+            if (result) {
+                subagentReplies.set(check.id, String(result.content));
+            }
+        }
+
+        const subagentCheck = subagentChecks.find((check) => !subagentReplies.has(check.id));
         // A read-only browser call: it lists this session's tabs through the service user's Chrome relay.
         const tool = !hasWrite
             ? {
@@ -161,7 +183,9 @@ const respond: RequestListener = async (req, res) => {
                           name: "find_roots",
                           arguments: JSON.stringify({ app: "Finder" }),
                       }
-                    : undefined;
+                    : subagentCheck
+                      ? { ...subagentCheck, arguments: JSON.stringify(subagentCheck.arguments) }
+                      : undefined;
 
         res.writeHead(200, { "Content-Type": "text/event-stream" });
         const emit = (delta: unknown, finish: string | null = null) =>
@@ -422,12 +446,28 @@ try {
     );
     assert.equal(readFileSync(join(workspace, "proof.txt"), "utf8"), "ROTOM_KERNEL_OK\n");
     assert.equal(toolReadObserved, true);
-    assert.equal(requests, 6);
+    assert.equal(requests, 6 + subagentChecks.length);
     assert.ok(offeredTools?.includes("mcp__probe__echo"), "the project's MCP tool must be offered");
     assert.equal(readFileSync(extensionMarker, "utf8"), "loaded", "the project's extension loads");
     assert.match(systemPrompt!, /PROJECT_SKILL_LOADED/, "the project's skill loads");
     assert.doesNotMatch(systemPrompt!, /PERSONAL_SKILL_MUST_NOT_LOAD/);
     report.personalSkillsIgnored = true;
+    const agentList = subagentReplies.get("subagent-list") ?? "";
+
+    assert.deepEqual(
+        [...agentList.matchAll(/^- (\w+) \(/gm)].map((match) => match[1]).sort(),
+        ["reviewer", "scout", "worker"],
+        agentList,
+    );
+
+    for (const agent of ["delegate", "oracle", "advisor", "researcher"]) {
+        assert.match(
+            subagentReplies.get(`subagent-denied-${agent}`) ?? "",
+            new RegExp(`Unknown agent: ${agent}`),
+        );
+    }
+
+    report.teamSubagentDefaults = true;
     assert.ok(
         !offeredTools?.some((name) => name.startsWith("mcp__leakprobe")),
         "a server naming a service env var must fail closed",
