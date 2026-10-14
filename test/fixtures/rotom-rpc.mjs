@@ -60,6 +60,12 @@ for await (const line of input) {
         continue;
     }
 
+    if (mode === "readback-large" && command.type === "get_entries") {
+        // 48 MiB of multi-byte text: the size of an image-heavy session's readback.
+        response({ text: "中".repeat(16 * 1024 * 1024) });
+        continue;
+    }
+
     if (command.type !== "prompt") {
         response({
             cleanEnvironment: !process.env.OPENAI_API_KEY,

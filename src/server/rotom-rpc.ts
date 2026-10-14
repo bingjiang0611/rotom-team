@@ -32,7 +32,9 @@ export class RotomRpc {
     /** Dialogs a person may still answer; null while dialogs are cancelled at once. */
     #dialogs: Set<string> | null = null;
     #failure?: RpcFailure;
+    /** The unfinished last line, and its size in bytes. */
     #buffer = "";
+    #bufferBytes = 0;
     #busy = false;
     /** A prompt is running: it may take more of its member's messages. */
     #prompting = false;
@@ -141,13 +143,17 @@ export class RotomRpc {
             return;
         }
 
-        this.#buffer += text;
-        let end: number;
+        // Search and measure only the new text: rescanning the whole buffer per chunk is quadratic, and a large
+        // record (a get_entries of an image-heavy session) then outlasts the acknowledgement deadline.
+        let start = 0,
+            end: number;
 
-        while ((end = this.#buffer.indexOf("\n")) >= 0) {
-            const line = this.#buffer.slice(0, end).replace(/\r$/, "");
+        while ((end = text.indexOf("\n", start)) >= 0) {
+            const line = (this.#buffer + text.slice(start, end)).replace(/\r$/, "");
 
-            this.#buffer = this.#buffer.slice(end + 1);
+            this.#buffer = "";
+            this.#bufferBytes = 0;
+            start = end + 1;
 
             if (Buffer.byteLength(line) > this.#recordLimit) {
                 this.#fail(`RPC record exceeds ${this.#recordLimit / 1024 / 1024} MiB`);
@@ -241,7 +247,12 @@ export class RotomRpc {
             }
         }
 
-        if (Buffer.byteLength(this.#buffer) > this.#recordLimit) {
+        const rest = text.slice(start);
+
+        this.#buffer += rest;
+        this.#bufferBytes += Buffer.byteLength(rest);
+
+        if (this.#bufferBytes > this.#recordLimit) {
             this.#fail(`RPC record exceeds ${this.#recordLimit / 1024 / 1024} MiB`);
         }
     }

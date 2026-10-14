@@ -8,8 +8,10 @@ const client = async (mode: string) => {
     const rpc = new RotomRpc(process.execPath, [fixture, mode], {
         cwd: process.cwd(),
         env: {},
-        timeoutMs: 1000,
-        ...(mode === "images-large" ? { recordLimit: 64 * 1024 * 1024 } : {}),
+        timeoutMs: mode === "readback-large" ? 3000 : 1000,
+        ...(["images-large", "readback-large"].includes(mode)
+            ? { recordLimit: 64 * 1024 * 1024 }
+            : {}),
     });
     const ready = Promise.withResolvers<void>();
     const detach = rpc.onEvent((event) => {
@@ -90,6 +92,18 @@ test("native-sized RPC accepts image commands and readback above the old 1/8 MiB
         };
 
         assert.equal(state.promptImages[0]?.data.length, image.data.length);
+    } finally {
+        await rpc.close();
+    }
+});
+
+test("a native-sized multi-byte readback arrives well inside the acknowledgement deadline", async () => {
+    const rpc = await client("readback-large");
+
+    try {
+        const data = (await rpc.request({ type: "get_entries" })) as { text: string };
+
+        assert.equal(data.text.length, 16 * 1024 * 1024);
     } finally {
         await rpc.close();
     }
