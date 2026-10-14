@@ -537,11 +537,7 @@ try {
     );
     const selection = await json(await submit(alice, "/tree"));
 
-    assert.ok(
-        selection.interaction.options.some(
-            (option: { text: string }) => option.text === `/tree ${selected.id}`,
-        ),
-    );
+    assert.ok(selection.interaction.nodes.some((node: { id: string }) => node.id === selected.id));
     const treeResult = await json(
         await submit(alice, `/tree ${selected.id}`, { requestId: "tree-stable" }),
     );

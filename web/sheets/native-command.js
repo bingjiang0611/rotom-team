@@ -11,7 +11,8 @@ import {
     store,
 } from "../store.js";
 import { html, Sheet } from "../ui.js";
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
+import { FILTERS, TreeView } from "../native-tree.js";
 
 export function nativeCommandAccepted(result) {
     return (
@@ -157,36 +158,251 @@ export function NativeSettingsSheet({ scope = false }) {
     <//>`;
 }
 
+/** Run the chosen native selection; its result restores a draft or opens the next step, never auto-submits. */
+const runChoice = (text) =>
+    attempt(async () => {
+        const result = await actions.submit(text, [], "steer", false, true);
+
+        closeSheet();
+        showNativeResult(result);
+    });
+
 export function NativeCommandSheet() {
     const sheet = store.state.sheet;
-    const [summarize, setSummarize] = useState(false);
-    const choose = (text) =>
-        attempt(async () => {
-            const result = await actions.submit(
-                `${text}${sheet.command === "tree" && summarize ? " --summarize" : ""}`,
-                [],
-                "steer",
-                false,
-                true,
-            );
-
-            closeSheet();
-            showNativeResult(result);
-        });
 
     return html`<${Sheet} title=${sheet.title} onClose=${closeSheet}>
-        ${
-            sheet.command === "tree" &&
-            html`<p class="muted">The transcript retains immutable audit history. Labels below identify the active native branch.</p>
-            <label class="field"><input type="checkbox" checked=${summarize} onChange=${(event) => setSummarize(event.currentTarget.checked)} /> Summarize the abandoned branch using my selected model and account</label>`
-        }
         ${sheet.options.length === 0 && html`<p class="muted">No native entries yet.</p>`}
         ${sheet.options.map(
             (option) => html`<button
-            class="button wide"
-            data-entry-id=${option.entryId}
-            onClick=${() => choose(option.text)}
-        >${option.label}</button>`,
+                class="button wide"
+                data-entry-id=${option.entryId}
+                onClick=${() => runChoice(option.text)}
+            >
+                ${option.label}
+            </button>`,
         )}
+    <//>`;
+}
+
+const FILTER_NAMES = {
+    default: "default",
+    "no-tools": "no-tools",
+    "user-only": "user",
+    "labeled-only": "labeled",
+    all: "all",
+};
+const FILTER_KEYS = { d: "default", t: "no-tools", u: "user-only", l: "labeled-only", a: "all" };
+const TREE_HELP =
+    "↑/↓ move · ←/→ page · option+←/→ branch · shift+t label time · " +
+    "filters ctrl+d/t/u/l/a · cycle ctrl+o/shift+ctrl+o";
+const TREE_NOTE =
+    "Enter or a tap goes to an entry. Choosing a user message puts its text back in the box. " +
+    "The shared transcript keeps every branch for audit.";
+const toneClass = (tone) =>
+    tone
+        .split(" ")
+        .filter(Boolean)
+        .map((each) => `tone-${each}`)
+        .join(" ");
+
+/** /tree as the terminal draws it: the same rows, keys and filters, with taps for touch screens. */
+export function NativeTreeSheet() {
+    const sheet = store.state.sheet;
+    const [view] = useState(() => new TreeView(sheet.nodes, sheet.leafId));
+    const [, setVersion] = useState(0);
+    const [summarize, setSummarize] = useState(false);
+    const list = useRef(null);
+    const search = useRef(null);
+    const scroll = useRef("center");
+
+    const update = (block = "nearest") => {
+        scroll.current = block;
+        setVersion((version) => version + 1);
+    };
+
+    const choose = (id) => runChoice(`/tree ${id}${summarize ? " --summarize" : ""}`);
+
+    useEffect(() => {
+        // A phone keyboard would cover the tree; pointer devices type to search at once, as in the terminal.
+        if (matchMedia("(pointer: fine)").matches) {
+            search.current.focus({ preventScroll: true });
+        }
+    }, []);
+
+    useEffect(() => {
+        if (scroll.current) {
+            list.current
+                ?.querySelector(".native-tree-row.on")
+                ?.scrollIntoView({ block: scroll.current });
+            scroll.current = null;
+        }
+    });
+
+    useEffect(() => {
+        const observer = new ResizeObserver(() => {
+            list.current.querySelector(".native-tree-row.on")?.scrollIntoView({ block: "nearest" });
+        });
+
+        observer.observe(list.current);
+
+        return () => observer.disconnect();
+    }, []);
+
+    const pageSize = () => {
+        const row = list.current?.querySelector(".native-tree-row");
+
+        return Math.max(
+            5,
+            Math.floor((list.current?.clientHeight ?? 0) / (row?.offsetHeight || 1)),
+        );
+    };
+
+    const onKey = (event) => {
+        const key = event.key.toLowerCase();
+        const ctrl = event.ctrlKey && !event.metaKey;
+        const control = event.target.closest("button, input[type=checkbox]");
+
+        if (event.isComposing || event.metaKey) {
+            return;
+        }
+
+        if (key === "escape") {
+            if (view.query) {
+                event.stopPropagation();
+                view.search("");
+                update();
+            }
+
+            return;
+        }
+
+        if (key === "enter") {
+            if (!control && view.rows[view.selected]) {
+                event.preventDefault();
+                choose(view.rows[view.selected].node.id);
+            }
+
+            return;
+        }
+
+        if (key === "arrowup" || key === "arrowdown") {
+            view.move(key === "arrowup" ? -1 : 1);
+        } else if ((key === "arrowleft" || key === "arrowright") && (event.altKey || ctrl)) {
+            key === "arrowleft" ? view.foldOrUp() : view.unfoldOrDown();
+        } else if (key === "arrowleft" || key === "pageup") {
+            view.page(-pageSize());
+        } else if (key === "arrowright" || key === "pagedown") {
+            view.page(pageSize());
+        } else if (ctrl && FILTER_KEYS[key]) {
+            view.setFilter(FILTER_KEYS[key]);
+        } else if (ctrl && key === "o") {
+            view.cycleFilter(event.shiftKey ? -1 : 1);
+        } else if (event.shiftKey && !ctrl && !event.altKey && key === "t") {
+            view.toggleLabelTimes();
+        } else {
+            if (
+                event.target !== search.current &&
+                !control &&
+                event.key.length === 1 &&
+                !ctrl &&
+                !event.altKey
+            ) {
+                event.preventDefault();
+                search.current.focus({ preventScroll: true });
+                view.search(view.query + event.key);
+                update();
+            }
+
+            return;
+        }
+
+        event.preventDefault();
+        update();
+    };
+
+    const selected = view.rows[view.selected]?.node.id;
+
+    return html`<${Sheet} title=${sheet.title} wide className="native-tree-sheet" onClose=${closeSheet}>
+        <div class="native-tree" onKeyDown=${onKey}>
+            <div class="native-tree-help">${TREE_HELP}</div>
+            <label class="native-tree-search">
+                <span>Type to search:</span>
+                <input
+                    ref=${search}
+                    type="text"
+                    autocomplete="off"
+                    spellcheck="false"
+                    role="combobox"
+                    aria-label="Search the session tree"
+                    aria-autocomplete="list"
+                    aria-expanded="true"
+                    aria-controls="native-tree-entries"
+                    aria-activedescendant=${selected ? `native-tree-entry-${selected}` : undefined}
+                    value=${view.query}
+                    onInput=${(event) => {
+                        view.search(event.currentTarget.value);
+                        update();
+                    }}
+                />
+            </label>
+            <div class="segmented" role="group" aria-label="Tree filter">
+                ${FILTERS.map(
+                    (mode) => html`<button
+                        class=${view.filter === mode ? "on" : ""}
+                        aria-pressed=${view.filter === mode}
+                        onClick=${() => {
+                            view.setFilter(mode);
+                            update("center");
+                        }}
+                    >
+                        ${FILTER_NAMES[mode]}
+                    </button>`,
+                )}
+            </div>
+            <div
+                id="native-tree-entries"
+                class="native-tree-list"
+                role="listbox"
+                aria-label="Session entries"
+                ref=${list}
+            >
+                ${view.rows.length === 0 && html`<div class="native-tree-empty">No entries found</div>`}
+                ${view.rows.map((row) => {
+                    const line = view.line(row);
+
+                    return html`<button
+                        key=${line.id}
+                        id=${`native-tree-entry-${line.id}`}
+                        class=${`native-tree-row ${line.id === selected ? "on" : ""}`}
+                        role="option"
+                        tabindex="-1"
+                        aria-selected=${line.id === selected}
+                        data-entry-id=${line.id}
+                        onClick=${() => choose(line.id)}
+                    >
+                        <span class="native-tree-cursor">${line.id === selected ? "› " : "  "}</span>
+                        <span class="tone-dim">${line.prefix}</span>
+                        <span class="tone-accent">${line.fold}${line.active}</span>
+                        <span class="tone-warning">${line.label}</span>
+                        <span class="tone-muted">${line.labelTime}</span>
+                        ${line.parts.map(
+                            ([tone, text]) => html`<span class=${toneClass(tone)}>${text}</span>`,
+                        )}
+                    </button>`;
+                })}
+            </div>
+            <div class="native-tree-count">
+                (${view.rows.length === 0 ? 0 : view.selected + 1}/${view.rows.length})${view.status()}
+            </div>
+            <label class="field native-tree-summary">
+                <input
+                    type="checkbox"
+                    checked=${summarize}
+                    onChange=${(event) => setSummarize(event.currentTarget.checked)}
+                />
+                Summarize the abandoned branch using my selected model and account
+            </label>
+            <p class="muted small">${TREE_NOTE}</p>
+        </div>
     <//>`;
 }

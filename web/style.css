@@ -7945,3 +7945,148 @@ textarea.notes {
 .native-question textarea {
     width: 100%;
 }
+
+/* Native /tree, drawn like the terminal selector: one monospace line per entry, tree glyphs kept aligned. */
+.native-tree-sheet .sheet-body {
+    overflow: hidden;
+}
+
+.native-tree {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-height: 0;
+    font-family: var(--mono);
+    font-size: 0.8rem;
+}
+
+.native-tree-help,
+.native-tree-count {
+    color: var(--muted);
+}
+
+.native-tree-search {
+    display: flex;
+    align-items: center;
+    gap: 0.6ch;
+    color: var(--muted);
+}
+
+.native-tree-search input {
+    flex: 1;
+    min-width: 0;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    background: transparent;
+    color: var(--accent);
+    font: inherit;
+    padding: 0.2rem 0;
+}
+
+/* The underline shows the focus, as in the launcher search. */
+.native-tree-search input:focus-visible {
+    outline: none;
+    border-bottom-color: var(--accent);
+}
+
+.native-tree-list {
+    display: flex;
+    flex-direction: column;
+    min-height: 8rem;
+    max-height: 56dvh;
+    overflow: auto;
+    border-block: 1px solid var(--line);
+    padding-block: 0.3rem;
+}
+
+.native-tree-row {
+    display: block;
+    flex: none;
+    width: 100%;
+    padding: 0.08rem 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: pre;
+    text-align: left;
+    color: var(--text);
+    font: inherit;
+    line-height: 1.45;
+}
+
+.native-tree-row:hover {
+    background: var(--hover);
+}
+
+.native-tree-row.on {
+    background: var(--o-selection);
+    font-weight: 700;
+}
+
+.native-tree-row.on .native-tree-cursor {
+    color: var(--accent);
+}
+
+.native-tree-empty {
+    color: var(--muted);
+    padding-left: 2ch;
+}
+
+.native-tree-summary {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.native-tree-summary input {
+    width: auto;
+}
+
+.tone-accent {
+    color: var(--accent);
+}
+
+.tone-success {
+    color: var(--ok);
+}
+
+.tone-muted {
+    color: var(--muted);
+}
+
+.tone-dim {
+    color: var(--faint);
+}
+
+.tone-error {
+    color: var(--err);
+}
+
+.tone-warning {
+    color: var(--warn);
+}
+
+.tone-customMessageLabel,
+.tone-borderAccent {
+    color: var(--spark);
+}
+
+.tone-italic {
+    font-style: italic;
+}
+
+@media (pointer: coarse) {
+    .native-tree-row {
+        min-height: 44px;
+        padding-block: 0.45rem;
+    }
+
+    .native-tree .segmented button,
+    .native-tree-summary {
+        min-height: 44px;
+    }
+
+    /* At 16px iOS does not zoom into the field. */
+    .native-tree-search input {
+        font-size: 16px;
+    }
+}

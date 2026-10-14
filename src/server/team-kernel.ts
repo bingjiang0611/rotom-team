@@ -64,6 +64,7 @@ import {
     verifyRotomKernel,
 } from "./rotom-kernel.ts";
 import { McpSignIns } from "./mcp-sign-in.ts";
+import { nativeTreeNodes } from "./native-tree.ts";
 import { touchSession } from "./titles.ts";
 
 export type NativeCreation = {
@@ -1095,44 +1096,38 @@ export class TeamKernel {
 
             const { segmentId } = this.executions.journal.session(String(id));
             const entries = this.executions.journal.segmentEntries(segmentId);
-            const native = await nativeSessionManager();
-            const active = new Set<string>();
-            const byId = new Map(entries.map((entry) => [entry.id, entry]));
-            let leaf = entries.at(-1);
 
-            while (leaf && !active.has(leaf.id!)) {
-                active.add(leaf.id!);
-                leaf = typeof leaf.parentId === "string" ? byId.get(leaf.parentId) : undefined;
+            if (command === "tree") {
+                return {
+                    status: "handled" as const,
+                    interaction: {
+                        type: "native-tree",
+                        title: "Session Tree",
+                        ...nativeTreeNodes(entries),
+                    },
+                };
             }
 
+            const native = await nativeSessionManager();
             const options = entries.flatMap((entry) => {
                 const message = entry.message as { role?: string; content?: unknown } | undefined;
 
-                if (
-                    command === "fork"
-                        ? entry.type !== "message" || message?.role !== "user"
-                        : !["message", "custom_message", "branch_summary", "compaction"].includes(
-                              String(entry.type),
-                          )
-                ) {
+                if (entry.type !== "message" || message?.role !== "user") {
                     return [];
                 }
 
-                const selectedText = native.contentText(
-                    message?.content ?? entry.content ?? entry.summary,
-                    "",
-                ) as string;
+                const selectedText = native.contentText(message.content, "") as string;
 
                 // Native fork selectors omit user entries with no text (including image-only input).
-                if (command === "fork" && !selectedText) {
+                if (!selectedText) {
                     return [];
                 }
 
                 return [
                     {
                         entryId: entry.id,
-                        label: `${message?.role ?? entry.type}: ${selectedText.slice(0, 160) || "(no text)"}${command === "tree" ? (active.has(entry.id!) ? " · active branch" : " · abandoned branch") : ""}`,
-                        text: `/${command} ${entry.id}`,
+                        label: `user: ${selectedText.slice(0, 160)}`,
+                        text: `/fork ${entry.id}`,
                     },
                 ];
             });
@@ -1141,8 +1136,7 @@ export class TeamKernel {
                 status: "handled" as const,
                 interaction: {
                     type: "native-command",
-                    title:
-                        command === "fork" ? "Fork before a user message" : "Navigate native tree",
+                    title: "Fork before a user message",
                     command,
                     options,
                 },

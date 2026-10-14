@@ -27,6 +27,7 @@ import {
     NativeCommandSheet,
     NativeInfoSheet,
     NativeSettingsSheet,
+    NativeTreeSheet,
     showNativeResult,
 } from "./sheets/native-command.js";
 import { ArtifactsSheet, ArtifactViewer, ImageViewer } from "./sheets/viewers.js";
@@ -200,6 +201,9 @@ function sheetBody(sheet) {
             break;
         case "native-command":
             body = html`<${NativeCommandSheet} />`;
+            break;
+        case "native-tree":
+            body = html`<${NativeTreeSheet} />`;
             break;
         case "native-name":
             body = html`<${TextSheet}

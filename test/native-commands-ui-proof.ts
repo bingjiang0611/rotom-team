@@ -4,6 +4,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { Browsers } from "../src/server/browser.ts";
 import { findBrowser } from "../src/server/browser/discovery.ts";
+import { VIEWPORTS } from "../src/server/browser/viewport.ts";
 import { nativeSessionManager } from "../src/server/rotom-kernel.ts";
 import type { PocketApp } from "../src/server/app.ts";
 import type { User } from "../src/server/config.ts";
@@ -339,6 +340,57 @@ export async function nativeCommandUiProof(options: {
             "tree selector",
             20_000,
         );
+        // The real component must stay usable at phone width, not just render short desktop labels.
+        const treeAtRest = () =>
+            until(
+                async () =>
+                    (await page.evaluate(`
+                const sheet = document.querySelector('.native-tree-sheet');
+                return sheet.getAnimations().length === 0 &&
+                    sheet.closest('.overlay').getAnimations().length === 0;
+            `)) === "true",
+                "tree opening animation finishes",
+            );
+
+        await treeAtRest();
+        await screenshot("native-command-tree-desktop");
+        await page.setViewport(VIEWPORTS.mobile);
+        await page.evaluate(`await new Promise(resolve => requestAnimationFrame(resolve))`);
+        await treeAtRest();
+        const mobileTree = JSON.parse(
+            await page.evaluate(`
+                const sheet = document.querySelector('.native-tree-sheet');
+                const list = document.querySelector('.native-tree-list');
+                const row = document.querySelector('.native-tree-row');
+                const search = document.querySelector('.native-tree-search input');
+                const check = document.querySelector('.native-tree-summary input');
+                const selected = document.querySelector('.native-tree-row.on').getBoundingClientRect();
+                const bounds = list.getBoundingClientRect();
+                return JSON.stringify({
+                    selectedVisible: selected.top >= bounds.top && selected.bottom <= bounds.bottom,
+                    fits: sheet.getBoundingClientRect().right <= innerWidth &&
+                        sheet.scrollWidth <= sheet.clientWidth && list.scrollWidth <= list.clientWidth,
+                    bottomVisible: sheet.getBoundingClientRect().bottom <= innerHeight + 1 &&
+                        document.querySelector('.native-tree-summary').getBoundingClientRect().bottom <= innerHeight,
+                    rowHeight: row.getBoundingClientRect().height,
+                    searchFont: parseFloat(getComputedStyle(search).fontSize),
+                    checkboxWidth: check.getBoundingClientRect().width,
+                });
+            `),
+        );
+
+        assert.equal(mobileTree.fits, true, "tree stays within the 390px viewport");
+        assert.equal(mobileTree.bottomVisible, true, "summary control remains visible on a phone");
+        assert.equal(
+            mobileTree.selectedVisible,
+            true,
+            "selection stays visible after viewport resize",
+        );
+        assert.ok(mobileTree.rowHeight >= 44, "touch rows are at least 44px");
+        assert.ok(mobileTree.searchFont >= 16, "search does not trigger iOS font-size zoom");
+        assert.ok(mobileTree.checkboxWidth < 30, "summary checkbox is not stretched");
+        await screenshot("native-command-tree-mobile");
+        await page.setViewport(VIEWPORTS.desktop);
         await type("KEEP_CANCELLED_DRAFT");
         await page.evaluate(`document.querySelector(${JSON.stringify(selectedButton)}).click()`);
         await until(
@@ -376,7 +428,47 @@ export async function nativeCommandUiProof(options: {
             20_000,
         );
         await page.evaluate(`document.querySelector('.sheet input[type="checkbox"]').click()`);
-        await page.evaluate(`document.querySelector(${JSON.stringify(selectedButton)}).click()`);
+        await page.evaluate(`
+            const input = document.querySelector('.native-tree-search input');
+            input.value = 'no-entry-has-this-search-text';
+            input.dispatchEvent(new Event('input', {bubbles: true}));
+        `);
+        assert.ok((await text(".native-tree-empty")).includes("No entries found"));
+        await page.evaluate(`
+            document.querySelector('.native-tree-search input').dispatchEvent(
+                new KeyboardEvent('keydown', {key: 'Escape', bubbles: true})
+            );
+        `);
+        assert.equal(
+            await page.evaluate(`document.querySelector('.native-tree-search input')?.value`),
+            "",
+        );
+        assert.equal(
+            await page.evaluate(`Boolean(document.querySelector('.native-tree-row.on'))`),
+            "true",
+        );
+        // Keyboard as in the terminal: type to search, arrows to the entry, Enter to go there.
+        await page.evaluate(
+            `const input = document.querySelector('.native-tree-search input'); input.value = 'SECOND_BROWSER_MARKER'; input.dispatchEvent(new Event('input', {bubbles: true}));`,
+        );
+        const highlighted = () =>
+            page.evaluate(`document.querySelector('.native-tree-row.on')?.dataset.entryId`);
+        const rows = Number(
+            await page.evaluate(`document.querySelectorAll('.native-tree-row').length`),
+        );
+
+        assert.ok(rows > 0 && rows < 10, "search narrows the tree");
+
+        for (let step = 0; step < rows && (await highlighted()) !== selected.id; step++) {
+            await page.evaluate(
+                `document.querySelector('.native-tree-search input').dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowUp', bubbles: true}))`,
+            );
+        }
+
+        assert.equal(await highlighted(), selected.id, "arrow keys move the highlight");
+        await page.evaluate(
+            `document.querySelector('.native-tree-search input').dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', bubbles: true}))`,
+        );
         await until(
             async () =>
                 (await page.evaluate(`document.querySelector('.composer textarea')?.value`)) ===
