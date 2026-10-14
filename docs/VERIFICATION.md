@@ -39,7 +39,7 @@ image-only input, receipt idempotency, permission/path rejection, mirrored image
 text, then checks the answer and image in the transcript. These use synthetic credentials, not real model accounts.
 `node --test test/rotom-qoder-unit.ts` checks exhausted-context refusal before HTTP dispatch and valid explicit
 one-token requests. The adapter preserves the pinned native context estimator and the verified model window;
-it does not automatically compact, retry or enlarge that window.
+it does not enlarge that window. Native automatic compaction/retry can recover the context using the same payer/model gate.
 
 Uploads are limited to 50 MiB each and 10 files per message. Direct model images are limited to 5 MiB each and
 20 MiB total before resizing; native RPC records are bounded to 64 MiB. Larger input must be compressed or split.
@@ -95,10 +95,14 @@ Existing `unknown` receipts are not rewritten or replayed by this change.
 
 ## Team subagent defaults
 
-`test/rotom-subagents.test.ts` checks fresh and existing settings for two isolated member HOMEs, preservation of
-unrelated settings, private file permissions and no rewrite when defaults already match. `npm run test:kernel`
-uses the actual pinned subagent tool against a loopback model: its executable list contains only `scout`, `worker`
-and `reviewer`, and new tasks naming `delegate`, `oracle`, `advisor` or `researcher` are rejected as unknown agents.
+`test/rotom-subagents.test.ts` compares derived settings with the pinned native SettingsManager defaults, checks two
+isolated member HOMEs and retirement of old managed overrides, and preserves shared retry, model-specific compaction
+and role settings. `npm run test:kernel` uses the actual pinned subagent tool against a loopback model: its executable
+list contains all six native roles (`scout`, `worker`, `reviewer`, `delegate`, `oracle`, `researcher`). Its separate
+no-redispatch fixture explicitly disables recovery in that fixture's shared profile, not in production code.
+`node test/rotom-native-defaults-proof.ts` verifies actual Agent retry, provider retry options, automatic compaction,
+same-payer gate checks and persisted summary usage with synthetic loopback requests. Journal unit tests preserve
+unknown summary usage and require a terminal assistant response independently of automatic compaction.
 This does not use real accounts. Independent reader enforcement is covered by the resource proofs above, not inferred from
 the default-role test. Actual child inference/usage, fd-3 owner lifetime and Stop remain covered by the Team kernel proof.
 The same proof checks optional named-skill/memory/refinement refusals before child inference and pre-execution rejection of

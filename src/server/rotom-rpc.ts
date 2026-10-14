@@ -279,12 +279,8 @@ export class RotomRpc {
             "get_session_stats",
             "get_available_models",
         ];
-        const disableAutomatic =
-            ["set_auto_retry", "set_auto_compaction"].includes(command.type) &&
-            command.enabled === false &&
-            !this.#busy;
 
-        if (!readOnly.includes(command.type) && command.type !== "abort" && !disableAutomatic) {
+        if (!readOnly.includes(command.type) && command.type !== "abort") {
             return Promise.reject(new RpcFailure("rejected", "unsupported kernel command"));
         }
 

@@ -278,7 +278,6 @@ export default function (pi) {
                                           ),
                                   }
                                 : {}),
-                            maxRetries: 0,
                             transport: "sse",
                         });
                     });

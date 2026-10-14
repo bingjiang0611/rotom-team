@@ -918,7 +918,7 @@ export class RotomJournal {
                 continue;
             }
 
-            if (attempt.operation === "compact" && entry.type === "compaction") {
+            if (entry.type === "compaction") {
                 if (
                     typeof entry.summary !== "string" ||
                     !entry.summary.trim() ||

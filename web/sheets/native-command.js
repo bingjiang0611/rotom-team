@@ -137,7 +137,7 @@ export function NativeSettingsSheet({ scope = false }) {
             <button class="button" onClick=${cycle}>Cycle model</button>
         `
                   : html`
-            <p class="muted">Only the owner can change shared native settings. Project settings cannot override them. Team keeps automatic retries and automatic compaction off.</p>
+            <p class="muted">Only the owner can change shared native settings. Project settings cannot override them. Retry and compaction use the pinned rotom defaults.</p>
             ${["steeringMode", "followUpMode"].map(
                 (key) => html`<label class="field">
                 ${key}

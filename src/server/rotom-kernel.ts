@@ -2,27 +2,13 @@
 import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { once } from "node:events";
-import {
-    teamSubagentEnvironment,
-    teamSubagentSettings,
-    safeConfigurationPath,
-} from "./rotom-resource-policy.ts";
-import {
-    accessSync,
-    constants,
-    existsSync,
-    lstatSync,
-    mkdirSync,
-    readFileSync,
-    realpathSync,
-    renameSync,
-    writeFileSync,
-} from "node:fs";
+import { teamSubagentEnvironment } from "./rotom-resource-policy.ts";
+import { accessSync, constants, lstatSync, readFileSync, realpathSync } from "node:fs";
 import { connect } from "node:net";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { promisify, isDeepStrictEqual } from "node:util";
+import { promisify } from "node:util";
 import { RotomRpc } from "./rotom-rpc.ts";
 import {
     prepareTeamResources,
@@ -290,33 +276,6 @@ async function startComputerUseHelper(app: string): Promise<void> {
     );
 }
 
-function settingsOf(file: string): Record<string, unknown> {
-    return existsSync(file)
-        ? (JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>)
-        : {};
-}
-
-/** Derived Team role defaults; independent plugin project readers require separate enforcement. */
-export function configureTeamSubagents(home: string): void {
-    const file = safeConfigurationPath(home, ".pi/agent/settings.json");
-    const settings = settingsOf(file);
-
-    const subagents = teamSubagentSettings(
-        settings.subagents as Record<string, unknown> | undefined,
-    );
-
-    if (isDeepStrictEqual(settings.subagents, subagents)) {
-        return;
-    }
-
-    settings.subagents = subagents;
-    mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
-    const temporary = `${file}.${randomUUID()}.tmp`;
-
-    writeFileSync(temporary, `${JSON.stringify(settings, null, 2)}\n`, { mode: 0o600 });
-    renameSync(temporary, file);
-}
-
 /** What every rotom process of a member sees: its own HOME, the service's toolchain, and no ambient credential. */
 function memberEnvironment(home: string, node: string): Record<string, string> {
     return {
@@ -420,7 +379,6 @@ export async function startRotomKernel(options: {
     const teamAgentDir = options.teamAgentDir;
 
     await prepareTeamResources(home, teamAgentDir, workspace);
-    configureTeamSubagents(home);
     const node = realpathSync(process.execPath);
     // Desktop tools run as the service user. The member HOME isolates credentials, not the screen:
     // reuse the service user's installed (and TCC-authorized) Computer Use helper.
@@ -573,9 +531,6 @@ export async function startRotomKernel(options: {
                 detach();
             }
         }
-
-        await client.request({ type: "set_auto_retry", enabled: false });
-        await client.request({ type: "set_auto_compaction", enabled: false });
 
         return client;
     } catch (error) {

@@ -17,7 +17,6 @@ import {
     assertTeamResourceSources,
     teamResourceSettings,
     resourceFileDigest,
-    teamSubagentSettings,
     safeConfigurationPath,
     privateConfigurationNames,
     TeamResourcePolicyError,
@@ -169,9 +168,7 @@ export async function prepareTeamResources(home: string, directory: string, work
             prompts: [],
             themes: [],
         })),
-        subagents: teamSubagentSettings(base.subagents),
-        retry: { ...base.retry, enabled: false },
-        compaction: { ...base.compaction, enabled: false },
+        subagents: base.subagents,
     };
 
     for (const key of resourceKeys) {

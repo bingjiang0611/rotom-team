@@ -79,11 +79,6 @@ let desktopAsked = false;
 const subagentChecks = [
     { id: "subagent-search", name: "search_tools", arguments: { query: "subagent", limit: 1 } },
     { id: "subagent-list", name: "subagent", arguments: { action: "list" } },
-    ...["delegate", "oracle", "advisor", "researcher"].map((agent) => ({
-        id: `subagent-denied-${agent}`,
-        name: "subagent",
-        arguments: { agent, task: "Must not start", async: true, context: "fresh" },
-    })),
 ];
 const subagentReplies = new Map<string, string>();
 
@@ -461,18 +456,11 @@ try {
 
     assert.deepEqual(
         [...agentList.matchAll(/^- (\w+) \(/gm)].map((match) => match[1]).sort(),
-        ["reviewer", "scout", "worker"],
+        ["delegate", "oracle", "researcher", "reviewer", "scout", "worker"],
         agentList,
     );
 
-    for (const agent of ["delegate", "oracle", "advisor", "researcher"]) {
-        assert.match(
-            subagentReplies.get(`subagent-denied-${agent}`) ?? "",
-            new RegExp(`Unknown agent: ${agent}`),
-        );
-    }
-
-    report.teamSubagentDefaults = true;
+    report.nativeSubagentRoles = true;
     assert.ok(
         !offeredTools?.some((name) => name.startsWith("mcp__leakprobe")),
         "a server naming a service env var must fail closed",
@@ -573,6 +561,12 @@ try {
         );
     }
 
+    // This no-redispatch fixture deliberately disables native recovery in its shared profile.
+    mkdirSync(join(data, "team-agent"), { mode: 0o700 });
+    writeFileSync(
+        join(data, "team-agent/settings.json"),
+        JSON.stringify({ retry: { enabled: false }, compaction: { enabled: false } }),
+    );
     let allowed = true,
         inferenceChecks = 0;
 

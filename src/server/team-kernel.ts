@@ -1621,11 +1621,11 @@ export class TeamKernel {
                 delete live.retry;
                 break;
 
-            case "auto_compaction_start":
+            case "compaction_start":
                 live.compacting = String(event.reason ?? "threshold");
                 break;
 
-            case "auto_compaction_end":
+            case "compaction_end":
                 delete live.compacting;
                 break;
 
@@ -2031,8 +2031,8 @@ export class TeamKernel {
             blockImages: manager.getBlockImages(),
             enableSkillCommands: manager.getEnableSkillCommands(),
             enabledModels: manager.getEnabledModels() ?? [],
-            autoRetry: false,
-            autoCompaction: false,
+            autoRetry: manager.getRetryEnabled(),
+            autoCompaction: manager.getCompactionEnabled(),
             scopeWarnings: scope.diagnostics.map((item) => item.message),
             models: available.map((model) => {
                 const native = this.#app.accounts.kernelModel(user, {

@@ -68,16 +68,6 @@ export function resourceFileDigest(file: string): string {
     return createHash("sha256").update(readFileSync(file)).digest("hex");
 }
 
-export function teamSubagentSettings(base: Record<string, any> = {}) {
-    const agentOverrides = { ...base.agentOverrides };
-
-    for (const name of ["delegate", "oracle", "researcher"]) {
-        agentOverrides[name] = { ...agentOverrides[name], disabled: true };
-    }
-
-    return { ...base, agentOverrides };
-}
-
 /** Only native resource-selection fields; credentials/default model/runtime state are not shared resources. */
 export function teamResourceSettings(settings: Record<string, any>) {
     return Object.fromEntries(
@@ -191,9 +181,7 @@ export async function assertTeamResourceSources(
     }
 
     const matchesDerivedRoles = isDeepStrictEqual(member.subagents, previous.subagents);
-    const unpreparedDefaults =
-        phase === "prepare" &&
-        (!member.subagents || isDeepStrictEqual(member.subagents, teamSubagentSettings()));
+    const unpreparedDefaults = phase === "prepare" && !member.subagents;
 
     if (!matchesDerivedRoles && !unpreparedDefaults) {
         throw new TeamResourcePolicyError(

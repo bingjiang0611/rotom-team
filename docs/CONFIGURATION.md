@@ -102,9 +102,19 @@ absolute path, not opening newer execution data with an older binary.
 
 ## Native pin and subagent defaults
 
-The pin remains rotom 0.1.21; no native source, installed dependency or pin is changed by this work. Derived native settings
-keep automatic retries/compaction disabled and retain the Team's disabled delegate/oracle/researcher defaults. The safe
-builtin roles remain scout, worker and reviewer. This is not an OS sandbox or a claim that a plugin cannot read project files.
+The pin remains rotom 0.1.21. Team does not override native retry, compaction or builtin role settings. An empty shared
+profile uses native defaults: automatic retry enabled (3 retries, 2-second exponential base delay, 60-second maximum),
+automatic compaction enabled (16,384 reserve tokens and approximately 20,000 recent tokens retained), and all six builtin
+roles: scout, worker, reviewer, delegate, oracle and researcher (alias advisor for oracle). Compaction triggers when the
+native context estimate exceeds the selected model's context window minus reserve tokens, and uses native overflow
+recovery. Context windows come from model metadata, not a Team-wide limit. Shared `compaction.modelOverrides` and
+`retry.provider` settings retain native precedence. Provider request retry options are forwarded unchanged; the pinned
+OpenAI provider helper defaults to zero HTTP retries when no override is set. Agent-level retry is separate and defaults
+to three. Automatic compaction usage is journaled under the same prompt payer; missing usage remains unknown. All
+inference, including retry and compaction, still passes through the fixed payer/model gate. Unknown Team operations and
+credential refreshes are not replayed. Existing managed role/recovery overrides are replaced from the shared profile on
+the next startup; private/unclassified state is untouched. This is not an OS sandbox or a claim that a plugin cannot read
+project files.
 
 Optional subagent named-skill/memory injection needs attested sources. Owned async launch descriptors with no injection retain
 normal structured single-child execution; nonempty name-only descriptors, role memory and selected project refinements are
@@ -140,7 +150,7 @@ skill or prompt-template suggestion only fills the draft; submitting it starts t
 | `/tree`                                                          | Select an entry in the member's native segment. Native `ctx.navigateTree` changes the branch; optional **Summarize** (or `/tree <entryId> --summarize`) runs the native summarizer through the same payer/model gate. Persisted summary usage is recorded; absent usage stays unknown. |
 | `/export`                                                        | Authenticated, member-private attachment using native JSONL branch serialization or the native HTML exporter. JSONL is the current branch, not a byte-for-byte full-tree copy. HTML retains the native exporter's tree behavior.                                                       |
 | `/import`                                                        | Native parse/migration of a JSONL file in this workspace or this session's uploads, bounded to 50 MiB; a new Team conversation receives only public history, never imported provider state.                                                                                            |
-| `/settings`                                                      | Native `SettingsManager` execution settings: steering/follow-up, image options, skill commands and model scope. Owner-only shared settings; project settings do not take precedence. Team automatic retries/compaction remain disabled.                                                |
+| `/settings`                                                      | Native `SettingsManager` execution settings: steering/follow-up, image options, skill commands and model scope. Owner-only shared settings; project settings do not take precedence. Retry and compaction follow the shared profile and native defaults.                               |
 | `/compact`, `/reload`, `/session`, `/copy`                       | Native compaction, resource reload, state/statistics and last-assistant-text clipboard result.                                                                                                                                                                                         |
 | `/login`, `/logout`, `/hotkeys`, `/changelog`, `/trust`, `/quit` | Personal provider sheet, web shortcuts, pinned product update guidance, native trust choices (which cannot enable project agent configuration), and stopping/leaving this view respectively. Project trust does not create an OS boundary.                                             |
 | `/mcp`, `/mcp login <server>`, `/mcp logout <server>`            | The existing member-owned browserless sign-in bridge. These adapters first verify actual native registration.                                                                                                                                                                          |

@@ -313,6 +313,52 @@ test("fork seed is visible context but not billed; compaction requires its own p
     assert.equal(j.reserve("fork", "compact", "summarize", "compact").id, compact.id);
 });
 
+test("automatic compaction usage belongs to its prompt payer, is deduplicated and does not settle a missing response", (t) => {
+    const f = setup(t),
+        j = f.journal;
+
+    j.bind("automatic", f.member("alice"));
+    const attempt = j.reserve("automatic", "prompt", "continue");
+
+    j.attach(attempt.id, "automatic.jsonl", "native-automatic");
+    const user = { type: "message", id: "user", message: { role: "user", content: "continue" } };
+    const summary = {
+        type: "compaction",
+        id: "summary",
+        summary: "context summary",
+        firstKeptEntryId: "user",
+        tokensBefore: 1000,
+        usage: { totalTokens: 9 },
+    };
+
+    j.progress(attempt.id, [user, summary]);
+    assert.equal(j.usage("automatic").length, 1);
+    assert.deepEqual(j.usage("automatic")[0], {
+        memberId: "alice",
+        attemptId: attempt.id,
+        raw: { totalTokens: 9 },
+        costStatus: "unknown",
+    });
+    assert.throws(() => j.finish(attempt.id, "settled", [user, summary]), /terminal response/);
+    j.finish(attempt.id, "settled", [user, summary, response("done")]);
+    assert.equal(j.usage("automatic").length, 2, "summary is not charged twice at final ingestion");
+
+    j.bind("missing-usage", f.member("bob"));
+    const missing = j.reserve("missing-usage", "prompt", "continue");
+
+    j.attach(missing.id, "missing.jsonl", "native-missing");
+    j.finish(missing.id, "settled", [
+        { ...summary, usage: undefined, firstKeptEntryId: null },
+        response("done"),
+    ]);
+    assert.deepEqual(j.usage("missing-usage")[0], {
+        memberId: "bob",
+        attemptId: missing.id,
+        raw: null,
+        costStatus: "unknown",
+    });
+});
+
 test("cross-store reconciliation discards only untouched orphan bindings and preserves all execution evidence atomically", (t) => {
     const f = setup(t),
         j = f.journal,
