@@ -18,16 +18,17 @@ const home = join(root, "kernel-homes", "alice");
 const workspace = join(root, "workspace");
 
 mkdirSync(join(home, ".pi/agent"), { recursive: true, mode: 0o700 });
-mkdirSync(join(workspace, ".pi/extensions"), { recursive: true, mode: 0o700 });
+mkdirSync(workspace, { recursive: true, mode: 0o700 });
+mkdirSync(join(root, "team-agent/extensions"), { recursive: true, mode: 0o700 });
 writeFileSync(
-    join(home, ".pi/agent/settings.json"),
+    join(root, "team-agent/settings.json"),
     JSON.stringify({ compaction: { enabled: false, keepRecentTokens: 1, reserveTokens: 1024 } }),
     { mode: 0o600 },
 );
-// Extensions are the project's: the fixture intercepts the transport of every member's run in this workspace.
+// The owner-installed shared fixture intercepts the transport of every member run.
 cpSync(
     new URL("./fixtures/qoder-native-fetch.mjs", import.meta.url),
-    join(workspace, ".pi/extensions/fixture.js"),
+    join(root, "team-agent/extensions/fixture.js"),
 );
 const auth: QoderRequestAuth = {
     credential: {

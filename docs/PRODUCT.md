@@ -29,9 +29,9 @@ flowchart LR
 
 ## 配置与工具
 
-新会话每次运行读取项目的 `AGENTS.md`、skills、MCP 和扩展，不再使用个人配置层。成员 HOME 中已安装的 skills 可以保留，但默认不加载，也不阻塞运行。完整加载、信任及 MCP 登录规则见 [CONFIGURATION.md](CONFIGURATION.md)。
+团队只有一个共享基础 Agent，配置分两层：Owner 管理 `<data>/team-agent` 的扩展、MCP、skills 和设置；项目只提供上下文、AGENTS.md 与 skills。成员 HOME 保留凭据、会话和未分类运行状态，不是可定制的个人资源配置。成员仍用自己的账号选择模型，固定付费人和模型绑定不变。完整规则与仍不支持的能力见 [CONFIGURATION.md](CONFIGURATION.md)。
 
-- 项目文件由所有成员共享；项目 MCP 命令和扩展以服务 OS 用户执行，只允许可信人员修改这些文件。
+- 扩展属于共享 Agent，不属于项目。Owner 管理共享资源；原生核心加载器始终拒绝项目 agent 配置。共享扩展以服务 OS 用户执行，仍须信任其代码；不能把核心 trust 标志当作所有插件独立配置读取器的隔离证明。pi-subagents 的项目/成员来源、运行中工具调用与子进程 CLI 另设拒绝边界；未知插件状态不猜测、不清空。
 - OAuth 型 MCP 由各成员在 **MCP sign-ins** 独立登录。MCP 授权与模型授权不同；文件分开不构成成员间 OS 隔离。
 - 历史冻结配置会话保留原配置摘要，不自动切换为项目配置。相关配置 API 和 8 MiB 技能快照上限是旧会话路径，不是新会话的配置方式。
 - rotom 使用服务用户的 Chrome Relay 和桌面；不同成员不拥有相互隔离的浏览器登录或屏幕。
@@ -40,16 +40,16 @@ flowchart LR
 
 ## 原生 slash 命令
 
-- `/` 菜单来自固定版本的原生注册表。GET 只读；首次动态发现由成员明确启动，沿用权限和 lease，但拒绝 Team 模型推理。缓存按成员、segment 和固定绑定隔离。未知命令不作为模型输入。
+- `/` 菜单来自固定版本的原生注册表。GET 只读；首次动态发现由成员明确启动，沿用权限和 lease，但拒绝 Team 模型推理。打开 slash 建议即显式发起发现。缓存按成员、segment 和固定绑定隔离，保留最后已知结果，不再空闲 30 秒后消失；显示 freshness，执行前仍核对原生注册表。未知命令不作为模型输入。
 - 模型选择走 Team 接力，不改写运行中的付费人/模型。原生 fork/tree 选择恢复编辑草稿，不自动提交；tree 的可选原生摘要使用当前成员和模型，记录真实持久化用量。共享 Transcript 是含废弃分支的审计历史，不等于当前模型上下文。
 - 原生 JSONL 导出使用当前分支序列化；HTML 使用原生 exporter。原始导出只交付给该 segment 的成员。跨成员 fork/clone/import 仍只传公开历史。
 - `/mcp` 复用成员自己的浏览器外置登录桥。Qoder catalog/credits 调用成员 provider API，结果不向会话广播。
-- 本次明确排除的命令只有 `/share` 和 `/bug`：不提供可执行建议，手动输入在原生启动、推理及上传前拒绝。其余权限、账户、运行状态限制仍生效。详见 [CONFIGURATION.md](CONFIGURATION.md)。
+- 本次明确排除的命令只有 `/share` 和 `/bug`：不提供可执行建议，手动输入在原生启动、推理及上传前拒绝。这不等于宣称其余 43 项全部对齐：`/context`、`/llama` 的 TUI 交互仍受阻，5 个个人技能按用户选择不安装；用户提供的 workflowScript、无来源证明的可选技能/记忆注入及项目 refinement 不受支持，在执行或子推理前拒绝。其余权限、账户、运行状态限制仍生效。详见 [CONFIGURATION.md](CONFIGURATION.md)。
 
 ## 中断、恢复与数据
 
 - 干净停止为运行中的 prompt 记录续跑计划；重启后以原成员继续一次。崩溃后只有确认旧 rotom 进程已结束，才能将 prompt 标为 interrupted 并安排继续。
-- 连续 3 次普通 prompt 自动续跑后，下一次中断等待成员手动 **Continue**。副作用型原生命令使用 `command` receipt；unknown 后不按普通 prompt 自动续跑。只有原生注册表确认的 prompt template/skill 展开才保留普通 prompt 恢复行为。既有 receipt 不改写。仍可能存活的进程、unknown 操作、未核清 lease 不自动重放；compaction、handoff、fork 和 discovery 的中断需要对账。
+- 连续 3 次普通 prompt 自动续跑后，下一次中断等待成员手动 **Continue**。副作用型原生命令使用 `command` receipt；unknown 后不按普通 prompt 自动续跑。只有原生注册表确认的 prompt template/skill 展开才保留普通 prompt 恢复行为。排队到普通 prompt 的副作用命令在发送前保存 durable 输入标记；只有确认 handled 才清除。未知输入使原 attempt 保持 unknown，禁止自动续跑，不改写其 operation。既有 receipt 不改写。仍可能存活的进程、unknown 操作、未核清 lease 不自动重放；compaction、handoff、fork 和 discovery 的中断需要对账。
 - Stop 请求、PID 消失、旧 PASS 或 receipt 存在，单独都不能证明工具已关闭或业务成功。操作步骤见 [NATIVE-RECOVERY.md](NATIVE-RECOVERY.md)。
 - 离线备份含秘密，要求停止 writer、核清 lease，并验证逐文件摘要。恢复只能使用原绝对路径且不能覆盖现有目录；模型和 MCP refresh grants 不恢复，须独立重登。项目工作区另行备份。
 
@@ -65,6 +65,6 @@ flowchart LR
 
 ## 当前文档入口
 
-[README](../README.md) 提供启动和使用方式；[CONFIGURATION.md](CONFIGURATION.md) 提供当前项目配置合同；[VERIFICATION.md](VERIFICATION.md) 说明验证范围；[NATIVE-DELIVERY.md](NATIVE-DELIVERY.md) 保留 R1–R8 验收要求；[DELIVERY-CHECKLIST.md](DELIVERY-CHECKLIST.md) 列出正式交付检查；[DEPLOYMENT.md](DEPLOYMENT.md) 与 [NATIVE-RECOVERY.md](NATIVE-RECOVERY.md) 提供运维边界。
+[README](../README.md) 提供启动和使用方式；[CONFIGURATION.md](CONFIGURATION.md) 提供共享基础 Agent / 项目双层配置合同；[VERIFICATION.md](VERIFICATION.md) 说明验证范围；[NATIVE-DELIVERY.md](NATIVE-DELIVERY.md) 保留 R1–R8 验收要求；[DELIVERY-CHECKLIST.md](DELIVERY-CHECKLIST.md) 列出正式交付检查；[DEPLOYMENT.md](DEPLOYMENT.md) 与 [NATIVE-RECOVERY.md](NATIVE-RECOVERY.md) 提供运维边界。
 
 旧迁移计划、阶段合同和实验验收记录不作为当前产品依据；需要追溯时从 Git 历史查看。私有账号、部署记录和原始日志不进入仓库。代码级检查不替代真实账号、目标设备或正式版验收。

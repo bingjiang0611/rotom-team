@@ -34,7 +34,7 @@ version and hashes come from `runtime/rotom/pin.json`. Do not replace that insta
 Durable sessions retain their backend. Pending/unknown native receipts remain fenced even if native creation is
 disabled; changing the flag does not authorize bypassing quarantine.
 
-The parent remains the model credential refresh writer. Project configuration and member MCP sign-ins follow
+The parent remains the model credential refresh writer. Shared agent configuration, project context/skills and private member MCP sign-ins follow
 [CONFIGURATION.md](CONFIGURATION.md). Do not place copied model grants in `kernel-homes`, delete receipts or remove
 an unreconciled lock to force recovery.
 
@@ -82,6 +82,8 @@ Do not auto-open or publish login URLs. Logs may contain the startup owner link;
 
 ## Upgrade and offline backup
 
+This release upgrades the native journal to **schema 5** to retain unresolved queued-command fences. Older releases refuse that schema. Keep the pre-upgrade backup: rolling back only the executable is insufficient after migration. Never drop the fences or lower the schema version. Review the shared-agent migration in [CONFIGURATION.md](CONFIGURATION.md) before starting the new release; project extensions, MCP and base settings no longer configure the agent.
+
 1. Stop launchd/the existing process and wait for `harness.lock` to disappear. Investigate a remaining lock; never delete a live writer's lock. Native kernel executions additionally hold `kernel.lock`: even a dead recorded parent PID is not proof that its tools stopped. Backup refuses this lease; reconcile owned processes and unknown effects before any explicit recovery.
 2. Create the destination parent privately first. Back up to a new directory outside the canonical data tree (ancestor symlink aliases cannot bypass this check):
 
@@ -95,7 +97,7 @@ Do not auto-open or publish login URLs. Logs may contain the startup owner link;
 5. Roll back across the parallel-sessions change only when no member has two sessions running or unknown at once: an older release rebuilds its one-run-per-account index on open and refuses to start otherwise. Let runs finish or reconcile them first.
 6. A failed/unverified external write is not permission to retry it. Inspect its durable task receipt and actual file/service state first. Durable process recovery and known interrupted tool behavior are different from OS/host migration. Never silently move SQLite or pending tool intents to another execution device.
 
-Backups contain provider credentials, login tokens and conversation data. Keep them private; do not attach them to bug reports or recordings. Backup refuses a live writer, symlinks and nonregular files; it records per-file SHA-256, excludes the lock and installed extension `node_modules`, and limits a file to 512 MiB. Larger data files need a separately designed/tested backup strategy; do not bypass the limit.
+Backups contain provider credentials, login tokens and conversation data. Keep them private; do not attach them to bug reports or recordings. Backup refuses a live writer, symlinks and nonregular files; it records per-file SHA-256, excludes the lock and installed extension `node_modules`, and limits a file to 512 MiB. Locked `team-agent/npm/node_modules` is also excluded as rebuildable code; the manifest lists `excludedCaches`. Package manifests/locks and declared configuration remain in the backup. After restore, explicitly reinstall those packages with `npm ci` in `team-agent/npm` before native startup. Packages storing configuration/state inside that cache are unsupported; do not treat the backup as preserving such data. Larger data files need a separately designed/tested backup strategy; do not bypass the limit.
 
 ## Restore
 
@@ -106,4 +108,4 @@ node scripts/data.mjs restore /absolute/backups/team-data-before-upgrade /absolu
 
 Restore verifies the manifest and every copied file. It refuses an existing destination or a different canonical absolute data path; macOS `/var`↔`/private/var` aliases are equivalent. Relocating durable tool intents is unsupported. Restore deliberately **does not restore `people/*/auth.json`, `kernel-homes/*/.pi/agent/auth.json` or `kernel-homes/*/.pi/agent/mcp-auth.json`**, and skips temporary kernel gate capabilities: reviving old rotated refresh credentials could break an account. Members must log in independently again. Account routes without credentials fail closed; reconcile pending executions before continuing. Restoring history/configuration is not proof of inference, valid credentials, safe replay or a complete host migration.
 
-Legacy frozen configuration snapshots contain copied instructions/skill assets, not symlinks to personal drafts. Their content is checked when read and at dispatch; changed assets are refused until a verified backup or explicit new configuration is activated. New sessions instead read shared project configuration on each run. Neither path is an OS sandbox: the service OS user controls every file.
+Legacy frozen configuration snapshots contain copied instructions/skill assets, not symlinks to personal drafts. Their content is checked when read and at dispatch; changed assets are refused until a verified backup or explicit new configuration is activated. New sessions instead read the shared agent profile plus allowed project context and skills on each run. Neither path is an OS sandbox: the service OS user controls every file.

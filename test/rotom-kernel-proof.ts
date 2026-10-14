@@ -25,6 +25,9 @@ const root = realpathSync(mkdtempSync(join(tmpdir(), "rotom-kernel-proof-"))),
     home = join(root, "home"),
     workspace = join(root, "workspace");
 
+const teamAgentDir = join(root, "team-agent");
+
+mkdirSync(join(teamAgentDir, "extensions"), { recursive: true, mode: 0o700 });
 mkdirSync(home, { mode: 0o700 });
 mkdirSync(workspace, { mode: 0o700 });
 mkdirSync(join(home, ".pi/agent"), { recursive: true, mode: 0o700 });
@@ -325,7 +328,7 @@ process.env.MCP_PROBE_SERVICE_SECRET = "service-secret-must-not-reach-mcp";
 mkdirSync(join(workspace, ".pi/extensions"), { recursive: true });
 mkdirSync(join(workspace, ".pi/skills/project-probe"), { recursive: true });
 writeFileSync(
-    join(workspace, ".pi/mcp.json"),
+    join(teamAgentDir, "mcp.json"),
     JSON.stringify({
         mcpServers: {
             probe: mcpServer({ MCP_PROBE_LEAK: "!printf keychain-stand-in" }),
@@ -336,7 +339,7 @@ writeFileSync(
 const extensionMarker = join(root, "project-extension.txt");
 
 writeFileSync(
-    join(workspace, ".pi/extensions/project-probe.ts"),
+    join(teamAgentDir, "extensions/shared-probe.ts"),
     `import { writeFileSync } from "node:fs";\nexport default function (pi) { pi.on("session_start", () => writeFileSync(${JSON.stringify(extensionMarker)}, "loaded")); }\n`,
 );
 writeFileSync(
@@ -349,26 +352,27 @@ async function refusedStart(path: string, content: string, expected: RegExp): Pr
     mkdirSync(join(path, ".."), { recursive: true });
     writeFileSync(path, content);
     await assert.rejects(
-        startRotomKernel({ home, workspace, provider: "kernel-fixture", model: "kernel-fixture" }),
+        startRotomKernel({
+            home,
+            workspace,
+            teamAgentDir,
+            provider: "kernel-fixture",
+            model: "kernel-fixture",
+        }),
         expected,
     );
     rmSync(path);
 }
 
 await refusedStart(
-    join(home, ".pi/agent/mcp.json"),
-    "{}",
-    /Configuration belongs to the project.*\.pi\/agent\/mcp\.json/,
+    join(home, ".pi/agent/AGENTS.override.md"),
+    "Personal instructions must not load",
+    /Member instructions are not allowed/,
 );
 await refusedStart(
-    join(home, ".pi/agent/settings.json"),
-    JSON.stringify({ extensions: ["/tmp/x.ts"] }),
-    /settings\.json "extensions"/,
-);
-await refusedStart(
-    join(workspace, ".pi/settings.json"),
-    JSON.stringify({ packages: ["npm:some-package"] }),
-    /Project packages are not loaded/,
+    join(home, ".pi/agent/extensions/personal.ts"),
+    "export default function() {}",
+    /Member extensions are not allowed/,
 );
 writeFileSync(
     join(home, ".pi/agent/settings.json"),
@@ -414,6 +418,7 @@ try {
     const startedAt = performance.now();
 
     kernel = await startRotomKernel({
+        teamAgentDir,
         home,
         workspace,
         provider: "kernel-fixture",
@@ -539,8 +544,8 @@ try {
         computerUseHelper: hostHelper ? "reached" : "absent-on-host",
         desktopReply: desktopReply!.slice(0, 200),
         browserReply: browserReply!.slice(0, 300),
-        projectMcp: mcpReply,
-        projectExtensionLoaded: true,
+        sharedMcp: mcpReply,
+        sharedExtensionLoaded: true,
         projectSkillLoaded: true,
         serviceEnvMcpLoaded: false,
         loopbackRequests: requests,

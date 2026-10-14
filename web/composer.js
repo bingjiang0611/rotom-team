@@ -329,9 +329,7 @@ export function Composer() {
             setHideCommands(false);
         }
 
-        if (value.startsWith("/")) {
-            loadTemplates();
-        }
+        loadTemplates(value);
 
         // A command is not a message to Pi: no "typing to Pi" for it.
         typing(value.trim() === "" || value.startsWith("/") ? null : "pi");
@@ -1034,8 +1032,9 @@ export function Composer() {
                                 await attempt(discoverCommands);
                                 setDiscovering(false);
                             }}
-                        >${discovering ? "Loading native commands…" : "Load / refresh project commands on my account"}</button>
-                        <span class="muted">Runs trusted project startup; Team model inference is disabled. Takes over an idle session if needed.</span>
+                        >${discovering ? "Loading native commands…" : "Refresh shared agent commands on my account"}</button>
+                        <span class="muted">Opening this menu discovers trusted shared agent commands without Team model inference. May take over an idle session. Catalog: ${store.state.templates?.freshness ?? "loading"}.</span>
+                        ${store.state.templates?.discoveryError && html`<span class="muted">${store.state.templates.discoveryError}</span>`}
                     </div>
                 `
                 }

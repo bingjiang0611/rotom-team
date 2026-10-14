@@ -1,6 +1,12 @@
 /** Experimental pinned rotom product boundary. Not yet connected to Pocket's Durable execution backend. */
 import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
+import { once } from "node:events";
+import {
+    teamSubagentEnvironment,
+    teamSubagentSettings,
+    safeConfigurationPath,
+} from "./rotom-resource-policy.ts";
 import {
     accessSync,
     constants,
@@ -16,8 +22,13 @@ import { connect } from "node:net";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { promisify } from "node:util";
+import { promisify, isDeepStrictEqual } from "node:util";
 import { RotomRpc } from "./rotom-rpc.ts";
+import {
+    prepareTeamResources,
+    teamComputerUseEnvironment,
+    sharedContextPaths,
+} from "./rotom-resources.ts";
 
 const runtime = fileURLToPath(new URL("../../runtime/rotom/", import.meta.url));
 const product = join(runtime, "node_modules/@bingjiang0611/rotom");
@@ -140,7 +151,18 @@ export async function nativeConfigurationApi() {
         pathToFileURL(canonical(join(root, "core/model-resolver.js"), "file")).href
     );
 
+    const packages = await import(
+        pathToFileURL(canonical(join(root, "core/package-manager.js"), "file")).href
+    );
+
+    const resourceLoader = await import(pathToFileURL(join(root, "core/resource-loader.js")).href);
+    const args = await import(pathToFileURL(join(root, "cli/args.js")).href);
+
     return {
+        bundledResourceRoot: product,
+        parseArgs: args.parseArgs,
+        loadProjectContextFiles: resourceLoader.loadProjectContextFiles,
+        DefaultPackageManager: packages.DefaultPackageManager,
         SettingsManager: settings.SettingsManager,
         ProjectTrustStore: trust.ProjectTrustStore,
         getProjectTrustOptions: trust.getProjectTrustOptions,
@@ -268,110 +290,31 @@ async function startComputerUseHelper(app: string): Promise<void> {
     );
 }
 
-/**
- * Personal configuration is refused, except skill files: they may stay in the member HOME but are not autoloaded.
- * Project skills are discovered separately, with the pinned resolver, after --no-skills disables defaults.
- */
-const MEMBER_RESOURCES = [
-    ".pi/agent/AGENTS.override.md",
-    ".pi/agent/AGENTS.md",
-    ".pi/agent/AGENTS.MD",
-    ".pi/agent/CLAUDE.md",
-    ".pi/agent/CLAUDE.MD",
-    ".pi/agent/SYSTEM.md",
-    ".pi/agent/APPEND_SYSTEM.md",
-    ".pi/agent/mcp.json",
-    ".pi/agent/extensions",
-    ".pi/agent/prompts",
-    ".pi/agent/themes",
-];
-/** Settings that name resources to load. */
-const RESOURCE_SETTINGS = ["extensions", "prompts", "themes", "packages"];
-
 function settingsOf(file: string): Record<string, unknown> {
     return existsSync(file)
         ? (JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>)
         : {};
 }
 
-/** Team-managed defaults; native project overrides retain their normal precedence. */
+/** Derived Team role defaults; independent plugin project readers require separate enforcement. */
 export function configureTeamSubagents(home: string): void {
-    const file = join(home, ".pi/agent/settings.json");
+    const file = safeConfigurationPath(home, ".pi/agent/settings.json");
     const settings = settingsOf(file);
-    const subagents = (settings.subagents ?? {}) as {
-        agentOverrides?: Record<string, Record<string, unknown>>;
-    };
-    const overrides = { ...subagents.agentOverrides };
-    const disabled = ["delegate", "oracle", "researcher"];
 
-    if (disabled.every((name) => overrides[name]?.disabled === true)) {
+    const subagents = teamSubagentSettings(
+        settings.subagents as Record<string, unknown> | undefined,
+    );
+
+    if (isDeepStrictEqual(settings.subagents, subagents)) {
         return;
     }
 
-    for (const name of disabled) {
-        overrides[name] = { ...overrides[name], disabled: true };
-    }
-
-    settings.subagents = { ...subagents, agentOverrides: overrides };
+    settings.subagents = subagents;
     mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
     const temporary = `${file}.${randomUUID()}.tmp`;
 
     writeFileSync(temporary, `${JSON.stringify(settings, null, 2)}\n`, { mode: 0o600 });
     renameSync(temporary, file);
-}
-
-function refuseMemberResources(home: string): void {
-    const found = MEMBER_RESOURCES.filter((path) => existsSync(join(home, path)));
-    const settings = settingsOf(join(home, ".pi/agent/settings.json"));
-
-    found.push(
-        ...RESOURCE_SETTINGS.filter((key) => key in settings).map(
-            (key) => `settings.json "${key}"`,
-        ),
-    );
-
-    if (found.length > 0) {
-        throw new Error(
-            `Configuration belongs to the project; remove it from this member's HOME (${home}): ${found.join(", ")}`,
-        );
-    }
-}
-
-/**
- * Project skill suggestions: `.pi/skills`, settings paths (relative to `.pi`), and `.agents/skills` in the workspace
- * and its parents up to the repository root. Native loading uses the pinned resolver, including override patterns.
- */
-export function projectSkillPaths(workspace: string): string[] {
-    const listed = settingsOf(join(workspace, ".pi/settings.json")).skills;
-    const paths = [
-        join(workspace, ".pi/skills"),
-        ...(Array.isArray(listed)
-            ? listed
-                  .filter((path): path is string => typeof path === "string")
-                  .map((path) => resolve(workspace, ".pi", path))
-            : []),
-    ];
-
-    for (let dir = workspace; ; dir = dirname(dir)) {
-        paths.push(join(dir, ".agents/skills"));
-
-        if (existsSync(join(dir, ".git")) || dirname(dir) === dir) {
-            break;
-        }
-    }
-
-    return paths;
-}
-
-/** Packages would install from the network as each run starts. */
-function refuseProjectPackages(workspace: string): void {
-    const packages = settingsOf(join(workspace, ".pi/settings.json")).packages;
-
-    if (Array.isArray(packages) ? packages.length > 0 : packages !== undefined) {
-        throw new Error(
-            'Project packages are not loaded: put the extensions in .pi/extensions instead (.pi/settings.json "packages").',
-        );
-    }
 }
 
 /** What every rotom process of a member sees: its own HOME, the service's toolchain, and no ambient credential. */
@@ -388,16 +331,17 @@ function memberEnvironment(home: string, node: string): Record<string, string> {
 }
 
 /**
- * `rotom mcp <args>` for a member in a project, as their runs see it: their HOME, the project's servers, the scrubbed
- * environment. `rotom mcp` has no `--approve`, so the project's trust is recorded in the member's `trust.json`.
+ * `rotom mcp <args>` for a member: shared definitions, their private HOME and the scrubbed environment.
+ * The subcommand has no --no-approve, so it runs from the shared profile rather than a project's folder.
  * Signing in never opens a browser on the server: a stand-in `open` shadows the real one, and the member opens the
  * address in their own browser. Otherwise the server's browser, signed in as the service user, could answer for them.
  */
-export function startRotomMcp(options: {
+export async function startRotomMcp(options: {
     home: string;
     workspace: string;
+    teamAgentDir: string;
     args: string[];
-}): ChildProcess {
+}): Promise<ChildProcess> {
     const { executable } = verifyRotomKernel();
     const home = canonical(options.home, "directory"),
         workspace = canonical(options.workspace, "directory");
@@ -406,28 +350,27 @@ export function startRotomMcp(options: {
         throw new Error("Kernel HOME must be private (0700)");
     }
 
-    refuseMemberResources(home);
-    const trustFile = join(home, ".pi/agent/trust.json");
-    const trust = settingsOf(trustFile);
+    const teamAgentDir = options.teamAgentDir;
 
-    if (trust[workspace] !== true) {
-        mkdirSync(dirname(trustFile), { recursive: true, mode: 0o700 });
-        writeFileSync(trustFile, `${JSON.stringify({ ...trust, [workspace]: true }, null, 2)}\n`, {
-            mode: 0o600,
-        });
-    }
+    await prepareTeamResources(home, teamAgentDir, workspace);
 
     const node = realpathSync(process.execPath);
     const environment = memberEnvironment(home, node);
 
-    return spawn(executable, ["mcp", ...options.args], {
-        cwd: workspace,
+    const child = spawn(executable, ["mcp", ...options.args], {
+        // The native mcp subcommand has no --no-approve option. A shared neutral cwd avoids project MCP/trust.
+        cwd: teamAgentDir,
         env: {
             ...environment,
+            ...teamSubagentEnvironment(teamAgentDir),
             PATH: `${fileURLToPath(new URL("./no-browser", import.meta.url))}:${environment.PATH}`,
         },
         stdio: ["ignore", "pipe", "pipe"],
     });
+
+    await once(child, "spawn");
+
+    return child;
 }
 
 /** Caller owns a private HOME and a stopped/authorized session. No ambient credential or user-extension inheritance. */
@@ -439,6 +382,7 @@ export async function startRotomKernel(options: {
     thinkingLevel?: string;
     sessionFile?: string;
     gateFile?: string;
+    teamAgentDir: string;
     configuration?: { contextFile: string; skills: string[] };
 }): Promise<RotomRpc> {
     const { executable } = verifyRotomKernel();
@@ -473,14 +417,9 @@ export async function startRotomKernel(options: {
         }
     }
 
-    refuseMemberResources(home);
+    const teamAgentDir = options.teamAgentDir;
 
-    // Without a frozen snapshot the project's own configuration applies: rotom trusts the project and reads its
-    // AGENTS.md, `.pi` (settings, mcp.json, extensions, skills, prompts, SYSTEM.md) and `.agents/skills` itself.
-    if (!options.configuration) {
-        refuseProjectPackages(workspace);
-    }
-
+    await prepareTeamResources(home, teamAgentDir, workspace);
     configureTeamSubagents(home);
     const node = realpathSync(process.execPath);
     // Desktop tools run as the service user. The member HOME isolates credentials, not the screen:
@@ -510,20 +449,24 @@ export async function startRotomKernel(options: {
             options.model,
             ...(options.thinkingLevel ? ["--thinking", options.thinkingLevel] : []),
             "--no-skills",
+            "--extension",
+            fileURLToPath(new URL("./rotom-skills.mjs", import.meta.url)),
             ...(options.configuration
                 ? [
                       // A member's stored project trust (MCP sign-in records one) must not reopen the project.
                       "--no-approve",
                       "--no-context-files",
-                      "--no-prompt-templates",
+                      ...(await sharedContextPaths(teamAgentDir)).flatMap((path) => [
+                          "--append-system-prompt",
+                          path,
+                      ]),
                       "--append-system-prompt",
                       options.configuration.contextFile,
                       ...options.configuration.skills.flatMap((path) => ["--skill", path]),
                   ]
                 : [
-                      "--approve",
-                      "--extension",
-                      fileURLToPath(new URL("./rotom-skills.mjs", import.meta.url)),
+                      // Project settings/packages/extensions stay closed, even after /trust or reload.
+                      "--no-approve",
                   ]),
             // Sessions stay in the member HOME, whatever a project's `sessionDir` says.
             "--session-dir",
@@ -539,6 +482,15 @@ export async function startRotomKernel(options: {
             recordLimit: 64 * 1024 * 1024,
             env: {
                 ...memberEnvironment(home, node),
+                ...teamComputerUseEnvironment(teamAgentDir),
+                ...teamSubagentEnvironment(teamAgentDir),
+                ...(options.configuration
+                    ? {
+                          ROTOM_TEAM_FROZEN_CONTEXT: options.configuration.contextFile,
+                          ROTOM_TEAM_FROZEN_SKILLS: JSON.stringify(options.configuration.skills),
+                      }
+                    : {}),
+                ROTOM_TEAM_AGENT_DIR: teamAgentDir,
                 PI_COMPUTER_USE_HELPER_APP_PATH: computerUseApp,
                 PI_CU_SOCKET_PATH: computerUseSocket,
                 // Browser tools drive the service user's Chrome too, through its relay: see rotom-relay.mjs.

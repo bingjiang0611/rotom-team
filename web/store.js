@@ -374,10 +374,18 @@ function applyView(data) {
         }
 
         return {
-            ...(state.view.kernel?.segmentId !== data.kernel?.segmentId ||
-            (state.templates?.capturedAt ?? null) !== (data.kernel?.commandsRevision ?? null)
+            ...(state.view.kernel?.segmentId !== data.kernel?.segmentId
                 ? { templates: null }
-                : {}),
+                : state.templates &&
+                    (state.templates.revision ?? null) !== (data.kernel?.commandsRevision ?? null)
+                  ? {
+                        templates: {
+                            ...state.templates,
+                            at: 0,
+                            freshness: "configuration-changed",
+                        },
+                    }
+                  : {}),
             view: {
                 ...base,
                 conversation: data.conversation,

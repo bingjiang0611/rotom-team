@@ -1,5 +1,5 @@
 /**
- * Sign-in to the project's MCP servers that use OAuth. The servers are the project's; the sign-in is each member's own:
+ * Sign-in to the shared agent's MCP servers that use OAuth. The definitions are shared; the sign-in is each member's own:
  * `rotom mcp login` runs in the member's kernel HOME, so the tokens land in that member's `mcp-auth.json` and only
  * their runs send them.
  *
@@ -59,6 +59,12 @@ function serverName(value: unknown): string {
 }
 
 export class McpSignIns {
+    readonly #teamAgentDir: string;
+
+    constructor(teamAgentDir: string) {
+        this.#teamAgentDir = teamAgentDir;
+    }
+
     /** One sign-in per member and project folder at a time. */
     readonly #pending = new Map<string, Pending>();
 
@@ -66,7 +72,14 @@ export class McpSignIns {
         home: string,
         workspace: string,
     ): Promise<{ servers: McpServerReport[]; errors: string[] }> {
-        const output = await finished(startRotomMcp({ home, workspace, args: ["list", "--json"] }));
+        const output = await finished(
+            await startRotomMcp({
+                home,
+                workspace,
+                teamAgentDir: this.#teamAgentDir,
+                args: ["list", "--json"],
+            }),
+        );
 
         // `list` exits 1 when a server is not connected; its report says which.
         if (output.code !== 0 && output.code !== 1) {
@@ -100,7 +113,8 @@ export class McpSignIns {
         const name = serverName(server);
 
         this.cancel(key);
-        const child = startRotomMcp({
+        const child = await startRotomMcp({
+            teamAgentDir: this.#teamAgentDir,
             home,
             workspace,
             args: ["login", name, "--timeout", String(SIGN_IN_SECONDS)],
@@ -129,7 +143,7 @@ export class McpSignIns {
 
         const redirect = authorization.searchParams.get("redirect_uri");
 
-        // The address comes from the project's server: only a web page is a link to show, and only a loopback
+        // The address comes from the configured server: only a web page is a link to show, and only a loopback
         // callback is somewhere to deliver the answer.
         if (
             !["https:", "http:"].includes(authorization.protocol) ||
@@ -209,7 +223,12 @@ export class McpSignIns {
     async logout(home: string, workspace: string, server: unknown): Promise<McpSignInResult> {
         return result(
             await finished(
-                startRotomMcp({ home, workspace, args: ["logout", serverName(server)] }),
+                await startRotomMcp({
+                    home,
+                    workspace,
+                    teamAgentDir: this.#teamAgentDir,
+                    args: ["logout", serverName(server)],
+                }),
             ),
         );
     }

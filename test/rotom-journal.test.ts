@@ -20,7 +20,7 @@ import {
     type KernelEntry,
 } from "../src/server/rotom-journal.ts";
 import { takeLock } from "../src/server/lock.ts";
-import { backup, restore } from "../scripts/data.mjs";
+import { backup, restore, inspectNative } from "../scripts/data.mjs";
 
 function setup() {
     const root = realpathSync(mkdtempSync(join(tmpdir(), "kernel-journal-"))),
@@ -459,6 +459,47 @@ test("writer and backup share an exclusion fence; restore strips native grants a
             "dead parent is not proof its tools stopped",
         );
     } finally {
+        rmSync(f.root, { recursive: true, force: true });
+    }
+});
+
+test("queued command intent fences prompt settlement and recovery until confirmed handled", () => {
+    const f = setup();
+    let journal = new RotomJournal(f.data);
+
+    try {
+        journal.bind("native", f.binding);
+        const receipt = journal.reserve("native", "owner", "ordinary prompt");
+
+        journal.attach(receipt.id, join(f.binding.home, "session.jsonl"), "native-id", 123);
+        const known = journal.beginCommandInput(receipt.id, "/goal pause");
+
+        assert.equal(journal.receipt(receipt.id).unresolvedCommandInput, true);
+        assert.throws(() => journal.beginCommandInput(receipt.id, "/another"), /unresolved/);
+        journal.completeCommandInput(known);
+        assert.equal(journal.receipt(receipt.id).unresolvedCommandInput, undefined);
+        journal.beginCommandInput(receipt.id, "/effect-then-error");
+        assert.throws(
+            () => journal.finish(receipt.id, "settled", [response("answer")]),
+            /unresolved/,
+        );
+        journal.close();
+        journal = new RotomJournal(f.data);
+        assert.equal(journal.receipt(receipt.id).operation, "prompt");
+        assert.equal(journal.receipt(receipt.id).status, "unknown");
+        assert.equal(journal.receipt(receipt.id).unresolvedCommandInput, true);
+        const inspected = inspectNative(f.data);
+
+        assert.equal(inspected.pending![0]!.operation, "prompt");
+        assert.equal(inspected.pending![0]!.unresolvedCommandInput, true);
+        assert.ok(!JSON.stringify(inspected).includes("effect-then-error"));
+        assert.deepEqual(journal.unknownPrompts(), []);
+        assert.throws(() => journal.interrupt(receipt.id, []), /unresolved/);
+        assert.throws(() => journal.planResume(receipt.id), /unresolved/);
+        assert.equal(journal.resume(receipt.id), undefined);
+        assert.equal(journal.existing("native", "owner", "ordinary prompt")?.id, receipt.id);
+    } finally {
+        journal.close();
         rmSync(f.root, { recursive: true, force: true });
     }
 });

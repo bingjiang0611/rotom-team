@@ -1,8 +1,10 @@
 /** Non-replayable team-owned execution journal around the real rotom loop. Not a model-provider adapter. */
 import { createServer } from "node:http";
+import { TeamResourcePolicyError, assertTeamResourceSources } from "./rotom-resource-policy.ts";
+import { memberConfigurationSnapshot, memberConfigurationChanges } from "./rotom-resources.ts";
 import type { ImageContent } from "@earendil-works/pi-ai";
 import { once } from "node:events";
-import { randomBytes, timingSafeEqual } from "node:crypto";
+import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import {
     constants,
     closeSync,
@@ -131,7 +133,7 @@ export type RunHooks = {
     /** Every kernel event, for provisional display only. */
     onEvent?: (event: RpcRecord) => void;
     /** The registry captured from this authorized kernel process. */
-    onCommands?: (commands: Array<Record<string, unknown>>) => void;
+    onCommands?: (commands: Array<Record<string, unknown>>) => void | Promise<void>;
     /** Canonical Goal state read from the current native branch after a handled barrier. */
     onNativeGoalState?: (state: unknown) => void;
     /** Team title after reservation; native handoff seeds do not carry session metadata. */
@@ -145,6 +147,7 @@ export type RunHooks = {
 
 type Running = {
     aborted: boolean;
+    attemptId?: string;
     kernel?: RotomRpc;
     closureUnknown?: boolean;
     /** Its prompt was dispatched: messages may join it. */
@@ -268,6 +271,13 @@ export class RotomExecutions {
     ): Promise<boolean> {
         for (const run of this.#running.get(sessionId) ?? []) {
             if (run.prompting && run.kernel) {
+                if (this.journal.hasUnresolvedCommandInput(run.attemptId!)) {
+                    throw new RpcFailure(
+                        "rejected",
+                        "A queued native command is pending or unknown; do not replay it",
+                    );
+                }
+
                 const slash = text.trimStart().startsWith("/");
                 const name = nativeCommandName(text);
 
@@ -284,6 +294,22 @@ export class RotomExecutions {
                 };
 
                 if (slash) {
+                    const { binding } = this.journal.session(sessionId);
+
+                    try {
+                        await assertTeamResourceSources(
+                            binding.home,
+                            join(this.#data, "team-agent"),
+                            binding.workspace,
+                        );
+                    } catch (error) {
+                        if (error instanceof TeamResourcePolicyError) {
+                            throw new RpcFailure("rejected", error.message);
+                        }
+
+                        throw error;
+                    }
+
                     const catalog = (await run.kernel.request({ type: "get_commands" })) as {
                         commands?: Array<{ name?: unknown; source?: unknown }>;
                     };
@@ -317,17 +343,24 @@ export class RotomExecutions {
                     });
 
                     try {
+                        const inputId = this.journal.beginCommandInput(
+                            run.attemptId!,
+                            normalizeNativePrompt(text),
+                        );
+
                         await run.kernel.command(normalizeNativePrompt(text));
                         await run.kernel.barrier();
+
+                        if (extensionError) {
+                            throw new RpcFailure(
+                                "unknown",
+                                `Native extension command failed: ${String(extensionError.error ?? "unknown error")}`,
+                            );
+                        }
+
+                        this.journal.completeCommandInput(inputId);
                     } finally {
                         detach();
-                    }
-
-                    if (extensionError) {
-                        throw new RpcFailure(
-                            "unknown",
-                            `Native extension command failed: ${String(extensionError.error ?? "unknown error")}`,
-                        );
                     }
 
                     return true;
@@ -751,6 +784,8 @@ export class RotomExecutions {
         const prepared = this.#prepare?.(binding, sessionId);
         const receipt = this.journal.reserve(sessionId, requestId, identity, operation);
 
+        running.attemptId = receipt.id;
+
         await hooks.onReserved?.(receipt);
         // Admission is asynchronous: an earlier request may have created the native file while it was pending.
         const session = this.journal.session(sessionId);
@@ -898,6 +933,7 @@ export class RotomExecutions {
             this.#notStopped(running);
             kernel = await startRotomKernel({
                 ...binding,
+                teamAgentDir: join(this.#data, "team-agent"),
                 gateFile,
                 sessionFile: session.sessionFile,
                 configuration: prepared?.frozen && {
@@ -970,7 +1006,7 @@ export class RotomExecutions {
                 commands?: Array<Record<string, unknown> & { name?: unknown }>;
             };
 
-            hooks.onCommands?.(catalog.commands ?? []);
+            await hooks.onCommands?.(catalog.commands ?? []);
 
             const builtins = await nativeBuiltinCommands();
 
@@ -1005,6 +1041,10 @@ export class RotomExecutions {
                 await kernel.setSessionName(sessionName);
             }
 
+            const resourceSnapshot = memberConfigurationSnapshot(
+                binding.home,
+                join(this.#data, "team-agent"),
+            );
             let disposition: "settled" | "handled";
 
             if (operation === "discover") {
@@ -1130,6 +1170,33 @@ export class RotomExecutions {
                 }
             }
 
+            if (operation === "command" && nativeCommandName(prompt) !== "reload") {
+                const changed = memberConfigurationChanges(
+                    binding.home,
+                    join(this.#data, "team-agent"),
+                    resourceSnapshot,
+                );
+
+                if (changed.length) {
+                    const message =
+                        "Team did not accept a change to member configuration. Edit the owner-managed shared profile instead. This attempt is unknown; do not replay it.";
+
+                    hooks.onEvent?.({
+                        type: "extension_ui_request",
+                        id: randomUUID(),
+                        method: "notify",
+                        message,
+                        notifyType: "warning",
+                    });
+                    await hooks.onNativeResult?.({
+                        configurationError: message,
+                        changedDerivedFiles: changed,
+                    });
+
+                    throw new Error(message);
+                }
+            }
+
             const finalState = (await kernel.request({ type: "get_state" })) as {
                 sessionId?: unknown;
                 sessionFile?: unknown;
@@ -1185,9 +1252,22 @@ export class RotomExecutions {
 
             return finished;
         } catch (error) {
-            // A rejection is known only if the kernel said so. Timeout, missing disk entries or process loss remain unknown.
+            // Team policy may reject before native startup. After startup only an explicit native rejection is known.
+            if (error instanceof TeamResourcePolicyError && !kernel && !inferenceAdmitted) {
+                hooks.onEvent?.({
+                    type: "extension_ui_request",
+                    id: randomUUID(),
+                    method: "notify",
+                    notifyType: "error",
+                    message:
+                        "Team blocked project/member agent configuration. Move agent resources into the owner-managed shared profile.",
+                });
+                await hooks.onNativeResult?.({ resourcePolicyError: error.message });
+            }
+
             failureStatus =
-                ((error instanceof RpcFailure && error.outcome === "rejected") ||
+                ((error instanceof TeamResourcePolicyError && !kernel) ||
+                    (error instanceof RpcFailure && error.outcome === "rejected") ||
                     error instanceof KernelRequestConflict) &&
                 !inferenceAdmitted
                     ? "rejected"

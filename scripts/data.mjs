@@ -25,7 +25,7 @@ const safe = (name) =>
     !name.includes("\0") &&
     name.split("/").every((part) => part && part !== "." && part !== "..");
 
-function copy(source, destination, records = [], prefix = "") {
+function copy(source, destination, records = [], prefix = "", excludedCaches = []) {
     mkdirSync(destination, { recursive: true, mode: 0o700 });
 
     for (const name of readdirSync(source).sort()) {
@@ -43,8 +43,49 @@ function copy(source, destination, records = [], prefix = "") {
             throw new Error(`Backup refuses non-regular path: ${path}`);
         }
 
+        if (path === "team-agent/npm/node_modules") {
+            if (!stat.isDirectory()) {
+                throw new Error("Shared npm cache must be a real directory");
+            }
+
+            for (const name of ["package.json", "package-lock.json"]) {
+                const manifest = lstatSync(join(source, name), { throwIfNoEntry: false });
+
+                if (!manifest?.isFile() || manifest.isSymbolicLink()) {
+                    throw new Error(
+                        "Shared npm cache requires regular package.json and package-lock.json; unlocked installs cannot be omitted from backup",
+                    );
+                }
+            }
+
+            const declarations = join(source, "../team.json");
+            const declarationStat = lstatSync(declarations, { throwIfNoEntry: false });
+
+            if (declarationStat && !declarationStat.isFile()) {
+                throw new Error("Shared configuration manifest must be a regular file");
+            }
+
+            const config = declarationStat ? JSON.parse(readFileSync(declarations, "utf8")) : {};
+
+            if (
+                (config.configFiles ?? []).some((name) =>
+                    String(name)
+                        .replaceAll("\\", "/")
+                        .toLowerCase()
+                        .startsWith("npm/node_modules/"),
+                )
+            ) {
+                throw new Error(
+                    "Declared owner configuration cannot be omitted as installed npm cache",
+                );
+            }
+
+            excludedCaches.push(path);
+            continue;
+        }
+
         if (stat.isDirectory()) {
-            copy(input, output, records, path);
+            copy(input, output, records, path, excludedCaches);
             continue;
         }
 
@@ -118,7 +159,7 @@ export function inspectNative(data) {
         db.exec("BEGIN");
         const version = Number(db.prepare("PRAGMA user_version").get().user_version);
 
-        if (![1, 2, 3, 4].includes(version)) {
+        if (![1, 2, 3, 4, 5].includes(version)) {
             throw new Error("Unsupported native journal version; no migration was attempted.");
         }
 
@@ -132,7 +173,8 @@ export function inspectNative(data) {
         const rows = db
             .prepare(
                 `SELECT a.id, a.session_id, a.request_id, a.binding, a.status, s.session_file,
-            ${version === 2 ? "a.conversation_id, a.operation" : "a.session_id AS conversation_id, 'prompt' AS operation"}
+            ${version >= 5 ? "EXISTS(SELECT 1 FROM kernel_command_inputs c WHERE c.attempt_id=a.id) AS unresolved_command_input," : ""}
+            ${version >= 2 ? "a.conversation_id, a.operation" : "a.session_id AS conversation_id, 'prompt' AS operation"}
             FROM kernel_attempts a JOIN kernel_sessions s ON s.id=a.session_id
             WHERE a.status IN ('dispatch-intent','unknown') ORDER BY a.id LIMIT 100`,
             )
@@ -146,6 +188,7 @@ export function inspectNative(data) {
             operation: String(row.operation),
             recordedStatus: String(row.status),
             transcriptBound: row.session_file !== null,
+            ...(row.unresolved_command_input ? { unresolvedCommandInput: true } : {}),
             outcome: "unresolved",
         }));
 
@@ -183,7 +226,8 @@ export function backup(data, destination) {
             );
         }
 
-        const files = copy(source, join(staging, "data"));
+        const excludedCaches = [];
+        const files = copy(source, join(staging, "data"), [], "", excludedCaches);
 
         writeFileSync(
             join(staging, "manifest.json"),
@@ -192,6 +236,7 @@ export function backup(data, destination) {
                 source,
                 createdAt: Date.now(),
                 files,
+                excludedCaches,
             }),
             { mode: 0o600, flag: "wx" },
         );
@@ -299,8 +344,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
         (command === "backup" ? backup : restore)(input, output);
         console.log(
             command === "backup"
-                ? "Private backup verified. It contains credentials: do not upload or share it."
-                : "Backup restored. Model accounts require independent sign-in; old refresh tokens were not restored.",
+                ? "Private backup verified. It contains credentials: do not upload or share it. Check excludedCaches; shared npm dependencies require explicit reinstall from the saved lock after restore."
+                : "Backup restored. Model accounts require independent sign-in; old refresh tokens were not restored. Check excludedCaches and explicitly reinstall shared npm dependencies before native startup.",
         );
     }
 }

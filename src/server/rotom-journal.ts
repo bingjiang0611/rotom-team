@@ -50,6 +50,8 @@ export type KernelReceipt = {
     /** `interrupted`: the server stopped mid-run and its kernel is gone; the session file holds what happened. */
     status: "dispatch-intent" | "settled" | "handled" | "rejected" | "unknown" | "interrupted";
     binding: KernelBinding;
+    /** A queued native command crossed dispatch without a confirmed handled outcome. */
+    unresolvedCommandInput?: true;
 };
 /** How many automatic continuations may follow one another before a person has to say Continue. */
 export const MAX_RESUME_CHAIN = 3;
@@ -78,7 +80,9 @@ export function requireNoPendingKernel(data: string): void {
     const db = new DatabaseSync(path, { readOnly: true });
 
     try {
-        if (![1, 2, 3, 4].includes(Number(db.prepare("PRAGMA user_version").get()!.user_version))) {
+        if (
+            ![1, 2, 3, 4, 5].includes(Number(db.prepare("PRAGMA user_version").get()!.user_version))
+        ) {
             throw new Error("Unsupported kernel journal version");
         }
 
@@ -151,7 +155,7 @@ export class RotomJournal {
             this.#db = opened = new DatabaseSync(path);
             const version = Number(this.#db.prepare("PRAGMA user_version").get()!.user_version);
 
-            if (![0, 1, 2, 3, 4].includes(version)) {
+            if (![0, 1, 2, 3, 4, 5].includes(version)) {
                 throw new Error("Unsupported kernel journal version");
             }
 
@@ -188,6 +192,13 @@ export class RotomJournal {
                 this.#db.exec(`BEGIN IMMEDIATE;
                     CREATE TABLE kernel_child_usage (attempt_id TEXT NOT NULL REFERENCES kernel_attempts(id), member_id TEXT NOT NULL, raw_usage TEXT NOT NULL);
                     PRAGMA user_version=4; COMMIT;`);
+            }
+
+            // Keep queued command uncertainty on the existing attempt; never reclassify its original intent.
+            if (version < 5) {
+                this.#db.exec(`BEGIN IMMEDIATE;
+                    CREATE TABLE kernel_command_inputs (id TEXT PRIMARY KEY, attempt_id TEXT NOT NULL UNIQUE REFERENCES kernel_attempts(id), command_hash TEXT NOT NULL);
+                    PRAGMA user_version=5; COMMIT;`);
             }
 
             // One member may run several sessions at once; each conversation keeps its own single writer.
@@ -409,7 +420,42 @@ export class RotomJournal {
             requestId: String(row.request_id),
             status: row.status as KernelReceipt["status"],
             binding: JSON.parse(String(row.binding)),
+            ...(this.hasUnresolvedCommandInput(id)
+                ? { unresolvedCommandInput: true as const }
+                : {}),
         };
+    }
+
+    /** Durable before queued side-effect dispatch; only a confirmed handled response clears this fence. */
+    beginCommandInput(attemptId: string, command: string): string {
+        if (
+            this.receipt(attemptId).status !== "dispatch-intent" ||
+            this.hasUnresolvedCommandInput(attemptId)
+        ) {
+            throw new KernelRequestConflict(
+                "The owning attempt is finished or has an unresolved queued command",
+            );
+        }
+
+        const id = randomUUID();
+
+        this.#db
+            .prepare("INSERT INTO kernel_command_inputs VALUES (?,?,?)")
+            .run(id, attemptId, digest(command));
+
+        return id;
+    }
+
+    completeCommandInput(id: string): void {
+        this.#db.prepare("DELETE FROM kernel_command_inputs WHERE id=?").run(id);
+    }
+
+    hasUnresolvedCommandInput(attemptId: string): boolean {
+        return Boolean(
+            this.#db
+                .prepare("SELECT id FROM kernel_command_inputs WHERE attempt_id=?")
+                .get(attemptId),
+        );
     }
 
     request(sessionId: string, requestId: string): KernelReceipt | undefined {
@@ -619,7 +665,8 @@ export class RotomJournal {
                 `SELECT a.id, a.pid, s.session_file, s.kernel_session_id FROM kernel_attempts a
                  JOIN kernel_sessions s ON s.id=a.session_id
                  WHERE a.status='unknown' AND a.operation='prompt' AND a.pid IS NOT NULL
-                   AND s.session_file IS NOT NULL AND s.kernel_session_id IS NOT NULL`,
+                   AND s.session_file IS NOT NULL AND s.kernel_session_id IS NOT NULL
+                   AND NOT EXISTS (SELECT 1 FROM kernel_command_inputs c WHERE c.attempt_id=a.id)`,
             )
             .all()
             .map((row) => ({
@@ -638,8 +685,14 @@ export class RotomJournal {
         const attempt = this.receipt(id),
             session = this.segment(attempt.segmentId);
 
-        if (attempt.status !== "unknown" || attempt.operation !== "prompt") {
-            throw new Error("Only an unknown prompt can be interrupted");
+        if (
+            attempt.status !== "unknown" ||
+            attempt.operation !== "prompt" ||
+            this.hasUnresolvedCommandInput(id)
+        ) {
+            throw new Error(
+                "Only an unknown prompt without unresolved command inputs can be interrupted",
+            );
         }
 
         this.#db.exec("BEGIN IMMEDIATE");
@@ -663,6 +716,11 @@ export class RotomJournal {
      */
     planResume(attemptId: string): KernelResume {
         const attempt = this.receipt(attemptId);
+
+        if (this.hasUnresolvedCommandInput(attemptId)) {
+            throw new Error("An unresolved queued command cannot be resumed");
+        }
+
         const previous = /:#resume-(.+)$/.exec(attempt.requestId)?.[1];
         const chain = previous ? (this.resume(previous)?.chain ?? 0) + 1 : 1;
 
@@ -749,6 +807,10 @@ export class RotomJournal {
     }
 
     finish(id: string, status: "settled" | "handled", entries: KernelEntry[]): KernelReceipt {
+        if (this.hasUnresolvedCommandInput(id)) {
+            throw new Error("Queued native command outcome is unresolved");
+        }
+
         const attempt = this.receipt(id),
             session = this.segment(attempt.segmentId);
 

@@ -4,7 +4,7 @@
 
 **当前版本：`0.1.1`。原生 macOS / 完全可信团队预览，不是企业级安全沙箱。** 包版本以 [package.json](package.json) 为准，执行内核另由 [pin.json](runtime/rotom/pin.json) 固定。
 
-新会话默认由 rotom 执行。团队层提供共享 Transcript、权限、个人账号和恢复，不另运行一个 Agent 循环。当前能力与限制见 [产品合同](docs/PRODUCT.md)；项目 instructions、skills、MCP、扩展及成员 MCP 登录见 [配置指南](docs/CONFIGURATION.md)。旧阶段计划不作为当前合同。
+新会话默认由 rotom 执行。团队层提供共享 Transcript、权限、个人账号和恢复，不另运行一个 Agent 循环。当前能力与限制见 [产品合同](docs/PRODUCT.md)；Owner 共享 Agent 配置、项目上下文/skills 及成员私有 MCP 登录见 [配置指南](docs/CONFIGURATION.md)。旧阶段计划不作为当前合同。
 
 ## 启动
 
@@ -39,7 +39,7 @@ npm start -- --no-rotom-kernel --cwd /absolute/path/to/project
 4. 其他成员可以查看、评论；空闲后发送新任务即接力，使用发送者自己的账号。运行中不能更换付费人。
 5. 需要独立探索时 fork；项目权限不会因 fork 扩大。worktree 隔离代码分支，不隔离 OS 权限，也不保证代码回到旧消息时点。
 
-项目配置每次运行重新加载。OAuth 型 MCP 由每位成员在 **MCP sign-ins** 独立登录。旧冻结配置会话保留原摘要，不自动切换为项目配置。
+Owner 管理共享扩展、MCP、skills 和设置；项目只补充上下文、AGENTS.md 与 skills，不加载项目 agent 配置。OAuth 型 MCP 由成员在 **MCP sign-ins** 独立登录。旧冻结项目快照保留原字节与身份，同时使用当前共享基础 Agent，不改写历史。
 
 ## 安全与限制
 

@@ -21,9 +21,10 @@ import { startOAuthMcp } from "./fixtures/mcp-oauth.ts";
 process.umask(0o077);
 const root = realpathSync(mkdtempSync(join(tmpdir(), "mcp-sign-in-proof-")));
 const workspace = join(root, "workspace");
+const teamAgentDir = join(root, "team-agent");
 const homes = { alice: join(root, "alice"), bob: join(root, "bob") };
 
-for (const path of [workspace, ...Object.values(homes)]) {
+for (const path of [workspace, teamAgentDir, ...Object.values(homes)]) {
     mkdirSync(path, { mode: 0o700 });
 }
 
@@ -46,11 +47,11 @@ const { origin } = oauth;
 
 mkdirSync(join(workspace, ".pi"));
 writeFileSync(
-    join(workspace, ".pi/mcp.json"),
+    join(teamAgentDir, "mcp.json"),
     JSON.stringify({ mcpServers: { team: { url: `${origin}/mcp`, exposure: "direct" } } }),
 );
 
-const signIns = new McpSignIns();
+const signIns = new McpSignIns(teamAgentDir);
 const report: Record<string, unknown> = { realProvider: false, status: "not-verified" };
 
 try {
@@ -103,6 +104,7 @@ try {
         }),
     );
     const kernel = await startRotomKernel({
+        teamAgentDir,
         home: homes.alice,
         workspace,
         provider: "fixture",
@@ -121,12 +123,12 @@ try {
     assert.match(notices.join("\n"), /team.*connected/i, notices.join("\n"));
     assert.ok(oauth.callers.length > 0 && oauth.callers.every((member) => member === "alice"));
 
-    // Signing in recorded the project's trust in Alice's HOME. A session with a frozen configuration still does not
-    // open the project.
+    // Frozen context does not suppress the shared agent MCP configuration; project configuration remains closed.
     const frozenContext = join(root, "frozen.md");
 
     writeFileSync(frozenContext, "Frozen configuration.");
     const frozen = await startRotomKernel({
+        teamAgentDir,
         home: homes.alice,
         workspace,
         provider: "fixture",
@@ -142,7 +144,7 @@ try {
     });
     assert.equal(await frozen.prompt("/mcp"), "handled");
     await frozen.close();
-    assert.match(notices.join("\n"), /No MCP servers configured/, notices.join("\n"));
+    assert.match(notices.join("\n"), /team.*connected/i, notices.join("\n"));
 
     // `open` starts detached, after the address is printed; the run above took long enough for one to show.
     assert.ok(!existsSync(opened), "a sign-in must never open a browser on the server");
@@ -160,7 +162,7 @@ try {
         perMemberTokens: true,
         runSentMembersToken: true,
         signOut: true,
-        frozenConfigurationStaysClosed: true,
+        frozenContextKeepsSharedMcp: true,
     });
 } finally {
     signIns.close();

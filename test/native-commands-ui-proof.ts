@@ -77,17 +77,32 @@ export async function nativeCommandUiProof(options: {
             "pinned builtin menu",
             20_000,
         );
-        assert.ok(!(await text(".commands")).includes("/goal"));
         assert.ok(!(await text(".commands")).includes("/share"));
         assert.ok(!(await text(".commands")).includes("/bug"));
-        await page.evaluate(`${button("Load / refresh project commands on my account")}.click()`);
         await until(
             async () => (await text(".commands")).includes("/goal"),
-            "explicit first-session discovery",
+            "opening slash suggestions discovers the initial catalog without an extra refresh click",
             30_000,
         );
         assert.equal(options.modelCalls(), before);
         await screenshot("native-command-menu");
+        await type("/future.");
+        await until(
+            async () => (await text(".commands")).includes("/future.点"),
+            "generic non-ASCII dotted native command suggestion",
+        );
+        assert.equal(
+            await page.evaluate(
+                `(await import('/commands.js')).parseCommand('/future.点 exact')?.command.name`,
+            ),
+            "future.点",
+        );
+        assert.equal(
+            await page.evaluate(
+                `(await import('/commands.js')).parseCommand('/constructor exact')?.command.name`,
+            ),
+            "constructor",
+        );
 
         for (const name of ["fixture-prompt", "skill:pi-subagents"]) {
             await type(`/${name}`);
@@ -434,6 +449,8 @@ export async function nativeCommandUiProof(options: {
             cancelledTreePreservesDraft: true,
             immutableAuditVsActiveBranch: true,
             firstSessionDiscoveryWithoutInference: true,
+            initialDiscoveryWithoutExtraClick: true,
+            genericNativeCommandNames: true,
             templateAndSkillSelectionWithoutInference: true,
             builtinExclusions: true,
             modelPickerHandoff: true,

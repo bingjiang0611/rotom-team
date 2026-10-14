@@ -1,76 +1,138 @@
-# Project configuration
+# One Team agent, two configuration layers
 
-This is the current configuration contract for new rotom sessions. Every member who works in a project gets the same
-configuration: the project's. Model accounts stay personal: whoever sends still pays. The execution and safety
-contract is [PRODUCT.md](PRODUCT.md); legacy frozen sessions keep their existing configuration.
+The Team has one shared base agent, not a customizable agent per member:
 
 ```mermaid
 flowchart LR
-    P["project folder (--cwd)"] -- AGENTS.md, .pi/*, .agents/skills --> R[rotom run]
-    H["kernel-homes/member"] -- sessions, subagent store, team role defaults --> R
-    R -- inference --> G[gate: the paying member's model account]
+    S["data/team-agent: owner-managed resources and settings"] --> R["verified native rotom"]
+    P["project: AGENTS/context and skills only"] --> R
+    H["member HOME: credentials, sessions, private runtime state"] --> R
+    R --> G["immutable execution payer/model gate"]
 ```
 
-## What loads
+The shared profile is **Team-dedicated**. Nothing imports the service user's personal agent settings, telemetry,
+credentials, model defaults, grants or skill memory. Each member still selects an available model on their own
+account; changing model uses the existing immutable Team handoff. See [PRODUCT.md](PRODUCT.md).
 
-rotom starts every run with `--approve` (project trust). It reads, from the session's working folder:
+## Shared installation and configuration
 
-| File                                      | What it is                                                     |
-| ----------------------------------------- | -------------------------------------------------------------- |
-| `AGENTS.md` (and those of parent folders) | Instructions                                                   |
-| `.pi/SYSTEM.md`, `.pi/APPEND_SYSTEM.md`   | System prompt                                                  |
-| `.pi/skills/`, `.agents/skills/`          | Skills                                                         |
-| `.pi/mcp.json`                            | MCP servers                                                    |
-| `.pi/extensions/`                         | Extensions (for example a recorder such as scry)               |
-| `.pi/prompts/`                            | Prompt templates                                               |
-| `.pi/settings.json`                       | Settings, except `packages` (below); sessions stay in the HOME |
+The owner manages `<data>/team-agent` using the pinned native resource layout:
 
-Edit these files in the project. The next native startup reads them. The command menu is a separately scoped, short-lived discovery snapshot (below).
+| Path                                            | Meaning                                                                                      |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `settings.json`                                 | Native shared settings, installed package references, resource paths and model-pattern scope |
+| `extensions/`, `skills/`, `prompts/`, `themes/` | Shared agent resources, discovered by the native resolver                                    |
+| `AGENTS.md`, `SYSTEM.md`, `APPEND_SYSTEM.md`    | Shared context/system instructions                                                           |
+| `mcp.json`                                      | Shared MCP server definitions; never a copy of a member's OAuth credentials                  |
+| `team.json` `configFiles`                       | Explicit relative plugin configuration files, for example `plugin/config.json`               |
 
-Pi reads `.pi/mcp.json`, not Claude Code's `.mcp.json`, and does not take the legacy SSE transport. A server that
-serves streamable HTTP at the same URL needs only `{"url": …}` there.
+Install packages into this dedicated profile with the pinned native CLI and an isolated HOME. Do not run installation
+against the service user's personal agent directory. Native `settings.json` package references must already be installed:
+startup calls the native package resolver with **error on missing**, never implicit installation. Relative resource paths
+resolve against the shared profile. A new extension's registered names need no Team command-dispatch changes.
 
-In one folder Pi reads the first of `AGENTS.md` and `CLAUDE.md`, not both.
+There is no new package-management web UI. The owner edits the profile on the deployment machine. Finish or stop Team
+runs before filesystem edits/package installation; direct OS writes are trusted and are not locked by Team. `/settings` and model
+scope editing are owner-only HTTP operations and refuse changes while Team runs are active. Ordinary model selection and
+scope cycling remain member-owned and payer-safe. Refresh the command catalog after resource changes.
 
-## rotom 0.1.21
+Each native startup derives member resource settings from the shared profile. Credentials, session files and unknown
+plugin state are not copied from the profile, moved or deleted. Declared configuration is restored from the shared source.
+A command that changes declared member configuration is not silently accepted as personal customization: its attempt
+becomes unknown and is not replayed; configure the owner-managed shared profile instead. Declaring a plugin config path
+is installation configuration, not adding a command-name adapter.
 
-The runtime pin is rotom 0.1.21 ([`runtime/rotom/pin.json`](../runtime/rotom/pin.json)). In 0.1.18 the Qoder legacy models
-(`ultimate`, `qmodel_latest`, `smodel` and the other COSY routes) ran without the system prompt: rotom sent it only in a
-top-level field that Qoder ignores. Such a run did not see `AGENTS.md`, `.pi/APPEND_SYSTEM.md`, the skill list or the
-folder. 0.1.19 also sends it as the first message, as Qoder's own CLI does. Other models were not affected.
+Managed files carry byte digests. Shared add/change/remove applies to each member at the next authorized startup.
+Removing a source or declaration retires only the unchanged managed mirror. An unmanaged collision or changed retiring
+file fails closed instead of deleting unknown content. Credential/state names are case-insensitively reserved; configuration
+file/parent symlinks and hardlinks are refused before reading or writing. Linked packages remain native resources, not
+configuration-copy aliases.
 
-## Team subagent defaults
+Shared roles can live in `agents/` or declared installed packages. Member role directories/subagent settings and project subagent
+settings, role/chain files and agent-package manifests are rejected before native startup. Ordinary project packages and
+allowed AGENTS/skills still work. Native subagent tool calls and queued slash commands recheck the policy during a live run.
+Live/child checks also compare resource-selection fields and declared file digests with the last derived view; later
+member package paths, executable autodiscovery and context/config overrides cannot become child configuration.
+Child CLI arguments use the pinned parser; `--approve`/`-a` and extensions outside canonical shared/bundled authority are
+refused. The shell keeps native owner fd 3 intact through final exec. Global npm role discovery uses a shared profile prefix,
+not ambient service/member global packages.
 
-Every native kernel start, including frozen sessions, sets `subagents.agentOverrides` for `delegate`, `oracle`
-(and its `advisor` alias), and `researcher` to `disabled: true` in the member's `.pi/agent/settings.json`.
-The remaining builtins are `scout`, `worker`, and `reviewer`, whose bundled profiles declare explicit extensions
-and fresh context. Disabled roles are absent from the executable list and cannot be selected for a new task.
-Other settings and role fields are preserved; these defaults do not alter an already-running kernel or replay work.
+Unknown plugin files are **unclassified compatibility state**, not proven harmless configuration. A new plugin's known
+configuration sources must be reviewed and declared during installation. Do not promise universal isolation for an
+arbitrary trusted extension's own filesystem reads/writes. Shared extensions remain trusted native code, not a sandbox.
 
-These are team defaults, not an enforcement boundary. Native project overrides in `.pi/settings.json` take
-precedence, and custom project agents are unchanged. A project override for one of these roles replaces its member
-HOME override, so even an override that only sets a model can restore it. Restoring a role does not adapt it to scoped
-execution: the native extension, context, tool and launch-mode checks still apply. No bundled dependency is modified.
+## Project layer and migration
+
+Native startup uses `--no-approve`, even if `/trust` or an earlier MCP login saved a trust grant. The core native resource
+loader therefore omits project extensions, packages, settings, templates, themes and MCP definitions. Native project and
+ancestor AGENTS/context still load. The Team skill hook uses the native resolver with **only** the project's `skills` key;
+project package/extension settings cannot participate in that resolution. Project `.pi/skills` and ancestor `.agents/skills`
+remain available. Member personal skill directories do not load.
+
+Move previously supported project MCP definitions, extensions and agent settings into the owner-managed shared profile.
+Do not blindly copy `.pi/settings.json`, personal skills or auth files. Frozen legacy context/skill snapshots retain their
+stored identity. Their old context files and receipts are not rewritten: current shared AGENTS, skills and templates are
+additive at native startup, while live project context/skills stay excluded from the frozen selection. This deliberately
+migrates the old “freeze all agent configuration” behavior to one current shared base plus frozen project context.
+
+The bundled computer-use extension independently reads `.pi/computer-use.json`. Team sets all four supported environment
+overrides from shared `extensions/pi-computer-use.json`, including native defaults, so project values cannot override them.
+The native pi-subagents reader is separately checked as described above; `--no-approve` alone does not enforce it.
+Other plugin-specific loaders require source/API verification during owner installation. This is not filesystem isolation
+against trusted code or a concurrent OS actor deliberately rewriting the protected resource tree.
+
+## Backup and restore of installed packages
+
+`node scripts/data.mjs backup` records `team-agent/npm/node_modules` in `excludedCaches`. This is an explicitly rebuildable
+installed dependency cache, not owner configuration or state. A real `package.json` and `package-lock.json` are required and
+backed up byte-for-byte. Standard npm `.bin` links are not followed or copied. Declared owner config inside this cache is
+rejected, as are unlocked installs; move that configuration outside installed dependencies.
+
+After restore, independently sign in to model accounts as usual. Before enabling native runs, inspect the saved manifests
+and explicitly reinstall the shared packages with the deployment toolchain (`npm ci` in `<data>/team-agent/npm`). Native
+startup fails closed on missing packages and never installs them automatically. The local test uses offline `npm ci
+--ignore-scripts`; real packages may need owner-reviewed lifecycle scripts/network access. Locks do not vendor external
+`file:` sources, private registries, edited installed files or arbitrary plugin state. Such content needs a separately
+reviewed backup/migration. Other links, including external linked-package paths outside this specific cache, remain refused
+by the existing backup contract. Never keep configuration/runtime state inside a rebuildable dependency tree.
+
+Opening this release upgrades the execution journal to schema 5 for queued-command no-replay fences. Older releases refuse
+that schema; do not drop its markers or change the version number. Rollback requires the pre-upgrade backup at its original
+absolute path, not opening newer execution data with an older binary.
+
+## Native pin and subagent defaults
+
+The pin remains rotom 0.1.21; no native source, installed dependency or pin is changed by this work. Derived native settings
+keep automatic retries/compaction disabled and retain the Team's disabled delegate/oracle/researcher defaults. The safe
+builtin roles remain scout, worker and reviewer. This is not an OS sandbox or a claim that a plugin cannot read project files.
+
+Optional subagent named-skill/memory injection needs attested sources. Owned async launch descriptors with no injection retain
+normal structured single-child execution; nonempty name-only descriptors, role memory and selected project refinements are
+refused before child inference. Private files stay unchanged. User-provided `workflowScript` is explicitly unsupported in the
+user-approved verified subset and rejected before execution: native scoped ownership refuses synchronous controllers and
+async workflow delivery/lifetime has no verified bridge. Internal single-child normalization is not programmable workflow
+coverage. Native ownership and pin remain unchanged. See [NATIVE-COMMAND-COMPATIBILITY.md](NATIVE-COMMAND-COMPATIBILITY.md).
+Normal parent/project skill loading is unaffected.
 
 ## Native slash commands
 
 Typing `/` uses the pinned runtime's builtin catalog, not Pocket's old hardcoded list. Dynamic extensions, prompt
-templates and skills come from native `get_commands`. `GET /api/c/:id/prompts` reads a snapshot; it never starts project
-code. Before discovery, it offers only builtins. **Load / refresh project commands on my account** explicitly starts
-the trusted native runtime under the member's ordinary permissions, admission and lease. Discovery denies Team
-inference and credential-refresh requests. It needs no paid prompt, but project startup is still trusted executable
+templates and skills come from native `get_commands`. `GET /api/c/:id/prompts` reads a snapshot; it never starts native code. Opening slash suggestions through composer input, or choosing **Refresh shared agent commands on my account**, explicitly starts the trusted native runtime under the member's ordinary permissions, admission and lease. Discovery denies Team
+inference and credential-refresh requests. It needs no paid prompt, but shared extension startup is still trusted executable
 code, not a sandbox. An idle session owned by another member is first handed over using public history.
 
 Snapshots belong to one member, segment and immutable binding. Another member never receives their HOME-derived
-descriptions. Idle snapshots expire after 30 seconds; settings changes invalidate them, and authorized startup/reload
-captures them again. A snapshot is not a claim that project files have not changed since capture: refresh after editing
-configuration. Dispatch validates the current native registry. Unknown names and private `team-kernel-*` commands do
+descriptions. Snapshots persist and do not disappear after 30 idle seconds. Freshness distinguishes undiscovered, live, last-known and configuration-changed. The bounded fingerprint reads declared configuration and immediate resource metadata, never npm dependency trees or
+symlink targets. Linked/external code and nested file edits require explicit Refresh or `/reload`; this is a freshness hint,
+not a complete content attestation. Settings/failure invalidation retains the last-known names; authorized startup/reload captures again. This is not a file-watching or freshness guarantee for arbitrary external resources: refresh after editing configuration. Catalog errors are visible. Failed discovery needs explicit review/refresh, not automatic retry after the cache TTL.
+Unknown discovery blocks startup even with a new request ID; exact receipt readback starts no process. Known command-sheet
+input does not race an automatic discovery. Dispatch validates the current native registry. Unknown names and private `team-kernel-*` commands do
 not become model prompts. Native skills/templates are expanded by native APIs, including queued input. Selecting a
 skill or prompt-template suggestion only fills the draft; submitting it starts the model request.
 
 | Command                                                          | Team/native behavior                                                                                                                                                                                                                                                                   |
 | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/model`, `/thinking`, `/scoped-models`                          | Personal model picker and native model-pattern scope. A real Team handoff creates a new immutable binding; an active run is never mutated. Scope cycling uses that same path.                                                                                                          |
+| `/model`, `/thinking`, `/scoped-models`                          | Personal model picker and owner-managed shared native model-pattern scope. A real Team handoff creates a new immutable binding; an active run is never mutated. Scope cycling uses that same path.                                                                                     |
 | `/name`                                                          | Native `set_session_name`, with confirmed readback mirrored into Team. Native defers JSONL creation before the first conversation; Team preserves the confirmed name and restores it on the next startup.                                                                              |
 | `/new`, `/resume`                                                | Create a separate Team native conversation, or choose a visible existing one. No receipt is silently attached to a different native session.                                                                                                                                           |
 | `/fork`                                                          | Select a native user-entry ID; create a Team-safe public-history seed **before** that user message. Restore its text as a draft, never submit it automatically. This is not a call to native `forkSession`.                                                                            |
@@ -78,9 +140,9 @@ skill or prompt-template suggestion only fills the draft; submitting it starts t
 | `/tree`                                                          | Select an entry in the member's native segment. Native `ctx.navigateTree` changes the branch; optional **Summarize** (or `/tree <entryId> --summarize`) runs the native summarizer through the same payer/model gate. Persisted summary usage is recorded; absent usage stays unknown. |
 | `/export`                                                        | Authenticated, member-private attachment using native JSONL branch serialization or the native HTML exporter. JSONL is the current branch, not a byte-for-byte full-tree copy. HTML retains the native exporter's tree behavior.                                                       |
 | `/import`                                                        | Native parse/migration of a JSONL file in this workspace or this session's uploads, bounded to 50 MiB; a new Team conversation receives only public history, never imported provider state.                                                                                            |
-| `/settings`                                                      | Native `SettingsManager` execution settings: steering/follow-up, image options, skill commands and model scope. Project settings take precedence; Team automatic retries/compaction remain disabled.                                                                                   |
+| `/settings`                                                      | Native `SettingsManager` execution settings: steering/follow-up, image options, skill commands and model scope. Owner-only shared settings; project settings do not take precedence. Team automatic retries/compaction remain disabled.                                                |
 | `/compact`, `/reload`, `/session`, `/copy`                       | Native compaction, resource reload, state/statistics and last-assistant-text clipboard result.                                                                                                                                                                                         |
-| `/login`, `/logout`, `/hotkeys`, `/changelog`, `/trust`, `/quit` | Personal provider sheet, web shortcuts, pinned product update guidance, native project trust choices, and stopping/leaving this view respectively. Project trust does not create an OS boundary.                                                                                       |
+| `/login`, `/logout`, `/hotkeys`, `/changelog`, `/trust`, `/quit` | Personal provider sheet, web shortcuts, pinned product update guidance, native trust choices (which cannot enable project agent configuration), and stopping/leaving this view respectively. Project trust does not create an OS boundary.                                             |
 | `/mcp`, `/mcp login <server>`, `/mcp logout <server>`            | The existing member-owned browserless sign-in bridge. These adapters first verify actual native registration.                                                                                                                                                                          |
 | `/qoder-models`, `/qoder-credits`                                | The member's provider catalog/quota API in the credential-owning parent. Results are private HTTP responses, not room broadcasts. Account-changing/busy operations are refused; snapshots are not per-request debit or financial cost.                                                 |
 | `/goal` and other registered extensions                          | Actual native handlers. Goal keeps its process, receipt, member and gate while active/waiting; native deadlines, Pause, Resume, Stop and plain input control that lifecycle.                                                                                                           |
@@ -110,107 +172,35 @@ Side-effectful slash handlers use `command` receipts and are not automatically c
 Only native-discovered prompt templates/skills become ordinary recoverable `prompt` operations. Existing stored
 receipts stay readable and are not rewritten. Goal Stop may remain unknown; it does not certify external effects.
 
-## What does not load
+## MCP credentials
 
-| Refused                                                                                                                   | Why                                                                                                                            |
-| ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| Skills in a member's HOME: `.pi/agent/skills`, `.agents/skills`, and the `settings.json` `skills` key.                    | They may remain installed, but runs do not load them. Skills belong in the project.                                            |
-| Other configuration in a member's HOME: instructions, MCP, extensions, prompts, themes, packages, or their settings keys. | A run refuses to start and names the resource, rather than applying private configuration to a shared project.                 |
-| `packages` in `.pi/settings.json`.                                                                                        | They would install from the network at the start of each run. Put the extension in `.pi/extensions`. The run refuses to start. |
+MCP server definitions are shared; OAuth tokens remain in each member's
+`kernel-homes/<member>/.pi/agent/mcp-auth.json`. The browserless native sign-in bridge never opens the service user's browser.
+Only the initiating member's loopback callback origin/path is accepted. The native MCP CLI runs from the shared profile,
+not the project, because that subcommand has no `--no-approve` option. Signing in does not grant project extension access.
 
-The **My instructions & skills** sheet and `rotom-team profile push` are gone. The menu keeps **My browser sign-ins**.
+Do not put personal access tokens or global-account credentials in shared config. Environment lookups use the scrubbed
+member environment, not the service's ambient secrets. Backups/restores continue to exclude refresh grants; members sign
+in again. Declared config paths cannot name auth, model stores or session storage.
 
-Pi Pocket's own extensions (Artifacts, Browser, Subagents, Scheduled messages, Done when, Plan mode, Lancet Guard,
-Codemode, the system prompt) run in Pi Durable sessions only; a rotom run loads the project's `.pi/extensions` and its
-own tools. So a server that starts sessions in rotom shows no **Extensions** page in Settings or the launcher, and a
-rotom session's status line shows no guard state: those switches would look like they guarded rotom runs, and did not.
+## Forty-five terminal entries and TUI compatibility
 
-## MCP secrets
+See [NATIVE-COMMAND-COMPATIBILITY.md](NATIVE-COMMAND-COMPATIBILITY.md) for every comparison row and actual coverage.
+The isolated terminal comparison contains 24 builtins, 15 extension commands and 6 skill commands. The empty shared Team
+profile has 39 native entries, or 37 allowed catalog entries (not 37 working interactions) after the two explicit exclusions. This is a measured inventory,
+not proof that all entries have equivalent interactions.
 
-`.pi/mcp.json` usually lives in git. Do not write secrets in it. Read them from the server's keychain with a command
-value; Pi runs it when the server connects:
+`/context` and `/llama` require real TUI/custom UI. Pinned RPC cannot supply it; a handled response containing a TUI-only
+warning is not success. `/context` is not installed into the initial Team profile while this is blocked. The five personal
+skills are deliberately uninstalled by user choice, not permission to publish private memory/preferences/device lessons. Neither condition is silently reclassified as an additional product exclusion.
 
-```json
-{
-    "mcpServers": {
-        "tools": {
-            "command": "uvx",
-            "args": ["tools-mcp"],
-            "env": { "API_KEY": "!security find-generic-password -w -s tools-mcp" }
-        }
-    }
-}
-```
+Production TUI transport is outside this delivery scope. A bounded OS-PTY prototype renders and interacts with an actual native custom component, preserving an isolated member
+session and an unknown command receipt. It is **not** a production transport: public extension APIs expose no generic
+command-completion/error observer to the external TUI frontend. Terminal exit or visual messages are not sufficient to
+settle a receipt. No context.mode spoofing, native monkeypatch or reconstructed `/context` report is used.
 
-Store the secret once, as the service user: `security add-generic-password -s tools-mcp -a rotom-team -w`.
-`${NAME}` still resolves against the run's scrubbed environment, so a server that names a service variable fails
-closed. Everyone shares the server's identity with that service.
+## Verification
 
-## MCP servers that use OAuth
-
-An HTTP server in `.pi/mcp.json` without an `Authorization` header signs in with OAuth. The project declares it once;
-**each member signs in with their own account**. The tokens go to that member's
-`kernel-homes/<member>/.pi/agent/mcp-auth.json`, and only that member's runs send them. Another member's runs, a fork,
-or a takeover use the sender's own sign-in.
-
-```mermaid
-sequenceDiagram
-    participant M as Member's browser
-    participant S as rotom-team server
-    participant L as rotom mcp login (member HOME)
-    participant A as OAuth server
-    M->>S: MCP sign-ins → Sign in
-    S->>L: start; it listens on 127.0.0.1:<port>/callback
-    L-->>S: sign-in address
-    S-->>M: link
-    M->>A: open link, approve
-    A-->>M: redirect to 127.0.0.1:<port>/callback?code=… (does not load)
-    M->>S: paste that address → Finish
-    S->>L: deliver it to that callback only
-    L->>A: exchange code (PKCE), store tokens
-```
-
-Open it from the menu (**MCP sign-ins**) or with `/mcp` in a rotom session. The sheet lists the project's servers as
-your runs reach them: connected, needs your sign-in, or failed. On the server's own computer the redirect loads by
-itself; leave the address empty and press Finish.
-
-- **The server never opens a browser.** Its browser is the service user's, and could approve as them. `rotom mcp` runs
-  with a stand-in `open` (`src/server/no-browser/`), so the member always opens the link in their own browser.
-- **A pasted address goes only to the open sign-in's callback**: same origin and path, or the server refuses it.
-- **Who may:** members who can steer and may continue sessions in the project. The sheet starts the project's command
-  servers to report them, as a run does.
-- **The sheet records the project's trust** in the member's `trust.json` (`rotom mcp` has no `--approve`). Sessions
-  with a frozen configuration start with `--no-approve`, so it does not open the project for them.
-- **Backups:** restore leaves `mcp-auth.json` out, like `auth.json`. Members sign in again.
-- A sign-in waits up to 10 minutes. Starting another one cancels it. A server restart ends it.
-
-## Trust boundary changes
-
-- **The project's extensions and MCP commands run on every member's run**, as the service user. They can read what the
-  service user can read, and an extension can call a model provider of its own outside the gate. The
-  "Trusted members only" boundary applies to the project's files: only trusted people should change them.
-- **Sessions with a frozen configuration** (activated through the upstream configuration API) keep it, with no project
-  trust: their pinned AGENTS.md and skills apply, not the project's `.pi`.
-
-## Verification entry points
-
-These opt-in proof scripts describe reproducible fixture assertions, not a claim about any untested release.
-Check their inputs and authorization scope before running them; no real account or paid invocation is authorized by
-this guide.
-
-| Check               | Shows                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `test:kernel`       | The project's MCP server (secret from `!printf`, standing in for the keychain), extension and skill load; personal skill directories remain installed but are not loaded; a `${SERVICE_VAR}` server fails closed; a member-HOME `mcp.json`, a member `settings.json` `extensions` key and project `packages` refuse the start.                                                                                                  |
-| `test:kernel:app`   | Two members' runs in one project are both offered the project's MCP tool and see its skill. A member is offered the runtime's native command registry, including a skill from a `.pi/settings.json` path, and `/skill:name` reaches the model expanded; unknown slash names are rejected before inference.                                                                                                                      |
-| `test:kernel:mcp`   | Against a loopback OAuth server: a member signs in through a pasted address; a foreign address is refused; no browser opens on the server; the other member still needs sign-in; the member's run connects with the member's token; sign-out works; a frozen session stays closed.                                                                                                                                              |
-| `test:kernel:ui`    | In the browser: the MCP sheet lists the servers, signs the member in through the pasted address, then shows the server connected. Explicit discovery/authorized runs supply dynamic skills; `/mcp login` uses the member-owned sign-in sheet.                                                                                                                                                                                   |
-| `test:kernel:qoder` | The transport fixture loads as a project extension for two members.                                                                                                                                                                                                                                                                                                                                                             |
-| Negative control    | Without `--approve`, `test:kernel` fails on the project's MCP tool and `test:kernel:app` on the project's skill. Without the stand-in `open`, `test:kernel:mcp` records a browser opened on the server; without `--no-approve`, its frozen session loads the project's MCP. Treating all slash text as model prompts would allow an unknown command to reach inference; without the native registry route, the app proof fails. |
-
-`node test/native-commands-proof.ts --ui` additionally checks the command adapters, branch/draft/summary interactions,
-private downloads, private Qoder account results, unknown-command restart fencing and keyed status/widget UI.
-`node test/rotom-goal-proof.ts` checks real native Goal timer, Stop, pause and wake against a loopback model.
-
-The fixtures do not establish acceptance for a real keychain item (`!printf` stands in for it), a remote MCP or OAuth
-server, servers requiring a Client ID Metadata Document or step-up scopes, or the mobile layout. Historical account
-experiments and deployment evidence are not current verification and are kept outside this guide.
+Use [VERIFICATION.md](VERIFICATION.md). The native/browser, resource, MCP, Goal and inventory scripts use temporary data
+and synthetic loopback providers. They do not authorize a real model account, real MCP service, desktop action, external
+upload or production deployment. Old project-extension proofs must be migrated explicitly, not cited as this new contract.

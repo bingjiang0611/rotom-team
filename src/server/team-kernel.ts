@@ -1,4 +1,6 @@
 /** Opt-in application boundary: team authorizes and owns credentials; pinned rotom alone executes new native conversations. */
+import { safeConfigurationPath } from "./rotom-resource-policy.ts";
+import { teamResourceRevision } from "./rotom-resources.ts";
 import { createHash, randomUUID } from "node:crypto";
 import {
     existsSync,
@@ -48,16 +50,19 @@ import { AuthorsDoc, SessionsDoc } from "./docs.ts";
 import { THINKING_LEVELS } from "./commands.ts";
 import { NATIVE_ENTRY, RESUME_PREFIX } from "./entry-format.ts";
 import { projectLive, type ClientLive } from "./projection.ts";
-import type { KernelBinding, KernelEntry, KernelReceipt } from "./rotom-journal.ts";
+import {
+    KernelRequestConflict,
+    type KernelBinding,
+    type KernelEntry,
+    type KernelReceipt,
+} from "./rotom-journal.ts";
 import {
     nativeBuiltinCommands,
     nativeConfigurationApi,
     nativeSessionManager,
     nativeSessionExports,
-    projectSkillPaths,
     verifyRotomKernel,
 } from "./rotom-kernel.ts";
-import { loadSkillCommands, type SkillCommand } from "./prompts.ts";
 import { McpSignIns } from "./mcp-sign-in.ts";
 import { touchSession } from "./titles.ts";
 
@@ -120,6 +125,35 @@ export const NativeMirrorDoc = defineDoc<{ count: number }>({
     history: "latest",
     fork: "initial",
     initial: () => ({ count: 0 }),
+});
+
+type NativeCommandCatalog = {
+    memberId: string;
+    segmentId: string;
+    binding: string;
+    capturedAt: number;
+    resourceRevision: string;
+    invalidated?: boolean;
+    commands: Array<{
+        name: string;
+        description: string;
+        argumentHint?: string;
+        source?: string;
+        sourceInfo?: JsonValue;
+    }>;
+};
+
+function commandCatalogRevision(catalog: NativeCommandCatalog | undefined): string | null {
+    return catalog ? `${catalog.capturedAt}:${catalog.invalidated ? "stale" : "known"}` : null;
+}
+
+const NativeCommandCatalogDoc = defineDoc<{ catalog?: NativeCommandCatalog }>({
+    kind: "rotom-team.native-command-catalog",
+    version: 1,
+    scope: "conversation",
+    history: "latest",
+    fork: "initial",
+    initial: () => ({}),
 });
 
 /** Preserve native tree cancellation/draft outcomes for receipt readback without replaying navigation. */
@@ -188,24 +222,10 @@ export class TeamKernel {
     readonly #ready = new Set<ConversationId>();
     readonly #configurations = new Map<ConversationId, NativeConfigurations>();
     readonly #live = new Map<ConversationId, NativeLive>();
-    readonly #commands = new Map<
-        ConversationId,
-        {
-            memberId: string;
-            segmentId: string;
-            binding: string;
-            capturedAt: number;
-            commands: Array<{
-                name: string;
-                description: string;
-                argumentHint?: string;
-                source?: string;
-            }>;
-        }
-    >();
+    readonly #commands = new Map<ConversationId, NativeCommandCatalog>();
     readonly #nativeGoal = new Map<ConversationId, unknown>();
     readonly #branchedHistory = new Set<ConversationId>();
-    readonly #mcp = new McpSignIns();
+    readonly #mcp: McpSignIns;
     readonly #mirrors = new Map<ConversationId, Promise<void>>();
     readonly #operations = new Map<
         string,
@@ -213,6 +233,7 @@ export class TeamKernel {
     >();
     constructor(app: PocketApp) {
         this.#app = app;
+        this.#mcp = new McpSignIns(join(app.dataDir, "team-agent"));
         verifyRotomKernel();
         this.executions = new RotomExecutions(
             app.dataDir,
@@ -720,6 +741,10 @@ export class TeamKernel {
                 );
             }
 
+            if (error instanceof KernelRequestConflict) {
+                throw new HttpError(409, error.message);
+            }
+
             throw error;
         }
 
@@ -807,7 +832,7 @@ export class TeamKernel {
             "scoped-models": "native-models",
         };
 
-        if (command && sheets[command]) {
+        if (command && Object.hasOwn(sheets, command)) {
             return { status: "handled" as const, interaction: { type: sheets[command] } };
         }
 
@@ -838,7 +863,7 @@ export class TeamKernel {
                     status: "handled" as const,
                     interaction: {
                         type: "native-command",
-                        title: "Save native project trust (Team runs explicitly approve this project)",
+                        title: "Save native trust (Team agent configuration always ignores project trust)",
                         options: options.map((option, index) => ({
                             label: option.label,
                             text: `/trust ${index}`,
@@ -862,7 +887,7 @@ export class TeamKernel {
                 status: "handled" as const,
                 nativeResult: {
                     trust: option.label,
-                    note: "Team runs retain their explicit project approval.",
+                    note: "Team runs always disable project agent configuration; trust cannot enable project extensions.",
                 },
             };
         }
@@ -1476,7 +1501,7 @@ export class TeamKernel {
                 this.#app.roomChanged(id);
             },
             onEvent: (event) => this.#observe(id, event),
-            onCommands: (commands) => {
+            onCommands: async (commands) => {
                 const session = this.executions.journal.session(String(id));
 
                 this.#commands.set(id, {
@@ -1484,6 +1509,7 @@ export class TeamKernel {
                     segmentId: session.segmentId,
                     binding: JSON.stringify(session.binding),
                     capturedAt: Date.now(),
+                    resourceRevision: teamResourceRevision(join(this.#app.dataDir, "team-agent")),
                     commands: commands
                         .filter(
                             (command) =>
@@ -1497,11 +1523,17 @@ export class TeamKernel {
                             ...(typeof command.argumentHint === "string"
                                 ? { argumentHint: command.argumentHint }
                                 : {}),
+                            ...(command.sourceInfo
+                                ? { sourceInfo: command.sourceInfo as JsonValue }
+                                : {}),
                             ...(typeof command.source === "string"
                                 ? { source: command.source }
                                 : {}),
                         })),
                 });
+                await this.#app.harness.commit(async (tx) => {
+                    (await tx.doc(NativeCommandCatalogDoc, id)).catalog = this.#commands.get(id)!;
+                }, BACKGROUND_CONTEXT);
                 this.#app.roomChanged(id);
             },
             onNativeGoalState: (state) => {
@@ -1805,8 +1837,8 @@ export class TeamKernel {
     }
 
     /**
-     * The project's MCP servers as this member's runs reach them, and sign-in to those that use OAuth. A sign-in is the
-     * member's own: only their runs send its tokens. Reporting starts the project's command servers, as a run does, so
+     * The shared agent's MCP servers as this member's runs reach them, and sign-in to those that use OAuth. A sign-in is the
+     * member's own: only their runs send its tokens. Reporting starts the shared command servers, as a run does, so
      * it takes the right to run Pi in the project.
      */
     async #mcpCommand(id: ConversationId, user: User, text: string, requestId?: string) {
@@ -1888,13 +1920,26 @@ export class TeamKernel {
         this.#app.projects.require(user, this.#app.sessionMeta(id)?.projectId, "continue");
         await this.#app.accounts.forUser(user);
         const api = await nativeConfigurationApi();
+
+        safeConfigurationPath(join(this.#app.dataDir, "team-agent"), "settings.json");
         const manager = api.SettingsManager.create(
             this.#app.cwdOf(id),
-            join(this.#home(user.id), ".pi/agent"),
-            { projectTrusted: true },
+            join(this.#app.dataDir, "team-agent"),
+            { projectTrusted: false },
         );
 
         if (patch) {
+            if (user.role !== "owner") {
+                throw new HttpError(403, "Only the owner can change shared agent settings.");
+            }
+
+            if (this.#active.size > 0) {
+                throw new HttpError(
+                    409,
+                    "Wait for active Team runs before changing shared settings.",
+                );
+            }
+
             this.requireAccountIdle(user);
             const allowed = [
                 "steeringMode",
@@ -1959,10 +2004,8 @@ export class TeamKernel {
             await manager.flush();
 
             for (const [sessionId, cached] of this.#commands) {
-                if (cached.memberId === user.id) {
-                    this.#commands.delete(sessionId);
-                    this.#app.roomChanged(sessionId);
-                }
+                cached.invalidated = true;
+                this.#app.roomChanged(sessionId);
             }
 
             const errors = manager.drainErrors();
@@ -2081,6 +2124,26 @@ export class TeamKernel {
                 throw new HttpError(409, "Wait for this run before refreshing native commands.");
             }
 
+            const prior = this.executions.journal.request(
+                String(id),
+                this.#request(id, user, requestId),
+            );
+
+            if (prior) {
+                if (prior.operation !== "discover") {
+                    throw new HttpError(409, "Request belongs to another operation.");
+                }
+
+                return { receipt: this.#receipt(prior), ...(await this.nativeCommands(id, user)) };
+            }
+
+            if (this.executions.journal.pendingConversation(String(id))?.status === "unknown") {
+                throw new HttpError(
+                    409,
+                    "Reconcile the unknown operation before refreshing native commands.",
+                );
+            }
+
             const source = this.executions.journal.session(String(id));
 
             if (
@@ -2154,8 +2217,7 @@ export class TeamKernel {
         if (
             cached?.memberId === memberId &&
             cached.segmentId === session.segmentId &&
-            cached.binding === JSON.stringify(session.binding) &&
-            (this.isRunning(id) || Date.now() - cached.capturedAt < 30_000)
+            cached.binding === JSON.stringify(session.binding)
         ) {
             return cached;
         }
@@ -2166,6 +2228,17 @@ export class TeamKernel {
         this.#app.requireSee(user, id);
 
         const builtins = await nativeBuiltinCommands();
+
+        if (!this.#commands.has(id)) {
+            const saved = (
+                await this.#app.harness.snapshot(NativeCommandCatalogDoc, id, BACKGROUND_CONTEXT)
+            )?.catalog;
+
+            if (saved) {
+                this.#commands.set(id, saved);
+            }
+        }
+
         const cached = this.#commandSnapshot(id, user.id);
         const dynamic = cached?.commands ?? [];
         const names = new Set(builtins.map((command) => command.name));
@@ -2176,6 +2249,18 @@ export class TeamKernel {
                 ...dynamic.filter((command) => !names.has(command.name)),
             ],
             dynamicReady: Boolean(cached),
+            discoveryBlocked:
+                this.executions.journal.pendingConversation(String(id))?.status === "unknown",
+            revision: commandCatalogRevision(cached),
+            freshness: !cached
+                ? "undiscovered"
+                : cached.invalidated ||
+                    cached.resourceRevision !==
+                        teamResourceRevision(join(this.#app.dataDir, "team-agent"))
+                  ? "configuration-changed"
+                  : this.isRunning(id)
+                    ? "live"
+                    : "last-known",
             capturedAt: cached?.capturedAt ?? null,
         };
     }
@@ -2195,33 +2280,6 @@ export class TeamKernel {
         const entries = this.executions.journal.segmentEntries(segmentId);
 
         return currentBranchGoalState({ entries, leafId: entries.at(-1)?.id });
-    }
-
-    /**
-     * The skills to suggest as `/skill:name`: a frozen configuration's, or the project's as this member's runs find
-     * them. Suggestions only: the kernel expands the command itself, with its bundled skills too.
-     */
-    skillCommands(id: ConversationId, user: User): SkillCommand[] {
-        this.#app.requireSee(user, id);
-
-        if (!this.executions.journal.hasConversation(String(id))) {
-            throw new HttpError(409, "This session is still starting.");
-        }
-
-        const snapshot = this.configuration(id);
-
-        if (snapshot) {
-            return snapshot.skills;
-        }
-
-        const { workspace } = this.executions.journal.session(String(id)).binding;
-
-        return loadSkillCommands(
-            workspace,
-            join(this.#home(user.id), ".pi/agent"),
-            projectSkillPaths(workspace),
-            false,
-        );
     }
 
     /** What the web app needs to drive a native conversation: the head it acts on, and who pays for it. */
@@ -2245,7 +2303,7 @@ export class TeamKernel {
             thinkingLevel: binding.thinkingLevel ?? "off",
             kernelVersion: binding.kernelVersion,
             yours: binding.memberId === viewer.id,
-            commandsRevision: this.#commandSnapshot(id, viewer.id)?.capturedAt ?? null,
+            commandsRevision: commandCatalogRevision(this.#commandSnapshot(id, viewer.id)),
             hasBranchedHistory: this.#branchedHistory.has(id),
             dialogs: this.#live.get(id)?.dialogs ?? [],
             statuses: this.#live.get(id)?.statuses ?? {},
@@ -2825,7 +2883,11 @@ export class TeamKernel {
             const receipt = await run.promise;
 
             if (["unknown", "rejected", "interrupted"].includes(receipt.status)) {
-                this.#commands.delete(id);
+                const cached = this.#commands.get(id);
+
+                if (cached) {
+                    cached.invalidated = true;
+                }
             }
 
             await this.mirror(id);

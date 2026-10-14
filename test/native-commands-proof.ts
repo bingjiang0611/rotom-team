@@ -3,7 +3,7 @@ import { root, owner, until } from "./helpers.ts";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { once } from "node:events";
-import { mkdirSync, readFileSync, writeFileSync, realpathSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { PocketApp } from "../src/server/app.ts";
 import { createHandler } from "../src/server/http.ts";
@@ -15,14 +15,22 @@ import { nativeSessionManager } from "../src/server/rotom-kernel.ts";
 process.umask(0o077);
 const data = join(realpathSync(root), "native-commands");
 const workspace = join(realpathSync(root), "commands-workspace");
+const startsFile = join(data, "native-starts.jsonl");
 
 mkdirSync(data, { mode: 0o700 });
-mkdirSync(join(workspace, ".pi/extensions"), { recursive: true, mode: 0o700 });
-mkdirSync(join(workspace, ".pi/prompts"), { recursive: true, mode: 0o700 });
-writeFileSync(join(workspace, ".pi/prompts/fixture-prompt.md"), "NATIVE_TEMPLATE_INPUT $ARGUMENTS");
+mkdirSync(workspace, { recursive: true, mode: 0o700 });
+mkdirSync(join(data, "team-agent/extensions"), { recursive: true, mode: 0o700 });
+mkdirSync(join(data, "team-agent/prompts"), { recursive: true, mode: 0o700 });
 writeFileSync(
-    join(workspace, ".pi/extensions/commands.ts"),
-    `export default function(pi) {
+    join(data, "team-agent/prompts/fixture-prompt.md"),
+    "NATIVE_TEMPLATE_INPUT $ARGUMENTS",
+);
+writeFileSync(
+    join(data, "team-agent/extensions/commands.ts"),
+    `import {appendFileSync,existsSync} from "node:fs";
+export default function(pi) {
+    pi.on("session_start", () => appendFileSync(${JSON.stringify(join(realpathSync(root), "native-commands/native-starts.jsonl"))}, JSON.stringify({home: process.env.HOME}) + "\\n"));
+    pi.on("session_start", () => { if (existsSync(${JSON.stringify(join(data, "force-discovery-unknown"))})) process.exit(17); });
     pi.registerCommand("fixture-echo", {description: "fixture dynamic command", handler: async (_args, ctx) => ctx.ui.notify("native-echo")});
     pi.registerCommand("fixture-custom-message", {handler: async (_args, ctx) => {
         pi.sendMessage({customType: "fixture-text", content: [{type: "text", text: "CUSTOM_"}, {type: "text", text: "DRAFT"}], display: true}, {triggerTurn: false});
@@ -40,6 +48,7 @@ writeFileSync(
     pi.on("session_before_tree", (_event, ctx) => {
         if (ctx.sessionManager.getEntries().findLast(entry => entry.customType === "fixture-tree-cancellation")?.data?.enabled) return {cancel: true};
     });
+    for (const name of ["future.点", "constructor"]) { pi.registerCommand(name, {description: "Generic native name", handler: async (args) => pi.appendEntry("fixture-generic-name", {name, args})}); }
     pi.registerCommand("fixture-private", {description: "private-home:" + process.env.HOME, handler: async () => {}});
     pi.registerCommand("fixture-error", {handler: async () => { pi.appendEntry("fixture-effect", {effect: true}); throw new Error("fixture-after-effect"); }});
 }`,
@@ -269,6 +278,7 @@ try {
     const beforeCatalog = await json(await request(viewer, `c/${id}/prompts`));
 
     assert.equal(beforeCatalog.dynamicReady, false);
+    assert.equal(existsSync(startsFile), false, "GET does not start native extensions");
     assert.ok(beforeCatalog.commands.some((command: { name: string }) => command.name === "model"));
     assert.ok(
         !beforeCatalog.commands.some((command: { name: string }) =>
@@ -291,12 +301,55 @@ try {
     assert.equal(discovered.receipt.operation, "discover");
     assert.ok(discovered.commands.some((command: { name: string }) => command.name === "goal"));
     assert.equal(calls.length, 0, "first-session discovery must not require a paid prompt");
+    const startsBeforeRead = readFileSync(startsFile, "utf8");
+    const realNow = Date.now;
+
+    try {
+        Date.now = () => realNow() + 31_000;
+        const retained = await json(await request(alice, `c/${id}/prompts`));
+
+        assert.equal(retained.dynamicReady, true);
+        assert.equal(retained.freshness, "last-known");
+        assert.equal(retained.capturedAt, discovered.capturedAt);
+        assert.deepEqual(retained.commands, discovered.commands);
+    } finally {
+        Date.now = realNow;
+    }
+
+    assert.equal(readFileSync(startsFile, "utf8"), startsBeforeRead);
+    assert.equal(
+        (await request(bob, `c/${id}/native-settings`, { steeringMode: "all" })).status,
+        403,
+    );
     assert.equal((await json(await request(bob, `c/${id}/prompts`))).dynamicReady, false);
     assert.equal((await submit(alice, "/unknown-before-title")).status, 400);
     assert.equal(app.sessionMeta(id)?.title, undefined);
     assert.equal((await json(await submit(alice, "FIRST_USER_MARKER"))).status, "settled");
     assert.equal(calls.at(-1)!.body.model, "model-a");
+    const beforeGenericNames = calls.length;
+
+    for (const name of ["future.点", "constructor"]) {
+        assert.equal(
+            (await json(await submit(alice, `/${name} exact-argument`))).status,
+            "handled",
+        );
+    }
+
+    assert.equal(
+        calls.length,
+        beforeGenericNames,
+        "generic names invoke native handlers, not inference or builtin object properties",
+    );
     const sourceFirst = app.kernel!.executions.journal.session(String(id));
+
+    for (const name of ["future.点", "constructor"]) {
+        assert.ok(
+            readFileSync(sourceFirst.sessionFile!, "utf8").includes(
+                JSON.stringify({ name, args: "exact-argument" }),
+            ),
+        );
+    }
+
     const originalFile = sourceFirst.sessionFile!;
     const registry = await json(await request(alice, `c/${id}/prompts`));
 
@@ -539,6 +592,7 @@ try {
         oldFile.includes("FIRST_USER_MARKER"),
         "original source file survives session creation and model handoff",
     );
+    const catalogBeforeSettings = await json(await request(alice, `c/${id}/prompts`));
     const setting = await json(
         await request(alice, `c/${id}/native-settings`, {
             steeringMode: "all",
@@ -548,7 +602,17 @@ try {
 
     assert.equal(setting.steeringMode, "all");
     assert.deepEqual(setting.enabledModels, ["openai/model-b"]);
-    assert.equal((await json(await request(alice, `c/${id}/prompts`))).dynamicReady, false);
+    const retainedCatalog = await json(await request(alice, `c/${id}/prompts`));
+
+    assert.equal(retainedCatalog.dynamicReady, true);
+    assert.notEqual(retainedCatalog.revision, catalogBeforeSettings.revision);
+    assert.equal(retainedCatalog.capturedAt, catalogBeforeSettings.capturedAt);
+    assert.equal(retainedCatalog.freshness, "configuration-changed");
+    assert.ok(
+        retainedCatalog.commands.some(
+            (command: { name: string }) => command.name === "fixture-echo",
+        ),
+    );
     const info = await json(await submit(alice, "/session"));
 
     assert.equal(info.nativeResult.state.model.id, "model-b");
@@ -587,6 +651,16 @@ try {
     handler = createHandler({ app, listen: { host: "127.0.0.1", port: 0 }, restart: () => {} });
     assert.equal(app.sessionMeta(id)?.title, "Synchronized Native Name");
     assert.equal(app.kernel!.executions.journal.session(String(id)).binding.model, "model-b");
+    const startsAfterRestart = readFileSync(startsFile, "utf8");
+    const catalogAfterRestart = await json(await request(alice, `c/${id}/prompts`));
+
+    assert.equal(catalogAfterRestart.dynamicReady, true);
+    assert.ok(
+        catalogAfterRestart.commands.some(
+            (command: { name: string }) => command.name === "fixture-echo",
+        ),
+    );
+    assert.equal(readFileSync(startsFile, "utf8"), startsAfterRestart);
     const restoredTree = await json(
         await request(alice, `c/${id}/kernel-request?requestId=tree-stable&operation=submit`),
     );
@@ -610,7 +684,7 @@ try {
     assert.equal(calls.length, beforeNoOp);
     await json(await submit(alice, "COMPACT_SECOND", {}, noOpSession.id));
     await json(await submit(alice, "COMPACT_THIRD", {}, noOpSession.id));
-    const compactSettingsPath = join(noOpSegment.binding.home, ".pi/agent/settings.json");
+    const compactSettingsPath = join(data, "team-agent/settings.json");
     const compactSettings = JSON.parse(readFileSync(compactSettingsPath, "utf8"));
 
     compactSettings.compaction = { enabled: false, keepRecentTokens: 1, reserveTokens: 1024 };
@@ -673,11 +747,139 @@ try {
         });
     }
 
+    const queuedFailureSession = await json(
+        await request(alice, "sessions", { backend: "rotom", cwd: workspace }),
+    );
+
+    await json(await submit(alice, "QUEUED_EFFECT_BASELINE", {}, queuedFailureSession.id));
+    hold = true;
+    await json(
+        await submit(
+            alice,
+            "QUEUED_EFFECT_HOLD",
+            { wait: false, requestId: "queued-owner" },
+            queuedFailureSession.id,
+        ),
+    );
+    await until(
+        () => JSON.stringify(calls.at(-1)?.body).includes("QUEUED_EFFECT_HOLD"),
+        "ordinary active prompt for queued effect",
+        20000,
+    );
+    const queuedOwner = app.kernel!.executions.journal.latest(String(queuedFailureSession.id))!;
+    const queuedFailurePending = submit(
+        alice,
+        "/fixture-error",
+        { mode: "steer", requestId: "queued-effect" },
+        queuedFailureSession.id,
+    );
+    const queuedFile = app.kernel!.executions.journal.session(
+        String(queuedFailureSession.id),
+    ).sessionFile!;
+
+    await until(
+        () => readFileSync(queuedFile, "utf8").includes("fixture-effect"),
+        "queued native effect before owner completion",
+        20000,
+    );
+    let queuedRetry: Response | undefined;
+    const queuedRetryPending = submit(
+        alice,
+        "/fixture-error",
+        { mode: "steer", requestId: "queued-effect" },
+        queuedFailureSession.id,
+    ).then((response) => {
+        queuedRetry = response;
+    });
+
+    await until(() => queuedRetry !== undefined, "pending queued command retry refused", 5000);
+    await queuedRetryPending;
+    assert.equal(queuedRetry!.status, 409);
+    await app.kernel!.abort(queuedFailureSession.id, alice);
+    const queuedFailure = await queuedFailurePending;
+
+    assert.equal(queuedFailure.status, 409);
+    assert.ok((await queuedFailure.text()).includes("unknown"));
+    hold = false;
+    await until(
+        () => !app.kernel!.isRunning(queuedFailureSession.id),
+        "queued effect owner closure",
+        20000,
+    );
+    const queuedReceipt = app.kernel!.executions.journal.receipt(queuedOwner.id);
+    const queuedBytes = readFileSync(queuedFile, "utf8");
+
+    assert.ok(queuedBytes.includes("fixture-effect"));
+    assert.equal(
+        queuedBytes.split("\n").filter((line) => line.includes('"customType":"fixture-effect"'))
+            .length,
+        1,
+        "queued retry cannot repeat the effect",
+    );
+    const queuedRecoverable = app
+        .kernel!.executions.journal.unknownPrompts()
+        .some((row) => row.id === queuedOwner.id);
+
+    writeFileSync(
+        join(data, "queued-effect-evidence.json"),
+        JSON.stringify({
+            receipt: queuedReceipt,
+            recoverable: queuedRecoverable,
+            effectPersisted: true,
+        }),
+    );
+    assert.equal(queuedReceipt.status, "unknown");
+    assert.equal(queuedReceipt.operation, "prompt", "do not rewrite the owning intent type");
+    assert.equal(
+        queuedRecoverable,
+        false,
+        "queued effect-then-error must fence ordinary prompt recovery",
+    );
     const failureSession = await json(
         await request(alice, "sessions", { backend: "rotom", cwd: workspace }),
     );
 
     await json(await submit(alice, "ERROR_BASELINE", {}, failureSession.id));
+    const unknownDiscoverySession = await json(
+        await request(alice, "sessions", { backend: "rotom", cwd: workspace }),
+    );
+
+    writeFileSync(join(data, "force-discovery-unknown"), "fixture-only abrupt startup exit");
+    const unknownDiscovery = await json(
+        await request(alice, `c/${unknownDiscoverySession.id}/prompts`, {
+            requestId: "discovery-unknown",
+        }),
+    );
+
+    rmSync(join(data, "force-discovery-unknown"));
+    assert.equal(unknownDiscovery.receipt.status, "unknown");
+    const startsAfterUnknown = readFileSync(startsFile, "utf8");
+
+    assert.equal(
+        (await json(await request(alice, `c/${unknownDiscoverySession.id}/prompts`)))
+            .discoveryBlocked,
+        true,
+    );
+    assert.equal(
+        (
+            await request(alice, `c/${unknownDiscoverySession.id}/prompts`, {
+                requestId: "must-not-start",
+            })
+        ).status,
+        409,
+    );
+    const unknownReplay = await json(
+        await request(alice, `c/${unknownDiscoverySession.id}/prompts`, {
+            requestId: "discovery-unknown",
+        }),
+    );
+
+    assert.equal(unknownReplay.receipt.id, unknownDiscovery.receipt.id);
+    assert.equal(
+        readFileSync(startsFile, "utf8"),
+        startsAfterUnknown,
+        "unknown discovery cannot start a second native process, even with a new request id",
+    );
     const beforeFailure = calls.length;
     const failed = await json(
         await submit(alice, "/fixture-error", { requestId: "error-stable" }, failureSession.id),
@@ -703,6 +905,20 @@ try {
     handler = createHandler({ app, listen: { host: "127.0.0.1", port: 0 }, restart: () => {} });
     await new Promise((resolve) => setTimeout(resolve, 350));
     assert.equal(app.kernel!.executions.journal.receipt(failed.id).status, "unknown");
+    assert.equal(app.kernel!.executions.journal.receipt(queuedOwner.id).status, "unknown");
+    assert.equal(app.kernel!.executions.journal.resume(queuedOwner.id), undefined);
+    assert.equal(readFileSync(queuedFile, "utf8"), queuedBytes);
+    const queuedReadback = await json(
+        await submit(
+            alice,
+            "QUEUED_EFFECT_HOLD",
+            { requestId: "queued-owner" },
+            queuedFailureSession.id,
+        ),
+    );
+
+    assert.equal(queuedReadback.id, queuedOwner.id);
+    assert.equal(queuedReadback.status, "unknown");
     const failedReadback = await json(
         await request(
             alice,
@@ -726,10 +942,22 @@ try {
     assert.equal(replay.status, "unknown");
     assert.equal(readFileSync(failureFile, "utf8"), failureBytes);
     assert.equal(calls.length, beforeFailure);
+    report.queuedCommand = {
+        operation: queuedReceipt.operation,
+        status: queuedReceipt.status,
+        unresolvedCommandInput: queuedReceipt.unresolvedCommandInput,
+        effectCount: 1,
+        recoveryEligible: false,
+        restartedWithoutReplay: true,
+    };
     report.passed = true;
     report.inferences = calls.length;
     report.checks = [
         "command effects remain unknown without restart/retry replay",
+        "queued effect-then-error durably fences the existing prompt; no duplicate effect or automatic resume",
+        "actual unknown discovery cannot start a second native process with same or new request ID",
+        "catalog retained after 30 seconds/restart without native startup; owner-only shared settings",
+        "generic dotted/non-ASCII/prototype-property command names reach native handlers",
         "first-session no-inference discovery and member-private snapshots",
         "Qoder account API private results",
         "native title readback before first message and after handoff",

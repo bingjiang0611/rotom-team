@@ -81,6 +81,7 @@ export function NativeInfoSheet() {
 
 export function NativeSettingsSheet({ scope = false }) {
     const [settings, setSettings] = useState(null);
+    const sharedWritable = store.state.me?.role === "owner";
 
     useEffect(() => {
         attempt(async () => setSettings(await actions.nativeSettings()));
@@ -124,10 +125,10 @@ export function NativeSettingsSheet({ scope = false }) {
                 ? html`<p>Loading…</p>`
                 : scope
                   ? html`
-            <p class="muted">Select models for cycling. An empty selection means all your available models.</p>
+            <p class="muted">The owner sets shared model patterns. An empty scope means all your available models; model cycling still uses your own account.</p>
             ${settings.models.map(
                 (model) => html`<label class="field">
-                <input type="checkbox" checked=${model.selected} onChange=${() => toggle(model.nativeName)} />
+                <input type="checkbox" disabled=${!sharedWritable} checked=${model.selected} onChange=${() => toggle(model.nativeName)} />
                 ${model.name}
             </label>`,
             )}
@@ -135,11 +136,11 @@ export function NativeSettingsSheet({ scope = false }) {
             <button class="button" onClick=${cycle}>Cycle model</button>
         `
                   : html`
-            <p class="muted">Saved with native SettingsManager for your next run. Project settings take precedence. Team keeps automatic retries and automatic compaction off.</p>
+            <p class="muted">Only the owner can change shared native settings. Project settings cannot override them. Team keeps automatic retries and automatic compaction off.</p>
             ${["steeringMode", "followUpMode"].map(
                 (key) => html`<label class="field">
                 ${key}
-                <select value=${settings[key]} onChange=${(event) => save({ [key]: event.currentTarget.value })}>
+                <select disabled=${!sharedWritable} value=${settings[key]} onChange=${(event) => save({ [key]: event.currentTarget.value })}>
                     <option value="one-at-a-time">One at a time</option>
                     <option value="all">All</option>
                 </select>
@@ -147,7 +148,7 @@ export function NativeSettingsSheet({ scope = false }) {
             )}
             ${["imageAutoResize", "blockImages", "enableSkillCommands"].map(
                 (key) => html`<label class="field">
-                <input type="checkbox" checked=${settings[key]} onChange=${(event) => save({ [key]: event.currentTarget.checked })} />
+                <input type="checkbox" disabled=${!sharedWritable} checked=${settings[key]} onChange=${(event) => save({ [key]: event.currentTarget.checked })} />
                 ${key}
             </label>`,
             )}

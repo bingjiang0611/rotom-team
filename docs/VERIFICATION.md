@@ -46,6 +46,43 @@ Uploads are limited to 50 MiB each and 10 files per message. Direct model images
 The fixtures do not establish image understanding on every real provider, image-specific interrupted-run recovery,
 or an OS sandbox between trusted members.
 
+## Shared agent resources and command inventory
+
+```sh
+node --test test/rotom-resources.test.ts test/native-command-menu.test.ts test/team-resource-backup.test.ts
+node test/team-resources-proof.ts
+node test/native-command-inventory.ts <attested-terminal-inventory.json>
+node test/native-tui-prototype.ts
+node test/mcp-sign-in-proof.ts
+```
+
+The resource unit checks derive shared settings, preserve credential/unknown-state bytes, reject credential declarations,
+restore declared configuration, detect private config writes and set every native computer-use override. The actual pinned
+resource proof installs unknown extension names and checks arguments, standard UI interactions, context/skill loading,
+stored trust, native reload, package/setting/direct project-extension negative controls, awaited async follow-up and
+post-effect-error replay fencing. It records real native read-only command outputs, shared direct/package roles, pre-start
+project-role rejection, a late project-settings denial at the actual native subagent tool boundary, and frozen context
+composition. Dedicated regressions cover two-member managed file retirement, credential aliases, linked-package fingerprints,
+dotted/non-ASCII command grammar, unknown discovery without a second POST, and real offline npm backup/restore/reinstall.
+The browser proof creates an actual abruptly-ended discovery and checks the native startup counter for same/new-request retries.
+The native command proof also executes a genuine effect-then-throw command during an ordinary active prompt. It checks the
+persisted effect, unknown owner with unchanged operation, duplicate refusal, absent recovery eligibility and no restart replay.
+Journal tests cover both unresolved and confirmed-handled inputs; read-only inspection exposes the fence without command text.
+The schema-1 migration fixture is reconstructed without newer tables, and schema-5 inspection preserves operation identity.
+
+The inventory script compares all 45 supplied terminal name/source pairs to actual isolated Team discovery. It records
+39 raw baseline entries and 37 allowed catalog entries (not 37 working interactions); it does not claim 45 behavioral passes. Five personal skills are deliberately uninstalled by user choice, not replaced by fabricated skills. Read-only terminal SKILL.md metadata evidence is private and stays outside
+Git. Every row and remaining interaction gap is listed in [NATIVE-COMMAND-COMPATIBILITY.md](NATIVE-COMMAND-COMPATIBILITY.md).
+
+The PTY experiment runs the verified CLI and a real custom component on an OS PTY. It proves a native key interaction,
+native persisted effects and session identity in a synthetic fixture. Its receipt remains unknown. It is not a browser
+terminal implementation, generic command-completion proof or production backend. `/context` and `/llama` RPC warnings
+are not success. No real accounts or external destructive actions are authorized by these checks.
+
+MCP fixtures now deliberately install server definitions into the shared profile, not project `.pi/mcp.json`; tokens remain
+per-member. The browserless OAuth callback, private token routing and sign-out assertions remain. Frozen context retains
+the shared base agent MCP, while project MCP/configuration stays closed.
+
 ## Personal skills do not block native runs
 
 `npm run test:kernel` keeps skills in both member-HOME directories and a personal `skills` setting. It verifies that
@@ -62,7 +99,12 @@ Existing `unknown` receipts are not rewritten or replayed by this change.
 unrelated settings, private file permissions and no rewrite when defaults already match. `npm run test:kernel`
 uses the actual pinned subagent tool against a loopback model: its executable list contains only `scout`, `worker`
 and `reviewer`, and new tasks naming `delegate`, `oracle`, `advisor` or `researcher` are rejected as unknown agents.
-This does not use real accounts or establish that an explicitly re-enabled project role can run under scoped rules.
+This does not use real accounts. Independent reader enforcement is covered by the resource proofs above, not inferred from
+the default-role test. Actual child inference/usage, fd-3 owner lifetime and Stop remain covered by the Team kernel proof.
+The same proof checks optional named-skill/memory/refinement refusals before child inference and pre-execution rejection of
+user-provided workflowScript. Native structured single-child normalization is not programmable-workflow coverage. Native scoped
+ownership itself rejects synchronous script controllers; the async script delivery/lifetime gap is an explicit unsupported
+capability, not simulated completion. See the user-approved subset in NATIVE-COMMAND-COMPATIBILITY.md.
 
 ## Delivered file links
 
@@ -96,7 +138,7 @@ npm run test:kernel:ui
 
 These scripts use the actual pinned runtime, isolated member HOMEs, loopback model/OAuth fixtures and Chromium.
 `native-commands-proof` writes `native-commands/report.json` and screenshots under its printed temporary data root.
-It checks first-session discovery without inference; viewer/other-member catalog privacy; model A→B and later payer/model
+It checks first-session discovery without inference; retained snapshots beyond 30 seconds and after restart without native startup; owner-only shared settings; viewer/other-member catalog privacy; model A→B and later payer/model
 requests; confirmed names before the first conversation and across handoff; native branch JSONL/HTML export; positive
 owner-private reasoning before cross-member clone/import filtering; earlier SECOND-entry fork/tree with THIRD absent
 from the new branch and later inference; request replay/conflicts; native settings and slash compaction with persisted summary/usage; and explicit share/bug rejection

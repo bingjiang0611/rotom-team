@@ -53,7 +53,12 @@ test("native inspection does not release leases, migrate or resolve attempts, or
 
     try {
         journal.bind("conversation", f.binding);
-        const receipt = journal.reserve("conversation", "request", "private-prompt-never-output");
+        const receipt = journal.reserve(
+            "conversation",
+            "request",
+            "private-prompt-never-output",
+            "command",
+        );
         const lease = readFileSync(join(f.data, "kernel.lock"));
         const result = inspectNative(f.data);
 
@@ -65,6 +70,7 @@ test("native inspection does not release leases, migrate or resolve attempts, or
         assert.equal(result.replayPermitted, false);
         assert.equal(result.pending![0]!.attemptId, receipt.id);
         assert.equal(result.pending![0]!.recordedStatus, "dispatch-intent");
+        assert.equal(result.pending![0]!.operation, "command");
         const cli = spawnSync(
             process.execPath,
             [
@@ -197,6 +203,7 @@ test(
             assert.equal(result.toolClosure, "unknown");
             assert.equal(result.pending![0]!.attemptId, message.attemptId);
             assert.equal(result.pending![0]!.recordedStatus, "dispatch-intent");
+            assert.equal(result.pending![0]!.operation, "prompt");
             assert.throws(() => new RotomJournal(f.data), /EEXIST/);
             assert.throws(() => backup(f.data, join(f.root, "backup")), /Kernel writer lease/);
             assert.deepEqual(readFileSync(join(f.data, "kernel.lock")), lease);

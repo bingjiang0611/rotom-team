@@ -10,8 +10,10 @@ import {
     realpathSync,
     readdirSync,
     existsSync,
+    rmSync,
+    globSync,
 } from "node:fs";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
 import { randomUUID } from "node:crypto";
 import { PocketApp } from "../src/server/app.ts";
 import { createHandler } from "../src/server/http.ts";
@@ -51,7 +53,7 @@ let subagentSearch = "";
 const childMembers: string[] = [];
 const hangingChild = Promise.withResolvers<void>();
 /** Once the project declares its MCP server, every member's live run is offered its tool. */
-let projectMcp = false;
+let sharedMcp = false;
 const offeredProjectMcp = new Set<string>();
 const modelServer = createServer(async (req, res) => {
     try {
@@ -78,10 +80,7 @@ const modelServer = createServer(async (req, res) => {
             // All configuration is the project's, read live from the workspace, the same for every member.
             assert.ok(body.includes("PROJECT_LIVE_CONTEXT"));
             // A session with a frozen snapshot keeps its pinned configuration and is not offered it.
-            assert.ok(
-                projectMcp || !body.includes("mcp__probe__"),
-                "MCP before the project had it",
-            );
+            assert.ok(sharedMcp || !body.includes("mcp__probe__"), "MCP before the project had it");
 
             if (body.includes("mcp__probe__")) {
                 offeredProjectMcp.add(member);
@@ -245,9 +244,16 @@ const modelServer = createServer(async (req, res) => {
             return;
         }
 
-        if (lastUser.includes("SPAWN_SUBAGENT") || lastUser.includes("SPAWN_HANGING")) {
+        if (
+            lastUser.includes("SPAWN_SUBAGENT") ||
+            lastUser.includes("SPAWN_HANGING") ||
+            lastUser.includes("SPAWN_RESOURCE_")
+        ) {
             // Each spawning prompt has its own tool call ids: an earlier prompt's calls stay in the history.
-            const round = lastUser.includes("SPAWN_HANGING") ? "2" : "1";
+            const resourceCase = lastUser.match(
+                /SPAWN_RESOURCE_(SKILL|MEMORY|REFINEMENT|ASYNC_WORKFLOW|WORKFLOW|WORKER)/,
+            )?.[1];
+            const round = resourceCase ?? (lastUser.includes("SPAWN_HANGING") ? "2" : "1");
             const spawned = input.messages.find(
                 (message: { role: string; tool_call_id?: string }) =>
                     message.role === "tool" && message.tool_call_id === `spawn-${round}`,
@@ -286,14 +292,36 @@ const modelServer = createServer(async (req, res) => {
                             type: "function",
                             function: {
                                 name: "subagent",
-                                arguments: JSON.stringify({
-                                    agent: "reviewer",
-                                    task:
-                                        round === "2"
-                                            ? "SUBAGENT_CHILD_HANG: never answer"
-                                            : "SUBAGENT_CHILD_TASK: reply CHILD_DONE",
-                                    extensions: [],
-                                }),
+                                arguments: JSON.stringify(
+                                    resourceCase
+                                        ? resourceCase.endsWith("WORKFLOW")
+                                            ? {
+                                                  workflowScript: `return await runs.run("resource-check", {agent:"reviewer",task:"SUBAGENT_CHILD_TASK: reply CHILD_DONE"});`,
+                                                  ...(resourceCase === "WORKFLOW"
+                                                      ? { async: false }
+                                                      : {}),
+                                              }
+                                            : {
+                                                  agent:
+                                                      resourceCase === "MEMORY"
+                                                          ? "memory-fixture"
+                                                          : resourceCase === "SKILL"
+                                                            ? "named-skill-fixture"
+                                                            : resourceCase === "WORKER"
+                                                              ? "worker"
+                                                              : "reviewer",
+                                                  task: "SUBAGENT_CHILD_TASK: reply CHILD_DONE",
+                                                  extensions: [],
+                                              }
+                                        : {
+                                              agent: "reviewer",
+                                              task:
+                                                  round === "2"
+                                                      ? "SUBAGENT_CHILD_HANG: never answer"
+                                                      : "SUBAGENT_CHILD_TASK: reply CHILD_DONE",
+                                              extensions: [],
+                                          },
+                                ),
                             },
                         },
                     ],
@@ -675,14 +703,14 @@ try {
     const bobNow = app.config.userById(bob.user.id)!;
     const bobSession = await app.commands.createSession(bobNow, { backend: "rotom" });
 
-    // Skills and MCP servers are the project's too, in its `.pi`.
+    // Project skills remain local; the owner declares MCP servers in the shared agent.
     mkdirSync(join(workspace, ".pi", "skills", "project-proof"), { recursive: true });
     writeFileSync(
         join(workspace, ".pi", "skills", "project-proof", "SKILL.md"),
         "---\nname: project-proof\ndescription: PROJECT_SKILL_DESCRIPTION\n---\nProject skill.\n",
     );
     writeFileSync(
-        join(workspace, ".pi", "mcp.json"),
+        join(folder, "team-agent", "mcp.json"),
         JSON.stringify({
             mcpServers: {
                 probe: {
@@ -694,7 +722,7 @@ try {
             },
         }),
     );
-    projectMcp = true;
+    sharedMcp = true;
     hold = true;
     const inFlight = request(bob.token, `c/${bobSession.id}/submit`, "POST", {
         text: "Wait for revocation",
@@ -758,7 +786,7 @@ try {
         ],
     );
     assert.equal((await request(bob.token, `c/${bobSession.id}/mcp`)).status, 403);
-    report.mcpSheetReportsProjectServers = true;
+    report.mcpSheetReportsSharedServers = true;
     const beforeRejected = app.kernel!.executions.journal.receipts(String(id)).length;
 
     for (const invalid of [
@@ -963,8 +991,8 @@ try {
         ).status,
         400,
     );
-    const settingsFile = join(folder, "kernel-homes", bob.user.id, ".pi/agent/settings.json");
-    const settings = JSON.parse(readFileSync(settingsFile, "utf8"));
+    const settingsFile = join(folder, "team-agent/settings.json");
+    const settings = existsSync(settingsFile) ? JSON.parse(readFileSync(settingsFile, "utf8")) : {};
 
     settings.compaction = { enabled: false, keepRecentTokens: 1, reserveTokens: 1024 };
     writeFileSync(settingsFile, JSON.stringify(settings), { mode: 0o600 });
@@ -2315,6 +2343,129 @@ try {
     assert.ok(JSON.stringify(restoredContent.at(-1)).includes("NATIVE_IMAGE_SEEN"));
     report.nativeAttachmentsImagesAndHistory = true;
     report.firstMessageNamesSession = true;
+
+    // Keep native structured-child/Stop behavior; prove optional injection and user-script refusals separately.
+    const resourceHome = join(folder, "kernel-homes", a.id);
+    const sharedRoles = join(folder, "team-agent/agents");
+
+    mkdirSync(sharedRoles, { recursive: true });
+    writeFileSync(
+        join(sharedRoles, "named-skill-fixture.md"),
+        "---\nname: named-skill-fixture\ndescription: Fixture optional named skill\ntools: read, ls\nextensions:\nskills: member-pi\n---\nFixture role.",
+    );
+    writeFileSync(
+        join(sharedRoles, "memory-fixture.md"),
+        "---\nname: memory-fixture\ndescription: Fixture optional memory\ntools: read, ls\nextensions:\nmemory:\n  scope: user\n  path: fixture-memory\n---\nFixture role.",
+    );
+    const privateMemory = join(resourceHome, ".pi/agent/agent-memory/fixture-memory/MEMORY.md");
+
+    mkdirSync(join(privateMemory, ".."), { recursive: true });
+    writeFileSync(privateMemory, "PRIVATE_MEMORY_MUST_NOT_BE_IMPORTED");
+    const refinement = join(workspace, ".pi/subagents/refinements/reviewer.md");
+    const metadata = {
+        agent: "reviewer",
+        revision: 1,
+        updatedAt: new Date().toISOString(),
+        base: { source: "builtin", filePath: "fixture-reviewer.md", systemPromptSha256: "fixture" },
+        evidence: {},
+    };
+    const refinementText = `<!-- pi-subagents-refinement:v1\n${JSON.stringify(metadata)}\n-->\n\n\`\`\`pi-subagents-refinement-current\nPROJECT_REFINEMENT_MUST_NOT_BE_IMPORTED\n\`\`\`\n`;
+    const resourceResults = [];
+
+    for (const kind of ["SKILL", "MEMORY", "REFINEMENT", "ASYNC_WORKFLOW", "WORKFLOW", "WORKER"]) {
+        if (kind === "REFINEMENT") {
+            mkdirSync(join(refinement, ".."), { recursive: true });
+            writeFileSync(refinement, refinementText);
+        }
+
+        const resourceToken = aliceToken;
+        const resourceRuns = subagentRuns;
+        const created = await request(resourceToken, "sessions", "POST", { backend: "rotom" });
+
+        assert.equal(created.status, 200, await created.clone().text());
+        const resourceId = ((await created.json()) as { id: number }).id;
+        const beforeChild: number = childRequests;
+        const resourceStore = dirname(resourceRuns);
+        const descriptors = () => globSync("**/recovery-descriptor.json", { cwd: resourceStore });
+        const beforeRuns = new Set(descriptors());
+        const beforeArtifacts = readdirSync(resourceRuns);
+        const result = await request(resourceToken, `c/${resourceId}/submit`, "POST", {
+            text: `SPAWN_RESOURCE_${kind}`,
+            requestId: `resource-${kind}`,
+        });
+
+        assert.equal(result.status, 200, await result.clone().text());
+        assert.equal(childRequests - beforeChild, kind === "WORKER" ? 1 : 0, kind);
+        const findDescriptor = () => descriptors().find((name) => !beforeRuns.has(name));
+
+        if (!kind.endsWith("WORKFLOW")) {
+            await until(() => Boolean(findDescriptor()), `${kind} native descriptor`);
+        }
+
+        const run = findDescriptor();
+        const directory = run ? dirname(join(resourceStore, run)) : undefined;
+        const descriptor = directory
+            ? JSON.parse(readFileSync(join(directory, "recovery-descriptor.json"), "utf8"))
+            : undefined;
+
+        if (kind === "SKILL") {
+            assert.deepEqual(descriptor.skills, ["member-pi"]);
+        }
+
+        if (kind === "MEMORY") {
+            assert.deepEqual(descriptor.memory, { scope: "user", path: "fixture-memory" });
+        }
+
+        if (!kind.endsWith("WORKFLOW") && kind !== "WORKER") {
+            assert.ok(
+                readFileSync(join(directory!, "output-0.log"), "utf8").includes(
+                    kind === "SKILL"
+                        ? "named-skill injection is unsupported"
+                        : kind === "MEMORY"
+                          ? "memory injection is unsupported"
+                          : "refinement injection is unsupported",
+                ),
+            );
+        }
+
+        if (kind.endsWith("WORKFLOW")) {
+            assert.deepEqual(readdirSync(resourceRuns), beforeArtifacts);
+            assert.equal(descriptors().filter((name) => !beforeRuns.has(name)).length, 0);
+            const entries = app.kernel!.executions.journal.entries(String(resourceId));
+
+            assert.ok(
+                JSON.stringify(entries).includes(
+                    kind === "ASYNC_WORKFLOW"
+                        ? "User-provided workflowScript is unsupported"
+                        : "async: must be equal to one of the allowed values",
+                ),
+                "async scripts are Team-refused; synchronous scripts are rejected by the actual pinned schema",
+            );
+        }
+
+        if (kind === "REFINEMENT") {
+            assert.equal(readFileSync(refinement, "utf8"), refinementText);
+            rmSync(refinement);
+        }
+
+        assert.equal(readFileSync(privateMemory, "utf8"), "PRIVATE_MEMORY_MUST_NOT_BE_IMPORTED");
+        assert.ok(
+            readFileSync(
+                join(resourceHome, ".pi/agent/skills/member-pi/SKILL.md"),
+                "utf8",
+            ).includes("PERSONAL_SKILL_MUST_NOT_LOAD"),
+        );
+        resourceResults.push({
+            kind,
+            childInferences: childRequests - beforeChild,
+            ...(directory ? { descriptor: join(directory, "recovery-descriptor.json") } : {}),
+        });
+    }
+
+    report.optionalSubagentInjectionFences = resourceResults;
+    report.userProvidedWorkflowScripts =
+        "unsupported: native scoped sync refusal and async lifetime/result-delivery gap";
+    report.loopbackRequests = calls;
 
     if (process.argv.includes("--serve") || process.argv.includes("--ui")) {
         // Exercise real native compaction on a small UI fixture, without changing product defaults.
