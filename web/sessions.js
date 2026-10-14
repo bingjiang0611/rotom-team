@@ -178,15 +178,11 @@ function dayGroup(ms) {
     return "Earlier";
 }
 
-/** `~/Development/pi-pocket` with its last part bold, for a folder group's name. */
+/** The last part of a folder path, for a compact folder group's name. */
 function FolderName({ path }) {
-    const at = path.lastIndexOf("/");
+    const name = path.slice(path.lastIndexOf("/") + 1);
 
-    if (at <= 0) {
-        return html`<b>${path}</b>`;
-    }
-
-    return html`${path.slice(0, at + 1)}<b>${path.slice(at + 1)}</b>`;
+    return html`<b>${name || path}</b>`;
 }
 
 /** The text with what matched the search marked. */
@@ -327,6 +323,7 @@ function groupsOf(shown, { tab, needle, home, pinned }) {
                     tab === "folders"
                         ? html`<${FolderName} path=${shortPath(session.cwd, home)} />`
                         : dayGroup(session.updatedAt),
+                title: tab === "folders" ? shortPath(session.cwd, home) : undefined,
                 rows: [],
             });
         }
@@ -764,7 +761,7 @@ export function SessionList({ compact = false }) {
                                 onClick=${() => group.key !== "flat" && toggleGroup(group.key)}
                                 aria-expanded=${!isClosed}
                             >
-                                <span class="group-name">${group.label}</span>
+                                <span class="group-name" title=${group.title}>${group.label}</span>
                                 <span class="group-count">${group.rows.length}</span>
                                 ${group.key !== "flat" && html`<${Icon} name="down" size=${12} />`}
                             </button>`

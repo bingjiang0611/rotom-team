@@ -213,6 +213,18 @@ after(async () => {
     cleanUp();
 });
 
+test("folder groups show only the last path component", real, async () => {
+    await fresh();
+    await tap('.session-tabs [role="tab"]:nth-child(2)');
+    const group = await inPage<{ text: string; title: string }>(`
+        const element = document.querySelector(".session-group .group-name");
+
+        return JSON.stringify({ text: element.textContent, title: element.title });
+    `);
+
+    assert.deepEqual(group, { text: "work", title: work });
+});
+
 test("a session opened from the list: back goes back to the list", real, async () => {
     await fresh();
     await tap(row(first));
