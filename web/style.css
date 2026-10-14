@@ -2273,7 +2273,8 @@ button.chip:hover {
     animation: popin var(--t-in) var(--ease-out);
 }
 
-.state-warn {
+.state-warn,
+.state-input {
     display: grid;
     place-items: center;
     width: 12px;
@@ -2283,6 +2284,11 @@ button.chip:hover {
     font-size: 0.6rem;
     font-weight: 800;
     animation: attention 1.6s var(--ease-in-out) infinite;
+}
+
+.state-input {
+    outline: 1px solid var(--warn);
+    outline-offset: 2px;
 }
 
 @keyframes attention {
@@ -2352,6 +2358,12 @@ button.chip:hover {
 .session-side .unread-dot {
     width: 6px;
     height: 6px;
+}
+
+.session-attention {
+    color: var(--warn);
+    font-weight: 700;
+    white-space: nowrap;
 }
 
 /* Hold Alt: each of the first nine rows shows the number that jumps to it. */
@@ -2834,7 +2846,7 @@ button.chip:hover {
 }
 
 /* A working session's tile: a still underline, accent to spark. */
-.ws.busy::after {
+.ws.busy:not(.waiting)::after {
     content: "";
     position: absolute;
     left: 8px;
@@ -2842,6 +2854,14 @@ button.chip:hover {
     bottom: 3px;
     height: 2px;
     background: linear-gradient(90deg, var(--accent), var(--spark));
+}
+
+.ws-answer {
+    position: absolute;
+    right: 3px;
+    bottom: 1px;
+    font-size: 0.65rem;
+    font-weight: 800;
 }
 
 .ws .unread-dot {
@@ -3379,6 +3399,20 @@ button.chip:hover {
 
 .list-item:active {
     background: var(--pressed);
+}
+
+.list-item:disabled {
+    cursor: not-allowed;
+    color: var(--muted);
+}
+
+.list-item:disabled:hover {
+    border-color: var(--line);
+    background: var(--card);
+}
+
+.list-item:disabled:hover > span:first-child {
+    color: var(--muted);
 }
 
 .sheet-body > .list-item,

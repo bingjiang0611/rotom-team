@@ -161,6 +161,17 @@ export function MenuSheet() {
     // Durable-only controls do not apply to a rotom session: its kernel owns context, tools and the folder.
     const durable = conversation && !kernel;
     const blocked = Boolean(kernel?.pending) || view.live?.busy === true;
+    const forkBlockedReason = !steer
+        ? "Your role cannot fork sessions"
+        : Array.isArray(me?.sessions)
+          ? "Scoped access cannot create sessions"
+          : kernel?.initializing
+            ? "This session is still initializing"
+            : kernel?.pending?.status === "unknown"
+              ? "Resolve the unknown outcome before forking"
+              : blocked
+                ? "Wait for the run to finish, or Stop it first"
+                : null;
 
     return html`<${Sheet} title=${conversation?.title ?? "Menu"} onClose=${closeSheet}>
         <${Places} />
@@ -184,11 +195,12 @@ export function MenuSheet() {
             }
             <button
                 class="list-item"
-                disabled=${blocked || !steer || Array.isArray(me.sessions)}
+                disabled=${Boolean(forkBlockedReason)}
+                title=${forkBlockedReason ?? "Fork public history with your account"}
                 onClick=${() => kernelAction("fork")}
             >
                 <span>Fork</span>
-                <span class="muted small">public history · your account</span>
+                <span class="muted small">${forkBlockedReason ?? "public history · your account"}</span>
             </button>
             <button
                 class="list-item"

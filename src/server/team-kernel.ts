@@ -509,6 +509,16 @@ export class TeamKernel {
         return [...this.#active].some((run) => run.id === id);
     }
 
+    needsAnswer(id: ConversationId, viewer?: User): boolean {
+        const waiting = (this.#live.get(id)?.dialogs?.length ?? 0) > 0;
+
+        if (!waiting || viewer === undefined) {
+            return waiting;
+        }
+
+        return this.executions.journal.session(String(id)).binding.memberId === viewer.id;
+    }
+
     snapshot(id: ConversationId, user: User) {
         this.#app.requireSee(user, id);
 
@@ -1701,6 +1711,7 @@ export class TeamKernel {
                         ...(text(event.prefill) !== undefined && { prefill: text(event.prefill) }),
                     },
                 ];
+                this.#app.kernelChanged();
                 break;
             }
 
@@ -1759,6 +1770,7 @@ export class TeamKernel {
         const live = this.#live.get(id)!;
 
         live.dialogs = live.dialogs!.filter((each) => each.id !== dialog.id);
+        this.#app.kernelChanged();
 
         if (!this.executions.answer(String(id), dialog.id, response)) {
             this.#app.roomChanged(id);

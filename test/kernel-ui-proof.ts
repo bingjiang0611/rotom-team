@@ -146,6 +146,17 @@ export async function nativeUiProof(options: {
             "the question shows above the composer",
             20000,
         );
+        const askingRow = `.session-row[data-id="${options.id}"]`;
+
+        await until(
+            async () => (await text(`${askingRow} .session-attention`)).includes("Needs answer"),
+            "the session list requests the paying member's answer",
+            20000,
+        );
+        assert.equal(
+            await page.evaluate(`Boolean(document.querySelector('${askingRow} .mini-sweep'))`),
+            "false",
+        );
         const asked = await page.screenshot();
         const askedPath = join(options.root, "native-ui-question.jpg");
 
@@ -160,6 +171,14 @@ export async function nativeUiProof(options: {
         assert.equal(
             await page.evaluate(`Boolean(document.querySelector('.native-question'))`),
             "false",
+        );
+        await until(
+            async () =>
+                (await page.evaluate(
+                    `Boolean(document.querySelector('${askingRow} .session-attention'))`,
+                )) === "false",
+            "the sidebar answer marker clears after replying",
+            20000,
         );
 
         // Typing a command offers the project's skills: the kernel runs `/skill:name` for the model.

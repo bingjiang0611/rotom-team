@@ -212,13 +212,20 @@ function SessionRow({ session, index, number, needle, selected, onPick, onSelect
         ? html`<span class="state-check" role="img" aria-label="Selected" title="Selected">
             <${Icon} name="check" size=${10} />
         </span>`
-        : session.waiting
-          ? html`<span class="state-warn" title="Waiting for approval">!</span>`
-          : session.busy
-            ? html`<span class="mini-sweep" title="Working"><i></i><i></i><i></i></span>`
-            : finishedUnread
-              ? html`<span class="state-finished" role="img" aria-label="Run finished, not yet viewed" title="Run finished · not yet viewed by you"></span>`
-              : html`<span class="state-idle"></span>`;
+        : session.needsAnswer
+          ? html`<span
+                class="state-input"
+                role="img"
+                aria-label="Waiting for your answer"
+                title="Waiting for your answer"
+            >?</span>`
+          : session.waiting
+            ? html`<span class="state-warn" title="Waiting for approval">!</span>`
+            : session.busy
+              ? html`<span class="mini-sweep" title="Working"><i></i><i></i><i></i></span>`
+              : finishedUnread
+                ? html`<span class="state-finished" role="img" aria-label="Run finished, not yet viewed" title="Run finished · not yet viewed by you"></span>`
+                : html`<span class="state-idle"></span>`;
     const people = collab()
         ? (session.people ?? []).filter((person) => person.id !== me?.id).slice(0, 4)
         : [];
@@ -256,7 +263,11 @@ function SessionRow({ session, index, number, needle, selected, onPick, onSelect
             </span>
             <span class="session-side">
                 ${unread && html`<span class="unread-dot" title="New chat messages"></span>`}
-                <span class="session-time">${timeAgo(session.updatedAt)}</span>
+                ${
+                    session.needsAnswer
+                        ? html`<span class="session-attention">Needs answer</span>`
+                        : html`<span class="session-time">${timeAgo(session.updatedAt)}</span>`
+                }
                 ${
                     number !== undefined &&
                     number < 9 &&
@@ -876,12 +887,13 @@ export function Rail() {
             ${order.map(
                 (session, index) => html`<button
                     key=${session.id}
-                    class=${`ws ${session.id === conversationId ? "active" : ""} ${session.busy ? "busy" : ""} ${session.waiting ? "waiting" : ""}`}
+                    class=${`ws ${session.id === conversationId ? "active" : ""} ${session.busy ? "busy" : ""} ${session.waiting || session.needsAnswer ? "waiting" : ""}`}
                     style=${`--i:${index}`}
-                    title=${`${session.title ?? "New session"}${index < 9 ? `  (Alt ${index + 1})` : ""}`}
+                    title=${`${session.title ?? "New session"}${session.needsAnswer ? " · Waiting for your answer" : ""}${index < 9 ? `  (Alt ${index + 1})` : ""}`}
                     onClick=${() => navigate(session.id)}
                 >
                     ${index < 9 ? index + 1 : initials(session.title ?? "New session")}
+                    ${session.needsAnswer && html`<span class="ws-answer" aria-label="Waiting for your answer">?</span>`}
                     ${collab() && sessionUnread(session) && html`<span class="unread-dot"></span>`}
                 </button>`,
             )}

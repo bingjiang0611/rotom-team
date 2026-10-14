@@ -1738,6 +1738,12 @@ try {
     }
 
     assert.ok(dialog, "the question is waiting in the room");
+    assert.equal(app.sessions(a).find((session) => session.id === shared2.id)?.needsAnswer, true);
+    assert.equal(
+        app.sessions(dana.user).find((session) => session.id === shared2.id)?.needsAnswer,
+        undefined,
+        "only the paying member's sidebar asks for an answer",
+    );
     assert.equal(dialog.method, "select");
     assert.match(dialog.title, /Which colour\?/);
     const green = dialog.options.find((option) => option.includes("Green"))!;
@@ -1747,6 +1753,11 @@ try {
     assert.equal((await answer(dana.token, { value: green })).status, 403);
     assert.equal((await answer(aliceToken, { value: "Purple" })).status, 400);
     assert.equal((await answer(aliceToken, { value: green })).status, 200);
+    assert.equal(
+        app.sessions(a).find((session) => session.id === shared2.id)?.needsAnswer,
+        undefined,
+        "answering clears the sidebar attention before the run finishes",
+    );
     assert.equal((await answer(aliceToken, { value: green })).status, 409);
 
     while (app.kernel!.isRunning(shared2.id as never)) {

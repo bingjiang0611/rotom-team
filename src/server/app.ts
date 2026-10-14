@@ -1354,8 +1354,10 @@ export class PocketApp {
                     this.canSee(user, Number(id) as unknown as ConversationId),
             )
             .map(([id, meta]) => {
-                const model = this.#agents.get(Number(id) as unknown as ConversationId)?.model;
-                const busy = this.isBusy(Number(id) as unknown as ConversationId);
+                const conversationId = Number(id) as unknown as ConversationId;
+                const model = this.#agents.get(conversationId)?.model;
+                const busy = this.isBusy(conversationId);
+                const needsAnswer = this.kernel?.needsAnswer(conversationId, user) === true;
                 const here = [...(people.get(id) ?? new Map<string, string>())].map(
                     ([userId, name]) => ({ id: userId, name }),
                 );
@@ -1372,6 +1374,7 @@ export class PocketApp {
                     ...meta,
                     busy,
                     waiting: waiting.has(id),
+                    ...(needsAnswer ? { needsAnswer: true } : {}),
                     ...(endedAt === undefined ? {} : { endedAt }),
                     ...(finishedUnread ? { finishedUnread: true } : {}),
                     ...(model === undefined ? {} : { model: model.modelId }),
