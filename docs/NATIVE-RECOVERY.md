@@ -33,6 +33,18 @@ The journal counts/rows share one read transaction. The separately sampled lease
 
 The current product deliberately has no universal `force-unlock`, mark-unknown-success or replay recovery API. Readback can establish an already recorded outcome; it cannot manufacture a missing terminal result or prove arbitrary external side effects. If evidence remains insufficient, preserve the files and stop. Re-login does not reconcile an earlier tool effect, and OAuth refresh tombstones must not be erased to force another attempt.
 
+## Startup continuation policy
+
+Startup never turns an `unknown` prompt into `interrupted` just because its native PID is gone or its
+transcript is readable. It preserves the receipt, conversation/HOME fence and any legacy pending resume
+plan without submitting a new request. Legacy `interrupted` classifications are not automatically resumed
+because older releases could derive them from an unknown outcome without authoritative closure evidence.
+
+Only an explicitly planned shutdown continuation whose original receipt is already `settled` can start
+automatically, under the same member and the ordinary admission checks. This preserves known clean-stop
+continuation without treating an unsuccessful/unknown stop as safe. A recovered browser login does not
+clear execution fences. Operators must reconcile unknown task effects separately.
+
 ## Backup/restore and rollback
 
 Stop the supervised service, prevent automatic restart and establish writer/tool closure before the existing offline backup procedure. `backup` refuses an unreconciled native lease, even if its parent has died. Use `docs/DEPLOYMENT.md` for the designated service controls and the original-path restore procedure.
@@ -43,5 +55,7 @@ Restore excludes model refresh credentials, including native child auth stores. 
 
 - `test/native-recovery.test.ts` checks CLI readback, unchanged receipt/lease state, bounded output, private-field exclusion, symlink refusal and schema-1 inspection without migration.
 - Its controlled OS fixture reserves a durable intent, starts a detached Node descendant and kills the journal-owning parent with SIGKILL. The descendant demonstrably survives; journal reopen and backup stay blocked, and inspection leaves the lease/intent untouched. Teardown terminates only the fixture's known descendant and confirms its exit before removing fixture data. This is not a production force-unlock implementation or a test of every native tool's process tree.
+- `test/startup-recovery.test.ts` checks two real app reopen cycles with dead-PID unknown attempts, legacy pending plans and legacy interrupted classifications. It asserts unchanged receipts/plans and zero automatic submissions; reverting the startup guard makes the unknown-to-interrupted assertion fail.
+- `test/team-kernel-proof.ts` retains the clean, settled shutdown continuation check and verifies a genuinely killed native process stays unknown across two restarts with no additional loopback model requests.
 - Existing pinned-process app/RPC tests cover cancellation/revocation, direct-child closure, persisted receipts and restart non-replay. They do not prove that arbitrary descendants or remote jobs have terminated.
 - Actual host power loss, hardware failure, filesystem durability under power failure and arbitrary remote-effect reconciliation remain unverified. No guarantee of those scenarios is inferred from SIGKILL, fsync calls or a clean backup/restore test.

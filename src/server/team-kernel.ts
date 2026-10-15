@@ -39,7 +39,6 @@ import {
     nativePromptOperation,
     nativeCommandName,
     nativeCommandArgs,
-    NativeTail,
     normalizeNativePrompt,
     RotomExecutions,
     type RunHooks,
@@ -498,7 +497,8 @@ export class TeamKernel {
         const native = ids.filter((id) => this.#app.sessionMeta(id)?.backend === "rotom");
 
         this.executions.journal.reconcileOrphans(new Set(native.map(String)));
-        this.#interruptDeadRuns();
+        // A missing native PID proves neither tool closure nor the outcome of an external request.
+        // Historical unknown attempts retain their fences; startup must not classify them as interrupted.
 
         for (const id of native) {
             const configurations = await this.#app.harness.snapshot(
@@ -2763,42 +2763,9 @@ export class TeamKernel {
     }
 
     /**
-     * After a crash, an unknown prompt whose kernel process no longer exists is over: what its session file holds is
-     * what it did. It becomes interrupted, which releases its account, and is planned to continue. A run whose process
-     * still lives, or that recorded none, stays unknown for a person to reconcile.
-     */
-    #interruptDeadRuns(): void {
-        const journal = this.executions.journal;
-
-        for (const attempt of journal.unknownPrompts()) {
-            if (processAlive(attempt.pid)) {
-                continue;
-            }
-
-            const { binding } = journal.receipt(attempt.id);
-
-            try {
-                const entries = new NativeTail(
-                    attempt.sessionFile,
-                    attempt.kernelSessionId,
-                    binding.workspace,
-                ).read();
-
-                journal.interrupt(attempt.id, entries);
-                journal.planResume(attempt.id);
-            } catch (error) {
-                this.#app.notice(
-                    "warning",
-                    `A rotom run cut off by a crash stays unknown: its session file did not read back (${error}).`,
-                );
-            }
-        }
-    }
-
-    /**
-     * Continue prompts a server stop cut off, once each: as the member they ran for, under the usual checks, with a
-     * message that tells Pi what happened. The request id is derived from the cut-off attempt, so a second startup
-     * finds the first continuation instead of sending another.
+     * Continue only a planned, cleanly settled stop, once, under the original member's usual checks.
+     * Unknown outcomes and legacy interrupted classifications stay untouched, even with a persisted resume plan.
+     * The derived request id prevents a second startup from sending the same continuation again.
      */
     async resumeInterrupted(): Promise<void> {
         const journal = this.executions.journal;
@@ -2806,6 +2773,11 @@ export class TeamKernel {
         for (const plan of journal.resumes("pending")) {
             const id = this.#id(plan.sessionId);
             const attempt = journal.receipt(plan.attemptId);
+
+            if (attempt.status !== "settled") {
+                continue;
+            }
+
             const { binding } = journal.session(plan.sessionId);
             const user = this.#app.config.userById(binding.memberId);
 
@@ -2855,17 +2827,6 @@ export class TeamKernel {
 
 /** What a continuation after a server stop tells Pi. It shows in the transcript as the server's note. */
 const RESUME_TEXT = `${RESUME_PREFIX} The server restarted while you were working, and your last step may have been cut off. Check what was already done, then continue the task from where it stopped. Do not repeat finished steps.`;
-
-function processAlive(pid: number): boolean {
-    try {
-        process.kill(pid, 0);
-
-        return true;
-    } catch (error) {
-        // EPERM: the process exists but belongs to someone else.
-        return (error as NodeJS.ErrnoException).code === "EPERM";
-    }
-}
 
 /**
  * What everyone in the room may see of a native entry: an answer's text and tool calls, without reasoning or provider

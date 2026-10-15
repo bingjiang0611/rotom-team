@@ -2014,7 +2014,7 @@ try {
     assert.deepEqual(childStates(), ["complete", "stopped"]);
     report.stopEndsSubagents = true;
 
-    // A server restart cuts a prompt off; the next start continues it once, as its member, without a person.
+    // A cleanly settled server stop can continue its explicitly planned prompt once, as its member.
     const journalOf = () => app.kernel!.executions.journal;
 
     const reopen = async () => {
@@ -2091,32 +2091,6 @@ try {
     await new Promise((resolve) => setTimeout(resolve, 500));
     assert.equal(calls, afterContinue);
     report.cleanRestartContinues = true;
-
-    // A crash: the kernel dies without a word. Its run is unknown until a start proves the process gone.
-    const crashHost = await startCutOff("crash-host");
-    const { DatabaseSync } = await import("node:sqlite");
-    const reader = new DatabaseSync(join(folder, "kernel.sqlite"), { readOnly: true });
-    const { pid } = reader.prepare("SELECT pid FROM kernel_attempts WHERE id=?").get(crashHost) as {
-        pid: number;
-    };
-
-    reader.close();
-    process.kill(pid, "SIGKILL");
-
-    while (app.kernel!.isRunning(shared2.id as never)) {
-        await new Promise((resolve) => setTimeout(resolve, 25));
-    }
-
-    assert.equal(journalOf().receipt(crashHost).status, "unknown");
-    assert.equal(
-        (app.kernel!.roomState(shared2.id as never, a) as { pending?: { status: string } }).pending
-            ?.status,
-        "unknown",
-    );
-    await reopen();
-    await continued(crashHost);
-    assert.equal(journalOf().receipt(crashHost).status, "interrupted");
-    report.crashedKernelInterruptedAndContinued = true;
 
     // A member runs a project skill by name. The message box offers the project's skills, including those its
     // settings name (relative to `.pi`), and the kernel expands `/skill:name` into the skill for the model.
@@ -2665,6 +2639,51 @@ try {
             await Promise.race([once(process, "SIGTERM"), once(process, "SIGINT")]);
         }
     }
+
+    // A dead PID is not evidence of a safe outcome. Keep this fence at the end so later fixtures cannot bypass it.
+    const crashHost = await startCutOff("crash-host");
+    const { DatabaseSync } = await import("node:sqlite");
+    const reader = new DatabaseSync(join(folder, "kernel.sqlite"), { readOnly: true });
+    const { pid } = reader.prepare("SELECT pid FROM kernel_attempts WHERE id=?").get(crashHost) as {
+        pid: number;
+    };
+
+    reader.close();
+    process.kill(pid, "SIGKILL");
+
+    while (app.kernel!.isRunning(shared2.id as never)) {
+        await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+
+    assert.equal(journalOf().receipt(crashHost).status, "unknown");
+    // Older releases could have persisted a plan even when shutdown failed to establish a known outcome.
+    const pendingPlan = journalOf().planResume(crashHost);
+    const beforeCrashRestart = calls;
+
+    for (let restart = 0; restart < 2; restart++) {
+        await reopen();
+        await app.kernel!.resumeInterrupted();
+        assert.equal(journalOf().receipt(crashHost).status, "unknown");
+        assert.deepEqual(journalOf().resume(crashHost), pendingPlan);
+        assert.equal(journalOf().latest(String(shared2.id))?.id, crashHost);
+        assert.equal(
+            journalOf().request(String(shared2.id), `${a.id}:#resume-${crashHost}`),
+            undefined,
+        );
+        assert.equal(
+            calls,
+            beforeCrashRestart,
+            "unknown startup never submits another model request",
+        );
+        assert.equal(
+            (app.kernel!.roomState(shared2.id as never, a) as { pending?: { status: string } })
+                .pending?.status,
+            "unknown",
+        );
+    }
+
+    report.crashedKernelRemainsUnknownWithoutContinuation = true;
+    report.loopbackRequests = calls;
 } finally {
     await app.close();
     oauth.close();
