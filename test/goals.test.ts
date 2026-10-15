@@ -1,6 +1,6 @@
 // Done when: Pi keeps going until a check passes, counting each answer's check once, and gives up after five.
 import {
-    type App,
+    type LegacyApp as App,
     cleanUp,
     context,
     lastText,

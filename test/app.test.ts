@@ -1,6 +1,6 @@
 // End-to-end tests of the server core with a scripted model: no network, no API keys, no Pi config.
 import {
-    type App,
+    type LegacyApp as App,
     cleanUp,
     fakeTab,
     lastText,

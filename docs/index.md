@@ -2,13 +2,13 @@
 
 ## Current product
 
-Start with [PRODUCT.md](PRODUCT.md) for the execution, account and safety contract, [CONFIGURATION.md](CONFIGURATION.md) for shared project configuration and member MCP sign-ins, and [VERIFICATION.md](VERIFICATION.md) for verification boundaries. The [README](../README.md) describes startup; [DEPLOYMENT.md](DEPLOYMENT.md) and [NATIVE-RECOVERY.md](NATIVE-RECOVERY.md) describe operations. [NATIVE-DELIVERY.md](NATIVE-DELIVERY.md) and [DELIVERY-CHECKLIST.md](DELIVERY-CHECKLIST.md) define acceptance, not permission to use real accounts or a completed deployment.
+Start with [PRODUCT.md](PRODUCT.md) for the execution, account and safety contract, [CONFIGURATION.md](CONFIGURATION.md) for shared project configuration and member MCP sign-ins, [AGENT-CONFIGURATION.md](AGENT-CONFIGURATION.md) for Agent Extension/Skill/MCP setup, and [VERIFICATION.md](VERIFICATION.md) for verification boundaries. The [README](../README.md) describes startup; [DEPLOYMENT.md](DEPLOYMENT.md) and [NATIVE-RECOVERY.md](NATIVE-RECOVERY.md) describe operations. [NATIVE-DELIVERY.md](NATIVE-DELIVERY.md) and [DELIVERY-CHECKLIST.md](DELIVERY-CHECKLIST.md) define acceptance, not permission to use real accounts or a completed deployment.
 
 Old migration plans and experimental reports are available through Git history, not as current requirements.
 
 ## Inherited Pi Pocket / Durable development guides
 
-The remaining sections document the inherited backend and its implementation. Their Pi Pocket paths, global Pi resources and extension workflows do **not** describe the default rotom session configuration. Use the current guides above for rotom sessions. These documents remain because the agent prompt and old backend still reference them; links are relative to this folder.
+The remaining sections document the inherited non-Team backend and its implementation. Their Pi Pocket paths, global Pi resources and service extension workflows do **not** describe Team kernel mode or the default rotom session configuration. Use the current guides above for rotom sessions. These documents remain because the agent prompt and old backend still reference them; links are relative to this folder.
 
 ### Where things are
 
@@ -20,13 +20,14 @@ The remaining sections document the inherited backend and its implementation. Th
 
 Each step reaches further than the one before it, and asks more care. Use the first that does the job.
 
-| To change                                                          | Use                                                                         | Read                               |
-| ------------------------------------------------------------------ | --------------------------------------------------------------------------- | ---------------------------------- |
-| How Pi works in one session                                        | The session's instructions (Menu → Instructions for Pi)                     | [customizing.md](customizing.md)   |
-| How Pi works in a project, or everywhere                           | An `AGENTS.md` in the project, or Pi's own in `~/.pi/agent/`                | [customizing.md](customizing.md)   |
-| A procedure Pi should follow on request                            | A skill, or a prompt template: both become slash commands                   | [customizing.md](customizing.md)   |
-| What Pi can do: a new tool, a rule in its prompt, a check on calls | A drop-in extension in `~/.pi-pocket/extensions/`, which the owner turns on | [extensions.md](extensions.md)     |
-| Pi Pocket itself: its screens, its server, a built-in extension    | Its code, while it runs                                                     | [self-editing.md](self-editing.md) |
+| To change                                                       | Use                                                          | Read                                             |
+| --------------------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------ |
+| How Pi works in one session                                     | The session's instructions (Menu → Instructions for Pi)      | [customizing.md](customizing.md)                 |
+| How Pi works in a project, or everywhere                        | An `AGENTS.md` in the project, or Pi's own in `~/.pi/agent/` | [customizing.md](customizing.md)                 |
+| A procedure Pi should follow on request                         | A skill, or a prompt template: both become slash commands    | [customizing.md](customizing.md)                 |
+| Team Agent tools, hooks, instructions, and MCP                  | Shared `team-agent` or trusted project `.pi` resources       | [AGENT-CONFIGURATION.md](AGENT-CONFIGURATION.md) |
+| Non-Team legacy tools, prompt rules, and call checks            | A service drop-in in `~/.pi-pocket/extensions/`              | [extensions.md](extensions.md)                   |
+| Pi Pocket itself: its screens, its server, a built-in extension | Its code, while it runs                                      | [self-editing.md](self-editing.md)               |
 
 A drop-in extension survives updates to Pi Pocket and can be turned off from the app; a change to Pi Pocket's code is shared by everyone who uses this copy and can break it for all of them.
 

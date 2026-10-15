@@ -16,6 +16,12 @@ account; changing model uses the existing immutable Team handoff. See [PRODUCT.m
 
 ## Shared installation and configuration
 
+Team supports native Agent Extensions only. In Team kernel mode, the inherited server extension loader is absent:
+`src/server/extensions/` and `<data>/extensions/` are not loaded or watched, no drop-in dependency link is created,
+and the old `/api/extensions` listing/toggle/reload endpoints return 404 for authorized requests. Existing files and
+switch records are retained. The non-Team legacy runtime still owns those modules; it is not an Agent configuration path.
+For paths, examples, package installation and reload steps, use [AGENT-CONFIGURATION.md](AGENT-CONFIGURATION.md).
+
 The owner manages `<data>/team-agent` using the pinned native resource layout:
 
 | Path                                            | Meaning                                                                                      |

@@ -59,6 +59,11 @@ or an OS sandbox between trusted members.
 
 ## Shared agent resources and command inventory
 
+`node --test test/native-service-extensions.test.ts test/app.test.ts test/dropins.test.ts` checks actual Team startup
+without a server extension loader or drop-in dependency link, refusal of the old listing/toggle/reload API, and a
+previously enabled drop-in not executing across reopen. Its source and persisted switch stay unchanged. Legacy tests
+retain their non-Team server module behavior. No model inference or real MCP service is required by the new tests.
+
 ```sh
 node --test test/rotom-resources.test.ts test/native-command-menu.test.ts test/team-resource-backup.test.ts
 node test/team-resources-proof.ts

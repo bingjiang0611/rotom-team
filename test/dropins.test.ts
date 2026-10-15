@@ -1,6 +1,6 @@
 // Drop-in extensions: the owner's own modules in the data folder load like built-in ones, but only once turned on.
 import {
-    type App,
+    type LegacyApp as App,
     cleanUp,
     fakeTab,
     lastText,

@@ -31,6 +31,7 @@ flowchart LR
 
 团队只有一个共享基础 Agent，配置分两层：Owner 管理 `<data>/team-agent` 的扩展、MCP、skills 和设置；可信项目提供原生设置、扩展、包、模板、主题、system 文件、上下文、skills 和 MCP；项目覆盖规则由原生加载器处理。成员 HOME 保留凭据、会话和未分类运行状态，不是可定制的个人资源配置。成员仍用自己的账号选择模型，固定付费人和模型绑定不变。完整规则与仍不支持的能力见 [CONFIGURATION.md](CONFIGURATION.md)。
 
+- Team 只支持原生 Agent Extension。旧 `src/server/extensions/` 与 `<data>/extensions/` 不加载、不监听，旧服务扩展管理 API 不可用；历史文件和开关记录保留。全局与项目配置步骤见 [AGENT-CONFIGURATION.md](AGENT-CONFIGURATION.md)。
 - 工作区按原生 `--approve` 加载。共享和项目扩展都以服务 OS 用户执行，必须信任代码，不是沙箱。项目角色和配置恢复原生加载；成员基础资源仍从共享配置派生。未知插件状态不猜测、不清空。
 - 同一固定绑定的成功任务复用原生进程、MCP 连接和扩展内存；空闲时 gate 拒绝推理。失败、Stop、接力和服务关闭回收相应进程；跨重启恢复持久化会话，不恢复内存。资源/设置修改后执行 `/reload`。
 - OAuth 型 MCP 由各成员在 **MCP sign-ins** 独立登录。MCP 授权与模型授权不同；文件分开不构成成员间 OS 隔离。

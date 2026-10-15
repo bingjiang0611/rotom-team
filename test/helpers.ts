@@ -1,5 +1,6 @@
 // What the server tests share: an isolated Pi install and data folder, a scripted model, and small helpers. Import
 // this before anything from src/: it points Pi's config at a temporary folder first.
+import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -9,6 +10,7 @@ import { fauxAssistantMessage, fauxProvider, fauxText } from "@earendil-works/pi
 import { type ConversationId, UsageDoc } from "@earendil-works/pi-durable";
 import type { Attachment } from "../src/server/commands.ts";
 import type { User } from "../src/server/config.ts";
+import type { ExtensionLoader } from "../src/server/reload.ts";
 import type { Client } from "../src/server/room.ts";
 
 export const context = BACKGROUND_CONTEXT;
@@ -25,6 +27,7 @@ mkdirSync(work);
 const { PocketApp } = await import("../src/server/app.ts");
 
 export type App = Awaited<ReturnType<typeof PocketApp.open>>;
+export type LegacyApp = App & { loader: ExtensionLoader };
 
 /** The text of the newest message a model request carries, and who sent it. */
 export function lastText(context: { messages: readonly { role: string; content: unknown }[] }): {
@@ -64,12 +67,12 @@ export function scriptedModel(route: FauxResponseStep = echo) {
 }
 
 /** Open the app on `dataDir` with the scripted model. Opening the same folder again is a restart; `now` moves its clock. */
-export function openApp(
+export async function openApp(
     model: ReturnType<typeof scriptedModel>,
     dataDir = join(root, "data"),
     now?: () => number,
-): Promise<App> {
-    return PocketApp.open({
+): Promise<LegacyApp> {
+    const app = await PocketApp.open({
         dataDir,
         defaultCwd: work,
         supervised: false,
@@ -77,6 +80,11 @@ export function openApp(
         configureModels: (models) => models.registerNativeProvider(model.provider),
         ...(now === undefined ? {} : { now }),
     });
+
+    // This helper starts the non-Team legacy runtime; its tests require server extensions.
+    assert.ok(app.loader);
+
+    return app as LegacyApp;
 }
 
 /** Wait until `check` holds, polling. */

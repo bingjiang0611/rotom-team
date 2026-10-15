@@ -232,7 +232,7 @@ handle = makeHandler({
 stopWatching = (() => {
     const stops = [watchTree(join(APP_ROOT, "web"), (file) => opened.reloadClients(file))];
 
-    opened.loader.watch();
+    opened.loader?.watch();
 
     return () => {
         for (const each of stops) {

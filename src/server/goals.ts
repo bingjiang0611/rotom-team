@@ -63,7 +63,7 @@ export class Goals {
             throw new HttpError(413, `Check commands are limited to ${MAX_COMMAND} characters.`);
         }
 
-        if (!app.loader.extensionNames().includes(GOALS_EXTENSION)) {
+        if (!app.loader?.extensionNames().includes(GOALS_EXTENSION)) {
             throw new HttpError(409, "Goals are turned off in Extensions.");
         }
 

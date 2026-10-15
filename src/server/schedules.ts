@@ -214,7 +214,7 @@ export class Schedules {
 
     /** Whether schedules run now: their extension is on. */
     get running(): boolean {
-        return this.#app.loader.extensionNames().includes(SCHEDULES_EXTENSION);
+        return this.#app.loader?.extensionNames().includes(SCHEDULES_EXTENSION) ?? false;
     }
 
     /** Set up a message to Pi. Throws an HttpError a person can act on when the time or the message will not do. */

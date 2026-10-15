@@ -143,7 +143,8 @@ export class PocketApp {
     readonly projects: TeamProjects;
     readonly execution = new TeamExecution(this);
     settings!: SettingsManager;
-    loader!: ExtensionLoader;
+    /** Only the non-Team legacy runtime loads server extension modules. */
+    loader: ExtensionLoader | undefined;
     readonly commands = new Commands(this);
     readonly collab = new Collab(this);
     readonly alerts = new Alerts(this);
@@ -297,40 +298,46 @@ export class PocketApp {
         registry.install(
             defineExtension({ name: "pocket-core", tasks: [ResendTask, this.shell.task] }),
         );
-        const host: PocketHost = {
-            guard: this.guard,
-            approvals: this.approvals,
-            agentDir: getAgentDir(),
-            dataDir: this.dataDir,
-            skillPaths: () => {
-                try {
-                    return this.settings.getSkillPaths();
-                } catch {
-                    return [];
-                }
-            },
-            resolveModel: (spec) => resolveModel(this.models, spec),
-            requesterOf: (conversationId) => this.attribution.requesterOf(conversationId),
-            notice: (level, message) => this.notice(level, message),
-            schedules: this.schedules,
-            goals: this.goals,
-            browsers: this.browsers,
-        };
-        const dropIn = join(this.dataDir, "extensions");
 
-        try {
-            prepareDropInFolder(dropIn, join(APP_ROOT, "node_modules"));
-        } catch (error) {
-            this.#log(`Drop-in extensions cannot import Pi Pocket's packages: ${describe(error)}`);
+        if (!this.#kernelEnabled) {
+            const host: PocketHost = {
+                guard: this.guard,
+                approvals: this.approvals,
+                agentDir: getAgentDir(),
+                dataDir: this.dataDir,
+                skillPaths: () => {
+                    try {
+                        return this.settings.getSkillPaths();
+                    } catch {
+                        return [];
+                    }
+                },
+                resolveModel: (spec) => resolveModel(this.models, spec),
+                requesterOf: (conversationId) => this.attribution.requesterOf(conversationId),
+                notice: (level, message) => this.notice(level, message),
+                schedules: this.schedules,
+                goals: this.goals,
+                browsers: this.browsers,
+            };
+            const dropIn = join(this.dataDir, "extensions");
+
+            try {
+                prepareDropInFolder(dropIn, join(APP_ROOT, "node_modules"));
+            } catch (error) {
+                this.#log(
+                    `Drop-in extensions cannot import Pi Pocket's packages: ${describe(error)}`,
+                );
+            }
+
+            this.loader = new ExtensionLoader(
+                registry,
+                host,
+                { builtIn: join(APP_ROOT, "src", "server", "extensions"), dropIn },
+                (file) => this.config.extensionChoice(file),
+            );
+            await this.loader.loadAll();
         }
 
-        this.loader = new ExtensionLoader(
-            registry,
-            host,
-            { builtIn: join(APP_ROOT, "src", "server", "extensions"), dropIn },
-            (file) => this.config.extensionChoice(file),
-        );
-        await this.loader.loadAll();
         registry.install(this.execution.extension());
 
         const storage = await openNodeSqliteStorage(join(this.dataDir, "pocket.sqlite"));
@@ -1236,7 +1243,7 @@ export class PocketApp {
                 startedAt: this.startedAt,
                 home: homedir(),
                 defaultCwd: this.defaultCwd,
-                extensions: this.loader.extensionNames(),
+                extensions: this.loader?.extensionNames() ?? [],
                 // Tells the web app this server has people chat and typing indicators.
                 chat: true,
                 kernel: this.kernel !== undefined,
@@ -1773,9 +1780,21 @@ export class PocketApp {
 
     // ─── Extensions ─────────────────────────────────────────────────────────
 
+    /** Server extension management is available only in the non-Team legacy runtime. */
+    #serviceExtensionLoader(): ExtensionLoader {
+        if (!this.loader) {
+            throw new HttpError(
+                404,
+                "Team supports Agent Extensions only. Configure team-agent or the project's .pi directory.",
+            );
+        }
+
+        return this.loader;
+    }
+
     /** Whether Lancet Guard's module is on here; Pi's own setting may still turn the guard off. */
     guardOn(): boolean {
-        return this.loader.enabled(GUARD_FILE);
+        return this.loader?.enabled(GUARD_FILE) ?? false;
     }
 
     /** Lancet Guard as it applies here: Pi's own setting, unless the guard extension is off in Pi Pocket. */
@@ -1799,18 +1818,20 @@ export class PocketApp {
     ): Promise<{ modules: ExtensionInfo[]; guard: GuardStatus; dropIns?: string }> {
         const owner = user.role === "owner";
         // A load error can name the server's folders too.
-        const modules = this.loader.list().map(({ path, error, ...module }) =>
-            owner
-                ? {
-                      ...module,
-                      ...(path === undefined ? {} : { path }),
-                      ...(error === undefined ? {} : { error }),
-                  }
-                : {
-                      ...module,
-                      ...(error === undefined ? {} : { error: "It failed to load." }),
-                  },
-        );
+        const modules = this.#serviceExtensionLoader()
+            .list()
+            .map(({ path, error, ...module }) =>
+                owner
+                    ? {
+                          ...module,
+                          ...(path === undefined ? {} : { path }),
+                          ...(error === undefined ? {} : { error }),
+                      }
+                    : {
+                          ...module,
+                          ...(error === undefined ? {} : { error: "It failed to load." }),
+                      },
+            );
 
         // The guard row shows Pi's own setting, so the owner can tell "off here" from "off everywhere".
         return {
@@ -1822,7 +1843,8 @@ export class PocketApp {
 
     /** Turn an extension module on or off for every session, now and after restarts. */
     async setExtensionEnabled(user: User, file: string, enabled: boolean): Promise<void> {
-        const module = this.loader.list().find((each) => each.file === file);
+        const loader = this.#serviceExtensionLoader();
+        const module = loader.list().find((each) => each.file === file);
 
         if (module === undefined) {
             throw new HttpError(404, `There is no extension module ${file}`);
@@ -1839,7 +1861,7 @@ export class PocketApp {
         this.config.setExtensionEnabled(file, enabled);
 
         try {
-            await this.loader.apply(file);
+            await loader.apply(file);
         } catch (error) {
             throw new HttpError(
                 500,
@@ -1864,7 +1886,8 @@ export class PocketApp {
     }
 
     async reloadExtension(file: string): Promise<void> {
-        const module = this.loader.list().find((each) => each.file === file);
+        const loader = this.#serviceExtensionLoader();
+        const module = loader.list().find((each) => each.file === file);
 
         if (module === undefined) {
             throw new HttpError(404, `There is no extension module ${file}`);
@@ -1875,7 +1898,7 @@ export class PocketApp {
         }
 
         try {
-            await this.loader.reload(file);
+            await loader.reload(file);
         } catch (error) {
             throw new HttpError(500, `${module.title} failed to load: ${describe(error)}`);
         } finally {
@@ -1918,7 +1941,7 @@ export class PocketApp {
 
     /** The browser is on while its extension module is: the owner turns both off together in Extensions. */
     browserOn(): boolean {
-        return this.loader.extensionNames().includes(BROWSER_EXTENSION);
+        return this.loader?.extensionNames().includes(BROWSER_EXTENSION) ?? false;
     }
 
     #browserEvent(conversationId: ConversationId, state: BrowserState) {

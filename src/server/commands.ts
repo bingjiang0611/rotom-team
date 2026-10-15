@@ -1005,7 +1005,7 @@ export class Commands {
 
         this.#requireSession(id);
 
-        if (on && !app.loader.extensionNames().includes(PLAN_EXTENSION)) {
+        if (on && !app.loader?.extensionNames().includes(PLAN_EXTENSION)) {
             throw new HttpError(409, "Plan mode is turned off in Extensions.");
         }
 
