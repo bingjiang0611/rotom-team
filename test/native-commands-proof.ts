@@ -485,10 +485,36 @@ try {
     );
     assert.equal(calls.length, noInference, "model selection does not infer");
     assert.equal(app.kernel!.executions.journal.session(String(id)).binding.model, "model-b");
-    await json(await submit(alice, "/thinking high"));
-    assert.equal(app.kernel!.executions.journal.session(String(id)).binding.thinkingLevel, "high");
+    const beforeThinking = app.kernel!.executions.journal.session(String(id));
+    const thinking = await json(await submit(alice, "/thinking high"));
+
+    assert.equal(thinking.status, "handled");
+    assert.equal(calls.length, noInference, "idle thinking selection does not infer");
+    assert.equal(app.kernel!.executions.thinkingLevel(String(id)), "high");
+    const afterThinking = app.kernel!.executions.journal.session(String(id));
+
+    assert.equal(
+        afterThinking.segmentId,
+        beforeThinking.segmentId,
+        "idle thinking keeps the segment",
+    );
+    assert.equal(
+        afterThinking.sessionFile,
+        beforeThinking.sessionFile,
+        "idle thinking keeps the session",
+    );
     await json(await submit(alice, "SECOND_USER_MARKER"));
     assert.equal(calls.at(-1)!.body.model, "model-b");
+    assert.equal(
+        calls.at(-1)!.body.reasoning_effort,
+        "high",
+        "idle thinking reaches the next request",
+    );
+    assert.equal(
+        app.kernel!.executions.journal.session(String(id)).segmentId,
+        beforeThinking.segmentId,
+        "the next prompt runs in the same segment",
+    );
     assert.equal(calls.at(-1)!.payer, alice.id);
     // Native title is fixture setup, not an exposed Team slash command.
     await app.kernel!.executions.run(

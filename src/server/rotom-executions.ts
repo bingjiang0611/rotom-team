@@ -1267,6 +1267,16 @@ export class RotomExecutions {
 
                 await hooks.onNativeResult?.({ state, stats });
                 disposition = "handled";
+            } else if (nativeCommandName(prompt) === "thinking") {
+                // Idle reasoning changes stay in this native session; only a payer/model change hands off.
+                const level = nativeCommandArgs(prompt);
+
+                if (!/^[a-z]+$/.test(level)) {
+                    throw new RpcFailure("rejected", "Use /thinking <level>");
+                }
+
+                await kernel.setThinkingLevel(level);
+                disposition = "handled";
             } else if (builtins.some((command) => command.name === nativeCommandName(prompt))) {
                 throw new RpcFailure(
                     "rejected",
