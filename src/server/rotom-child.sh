@@ -7,4 +7,4 @@ if [ -n "$ROTOM_TEAM_FROZEN_CONTEXT" ]; then
         set -- --append-system-prompt "$shared_context" "$@"
     fi
 fi
-npm_config_prefix="${ROTOM_TEAM_AGENT_DIR:?}/global-npm" PI_SUBAGENT_EXTRA_AGENT_DIRS="$ROTOM_TEAM_AGENT_DIR/agents" ROTOM_TEAM_SUBAGENT=1 exec "${ROTOM_NODE:?}" "${ROTOM_VERIFIED_PI_EXECUTABLE:?}" --no-approve --no-mcp --extension "${ROTOM_TEAM_MCP:?}" --no-skills --extension "${ROTOM_TEAM_SKILLS:?}" --extension "${ROTOM_TEAM_POLICY:?}" "$@"
+npm_config_prefix="${ROTOM_TEAM_AGENT_DIR:?}/global-npm" PI_SUBAGENT_EXTRA_AGENT_DIRS="$ROTOM_TEAM_AGENT_DIR/agents" ROTOM_TEAM_SUBAGENT=1 exec "${ROTOM_NODE:?}" "${ROTOM_VERIFIED_PI_EXECUTABLE:?}" --approve --no-skills --extension "${ROTOM_TEAM_SKILLS:?}" --extension "${ROTOM_TEAM_POLICY:?}" "$@"

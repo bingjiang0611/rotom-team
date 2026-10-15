@@ -1,6 +1,4 @@
-/** Load shared and allowed project skills; project packages and extensions never participate. */
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+/** Keep automatic skills shared/project-scoped while native trust loads all project resources. */
 import { getAgentDir } from "../../runtime/rotom/node_modules/@bingjiang0611/rotom/runtime/pi/node_modules/@earendil-works/pi-coding-agent/dist/config.js";
 import { DefaultPackageManager } from "../../runtime/rotom/node_modules/@bingjiang0611/rotom/runtime/pi/node_modules/@earendil-works/pi-coding-agent/dist/core/package-manager.js";
 import { SettingsManager } from "../../runtime/rotom/node_modules/@bingjiang0611/rotom/runtime/pi/node_modules/@earendil-works/pi-coding-agent/dist/core/settings-manager.js";
@@ -32,7 +30,7 @@ export default function (pi) {
 
             return {
                 block: true,
-                reason: "Team resource policy blocked project/member agent configuration. Use the owner-managed shared profile.",
+                reason: "Team resource policy blocked member agent customization. Use the shared profile or trusted project configuration.",
             };
         }
     });
@@ -49,20 +47,10 @@ export default function (pi) {
         const frozenSkills = process.env.ROTOM_TEAM_FROZEN_CONTEXT
             ? JSON.parse(process.env.ROTOM_TEAM_FROZEN_SKILLS)
             : undefined;
-        const file = join(cwd, ".pi/settings.json");
-        const sharedSkills =
-            JSON.parse(readFileSync(join(getAgentDir(), "settings.json"), "utf8")).skills ?? [];
-        const settingsManager = SettingsManager.fromStorage({
-            // Only skills are accepted from project settings. In particular, never resolve project packages.
-            withLock: (scope, read) => {
-                const settings =
-                    scope === "project" && !frozenSkills && existsSync(file)
-                        ? { skills: JSON.parse(readFileSync(file, "utf8")).skills }
-                        : { skills: sharedSkills };
-
-                return read(JSON.stringify(settings));
-            },
+        const settingsManager = SettingsManager.create(cwd, getAgentDir(), {
+            projectTrusted: !frozenSkills,
         });
+        const sharedSkills = settingsManager.getGlobalSettings().skills ?? [];
         const resources = await new DefaultPackageManager({
             cwd,
             agentDir: getAgentDir(),

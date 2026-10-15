@@ -10,11 +10,7 @@ import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { RotomRpc } from "./rotom-rpc.ts";
-import {
-    prepareTeamResources,
-    teamComputerUseEnvironment,
-    sharedContextPaths,
-} from "./rotom-resources.ts";
+import { prepareTeamResources, sharedContextPaths } from "./rotom-resources.ts";
 
 const runtime = fileURLToPath(new URL("../../runtime/rotom/", import.meta.url));
 const product = join(runtime, "node_modules/@bingjiang0611/rotom");
@@ -314,7 +310,7 @@ export async function startRotomMcp(options: {
     await prepareTeamResources(home, teamAgentDir, workspace);
     const api = await nativeConfigurationApi();
 
-    // The MCP-only CLI needs native project trust. Agent/child startup still forces --no-approve.
+    // The MCP-only CLI and Agent startup use the same trusted project configuration.
     new api.ProjectTrustStore(join(home, ".pi/agent")).set(workspace, true);
     const node = realpathSync(process.execPath);
     const environment = memberEnvironment(home, node);
@@ -408,16 +404,13 @@ export async function startRotomKernel(options: {
             "--model",
             options.model,
             ...(options.thinkingLevel ? ["--thinking", options.thinkingLevel] : []),
-            "--no-mcp",
-            "--extension",
-            fileURLToPath(new URL("./rotom-mcp.mjs", import.meta.url)),
+            "--approve",
             "--no-skills",
             "--extension",
             fileURLToPath(new URL("./rotom-skills.mjs", import.meta.url)),
             ...(options.configuration
                 ? [
-                      // Native MCP uses its own loader; saved trust must not open other project resources.
-                      "--no-approve",
+                      // Legacy snapshots freeze instructions, not trusted project executable resources.
                       "--no-context-files",
                       ...(await sharedContextPaths(teamAgentDir)).flatMap((path) => [
                           "--append-system-prompt",
@@ -427,10 +420,7 @@ export async function startRotomKernel(options: {
                       options.configuration.contextFile,
                       ...options.configuration.skills.flatMap((path) => ["--skill", path]),
                   ]
-                : [
-                      // Project settings/packages/extensions stay closed, even after /trust or reload.
-                      "--no-approve",
-                  ]),
+                : []),
             // Sessions stay in the member HOME, whatever a project's `sessionDir` says.
             "--session-dir",
             join(home, ".pi/agent/sessions"),
@@ -445,7 +435,6 @@ export async function startRotomKernel(options: {
             recordLimit: 64 * 1024 * 1024,
             env: {
                 ...memberEnvironment(home, node),
-                ...teamComputerUseEnvironment(teamAgentDir),
                 ...teamSubagentEnvironment(teamAgentDir),
                 ...(options.configuration
                     ? {
@@ -469,9 +458,6 @@ export async function startRotomKernel(options: {
                           ),
                           ROTOM_TEAM_POLICY: fileURLToPath(
                               new URL("./rotom-policy.mjs", import.meta.url),
-                          ),
-                          ROTOM_TEAM_MCP: fileURLToPath(
-                              new URL("./rotom-mcp.mjs", import.meta.url),
                           ),
                           ROTOM_TEAM_SKILLS: fileURLToPath(
                               new URL("./rotom-skills.mjs", import.meta.url),

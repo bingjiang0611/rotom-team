@@ -203,7 +203,7 @@ try {
         ),
     );
 } finally {
-    executions.close();
+    await executions.close();
     await new Promise<void>((resolve) => server.close(() => resolve()));
     rmSync(root, { recursive: true, force: true });
 }

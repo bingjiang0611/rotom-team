@@ -57,10 +57,7 @@ writeFileSync(
     join(workspace, ".pi/extensions/forbidden.ts"),
     `import {writeFileSync} from 'node:fs'; writeFileSync(${JSON.stringify(forbidden)}, 'loaded'); export default () => {};`,
 );
-writeFileSync(
-    join(workspace, ".pi/settings.json"),
-    JSON.stringify({ packages: ["npm:must-not-install"] }),
-);
+writeFileSync(join(workspace, ".pi/settings.json"), JSON.stringify({ packages: [] }));
 
 const signIns = new McpSignIns(teamAgentDir);
 const report: Record<string, unknown> = { realProvider: false, status: "not-verified" };
@@ -98,6 +95,8 @@ try {
     assert.deepEqual(alice.servers[0]?.tools, ["whoami_alice"]);
     assert.equal(bob.servers[0]?.state, "needs-auth", "Alice's sign-in is not Bob's");
 
+    assert.ok(!existsSync(forbidden), "MCP-only CLI does not execute project extensions");
+
     // A run of Alice's sends her token. `/mcp` reports what the run connected to, without a model call.
     writeFileSync(
         join(homes.alice, ".pi/agent/models.json"),
@@ -134,7 +133,7 @@ try {
     assert.match(notices.join("\n"), /team.*connected/i, notices.join("\n"));
     assert.ok(oauth.callers.length > 0 && oauth.callers.every((member) => member === "alice"));
 
-    // Frozen context still loads live project MCP definitions, not other project agent configuration.
+    // Frozen instructions still load live trusted project resources, including MCP.
     const frozenContext = join(root, "frozen.md");
 
     writeFileSync(frozenContext, "Frozen configuration.");
@@ -159,10 +158,7 @@ try {
 
     // `open` starts detached, after the address is printed; the run above took long enough for one to show.
     assert.ok(!existsSync(opened), "a sign-in must never open a browser on the server");
-    assert.ok(
-        !existsSync(forbidden),
-        "MCP CLI/parent/frozen startup must not load project extensions",
-    );
+    assert.ok(existsSync(forbidden), "Agent startup loads trusted project extensions");
 
     // Signing out removes only Alice's tokens.
     assert.equal((await signIns.logout(homes.alice, workspace, "team")).status, "done");
@@ -178,7 +174,7 @@ try {
         runSentMembersToken: true,
         signOut: true,
         frozenContextKeepsProjectMcp: true,
-        projectExtensionsAndPackagesRemainClosed: true,
+        trustedProjectExtensionsLoad: true,
     });
 } finally {
     signIns.close();

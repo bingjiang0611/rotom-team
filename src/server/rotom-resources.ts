@@ -24,7 +24,13 @@ import {
 import { nativeConfigurationApi } from "./rotom-kernel.ts";
 
 const resourceKeys = ["extensions", "skills", "prompts", "themes"] as const;
-const standardFiles = ["AGENTS.md", "SYSTEM.md", "APPEND_SYSTEM.md", "mcp.json"];
+const standardFiles = [
+    "AGENTS.md",
+    "SYSTEM.md",
+    "APPEND_SYSTEM.md",
+    "mcp.json",
+    "extensions/pi-computer-use.json",
+];
 
 function json(file: string): Record<string, any> {
     return existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : {};
@@ -88,12 +94,14 @@ export function teamResourceRevision(directory: string, workspace?: string): str
     const hash = createHash("sha256");
 
     if (workspace) {
-        const file = join(workspace, ".pi/mcp.json");
+        for (const name of ["settings.json", "mcp.json", "SYSTEM.md", "APPEND_SYSTEM.md"]) {
+            const file = join(workspace, ".pi", name);
 
-        hash.update(file);
+            hash.update(file);
 
-        if (existsSync(file)) {
-            hash.update(readFileSync(file));
+            if (existsSync(file)) {
+                hash.update(readFileSync(file));
+            }
         }
     }
 
@@ -309,37 +317,6 @@ export function memberConfigurationChanges(
     );
 
     return changed;
-}
-
-/** The bundled computer-use plugin reads project settings independently of native project trust. Its documented
- * environment overrides cover every field; set all four from shared configuration, including native defaults. */
-export function teamComputerUseEnvironment(directory: string): Record<string, string> {
-    const configured = json(safeConfigurationPath(directory, "extensions/pi-computer-use.json"));
-    const values = configured.computer_use ?? configured;
-    const config = {
-        browser_use: true,
-        headless: false,
-        cursor_overlay: true,
-        managed_browser: "chrome",
-        ...values,
-    };
-
-    for (const key of ["browser_use", "headless", "cursor_overlay"]) {
-        if (typeof config[key] !== "boolean") {
-            throw new Error(`Shared computer-use ${key} must be boolean`);
-        }
-    }
-
-    if (!["helium", "chrome"].includes(config.managed_browser)) {
-        throw new Error("Shared computer-use managed_browser must be helium or chrome");
-    }
-
-    return Object.fromEntries(
-        Object.entries(config).map(([key, value]) => [
-            `PI_COMPUTER_USE_${key.toUpperCase()}`,
-            String(value),
-        ]),
-    );
 }
 
 /** Keep the native context-file precedence, adding only the shared base to frozen project context. */

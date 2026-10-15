@@ -29,9 +29,10 @@ flowchart LR
 
 ## 配置与工具
 
-团队只有一个共享基础 Agent，配置分两层：Owner 管理 `<data>/team-agent` 的扩展、MCP、skills 和设置；项目提供上下文、AGENTS.md、skills 和 `.pi/mcp.json`；项目同名 MCP 按原生规则覆盖共享定义。成员 HOME 保留凭据、会话和未分类运行状态，不是可定制的个人资源配置。成员仍用自己的账号选择模型，固定付费人和模型绑定不变。完整规则与仍不支持的能力见 [CONFIGURATION.md](CONFIGURATION.md)。
+团队只有一个共享基础 Agent，配置分两层：Owner 管理 `<data>/team-agent` 的扩展、MCP、skills 和设置；可信项目提供原生设置、扩展、包、模板、主题、system 文件、上下文、skills 和 MCP；项目覆盖规则由原生加载器处理。成员 HOME 保留凭据、会话和未分类运行状态，不是可定制的个人资源配置。成员仍用自己的账号选择模型，固定付费人和模型绑定不变。完整规则与仍不支持的能力见 [CONFIGURATION.md](CONFIGURATION.md)。
 
-- 扩展属于共享 Agent，不属于项目。Owner 管理共享资源；原生核心加载器仍拒绝项目扩展、包和基础设置；MCP 使用独立的原生配置加载入口。共享扩展以服务 OS 用户执行，仍须信任其代码；不能把核心 trust 标志当作所有插件独立配置读取器的隔离证明。pi-subagents 的项目/成员来源、运行中工具调用与子进程 CLI 另设拒绝边界；未知插件状态不猜测、不清空。
+- 工作区按原生 `--approve` 加载。共享和项目扩展都以服务 OS 用户执行，必须信任代码，不是沙箱。项目角色和配置恢复原生加载；成员基础资源仍从共享配置派生。未知插件状态不猜测、不清空。
+- 同一固定绑定的成功任务复用原生进程、MCP 连接和扩展内存；空闲时 gate 拒绝推理。失败、Stop、接力和服务关闭回收相应进程；跨重启恢复持久化会话，不恢复内存。资源/设置修改后执行 `/reload`。
 - OAuth 型 MCP 由各成员在 **MCP sign-ins** 独立登录。MCP 授权与模型授权不同；文件分开不构成成员间 OS 隔离。
 - 历史冻结配置会话保留原配置摘要，不自动切换为项目配置。相关配置 API 和 8 MiB 技能快照上限是旧会话路径，不是新会话的配置方式。
 - rotom 使用服务用户的 Chrome Relay 和桌面；不同成员不拥有相互隔离的浏览器登录或屏幕。
@@ -44,7 +45,7 @@ flowchart LR
 - 模型选择走 Team 接力，不改写运行中的付费人/模型。原生 fork/tree 选择恢复编辑草稿，不自动提交；tree 的可选原生摘要使用当前成员和模型，记录真实持久化用量。共享 Transcript 是含废弃分支的审计历史，不等于当前模型上下文。
 - 原生 JSONL 导出使用当前分支序列化；HTML 使用原生 exporter。原始导出只交付给该 segment 的成员。跨成员 fork/clone/import 仍只传公开历史。
 - `/mcp` 复用成员自己的浏览器外置登录桥。Qoder catalog/credits 调用成员 provider API，结果不向会话广播。
-- 本次明确排除的命令只有 `/share` 和 `/bug`：不提供可执行建议，手动输入在原生启动、推理及上传前拒绝。这不等于宣称其余 43 项全部对齐：`/context`、`/llama` 的 TUI 交互仍受阻，5 个个人技能按用户选择不安装；用户提供的 workflowScript、无来源证明的可选技能/记忆注入及项目 refinement 不受支持，在执行或子推理前拒绝。其余权限、账户、运行状态限制仍生效。详见 [CONFIGURATION.md](CONFIGURATION.md)。
+- 本次明确排除的命令只有 `/share` 和 `/bug`：不提供可执行建议，手动输入在原生启动、推理及上传前拒绝。这不等于宣称其余 43 项全部对齐：`/context`、`/llama` 的 TUI 交互仍受阻，5 个个人技能按用户选择不安装；子 Agent 指定技能、user/project memory 和已有项目 refinement 叠加使用原生实现；user memory 按付费成员私有路由，project memory 按项目共享。workflowScript 缺少原生 RPC 收尾接口，refinement 自动生成受原生前台执行限制，仍不支持。其余权限、账户、运行状态限制仍生效。详见 [CONFIGURATION.md](CONFIGURATION.md)。
 
 ## 中断、恢复与数据
 

@@ -280,7 +280,7 @@ try {
         } finally {
             clearTimeout(deadline);
             await stop;
-            executions.close();
+            await executions.close();
         }
     }
 

@@ -57,12 +57,11 @@ node test/mcp-sign-in-proof.ts
 ```
 
 The resource unit checks derive shared settings, preserve credential/unknown-state bytes, reject credential declarations,
-restore declared configuration, detect private config writes and set every native computer-use override. The actual pinned
-resource proof installs unknown extension names and checks arguments, standard UI interactions, context/skill loading,
-stored trust, native reload, package/setting/direct project-extension negative controls, awaited async follow-up and
-post-effect-error replay fencing. It records real native read-only command outputs, shared direct/package roles, pre-start
-project-role rejection, a late project-settings denial at the actual native subagent tool boundary, and frozen context
-composition. Dedicated regressions cover two-member managed file retirement, credential aliases, linked-package fingerprints,
+restore declared configuration and detect private config writes. The actual pinned resource proof checks native
+computer-use project precedence, project settings/extensions/packages/templates/system files, native role loading,
+standard UI interactions, shared/project skills and frozen context composition. It proves same PID and an increasing
+extension-local counter across two receipts, idle gate HTTP 403, native reload, awaited follow-up and post-effect-error
+replay fencing. Member-private executable customization remains a negative control. Dedicated regressions cover two-member managed file retirement, credential aliases, linked-package fingerprints,
 dotted/non-ASCII command grammar, unknown discovery without a second POST, and real offline npm backup/restore/reinstall.
 The browser proof creates an actual abruptly-ended discovery and checks the native startup counter for same/new-request retries.
 The native command proof also executes a genuine effect-then-throw command during an ordinary active prompt. It checks the
@@ -83,8 +82,8 @@ are not success. No real accounts or external destructive actions are authorized
 routing rejection, visible malformed-config errors and per-workspace freshness. `npm run test:kernel` proves a project
 stdio tool overrides a shared definition and actually executes. `npm run test:kernel:mcp` uses project `.pi/mcp.json`
 with two isolated member HOMEs: browserless OAuth, foreign callback rejection, private token routing, logout and frozen
-context MCP loading. A malicious project extension/package marker stays unexecuted in CLI and Agent startup.
-`npm run test:kernel:app` uses project MCP in the parent/child account-gated workflow. Shared resources remain covered by
+context MCP loading. Project extensions stay unexecuted in MCP-only CLI operations and load in trusted Agent startup.
+`npm run test:kernel:app` uses a project-defined child role explicitly selecting builtin MCP, under the same account gate. Shared resources remain covered by
 the resource proofs. These are synthetic loopback checks, not real MCP service acceptance.
 
 ## Personal skills do not block native runs
@@ -109,8 +108,9 @@ same-payer gate checks and persisted summary usage with synthetic loopback reque
 unknown summary usage and require a terminal assistant response independently of automatic compaction.
 This does not use real accounts. Independent reader enforcement is covered by the resource proofs above, not inferred from
 the default-role test. Actual child inference/usage, fd-3 owner lifetime and Stop remain covered by the Team kernel proof.
-The same proof checks optional named-skill/memory/refinement refusals before child inference and pre-execution rejection of
-user-provided workflowScript. Native structured single-child normalization is not programmable-workflow coverage. Native scoped
+The same proof checks named-skill metadata plus an actual child read of its file, user-memory routing for two members,
+shared project memory for both members, and an existing refinement marker in the child's system prompt. Read-only memory
+files and refinement files remain unchanged. WorkflowScript still has pre-execution negative controls. Native structured single-child normalization is not programmable-workflow coverage. Native scoped
 ownership itself rejects synchronous script controllers; the async script delivery/lifetime gap is an explicit unsupported
 capability, not simulated completion. See the user-approved subset in NATIVE-COMMAND-COMPATIBILITY.md.
 

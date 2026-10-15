@@ -12,7 +12,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-    assertTeamChildArguments,
+    assertTeamResourceSources,
     teamSubagentEnvironment,
 } from "../src/server/rotom-resource-policy.ts";
 import { test } from "node:test";
@@ -21,7 +21,6 @@ import {
     memberConfigurationSnapshot,
     memberConfigurationChanges,
     sharedConfigFiles,
-    teamComputerUseEnvironment,
     teamResourceRevision,
 } from "../src/server/rotom-resources.ts";
 
@@ -124,63 +123,49 @@ test("commands cannot silently persist declared member configuration, while unkn
     );
 });
 
-test("shared computer-use values override every plugin-specific project setting", () => {
-    const { shared } = fixture();
-
-    assert.deepEqual(teamComputerUseEnvironment(shared), {
-        PI_COMPUTER_USE_BROWSER_USE: "true",
-        PI_COMPUTER_USE_HEADLESS: "false",
-        PI_COMPUTER_USE_CURSOR_OVERLAY: "true",
-        PI_COMPUTER_USE_MANAGED_BROWSER: "chrome",
-    });
-    mkdirSync(join(shared, "extensions"));
-    writeFileSync(
-        join(shared, "extensions/pi-computer-use.json"),
-        '{"browser_use":false,"headless":true,"cursor_overlay":false,"managed_browser":"helium"}',
-    );
-    assert.equal(teamComputerUseEnvironment(shared).PI_COMPUTER_USE_MANAGED_BROWSER, "helium");
-});
-
-test("project subagent settings, definitions and package readers fail closed without blocking ordinary packages or skills", async () => {
+test("shared computer-use configuration is copied without environment overrides", async () => {
     const { home, shared, project } = fixture();
 
-    const put = (name: string, value: string) => {
+    mkdirSync(join(shared, "extensions"));
+    const config =
+        '{"browser_use":false,"headless":true,"cursor_overlay":false,"managed_browser":"helium"}';
+
+    writeFileSync(join(shared, "extensions/pi-computer-use.json"), config);
+    await prepareTeamResources(home, shared, project);
+    assert.equal(
+        readFileSync(join(home, ".pi/agent/extensions/pi-computer-use.json"), "utf8"),
+        config,
+    );
+});
+
+test("project roles, overrides and package declarations are left to native trusted discovery", async () => {
+    const { home, shared, project } = fixture();
+
+    for (const name of [".pi/agents/role.md", ".agents/role.md", ".pi/chains/task.chain.json"]) {
         const file = join(project, name);
 
         mkdirSync(join(file, ".."), { recursive: true });
-        writeFileSync(file, value);
-    };
-
-    for (const name of [".pi/agents/role.md", ".agents/role.md", ".pi/chains/task.chain.json"]) {
-        put(name, "---\nname: evil\nextensions: ./evil.ts\n---\nevil");
-        await assert.rejects(
-            prepareTeamResources(home, shared, project),
-            /Project agent definitions/,
-        );
-        rmSync(join(project, name));
+        writeFileSync(file, "---\nname: project-role\n---\nProject role");
     }
 
-    put(".agents/skills/good/SKILL.md", "---\nname: good\ndescription: project skill\n---\ngood");
-    put(
-        ".pi/settings.json",
+    writeFileSync(
+        join(project, ".pi/settings.json"),
         JSON.stringify({
-            subagents: { agentOverrides: { worker: { extensions: ["./evil.ts"] } } },
+            subagents: { agentOverrides: { worker: { extensions: ["./project.ts"] } } },
+            packages: ["./project-package"],
         }),
     );
-    await assert.rejects(prepareTeamResources(home, shared, project), /Project subagent settings/);
-    put(".pi/settings.json", "{}");
-
-    for (const name of ["package.json", ".pi/npm/node_modules/@scope/evil/package.json"]) {
-        put(name, JSON.stringify({ "pi-subagents": { agents: ["roles"] } }));
-        await assert.rejects(prepareTeamResources(home, shared, project), /Agent package sources/);
-        put(name, '{"name":"ordinary-project-package"}');
-    }
-
-    put(".pi/local/package.json", JSON.stringify({ pi: { subagents: { chains: ["chains"] } } }));
-    put(".pi/settings.json", JSON.stringify({ packages: ["file:./local"] }));
-    await assert.rejects(prepareTeamResources(home, shared, project), /Agent package sources/);
-    put(".pi/local/package.json", '{"name":"ordinary-package"}');
+    writeFileSync(
+        join(project, "package.json"),
+        JSON.stringify({ "pi-subagents": { agents: ["roles"] } }),
+    );
     await prepareTeamResources(home, shared, project);
+    await assertTeamResourceSources(home, shared, project);
+    assert.equal(
+        JSON.parse(readFileSync(join(home, ".pi/agent/settings.json"), "utf8")).subagents,
+        undefined,
+        "project settings remain in their native scope, not the derived shared profile",
+    );
 });
 
 test("private member role/config readers reject customization and preserve runtime state", async () => {
@@ -224,37 +209,6 @@ test("private member role/config readers reject customization and preserve runti
         readFileSync(join(home, ".pi/agent/agents/shared.md"), "utf8").includes("shared-role"),
     );
     assert.equal(teamSubagentEnvironment(shared).npm_config_prefix, join(shared, "global-npm"));
-});
-
-test("child CLI checks actual extension/trust aliases and canonical paths", async () => {
-    const { home, shared, project } = fixture();
-    const good = join(shared, "good.ts"),
-        bad = join(project, "bad.ts");
-
-    writeFileSync(good, "export default () => {};");
-    writeFileSync(bad, "throw new Error('must not load');");
-    await prepareTeamResources(home, shared, project);
-
-    for (const flag of ["-e", "--extension"]) {
-        await assertTeamChildArguments([flag, good], home, shared, project);
-        await assert.rejects(
-            assertTeamChildArguments([flag, bad], home, shared, project),
-            /Child extension is not shared/,
-        );
-    }
-
-    for (const flag of ["-a", "--approve"]) {
-        await assert.rejects(
-            assertTeamChildArguments([flag], home, shared, project),
-            /Child --approve/,
-        );
-    }
-
-    symlinkSync(bad, join(shared, "escape.ts"));
-    await assert.rejects(
-        assertTeamChildArguments(["-e", join(shared, "escape.ts")], home, shared, project),
-        /Child extension is not shared/,
-    );
 });
 
 test("shared add/change/remove updates two members without deleting unknown state", async () => {
@@ -394,7 +348,7 @@ test("live child validation rejects later member package/extension/config overri
             JSON.stringify({ ...JSON.parse(original), [key]: [join(project, "private-package")] }),
         );
         await assert.rejects(
-            assertTeamChildArguments([], home, shared, project),
+            assertTeamResourceSources(home, shared, project),
             /Member resource settings changed/,
         );
         writeFileSync(path, original);
@@ -402,7 +356,7 @@ test("live child validation rejects later member package/extension/config overri
 
     writeFileSync(join(home, ".pi/agent/AGENTS.md"), "LATE_PRIVATE_INSTRUCTIONS");
     await assert.rejects(
-        assertTeamChildArguments([], home, shared, project),
+        assertTeamResourceSources(home, shared, project),
         /Member configuration changed/,
     );
     assert.equal(

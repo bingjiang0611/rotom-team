@@ -38,7 +38,7 @@ Source abbreviations are relative to `runtime/rotom/node_modules/@bingjiang0611/
 | `/hotkeys`              | B                                   | Web shortcut sheet, not a claim that native terminal keybindings work in the browser. Individual invocation not separately attested.                                     |
 | `/fork`                 | B                                   | Earlier selected user ID→Team-safe seed before entry→editable draft; later inference excludes abandoned text. Not native forkSession identity switching.                 |
 | `/clone`                | B                                   | Native same-member branch clone; foreign member gets public history only; continuation proof.                                                                            |
-| `/trust`                | B                                   | Native trust choices; cannot override Team's no-project-agent startup. Stored-trust and native reload negative controls belong to resource proof.                        |
+| `/trust`                | B                                   | Native trust choices; startup already trusts the configured workspace. Native project loading and reload are covered by the resource proof.                              |
 | `/login`                | B                                   | Personal provider sheet/security mediation; no real login performed by this work. Provider argument-specific parity is not separately attested.                          |
 | `/logout`               | B                                   | Personal provider sheet/security mediation; account lifecycle tests are separate from arbitrary native terminal UI parity.                                               |
 | `/new`                  | B                                   | Separate Team/native conversation; no receipt identity mutation; native proof.                                                                                           |
@@ -48,13 +48,13 @@ Source abbreviations are relative to `runtime/rotom/node_modules/@bingjiang0611/
 | `/quit`                 | B                                   | Stop/leave Team view, not terminate the shared server. Goal Stop is independently tested; individual slash invocation is not separately attested.                        |
 | `/trace`                | `extensions/observability/index.ts` | Actual native notification observed with observability disabled; not a claim that a trace upload occurred.                                                               |
 | `/browser`              | `extensions/browser/index.ts`       | Actual native `status` result observed. Installation and destructive browser actions are not run for coverage.                                                           |
-| `/computer-use`         | C                                   | Actual config notification; all four shared env values override conflicting project settings. No desktop action is needed for this check.                                |
+| `/computer-use`         | C                                   | Actual config notification; native project values take precedence over shared configuration. No desktop action is needed for this check.                                 |
 | `/subagent-cost`        | S                                   | Actual native report/message observed. Empty synthetic history is not real-account cost reconciliation.                                                                  |
 | `/subagents-doctor`     | S                                   | Actual native diagnostic message observed; not a proof that every reported capability is usable.                                                                         |
 | `/subagents-guide`      | S                                   | Actual packaged native guide message observed.                                                                                                                           |
 | `/subagents-detach`     | S                                   | Native empty-input/empty-task response observed; successful detachment of a live child is not individually attested here.                                                |
 | `/subagents-stop`       | S                                   | Native empty-task response observed; actual child closure is covered separately by the kernel proof, not inferred from this acknowledgement.                             |
-| `/subagents-models`     | S                                   | Native builtin-model report observed. Shared custom/package role listing and project/member rejection have separate native resource proofs.                              |
+| `/subagents-models`     | S                                   | Native builtin-model report observed. Shared/project/package roles load; member customization remains rejected in resource proofs.                                       |
 | `/goal`                 | G                                   | Actual timers, pause, Stop/unknown, plain and skill wake under one receipt/member; native and browser proofs.                                                            |
 | `/qoder-models`         | Q                                   | Private member provider API/catalog mediation with synthetic accounts; no broker HOME credential or room result broadcast.                                               |
 | `/qoder-credits`        | Q                                   | Private member quota API fixture; not per-request debit, billing or real-account evidence.                                                                               |
@@ -120,12 +120,14 @@ The user explicitly chose this verified subset. User-provided `workflowScript` i
 scope refuses synchronous workflow controllers, and asynchronous workflow result delivery/lifetime is not bridged. No script
 is silently rewritten, no native ownership protection is disabled, and no script completion is inferred from status files.
 
-An owned asynchronous child's pre-spawn recovery descriptor can attest that no optional named-skill or memory injection
-occurred. Nonempty skill names are not original source-path attestations and are refused; optional role memory and selected
-project refinements are also refused. The native named-skill injector advertises descriptions/locations, not full skill bodies.
-Missing descriptors fail closed. Refusal happens before child agent startup/inference; native private preparation may already
-have read inputs or written its own run artifacts. No private files are deleted or imported into the shared profile.
+Optional native named-skill injection, user/project memory and existing project refinement overlays are enabled.
+Native injection resolves sources; Team no longer assumes every owned child has an asynchronous recovery descriptor.
+User memory is member-private, project memory is shared, and neither is copied into the shared base profile.
+Named skills advertise descriptions/locations; the fixture verifies an actual child read, not just prompt metadata.
 
-This is not a filesystem sandbox or proof against concurrent resource replacement. Source-attested native launch metadata
-and a verified owned-workflow delivery/lifetime API are the respective upgrade triggers; neither is in this delivery scope.
-Native background-work identities have a 256-character limit; long fixture/session paths are not repaired by rewriting histories.
+Workflow support still needs a supported native RPC drain bridge. In 0.1.21, RPC has UI and skips the native headless
+auto-drain; agent settlement does not prove workflow-controller closure. Native refinement generation uses a standalone
+foreground reviewer that owned scope rejects. Existing overlays are supported; generation is not.
+
+This is not a filesystem sandbox or proof against concurrent resource replacement. Native background-work identities
+have a 256-character limit; long fixture/session paths are not repaired by rewriting histories.

@@ -1,7 +1,11 @@
 /** Non-replayable team-owned execution journal around the real rotom loop. Not a model-provider adapter. */
 import { createServer } from "node:http";
 import { TeamResourcePolicyError, assertTeamResourceSources } from "./rotom-resource-policy.ts";
-import { memberConfigurationSnapshot, memberConfigurationChanges } from "./rotom-resources.ts";
+import {
+    memberConfigurationSnapshot,
+    memberConfigurationChanges,
+    teamResourceRevision,
+} from "./rotom-resources.ts";
 import type { ImageContent } from "@earendil-works/pi-ai";
 import { once } from "node:events";
 import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
@@ -154,6 +158,23 @@ type Running = {
     prompting?: boolean;
 };
 
+type ActiveAttempt = {
+    receipt: KernelReceipt;
+    operation: "prompt" | "compact" | "discover" | "command";
+    running: Running;
+    inferenceAdmitted: boolean;
+};
+
+type PersistentKernel = {
+    revision: string;
+    kernel: RotomRpc;
+    gate: ReturnType<typeof createServer>;
+    gateFile: string;
+    contextFile?: string;
+    gateState: { active?: ActiveAttempt };
+    state: { sessionFile: string; sessionId: string; sessionName?: string };
+};
+
 function goalIsActive(value: unknown): boolean {
     if (!value || typeof value !== "object") {
         return false;
@@ -234,6 +255,7 @@ export class RotomExecutions {
         sessionId: string,
     ) => KernelLaunchContext;
     readonly #running = new Map<string, Set<Running>>();
+    readonly #kernels = new Map<string, PersistentKernel>();
     #active = 0;
     constructor(
         data: string,
@@ -464,8 +486,17 @@ export class RotomExecutions {
             const messages = publicNativeHistory(
                 native.buildSessionProjection(this.journal.segmentEntries(expectedHead)).messages,
             );
-            // No await between projection and intent/CAS; an existing intent is never replayed.
+            // Reserve before awaiting closure so no new prompt can reuse the retiring process.
             const receipt = this.journal.handoff(sessionId, requestId, expectedHead, binding);
+
+            try {
+                await this.#retire(expectedHead);
+            } catch (error) {
+                running.closureUnknown = true;
+                this.journal.fail(receipt.id, "unknown");
+
+                throw error;
+            }
 
             return this.#seed(receipt, messages, native.SessionManager, running);
         });
@@ -790,174 +821,216 @@ export class RotomExecutions {
         // Admission is asynchronous: an earlier request may have created the native file while it was pending.
         const session = this.journal.session(sessionId);
 
-        let kernel: RotomRpc | undefined,
-            closed = false;
+        const revision = teamResourceRevision(join(this.#data, "team-agent"), binding.workspace);
+        let persistent = this.#kernels.get(admitted.segmentId);
+        let kernel: RotomRpc | undefined = persistent?.kernel;
+        let gate: ReturnType<typeof createServer> | undefined = persistent?.gate;
+        let gateFile: string | undefined = persistent?.gateFile;
+        let contextFile: string | undefined = persistent?.contextFile;
+        let closed = false;
         let failureStatus: "unknown" | "rejected" = "unknown";
-        const token = randomBytes(32).toString("base64url");
-        let gateFile: string | undefined;
-        let contextFile: string | undefined;
-        let inferenceAdmitted = false;
-        const gate = createServer(async (req, res) => {
-            // The capability belongs to one attempt. Never accept a caller-supplied payer or session identity.
-            const authorization = Buffer.from(String(req.headers.authorization ?? "")),
-                expected = Buffer.from(`Bearer ${token}`);
+        const activeAttempt: ActiveAttempt = {
+            receipt,
+            operation,
+            running,
+            inferenceAdmitted: false,
+        };
 
-            if (
-                req.method !== "POST" ||
-                req.url !== "/authorize" ||
-                authorization.length !== expected.length ||
-                !timingSafeEqual(authorization, expected)
-            ) {
-                res.writeHead(403).end();
+        const gateState = persistent?.gateState ?? { active: activeAttempt };
 
-                return;
-            }
+        gateState.active = activeAttempt;
 
-            try {
-                let body = "";
+        const token = persistent ? undefined : randomBytes(32).toString("base64url");
 
-                for await (const chunk of req) {
-                    body += chunk;
-
-                    if (Buffer.byteLength(body) > 2048) {
-                        throw new Error("gate request too large");
-                    }
-                }
-
-                const value = JSON.parse(body);
-
-                if (operation === "discover") {
-                    throw new Error(
-                        "Command discovery does not authorize inference or credential refresh",
-                    );
-                }
+        if (!persistent) {
+            gate = createServer(async (req, res) => {
+                // This process has one immutable binding; only the currently active receipt may spend.
+                const authorization = Buffer.from(String(req.headers.authorization ?? "")),
+                    expected = Buffer.from(`Bearer ${token!}`);
 
                 if (
-                    !["inference", "refresh", "usage"].includes(value.operation) ||
-                    value.provider !== binding.provider ||
-                    (value.operation !== "refresh" && value.model !== binding.model)
+                    req.method !== "POST" ||
+                    req.url !== "/authorize" ||
+                    authorization.length !== expected.length ||
+                    !timingSafeEqual(authorization, expected)
                 ) {
-                    throw new Error("identity denied");
-                }
-
-                if (this.journal.receipt(receipt.id).status !== "dispatch-intent") {
-                    throw new Error("attempt is not active");
-                }
-
-                // A subagent's response: its entries stay in its own session, so the gate records what it spent.
-                if (value.operation === "usage") {
-                    if (!value.usage || typeof value.usage !== "object") {
-                        throw new Error("usage must be an object");
-                    }
-
-                    this.journal.childUsage(receipt.id, value.usage);
-                    res.writeHead(204).end();
+                    res.writeHead(403).end();
 
                     return;
                 }
 
-                if (running.aborted) {
-                    throw new Error("execution stopped");
-                }
+                try {
+                    let body = "";
 
-                const auth = await this.#authorize(binding, value.operation, sessionId);
+                    for await (const chunk of req) {
+                        body += chunk;
 
-                if (
-                    running.aborted ||
-                    this.journal.receipt(receipt.id).status !== "dispatch-intent"
-                ) {
-                    throw new Error("attempt ended during authorization");
-                }
-
-                if (prepared && value.operation === "inference") {
-                    if (!auth) {
-                        throw new Error("No request auth");
+                        if (Buffer.byteLength(body) > 2048) {
+                            throw new Error("gate request too large");
+                        }
                     }
 
-                    const body = JSON.stringify(auth);
+                    const value = JSON.parse(body);
 
-                    if (Buffer.byteLength(body) > 65536) {
-                        throw new Error("Request auth is too large");
+                    const active = gateState.active;
+
+                    if (!active || active.operation === "discover") {
+                        throw new Error("No active inference receipt");
                     }
 
-                    inferenceAdmitted = true;
-                    res.writeHead(200, {
-                        "Content-Type": "application/json",
-                        "Cache-Control": "no-store",
-                    }).end(body);
-                } else {
-                    if (value.operation === "inference") {
-                        inferenceAdmitted = true;
+                    if (
+                        !["inference", "refresh", "usage"].includes(value.operation) ||
+                        value.provider !== binding.provider ||
+                        (value.operation !== "refresh" && value.model !== binding.model)
+                    ) {
+                        throw new Error("identity denied");
                     }
 
-                    res.writeHead(204).end();
+                    if (this.journal.receipt(active.receipt.id).status !== "dispatch-intent") {
+                        throw new Error("attempt is not active");
+                    }
+
+                    // A subagent's response: its entries stay in its own session, so the gate records what it spent.
+                    if (value.operation === "usage") {
+                        if (!value.usage || typeof value.usage !== "object") {
+                            throw new Error("usage must be an object");
+                        }
+
+                        this.journal.childUsage(active.receipt.id, value.usage);
+                        res.writeHead(204).end();
+
+                        return;
+                    }
+
+                    if (active.running.aborted) {
+                        throw new Error("execution stopped");
+                    }
+
+                    const auth = await this.#authorize(binding, value.operation, sessionId);
+
+                    if (
+                        active.running.aborted ||
+                        this.journal.receipt(active.receipt.id).status !== "dispatch-intent" ||
+                        gateState.active !== active
+                    ) {
+                        throw new Error("attempt ended during authorization");
+                    }
+
+                    if (prepared && value.operation === "inference") {
+                        if (!auth) {
+                            throw new Error("No request auth");
+                        }
+
+                        const body = JSON.stringify(auth);
+
+                        if (Buffer.byteLength(body) > 65536) {
+                            throw new Error("Request auth is too large");
+                        }
+
+                        active.inferenceAdmitted = true;
+                        res.writeHead(200, {
+                            "Content-Type": "application/json",
+                            "Cache-Control": "no-store",
+                        }).end(body);
+                    } else {
+                        if (value.operation === "inference") {
+                            active.inferenceAdmitted = true;
+                        }
+
+                        res.writeHead(204).end();
+                    }
+                } catch {
+                    res.writeHead(403).end();
                 }
-            } catch {
-                res.writeHead(403).end();
-            }
-        });
+            });
+        }
+
+        let state: PersistentKernel["state"] | undefined = persistent?.state;
 
         try {
-            gate.listen(0, "127.0.0.1");
-            await once(gate, "listening");
-            const folder = join(this.#data, "kernel-gates");
+            if (!persistent) {
+                gate!.listen(0, "127.0.0.1");
+                await once(gate!, "listening");
+                const folder = join(this.#data, "kernel-gates");
 
-            mkdirSync(folder, { recursive: true, mode: 0o700 });
+                mkdirSync(folder, { recursive: true, mode: 0o700 });
 
-            if (
-                realpathSync(folder) !== folder ||
-                !lstatSync(folder).isDirectory() ||
-                lstatSync(folder).mode & 0o077
-            ) {
-                throw new Error("Kernel gate directory must be canonical and private");
+                if (
+                    realpathSync(folder) !== folder ||
+                    !lstatSync(folder).isDirectory() ||
+                    lstatSync(folder).mode & 0o077
+                ) {
+                    throw new Error("Kernel gate directory must be canonical and private");
+                }
+
+                gateFile = join(folder, `${receipt.id}.json`);
+                writeFileSync(
+                    gateFile,
+                    JSON.stringify({
+                        url: `http://127.0.0.1:${(gate!.address() as { port: number }).port}/authorize`,
+                        token: token!,
+                        provider: binding.provider,
+                        model: binding.model,
+                        ...(prepared ? { modelDefinition: prepared.modelDefinition } : {}),
+                    }),
+                    { mode: 0o600, flag: "wx" },
+                );
+
+                if (prepared?.frozen) {
+                    contextFile = `${gateFile}.context`;
+                    writeFileSync(contextFile, prepared.frozen.context, {
+                        mode: 0o600,
+                        flag: "wx",
+                    });
+                }
+
+                this.#notStopped(running);
+                kernel = await startRotomKernel({
+                    ...binding,
+                    teamAgentDir: join(this.#data, "team-agent"),
+                    gateFile,
+                    sessionFile: session.sessionFile,
+                    configuration: prepared?.frozen && {
+                        contextFile: contextFile!,
+                        skills: prepared.frozen.skills,
+                    },
+                });
+                running.kernel = kernel;
+                state = (await kernel!.request({ type: "get_state" })) as {
+                    sessionFile: string;
+                    sessionId: string;
+                    sessionName?: string;
+                };
+                const prefix = join(binding.home, ".pi/agent/sessions") + "/";
+
+                if (
+                    typeof state.sessionId !== "string" ||
+                    typeof state.sessionFile !== "string" ||
+                    !state.sessionFile.startsWith(prefix) ||
+                    realpathSync(dirname(state.sessionFile)) !== dirname(state.sessionFile)
+                ) {
+                    throw new Error("Native session outside admitted HOME");
+                }
+
+                persistent = {
+                    revision,
+                    kernel: kernel!,
+                    gate: gate!,
+                    gateFile: gateFile!,
+                    ...(contextFile ? { contextFile } : {}),
+                    gateState,
+                    state,
+                };
+                this.#kernels.set(admitted.segmentId, persistent);
             }
 
-            gateFile = join(folder, `${receipt.id}.json`);
-            writeFileSync(
-                gateFile,
-                JSON.stringify({
-                    url: `http://127.0.0.1:${(gate.address() as { port: number }).port}/authorize`,
-                    token,
-                    provider: binding.provider,
-                    model: binding.model,
-                    ...(prepared ? { modelDefinition: prepared.modelDefinition } : {}),
-                }),
-                { mode: 0o600, flag: "wx" },
-            );
-
-            if (prepared?.frozen) {
-                contextFile = `${gateFile}.context`;
-                writeFileSync(contextFile, prepared.frozen.context, { mode: 0o600, flag: "wx" });
+            if (!persistent || !state || !kernel) {
+                throw new Error("Native process did not initialize");
             }
 
-            this.#notStopped(running);
-            kernel = await startRotomKernel({
-                ...binding,
-                teamAgentDir: join(this.#data, "team-agent"),
-                gateFile,
-                sessionFile: session.sessionFile,
-                configuration: prepared?.frozen && {
-                    contextFile: contextFile!,
-                    skills: prepared.frozen.skills,
-                },
-            });
+            const nativeState = state;
+
             running.kernel = kernel;
-            const state = (await kernel.request({ type: "get_state" })) as {
-                sessionFile: string;
-                sessionId: string;
-                sessionName?: string;
-            };
-            const prefix = join(binding.home, ".pi/agent/sessions") + "/";
-
-            if (
-                typeof state.sessionId !== "string" ||
-                typeof state.sessionFile !== "string" ||
-                !state.sessionFile.startsWith(prefix) ||
-                realpathSync(dirname(state.sessionFile)) !== dirname(state.sessionFile)
-            ) {
-                throw new Error("Native session outside admitted HOME");
-            }
-
             this.journal.attach(receipt.id, state.sessionFile, state.sessionId, kernel.pid);
             // Recheck after startup/catalog work, immediately before sending the user request.
             await this.#authorize(binding, "admission", sessionId);
@@ -971,20 +1044,22 @@ export class RotomExecutions {
                 }
             });
 
+            let detachHook: (() => void) | undefined;
+
             if (hooks.onEvent) {
-                kernel.onEvent(hooks.onEvent);
+                detachHook = kernel.onEvent(hooks.onEvent);
                 // Someone watches this run, so its dialogs (ask_user_question, permissions) can reach a person.
                 kernel.forwardDialogs();
             }
 
             // Message-level durability: each persisted message is journaled as it lands, so a restart loses at most
             // the message in flight. The final snapshot below remains the authority for the outcome.
-            kernel.onEvent((event) => {
+            const detachProgress = kernel.onEvent((event) => {
                 if (
                     event.type !== "message_end" ||
                     !["prompt", "command"].includes(operation) ||
                     progressFailure !== undefined ||
-                    !existsSync(state.sessionFile)
+                    !existsSync(nativeState.sessionFile)
                 ) {
                     return;
                 }
@@ -1000,6 +1075,17 @@ export class RotomExecutions {
 
             if (running.aborted) {
                 throw new RpcFailure("rejected", "Stopped before prompt dispatch");
+            }
+
+            if (persistent.revision !== revision && nativeCommandName(prompt) !== "reload") {
+                // Shared settings edits used to apply on every startup. Reload the same process
+                // under the new receipt instead of silently retaining the old settings.
+                await kernel.command("/team-kernel-reload");
+                await kernel.barrier();
+
+                if (extensionError) {
+                    throw new RpcFailure("unknown", "Native resource reload failed");
+                }
             }
 
             const catalog = (await kernel.request({ type: "get_commands" })) as {
@@ -1024,6 +1110,7 @@ export class RotomExecutions {
                     if (source === "prompt" || source === "skill") {
                         this.journal.classifyPromptExpansion(receipt.id);
                         operation = "prompt";
+                        activeAttempt.operation = operation;
                     }
 
                     await hooks.onCommandAdmitted?.();
@@ -1213,6 +1300,9 @@ export class RotomExecutions {
                 );
             }
 
+            state.sessionName =
+                typeof finalState.sessionName === "string" ? finalState.sessionName : undefined;
+
             // Native delays JSONL creation until the first conversation. Preserve confirmed /name readback now,
             // then restore it through set_session_name when the next native process starts.
             if (
@@ -1222,9 +1312,14 @@ export class RotomExecutions {
                 await hooks.onSessionName?.(finalState.sessionName);
             }
 
+            if (running.aborted) {
+                // Stop is sticky in the native transport. Never reuse a stopped process.
+                await this.#retire(admitted.segmentId);
+            }
+
             detachExtensionErrors();
-            await kernel.close();
-            closed = true;
+            detachProgress();
+            detachHook?.();
 
             if (progressFailure !== undefined) {
                 throw progressFailure;
@@ -1248,19 +1343,27 @@ export class RotomExecutions {
 
             const finished = this.journal.finish(receipt.id, disposition, entries);
 
+            persistent.revision = revision;
+            gateState.active = undefined;
+            closed = true;
+
             hooks.onProgress?.();
 
             return finished;
         } catch (error) {
             // Team policy may reject before native startup. After startup only an explicit native rejection is known.
-            if (error instanceof TeamResourcePolicyError && !kernel && !inferenceAdmitted) {
+            if (
+                error instanceof TeamResourcePolicyError &&
+                !kernel &&
+                !activeAttempt.inferenceAdmitted
+            ) {
                 hooks.onEvent?.({
                     type: "extension_ui_request",
                     id: randomUUID(),
                     method: "notify",
                     notifyType: "error",
                     message:
-                        "Team blocked project/member agent configuration. Move agent resources into the owner-managed shared profile.",
+                        "Team blocked member agent customization. Use the shared profile or trusted project configuration.",
                 });
                 await hooks.onNativeResult?.({ resourcePolicyError: error.message });
             }
@@ -1269,31 +1372,35 @@ export class RotomExecutions {
                 ((error instanceof TeamResourcePolicyError && !kernel) ||
                     (error instanceof RpcFailure && error.outcome === "rejected") ||
                     error instanceof KernelRequestConflict) &&
-                !inferenceAdmitted
+                !activeAttempt.inferenceAdmitted
                     ? "rejected"
                     : "unknown";
         } finally {
-            gate.closeAllConnections();
-            await new Promise<void>((resolve) => gate.close(() => resolve()));
+            if (!closed) {
+                gateState.active = undefined;
+                this.#kernels.delete(admitted.segmentId);
+                gate?.closeAllConnections();
+                await new Promise<void>((resolve) => gate?.close(() => resolve()) ?? resolve());
 
-            // Keep the active lease and account reservation until child close is observed. A close failure must not release the writer lock.
-            if (kernel && !closed) {
-                try {
-                    await kernel.close();
-                } catch (error) {
-                    running.closureUnknown = true;
-                    this.journal.fail(receipt.id, "unknown");
+                // Keep the active lease and account reservation until child close is observed. A close failure must not release the writer lock.
+                if (kernel) {
+                    try {
+                        await kernel.close();
+                    } catch (error) {
+                        running.closureUnknown = true;
+                        this.journal.fail(receipt.id, "unknown");
 
-                    throw error;
+                        throw error;
+                    }
                 }
-            }
 
-            if (gateFile) {
-                rmSync(gateFile, { force: true });
-            }
+                if (gateFile) {
+                    rmSync(gateFile, { force: true });
+                }
 
-            if (contextFile) {
-                rmSync(contextFile, { force: true });
+                if (contextFile) {
+                    rmSync(contextFile, { force: true });
+                }
             }
         }
 
@@ -1307,12 +1414,38 @@ export class RotomExecutions {
         return this.journal.fail(receipt.id, failureStatus, unmaterialized);
     }
 
-    close(): void {
+    async #retire(segmentId: string): Promise<void> {
+        const persistent = this.#kernels.get(segmentId);
+
+        if (!persistent) {
+            return;
+        }
+
+        persistent.gateState.active = undefined;
+        persistent.gate.closeAllConnections();
+        await new Promise<void>((resolve) => persistent.gate.close(() => resolve()));
+
+        await persistent.kernel.close();
+        this.#kernels.delete(segmentId);
+        rmSync(persistent.gateFile, { force: true });
+
+        if (persistent.contextFile) {
+            rmSync(persistent.contextFile, { force: true });
+        }
+    }
+
+    close(): Promise<void> {
         if (this.#active) {
             throw new Error("Kernel executions are still active; do not release the writer lock");
         }
 
-        this.journal.close();
+        return (async () => {
+            for (const segmentId of [...this.#kernels.keys()]) {
+                await this.#retire(segmentId);
+            }
+
+            this.journal.close();
+        })();
     }
 }
 

@@ -648,7 +648,7 @@ try {
                 .usage("team-conversation")
                 .every((row) => row.memberId === "alice" && row.costStatus === "unknown"),
         );
-        executions.close();
+        await executions.close();
         executions = new RotomExecutions(data, authorize);
         const duplicate = await executions.run(
             "team-conversation",
@@ -814,7 +814,7 @@ try {
             inferenceChecks,
         };
     } finally {
-        executions.close();
+        await executions.close();
     }
 
     report.status = "passed";

@@ -1,7 +1,7 @@
-/** Fail closed on the bundled subagent loader's independent project/member resource readers. */
+/** Preserve the derived shared member profile; trusted projects use native resource discovery. */
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, readdirSync, realpathSync, statSync, lstatSync } from "node:fs";
-import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { existsSync, readFileSync, readdirSync, lstatSync } from "node:fs";
+import { isAbsolute, join, relative } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { nativeConfigurationApi } from "./rotom-kernel.ts";
 
@@ -228,77 +228,6 @@ export async function assertTeamResourceSources(
     for (const root of packageRoots(join(agentDir, "npm/node_modules"))) {
         rejectAgentPackage(root);
     }
-
-    // The native plugin can select an ancestor via projectRootResolution. Reject that configuration before it resolves a root.
-    let projectRoot: string | undefined;
-
-    for (let directory = resolve(cwd); ; directory = dirname(directory)) {
-        if (
-            existsSync(join(directory, ".pi/settings.json")) &&
-            "subagents" in json(join(directory, ".pi/settings.json"))
-        ) {
-            throw new TeamResourcePolicyError(
-                `Project subagent settings are not allowed: ${directory}`,
-            );
-        }
-
-        if (
-            !projectRoot &&
-            [".pi", ".agents"].some(
-                (name) =>
-                    existsSync(join(directory, name)) &&
-                    statSync(join(directory, name)).isDirectory(),
-            )
-        ) {
-            projectRoot = directory;
-        }
-
-        if (dirname(directory) === directory) {
-            break;
-        }
-    }
-
-    projectRoot ??= resolve(cwd);
-    const definitions = [
-        ...definitionFiles(join(projectRoot, ".pi/agents")),
-        ...definitionFiles(join(projectRoot, ".pi/chains")),
-        ...definitionFiles(join(projectRoot, ".agents"), true),
-    ];
-
-    if (definitions.length) {
-        throw new TeamResourcePolicyError(
-            `Project agent definitions are not allowed: ${definitions[0]}`,
-        );
-    }
-
-    const configDir = join(projectRoot, ".pi");
-    const manager = new api.DefaultPackageManager({
-        cwd: projectRoot,
-        agentDir,
-        settingsManager: api.SettingsManager.fromStorage({
-            withLock: (_scope: string, read: (value: string) => unknown) => read("{}"),
-        }),
-    });
-    const roots = [projectRoot, ...packageRoots(join(configDir, "npm/node_modules"))];
-
-    for (const entry of json(join(configDir, "settings.json")).packages ?? []) {
-        const source = typeof entry === "string" ? entry : entry.source;
-
-        if (typeof source !== "string") {
-            continue;
-        }
-
-        const normalized = source.replace(/^file:/, "").replace(/^~(?=\/|$)/, home);
-        const installed = manager.getInstalledPath(normalized, "project");
-
-        if (installed) {
-            roots.push(installed);
-        }
-    }
-
-    for (const root of roots) {
-        rejectAgentPackage(root);
-    }
 }
 
 export function teamSubagentEnvironment(shared: string): Record<string, string> {
@@ -306,50 +235,4 @@ export function teamSubagentEnvironment(shared: string): Record<string, string> 
         npm_config_prefix: join(shared, "global-npm"),
         PI_SUBAGENT_EXTRA_AGENT_DIRS: join(shared, "agents"),
     };
-}
-
-/** Native parsing handles actual aliases and option values. Canonical paths defeat project symlinks into an allowlist. */
-export async function assertTeamChildArguments(
-    args: string[],
-    home: string,
-    shared: string,
-    cwd: string,
-): Promise<void> {
-    await assertTeamResourceSources(home, shared, cwd);
-    const api = await nativeConfigurationApi();
-    const parsed = api.parseArgs(args);
-
-    if (parsed.projectTrustOverride === true) {
-        throw new TeamResourcePolicyError("Child --approve/-a is not allowed in Team");
-    }
-
-    const settings = json(join(home, ".pi/agent/settings.json"));
-    const roots = [realpathSync(shared), realpathSync(api.bundledResourceRoot)];
-    const configured = (settings.extensions ?? []).filter(
-        (path: string) => !path.startsWith("-") && !path.startsWith("builtin:"),
-    );
-    const allowed = new Set(configured.map((path: string) => realpathSync(path)));
-
-    for (const source of parsed.extensions ?? []) {
-        if (source.startsWith("builtin:")) {
-            if (!(settings.extensions ?? []).includes(source)) {
-                throw new TeamResourcePolicyError(`Child extension is not shared: ${source}`);
-            }
-
-            continue;
-        }
-
-        const file = realpathSync(
-            isAbsolute(source) ? source : resolve(cwd, source.replace(/^~(?=\/|$)/, home)),
-        );
-
-        if (
-            !allowed.has(file) &&
-            !roots.some((root) => file === root || file.startsWith(root + sep))
-        ) {
-            throw new TeamResourcePolicyError(
-                `Child extension is not shared or bundled: ${source}`,
-            );
-        }
-    }
 }

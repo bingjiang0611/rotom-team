@@ -51,6 +51,8 @@ let calls = 0,
 let subagentSearch = "";
 /** Who paid for each subagent request: the gate tells the model server the member. */
 const childMembers: string[] = [];
+const childBodies: string[] = [];
+const injectedSkillPath = join(folder, "team-agent/skills/injected-proof/SKILL.md");
 const hangingChild = Promise.withResolvers<void>();
 /** Once the project declares its MCP server, every member's live run is offered its tool. */
 let sharedMcp = false;
@@ -216,7 +218,7 @@ const modelServer = createServer(async (req, res) => {
         );
 
         // The child's result comes back to the parent as a message that starts a new turn of the same prompt.
-        if (lastUser.includes("Background task completed: **reviewer**")) {
+        if (lastUser.includes("Background task completed:")) {
             assert.match(lastUser, /CHILD_DONE/);
             emit({ content: "PARENT_SAW_CHILD" });
             emit({}, "stop");
@@ -237,8 +239,42 @@ const modelServer = createServer(async (req, res) => {
         if (lastUser.includes("SUBAGENT_CHILD_TASK")) {
             childRequests++;
             childMembers.push(member);
-            emit({ content: "CHILD_DONE" });
-            emit({}, "stop");
+            childBodies.push(body);
+
+            if (
+                lastUser.includes("RESOURCE_SKILL") &&
+                !input.messages.some((message: { role: string }) => message.role === "tool")
+            ) {
+                assert.ok(
+                    body.includes(injectedSkillPath),
+                    "native named-skill location reaches child",
+                );
+                emit({
+                    tool_calls: [
+                        {
+                            index: 0,
+                            id: "read-injected-skill",
+                            type: "function",
+                            function: {
+                                name: "read",
+                                arguments: JSON.stringify({ path: injectedSkillPath }),
+                            },
+                        },
+                    ],
+                });
+                emit({}, "tool_calls");
+            } else {
+                if (lastUser.includes("RESOURCE_SKILL")) {
+                    assert.ok(
+                        body.includes("INJECTED_SKILL_BODY_READ"),
+                        "child read the selected skill, not just its description",
+                    );
+                }
+
+                emit({ content: "CHILD_DONE" });
+                emit({}, "stop");
+            }
+
             res.end("data: [DONE]\n\n");
 
             return;
@@ -251,7 +287,7 @@ const modelServer = createServer(async (req, res) => {
         ) {
             // Each spawning prompt has its own tool call ids: an earlier prompt's calls stay in the history.
             const resourceCase = lastUser.match(
-                /SPAWN_RESOURCE_(SKILL|MEMORY|REFINEMENT|ASYNC_WORKFLOW|WORKFLOW|WORKER)/,
+                /SPAWN_RESOURCE_(SKILL|MEMORY|PROJECT_MEMORY|REFINEMENT|ASYNC_WORKFLOW|WORKFLOW|WORKER)/,
             )?.[1];
             const round = resourceCase ?? (lastUser.includes("SPAWN_HANGING") ? "2" : "1");
             const spawned = input.messages.find(
@@ -303,23 +339,24 @@ const modelServer = createServer(async (req, res) => {
                                               }
                                             : {
                                                   agent:
-                                                      resourceCase === "MEMORY"
-                                                          ? "memory-fixture"
-                                                          : resourceCase === "SKILL"
-                                                            ? "named-skill-fixture"
-                                                            : resourceCase === "WORKER"
-                                                              ? "worker"
-                                                              : "reviewer",
-                                                  task: "SUBAGENT_CHILD_TASK: reply CHILD_DONE",
+                                                      resourceCase === "PROJECT_MEMORY"
+                                                          ? "project-memory-fixture"
+                                                          : resourceCase === "MEMORY"
+                                                            ? "memory-fixture"
+                                                            : resourceCase === "SKILL"
+                                                              ? "named-skill-fixture"
+                                                              : resourceCase === "WORKER"
+                                                                ? "worker"
+                                                                : "reviewer",
+                                                  task: `SUBAGENT_CHILD_TASK RESOURCE_${resourceCase}: reply CHILD_DONE`,
                                                   extensions: [],
                                               }
                                         : {
-                                              agent: "reviewer",
+                                              agent: round === "2" ? "reviewer" : "mcp-fixture",
                                               task:
                                                   round === "2"
                                                       ? "SUBAGENT_CHILD_HANG: never answer"
                                                       : "SUBAGENT_CHILD_TASK: reply CHILD_DONE",
-                                              extensions: [],
                                           },
                                 ),
                             },
@@ -379,6 +416,7 @@ const modelServer = createServer(async (req, res) => {
 
         res.end("data: [DONE]\n\n");
     } catch (error) {
+        console.error("Synthetic provider assertion failed:", error);
         res.destroy(error as Error);
     }
 });
@@ -708,6 +746,11 @@ try {
     writeFileSync(
         join(workspace, ".pi", "skills", "project-proof", "SKILL.md"),
         "---\nname: project-proof\ndescription: PROJECT_SKILL_DESCRIPTION\n---\nProject skill.\n",
+    );
+    mkdirSync(join(workspace, ".pi/agents"), { recursive: true });
+    writeFileSync(
+        join(workspace, ".pi/agents/mcp-fixture.md"),
+        "---\nname: mcp-fixture\ndescription: Project role with native MCP\ntools: read, ls\nextensions: builtin:mcp\ninheritProjectContext: true\ninheritSkills: false\n---\nProject fixture role.",
     );
     const mcpStarts = join(folder, "project-mcp-starts");
     const mcpScript = join(workspace, ".pi/mcp-probe.mjs");
@@ -2356,23 +2399,53 @@ try {
     report.nativeAttachmentsImagesAndHistory = true;
     report.firstMessageNamesSession = true;
 
-    // Keep native structured-child/Stop behavior; prove optional injection and user-script refusals separately.
+    // Native optional injections are real child inputs; user memory stays with its paying member.
     const resourceHome = join(folder, "kernel-homes", a.id);
     const sharedRoles = join(folder, "team-agent/agents");
 
     mkdirSync(sharedRoles, { recursive: true });
     writeFileSync(
         join(sharedRoles, "named-skill-fixture.md"),
-        "---\nname: named-skill-fixture\ndescription: Fixture optional named skill\ntools: read, ls\nextensions:\nskills: member-pi\n---\nFixture role.",
+        "---\nname: named-skill-fixture\ndescription: Fixture optional named skill\ntools: read, ls\nextensions:\ninheritProjectContext: true\nskills: injected-proof\n---\nFixture role.",
     );
     writeFileSync(
         join(sharedRoles, "memory-fixture.md"),
-        "---\nname: memory-fixture\ndescription: Fixture optional memory\ntools: read, ls\nextensions:\nmemory:\n  scope: user\n  path: fixture-memory\n---\nFixture role.",
+        "---\nname: memory-fixture\ndescription: Fixture optional memory\ntools: read, ls\nextensions:\ninheritProjectContext: true\nmemory:\n  scope: user\n  path: fixture-memory\n---\nFixture role.",
     );
-    const privateMemory = join(resourceHome, ".pi/agent/agent-memory/fixture-memory/MEMORY.md");
+    mkdirSync(join(injectedSkillPath, ".."), { recursive: true });
+    writeFileSync(
+        injectedSkillPath,
+        "---\nname: injected-proof\ndescription: selected native skill\n---\nINJECTED_SKILL_BODY_READ",
+    );
+    writeFileSync(
+        join(sharedRoles, "project-memory-fixture.md"),
+        "---\nname: project-memory-fixture\ndescription: shared project memory\ntools: read, ls\nextensions:\ninheritProjectContext: true\nmemory:\n  scope: project\n  path: fixture-project-memory\n---\nFixture role.",
+    );
+    const memories = new Map(
+        [a.id, bob.user.id].map((memberId) => [
+            memberId,
+            {
+                path: join(
+                    folder,
+                    "kernel-homes",
+                    memberId,
+                    ".pi/agent/agent-memory/fixture-memory/MEMORY.md",
+                ),
+                marker: `PRIVATE_MEMORY_${memberId}`,
+            },
+        ]),
+    );
 
-    mkdirSync(join(privateMemory, ".."), { recursive: true });
-    writeFileSync(privateMemory, "PRIVATE_MEMORY_MUST_NOT_BE_IMPORTED");
+    for (const memory of memories.values()) {
+        mkdirSync(join(memory.path, ".."), { recursive: true });
+        writeFileSync(memory.path, memory.marker);
+    }
+
+    const projectMemory = join(workspace, ".pi/agent-memory/fixture-project-memory/MEMORY.md");
+
+    mkdirSync(join(projectMemory, ".."), { recursive: true });
+    writeFileSync(projectMemory, "PROJECT_MEMORY_SHARED");
+
     const refinement = join(workspace, ".pi/subagents/refinements/reviewer.md");
     const metadata = {
         agent: "reviewer",
@@ -2381,22 +2454,60 @@ try {
         base: { source: "builtin", filePath: "fixture-reviewer.md", systemPromptSha256: "fixture" },
         evidence: {},
     };
-    const refinementText = `<!-- pi-subagents-refinement:v1\n${JSON.stringify(metadata)}\n-->\n\n\`\`\`pi-subagents-refinement-current\nPROJECT_REFINEMENT_MUST_NOT_BE_IMPORTED\n\`\`\`\n`;
+    const refinementText = `<!-- pi-subagents-refinement:v1\n${JSON.stringify(metadata)}\n-->\n\n\`\`\`pi-subagents-refinement-current\nPROJECT_REFINEMENT_NATIVE\n\`\`\`\n`;
     const resourceResults = [];
 
-    for (const kind of ["SKILL", "MEMORY", "REFINEMENT", "ASYNC_WORKFLOW", "WORKFLOW", "WORKER"]) {
+    project = app.projects.save(
+        owner(app),
+        {
+            ...project,
+            members: {
+                ...project.members,
+                [bob.user.id]: { view: true, continue: true, fork: true },
+            },
+        },
+        (key) => !!app.config.userById(key),
+    );
+    await app.projectsChanged();
+
+    const resourceCases = [
+        ...[
+            "SKILL",
+            "MEMORY",
+            "PROJECT_MEMORY",
+            "REFINEMENT",
+            "ASYNC_WORKFLOW",
+            "WORKFLOW",
+            "WORKER",
+        ].map((kind) => ({ kind, memberId: a.id, token: aliceToken })),
+        ...["MEMORY", "PROJECT_MEMORY"].map((kind) => ({
+            kind,
+            memberId: bob.user.id,
+            token: bob.token,
+        })),
+    ];
+
+    for (const { kind, memberId, token } of resourceCases) {
         if (kind === "REFINEMENT") {
             mkdirSync(join(refinement, ".."), { recursive: true });
             writeFileSync(refinement, refinementText);
         }
 
-        const resourceToken = aliceToken;
-        const resourceRuns = subagentRuns;
+        const resourceToken = token;
+        const resourceRuns = join(
+            folder,
+            "kernel-homes",
+            memberId,
+            ".local/state/rotom/subagent-store/owned-process-groups-v2/async-subagent-runs",
+        );
+
+        mkdirSync(resourceRuns, { recursive: true });
         const created = await request(resourceToken, "sessions", "POST", { backend: "rotom" });
 
         assert.equal(created.status, 200, await created.clone().text());
         const resourceId = ((await created.json()) as { id: number }).id;
         const beforeChild: number = childRequests;
+        const beforeMembers = childMembers.length;
         const resourceStore = dirname(resourceRuns);
         const descriptors = () => globSync("**/recovery-descriptor.json", { cwd: resourceStore });
         const beforeRuns = new Set(descriptors());
@@ -2407,7 +2518,36 @@ try {
         });
 
         assert.equal(result.status, 200, await result.clone().text());
-        assert.equal(childRequests - beforeChild, kind === "WORKER" ? 1 : 0, kind);
+        const expectedRequests = kind.endsWith("WORKFLOW") ? 0 : kind === "SKILL" ? 2 : 1;
+
+        assert.equal(childRequests - beforeChild, expectedRequests, kind);
+        assert.deepEqual(childMembers.slice(beforeMembers), Array(expectedRequests).fill(memberId));
+        const childSystem = childBodies
+            .slice(beforeChild)
+            .map((body) =>
+                JSON.parse(body).messages.filter(
+                    (message: { role: string }) => message.role === "system",
+                ),
+            )
+            .map((value) => JSON.stringify(value))
+            .join("\n");
+
+        if (kind === "MEMORY") {
+            for (const [ownerId, memory] of memories) {
+                assert.equal(childSystem.includes(memory.marker), ownerId === memberId);
+                assert.equal(childSystem.includes(memory.path), ownerId === memberId);
+            }
+        }
+
+        if (kind === "PROJECT_MEMORY") {
+            assert.ok(childSystem.includes("PROJECT_MEMORY_SHARED"));
+            assert.ok(childSystem.includes(projectMemory));
+        }
+
+        if (kind === "REFINEMENT") {
+            assert.ok(childSystem.includes("PROJECT_REFINEMENT_NATIVE"));
+        }
+
         const findDescriptor = () => descriptors().find((name) => !beforeRuns.has(name));
 
         if (!kind.endsWith("WORKFLOW")) {
@@ -2421,22 +2561,16 @@ try {
             : undefined;
 
         if (kind === "SKILL") {
-            assert.deepEqual(descriptor.skills, ["member-pi"]);
+            assert.deepEqual(descriptor.skills, ["injected-proof"]);
         }
 
         if (kind === "MEMORY") {
             assert.deepEqual(descriptor.memory, { scope: "user", path: "fixture-memory" });
         }
 
-        if (!kind.endsWith("WORKFLOW") && kind !== "WORKER") {
+        if (!kind.endsWith("WORKFLOW")) {
             assert.ok(
-                readFileSync(join(directory!, "output-0.log"), "utf8").includes(
-                    kind === "SKILL"
-                        ? "named-skill injection is unsupported"
-                        : kind === "MEMORY"
-                          ? "memory injection is unsupported"
-                          : "refinement injection is unsupported",
-                ),
+                readFileSync(join(directory!, "output-0.log"), "utf8").includes("CHILD_DONE"),
             );
         }
 
@@ -2460,7 +2594,11 @@ try {
             rmSync(refinement);
         }
 
-        assert.equal(readFileSync(privateMemory, "utf8"), "PRIVATE_MEMORY_MUST_NOT_BE_IMPORTED");
+        for (const memory of memories.values()) {
+            assert.equal(readFileSync(memory.path, "utf8"), memory.marker);
+        }
+
+        assert.equal(readFileSync(projectMemory, "utf8"), "PROJECT_MEMORY_SHARED");
         assert.ok(
             readFileSync(
                 join(resourceHome, ".pi/agent/skills/member-pi/SKILL.md"),
@@ -2474,7 +2612,7 @@ try {
         });
     }
 
-    report.optionalSubagentInjectionFences = resourceResults;
+    report.nativeSubagentInjections = resourceResults;
     report.userProvidedWorkflowScripts =
         "unsupported: native scoped sync refusal and async lifetime/result-delivery gap";
     report.loopbackRequests = calls;

@@ -5,7 +5,7 @@ The Team has one shared base agent, not a customizable agent per member:
 ```mermaid
 flowchart LR
     S["data/team-agent: owner-managed resources and settings"] --> R["verified native rotom"]
-    P["project: AGENTS/context, skills and MCP"] --> R
+    P["trusted project: native settings, resources, context and MCP"] --> R
     H["member HOME: credentials, sessions, private runtime state"] --> R
     R --> G["immutable execution payer/model gate"]
 ```
@@ -34,7 +34,7 @@ resolve against the shared profile. A new extension's registered names need no T
 There is no new package-management web UI. The owner edits the profile on the deployment machine. Finish or stop Team
 runs before filesystem edits/package installation; direct OS writes are trusted and are not locked by Team. `/settings` and model
 scope editing are owner-only HTTP operations and refuse changes while Team runs are active. Ordinary model selection and
-scope cycling remain member-owned and payer-safe. Refresh the command catalog after resource changes.
+scope cycling remain member-owned and payer-safe. Run `/reload` after resource/settings changes, then refresh the command catalog.
 
 Each native startup derives member resource settings from the shared profile. Credentials, session files and unknown
 plugin state are not copied from the profile, moved or deleted. Declared configuration is restored from the shared source.
@@ -48,14 +48,12 @@ file fails closed instead of deleting unknown content. Credential/state names ar
 file/parent symlinks and hardlinks are refused before reading or writing. Linked packages remain native resources, not
 configuration-copy aliases.
 
-Shared roles can live in `agents/` or declared installed packages. Member role directories/subagent settings and project subagent
-settings, role/chain files and agent-package manifests are rejected before native startup. Ordinary project packages and
-allowed AGENTS/skills still work. Native subagent tool calls and queued slash commands recheck the policy during a live run.
-Live/child checks also compare resource-selection fields and declared file digests with the last derived view; later
-member package paths, executable autodiscovery and context/config overrides cannot become child configuration.
-Child CLI arguments use the pinned parser; `--approve`/`-a` and extensions outside canonical shared/bundled authority are
-refused. The shell keeps native owner fd 3 intact through final exec. Global npm role discovery uses a shared profile prefix,
-not ambient service/member global packages.
+Shared roles can live in `agents/` or declared installed packages. Trusted projects may also define native roles,
+subagent settings, chains and package sources; native owned-scope admission still decides which execution modes work.
+Member role directories/subagent settings remain derived from the shared profile, not personal customization.
+Live tool/child checks compare member resource-selection fields and declared digests with the last derived view.
+The shell keeps native owner fd 3 intact through final exec; native child admission owns lifeline and writer validation.
+Global npm role discovery uses a shared profile prefix, not ambient service/member global packages.
 
 Unknown plugin files are **unclassified compatibility state**, not proven harmless configuration. A new plugin's known
 configuration sources must be reviewed and declared during installation. Do not promise universal isolation for an
@@ -63,26 +61,39 @@ arbitrary trusted extension's own filesystem reads/writes. Shared extensions rem
 
 ## Project layer and migration
 
-Native startup uses `--no-approve`, even if `/trust` or an earlier MCP login saved a trust grant. The core native resource
-loader therefore omits project extensions, packages, settings, templates and themes. Team loads MCP separately with the
-pinned native `createMcpExtension({ loadConfig })` API and `loadMcpConfig`: shared `<data>/team-agent/mcp.json` plus
-`<cwd>/.pi/mcp.json`, preserving native project replacement/partial-override precedence, exposure and config errors.
-The default builtin MCP instance is disabled so only this native instance connects. Parent, child and frozen-context
-runs all load live project MCP. Native project and ancestor AGENTS/context still load. The Team skill hook uses the native resolver with **only** the project's `skills` key;
-project package/extension settings cannot participate in that resolution. Project `.pi/skills` and ancestor `.agents/skills`
-remain available. Member personal skill directories do not load.
+Native startup uses `--approve`: the configured workspace is a trusted native project, including its executable
+extensions and packages. Native loads project settings, templates, themes, `SYSTEM.md`, `APPEND_SYSTEM.md`, MCP and
+project/ancestor context. Project system files take native precedence over corresponding shared files. The builtin MCP
+loader handles shared/project replacement, partial overrides and credential restrictions; there is no second MCP instance.
+Child roles retain native extension selection: a role with no extensions does not implicitly acquire MCP; include
+`builtin:mcp` in its extensions when needed.
 
-Project MCP definitions stay in `.pi/mcp.json`; move project extensions and base agent settings into the owner-managed shared profile.
-Do not blindly copy `.pi/settings.json`, personal skills or auth files. Frozen legacy context/skill snapshots retain their
-stored identity. Their old context files and receipts are not rewritten: current shared AGENTS, skills and templates are
-additive at native startup, while live project context/skills stay excluded from the frozen selection. This deliberately
-migrates the old “freeze all agent configuration” behavior to one current shared base plus frozen project context.
+The automatic skill catalog uses the native resolver over shared and trusted project resources, including project
+packages, while excluding undeclared member personal skill directories. Explicit optional child named-skill injection
+uses native resolution (including role paths and member-local sources); it does not rewrite the shared base.
 
-The bundled computer-use extension independently reads `.pi/computer-use.json`. Team sets all four supported environment
-overrides from shared `extensions/pi-computer-use.json`, including native defaults, so project values cannot override them.
-The native pi-subagents reader is separately checked as described above; `--no-approve` alone does not enforce it.
-Other plugin-specific loaders require source/API verification during owner installation. This is not filesystem isolation
-against trusted code or a concurrent OS actor deliberately rewriting the protected resource tree.
+Frozen legacy context/skill snapshots retain their stored identity and files. Current shared context/skills/templates
+remain additive, while live project context/skills stay excluded from that frozen selection. Other trusted project
+settings, executable resources and MCP are live, not frozen.
+
+Computer-use configuration follows native global/project precedence; Team no longer forces environment overrides.
+Shared `extensions/pi-computer-use.json` is copied as declared native configuration. Other plugin-specific files need
+owner declaration. Trusted project code runs with the service OS user's permissions; this is not filesystem or credential
+isolation from that code. Review project packages before enabling this release.
+
+## Native process lifetime
+
+One native process is retained per immutable conversation segment after successful prompts and commands. MCP connections
+and extension memory survive between turns. Each new receipt is authorized separately; the gate denies inference while
+idle. Failures/unknown outcomes retire the process, and handoff retires the old binding. Stop does not reuse the stopped
+transport. Server shutdown awaits closure of retained processes before releasing its journal lock. No idle eviction or
+cross-restart in-memory restoration is claimed; reopening after restart uses the persisted native session.
+
+Tracked shared settings/resource metadata and project configuration changes trigger a native reload on the next
+authorized receipt. This preserves settings-sheet updates without restarting the process. The freshness hint does not
+recursively hash dependency/resource trees; use `/reload` for deeper file changes. Reload may reset extension memory
+and reconnect MCP. The process stays on its admitted payer/model; neither project defaults nor child roles can change
+that authorization.
 
 ## Backup and restore of installed packages
 
@@ -119,13 +130,19 @@ credential refreshes are not replayed. Existing managed role/recovery overrides 
 the next startup; private/unclassified state is untouched. This is not an OS sandbox or a claim that a plugin cannot read
 project files.
 
-Optional subagent named-skill/memory injection needs attested sources. Owned async launch descriptors with no injection retain
-normal structured single-child execution; nonempty name-only descriptors, role memory and selected project refinements are
-refused before child inference. Private files stay unchanged. User-provided `workflowScript` is explicitly unsupported in the
-user-approved verified subset and rejected before execution: native scoped ownership refuses synchronous controllers and
-async workflow delivery/lifetime has no verified bridge. Internal single-child normalization is not programmable workflow
-coverage. Native ownership and pin remain unchanged. See [NATIVE-COMMAND-COMPATIBILITY.md](NATIVE-COMMAND-COMPATIBILITY.md).
-Normal parent/project skill loading is unaffected.
+Optional child named skills, user/project memory and existing project refinement overlays use native injection.
+User memory stays under the paying member's native agent directory and is never copied on handoff. Project memory is
+shared by that project. Native read/write and size limits apply. Private routing is not secrecy after a model quotes
+memory into a shared conversation, and is not an OS sandbox. The old Team recovery-descriptor injection gate is removed;
+native owned admission and the fd-3 lifeline remain authoritative.
+
+`workflowScript` remains blocked in Team RPC. Pinned native synchronous controllers and standalone foreground launches
+are refused by owned scope. Native asynchronous controllers are supported natively, but the RPC UI skips the headless
+auto-drain; `agent_settled` and `ctx.waitForIdle()` do not prove controller/child closure. The fixed pin exports no public
+drain bridge. Enabling this requires a supported native drain request/response plus Team integration and closure tests,
+not a new Team executor, status-file polling, or spoofing `hasUI`. Native refinement generation also uses an unsupported
+foreground reviewer; this release enables existing overlays, not generation. See
+[NATIVE-COMMAND-COMPATIBILITY.md](NATIVE-COMMAND-COMPATIBILITY.md).
 
 ## Native slash commands
 
@@ -143,22 +160,22 @@ input does not race an automatic discovery. Dispatch validates the current nativ
 not become model prompts. Native skills/templates are expanded by native APIs, including queued input. Selecting a
 skill or prompt-template suggestion only fills the draft; submitting it starts the model request.
 
-| Command                                                          | Team/native behavior                                                                                                                                                                                                                                                                   |
-| ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/model`, `/thinking`, `/scoped-models`                          | Personal model picker and owner-managed shared native model-pattern scope. A real Team handoff creates a new immutable binding; an active run is never mutated. Scope cycling uses that same path.                                                                                     |
-| `/name`                                                          | Native `set_session_name`, with confirmed readback mirrored into Team. Native defers JSONL creation before the first conversation; Team preserves the confirmed name and restores it on the next startup.                                                                              |
-| `/new`, `/resume`                                                | Create a separate Team native conversation, or choose a visible existing one. No receipt is silently attached to a different native session.                                                                                                                                           |
-| `/fork`                                                          | Select a native user-entry ID; create a Team-safe public-history seed **before** that user message. Restore its text as a draft, never submit it automatically. This is not a call to native `forkSession`.                                                                            |
-| `/clone`                                                         | Native `createBranchedSession` for the same member; public-history seed for a different member.                                                                                                                                                                                        |
-| `/tree`                                                          | Select an entry in the member's native segment. Native `ctx.navigateTree` changes the branch; optional **Summarize** (or `/tree <entryId> --summarize`) runs the native summarizer through the same payer/model gate. Persisted summary usage is recorded; absent usage stays unknown. |
-| `/export`                                                        | Authenticated, member-private attachment using native JSONL branch serialization or the native HTML exporter. JSONL is the current branch, not a byte-for-byte full-tree copy. HTML retains the native exporter's tree behavior.                                                       |
-| `/import`                                                        | Native parse/migration of a JSONL file in this workspace or this session's uploads, bounded to 50 MiB; a new Team conversation receives only public history, never imported provider state.                                                                                            |
-| `/settings`                                                      | Native `SettingsManager` execution settings: steering/follow-up, image options, skill commands and model scope. Owner-only shared settings; project settings do not take precedence. Retry and compaction follow the shared profile and native defaults.                               |
-| `/compact`, `/reload`, `/session`, `/copy`                       | Native compaction, resource reload, state/statistics and last-assistant-text clipboard result.                                                                                                                                                                                         |
-| `/login`, `/logout`, `/hotkeys`, `/changelog`, `/trust`, `/quit` | Personal provider sheet, web shortcuts, pinned product update guidance, native trust choices (which cannot enable project agent configuration), and stopping/leaving this view respectively. Project trust does not create an OS boundary.                                             |
-| `/mcp`, `/mcp login <server>`, `/mcp logout <server>`            | The existing member-owned browserless sign-in bridge. These adapters first verify actual native registration.                                                                                                                                                                          |
-| `/qoder-models`, `/qoder-credits`                                | The member's provider catalog/quota API in the credential-owning parent. Results are private HTTP responses, not room broadcasts. Account-changing/busy operations are refused; snapshots are not per-request debit or financial cost.                                                 |
-| `/goal` and other registered extensions                          | Actual native handlers. Goal keeps its process, receipt, member and gate while active/waiting; native deadlines, Pause, Resume, Stop and plain input control that lifecycle.                                                                                                           |
+| Command                                                          | Team/native behavior                                                                                                                                                                                                                                                                            |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/model`, `/thinking`, `/scoped-models`                          | Personal model picker and owner-managed shared native model-pattern scope. A real Team handoff creates a new immutable binding; an active run is never mutated. Scope cycling uses that same path.                                                                                              |
+| `/name`                                                          | Native `set_session_name`, with confirmed readback mirrored into Team. Native defers JSONL creation before the first conversation; Team preserves the confirmed name and restores it on the next startup.                                                                                       |
+| `/new`, `/resume`                                                | Create a separate Team native conversation, or choose a visible existing one. No receipt is silently attached to a different native session.                                                                                                                                                    |
+| `/fork`                                                          | Select a native user-entry ID; create a Team-safe public-history seed **before** that user message. Restore its text as a draft, never submit it automatically. This is not a call to native `forkSession`.                                                                                     |
+| `/clone`                                                         | Native `createBranchedSession` for the same member; public-history seed for a different member.                                                                                                                                                                                                 |
+| `/tree`                                                          | Select an entry in the member's native segment. Native `ctx.navigateTree` changes the branch; optional **Summarize** (or `/tree <entryId> --summarize`) runs the native summarizer through the same payer/model gate. Persisted summary usage is recorded; absent usage stays unknown.          |
+| `/export`                                                        | Authenticated, member-private attachment using native JSONL branch serialization or the native HTML exporter. JSONL is the current branch, not a byte-for-byte full-tree copy. HTML retains the native exporter's tree behavior.                                                                |
+| `/import`                                                        | Native parse/migration of a JSONL file in this workspace or this session's uploads, bounded to 50 MiB; a new Team conversation receives only public history, never imported provider state.                                                                                                     |
+| `/settings`                                                      | Native `SettingsManager` execution settings: steering/follow-up, image options, skill commands and model scope. Owner-only shared settings; trusted project settings retain native precedence; use `/reload` after changes. Retry and compaction follow the shared profile and native defaults. |
+| `/compact`, `/reload`, `/session`, `/copy`                       | Native compaction, resource reload, state/statistics and last-assistant-text clipboard result.                                                                                                                                                                                                  |
+| `/login`, `/logout`, `/hotkeys`, `/changelog`, `/trust`, `/quit` | Personal provider sheet, web shortcuts, pinned product update guidance, native trust choices (startup already trusts the configured project), and stopping/leaving this view respectively. Project trust does not create an OS boundary.                                                        |
+| `/mcp`, `/mcp login <server>`, `/mcp logout <server>`            | The existing member-owned browserless sign-in bridge. These adapters first verify actual native registration.                                                                                                                                                                                   |
+| `/qoder-models`, `/qoder-credits`                                | The member's provider catalog/quota API in the credential-owning parent. Results are private HTTP responses, not room broadcasts. Account-changing/busy operations are refused; snapshots are not per-request debit or financial cost.                                                          |
+| `/goal` and other registered extensions                          | Actual native handlers. Goal keeps its process, receipt, member and gate while active/waiting; native deadlines, Pause, Resume, Stop and plain input control that lifecycle.                                                                                                                    |
 
 **Only `/share` and `/bug` are explicitly excluded from this release.** They are absent from executable suggestions;
 manual invocation is rejected before native startup, inference or upload. No sharing/auth service or diagnostic runner
@@ -191,8 +208,8 @@ MCP server definitions can be shared or project-local; OAuth tokens remain in ea
 `kernel-homes/<member>/.pi/agent/mcp-auth.json`. The browserless native sign-in bridge never opens the service user's browser.
 Only the initiating member's loopback callback origin/path is accepted. The MCP-only native CLI runs from the project's
 cwd, so relative stdio arguments and config precedence match Agent execution. Its native trust record enables project MCP
-parsing; this CLI exits before project extension/package loading, and Agent/child startup still forces `--no-approve`.
-Signing in therefore does not enable other project Agent resources. Project `auth.provider` remains rejected by the native
+parsing; this CLI exits before project extension/package loading. Agent/child startup independently grants native project
+trust. Project `auth.provider` remains rejected by the native
 parser: a repository cannot redirect a member's model login token. Config add/edit/remove changes the next startup and
 command freshness; `/reload` reconnects native MCP. Project workspaces remain separately backed up.
 

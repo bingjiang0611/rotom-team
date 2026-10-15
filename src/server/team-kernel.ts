@@ -3022,7 +3022,7 @@ export class TeamKernel {
         }
 
         await Promise.allSettled([...this.#active].map((run) => run.promise));
-        this.executions.close();
+        await this.executions.close();
     }
 }
 

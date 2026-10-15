@@ -87,7 +87,7 @@ test("a handoff during asynchronous admission cannot reserve Bob while launching
     );
     assert.equal(f.journal.receipts("shared").length, 1);
     assert.equal(f.journal.existing("shared", "stale-request", "must not dispatch"), undefined);
-    executions.close();
+    await executions.close();
 });
 
 for (const operation of ["prompt", "compact", "handoff", "fork"] as const) {
@@ -121,7 +121,7 @@ for (const operation of ["prompt", "compact", "handoff", "fork"] as const) {
         assert.equal(f.journal.session("shared").segmentId, "shared");
         assert.equal(f.journal.session("shared").sessionFile, undefined);
         assert.equal(f.journal.session("target").sessionFile, undefined);
-        executions.close();
+        await executions.close();
     });
 }
 

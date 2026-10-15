@@ -8,6 +8,7 @@ import {
     mkdtempSync,
     mkdirSync,
     readFileSync,
+    readdirSync,
     realpathSync,
     rmSync,
     writeFileSync,
@@ -37,6 +38,7 @@ for (const directory of [
 }
 
 const forbidden = join(root, "PROJECT_EXECUTED");
+const privateMarker = join(root, "PRIVATE_EXECUTED");
 const malicious = `import { writeFileSync } from 'node:fs'; writeFileSync(${JSON.stringify(forbidden)}, 'loaded'); export default pi => pi.registerCommand('project-forbidden', {handler: async () => {}});`;
 
 writeFileSync(join(workspace, ".pi/extensions/forbidden.ts"), malicious);
@@ -46,6 +48,7 @@ writeFileSync(
         extensions: ["./extensions/forbidden.ts"],
         packages: ["./extension-package"],
         skills: [],
+        compaction: { enabled: false },
     }),
 );
 mkdirSync(join(workspace, ".pi/extension-package"));
@@ -53,8 +56,17 @@ writeFileSync(
     join(workspace, ".pi/extension-package/package.json"),
     '{"name":"project-package","pi":{"extensions":["index.ts"]}}',
 );
-writeFileSync(join(workspace, ".pi/extension-package/index.ts"), malicious);
+writeFileSync(
+    join(workspace, ".pi/extension-package/index.ts"),
+    malicious
+        .replaceAll("project-forbidden", "project-package-command")
+        .replace("PROJECT_EXECUTED", "PROJECT_PACKAGE_EXECUTED"),
+);
 writeFileSync(join(workspace, "AGENTS.md"), "PROJECT_CONTEXT_ALLOWED\n");
+writeFileSync(join(workspace, ".pi/SYSTEM.md"), "PROJECT_SYSTEM_NATIVE\n");
+writeFileSync(join(workspace, ".pi/APPEND_SYSTEM.md"), "PROJECT_APPEND_NATIVE\n");
+mkdirSync(join(workspace, ".pi/prompts"));
+writeFileSync(join(workspace, ".pi/prompts/project-template.md"), "Project template $ARGUMENTS");
 writeFileSync(
     join(workspace, ".pi/computer-use.json"),
     JSON.stringify({
@@ -82,6 +94,8 @@ writeFileSync(
 writeFileSync(join(teamAgentDir, "fixture-config.json"), '{"enabled":true}');
 const extension = `import {writeFileSync,appendFileSync} from 'node:fs';
 export default function(pi) {
+    let counter = 0;
+    pi.registerCommand('future-persistent', {handler: async () => pi.appendEntry('persistent-state', {pid: process.pid, counter: ++counter})});
     appendFileSync(${JSON.stringify(join(root, "native-starts"))},"start\\n");
     pi.registerCommand('future-alpha', { description: 'unknown name one', handler: async(args, ctx) => {
         const selected = await ctx.ui.select('Native selection', ['one', 'two']);
@@ -263,6 +277,8 @@ try {
     for (const name of [
         "future-alpha",
         "future-beta",
+        "project-template",
+        "project-package-command",
         "skill:project-allowed",
         "skill:shared-allowed",
     ]) {
@@ -274,9 +290,9 @@ try {
 
     assert.equal(
         catalog.commands.some((command) => command.name === "project-forbidden"),
-        false,
+        true,
     );
-    assert.equal(existsSync(forbidden), false);
+    assert.equal(existsSync(forbidden), true);
     await client.command("/future-alpha exact native arguments");
     const state = (await client.request({ type: "get_state" })) as { sessionFile: string };
     const rows = readFileSync(state.sessionFile, "utf8")
@@ -297,6 +313,13 @@ try {
 
     assert.ok(context.includes("SHARED_CONTEXT_ALLOWED"));
     assert.ok(context.includes("PROJECT_CONTEXT_ALLOWED"));
+    assert.ok(context.includes("PROJECT_SYSTEM_NATIVE"));
+    assert.ok(context.includes("PROJECT_APPEND_NATIVE"));
+    assert.equal(
+        ((await client.request({ type: "get_state" })) as { autoCompactionEnabled: boolean })
+            .autoCompactionEnabled,
+        false,
+    );
     const observedCommands: Record<string, unknown> = {};
 
     for (const command of [
@@ -350,7 +373,7 @@ try {
     );
     await client.prompt("POLICY_ROLE_PROBE");
     assert.ok(
-        readFileSync(seed.getSessionFile()!, "utf8").includes("Team resource policy blocked"),
+        !readFileSync(seed.getSessionFile()!, "utf8").includes("Team resource policy blocked"),
     );
     writeFileSync(join(workspace, ".pi/settings.json"), originalProjectSettings);
     const memberSettings = join(home, ".pi/agent/settings.json");
@@ -384,12 +407,12 @@ try {
 
     writeFileSync(
         privateExtension,
-        `import {writeFileSync} from 'node:fs';export default ()=>writeFileSync(${JSON.stringify(forbidden)},'PRIVATE_EXTENSION_RAN');`,
+        `import {writeFileSync} from 'node:fs';export default ()=>writeFileSync(${JSON.stringify(privateMarker)},'PRIVATE_EXTENSION_RAN');`,
     );
     await client.prompt("POLICY_ROLE_PROBE");
     assert.ok(lastTool().isError);
     assert.ok(JSON.stringify(lastTool()).includes("Team resource policy blocked"));
-    assert.equal(existsSync(forbidden), false);
+    assert.equal(existsSync(privateMarker), false);
     rmSync(privateExtension);
     const computerUse = events.find(
         (event) =>
@@ -397,8 +420,8 @@ try {
             String(event.message).startsWith("pi-computer-use configuration"),
     );
 
-    assert.match(String(computerUse?.message), /managed_browser: chrome/);
-    assert.match(String(computerUse?.message), /headless: disabled/);
+    assert.match(String(computerUse?.message), /managed_browser: helium/);
+    assert.match(String(computerUse?.message), /headless: enabled/);
     writeFileSync(
         join(teamAgentDir, "extensions/live-install.ts"),
         "export default pi => pi.registerCommand('future-live-installed', {handler: async()=>{}});",
@@ -411,9 +434,9 @@ try {
     assert.ok(reloaded.commands.some((command) => command.name === "future-live-installed"));
     assert.equal(
         reloaded.commands.some((command) => command.name === "project-forbidden"),
-        false,
+        true,
     );
-    assert.equal(existsSync(forbidden), false);
+    assert.equal(existsSync(forbidden), true);
     writeFileSync(
         join(root, "report.json"),
         JSON.stringify(
@@ -423,7 +446,7 @@ try {
                 catalog,
                 effect,
                 observedCommands,
-                forbiddenProjectExecuted: existsSync(forbidden),
+                trustedProjectExecuted: existsSync(forbidden),
                 checks: [
                     "shared and project skills",
                     "native registration",
@@ -431,7 +454,7 @@ try {
                     "exact arguments",
                     "persisted effect",
                     "status/widget",
-                    "project auto/settings/package extensions blocked",
+                    "trusted project extensions, packages, prompts, system files and settings load",
                 ],
             },
             null,
@@ -442,25 +465,28 @@ try {
     await client.close();
 }
 
-const beforeRejectedStartup = readFileSync(join(root, "native-starts"), "utf8");
-
 mkdirSync(join(workspace, ".pi/agents"), { recursive: true });
 writeFileSync(
     join(workspace, ".pi/agents/project.md"),
-    "---\nname: project-role\nextensions: ../extensions/forbidden.ts\n---\nUntrusted role",
+    "---\nname: project-role\ndescription: trusted project role\n---\nProject role",
 );
-await assert.rejects(
-    startRotomKernel({
-        home,
-        workspace,
-        teamAgentDir,
-        provider: "resource-fixture",
-        model: "resource-fixture",
-    }),
-    /Project agent definitions/,
-);
-assert.equal(readFileSync(join(root, "native-starts"), "utf8"), beforeRejectedStartup);
-assert.equal(existsSync(forbidden), false);
+const projectClient = await startRotomKernel({
+    home,
+    workspace,
+    teamAgentDir,
+    provider: "resource-fixture",
+    model: "resource-fixture",
+});
+
+try {
+    await projectClient.prompt("POLICY_ROLE_PROBE");
+    const entries = await projectClient.request({ type: "get_entries" });
+
+    assert.ok(JSON.stringify(entries).includes("project-role"));
+} finally {
+    await projectClient.close();
+}
+
 rmSync(join(workspace, ".pi/agents/project.md"));
 const frozenFile = join(root, "frozen-context.md");
 
@@ -544,6 +570,57 @@ try {
     const sessionFile = executions.journal.session("generic").sessionFile!;
 
     assert.ok(readFileSync(sessionFile, "utf8").includes("ASYNC_FOLLOWUP_COMPLETED"));
+
+    for (const id of ["persistent-one", "persistent-two"]) {
+        assert.equal((await executions.run("generic", id, "/future-persistent")).status, "handled");
+    }
+
+    const persistentRows = readFileSync(sessionFile, "utf8")
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line))
+        .filter((row) => row.customType === "persistent-state");
+
+    assert.deepEqual(
+        persistentRows.map((row) => row.data.counter),
+        [1, 2],
+    );
+    assert.equal(persistentRows[0].data.pid, persistentRows[1].data.pid);
+    const gateFile = readdirSync(join(root, "kernel-gates")).find((name) =>
+        name.endsWith(".json"),
+    )!;
+    const gate = JSON.parse(readFileSync(join(root, "kernel-gates", gateFile), "utf8"));
+    const idle = await fetch(gate.url, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${gate.token}` },
+        body: JSON.stringify({
+            operation: "inference",
+            provider: "resource-fixture",
+            model: "resource-fixture",
+        }),
+    });
+
+    assert.equal(idle.status, 403, "retained idle process cannot spend outside a receipt");
+    await idle.body?.cancel();
+    const settingsFile = join(teamAgentDir, "settings.json");
+
+    writeFileSync(
+        settingsFile,
+        JSON.stringify({ ...JSON.parse(readFileSync(settingsFile, "utf8")), steeringMode: "all" }),
+    );
+    let nativeSettings: any;
+    const updated = await executions.run("generic", "updated-settings", "/session", {
+        onNativeResult: (result) => {
+            nativeSettings = result;
+        },
+    });
+
+    assert.equal(updated.status, "handled");
+    assert.equal(
+        nativeSettings.state.steeringMode,
+        "all",
+        "changed shared settings reach the retained process",
+    );
     writeFileSync(
         join(teamAgentDir, "extensions/after-install.ts"),
         "export default pi => pi.registerCommand('future-after-install', {handler: async(args) => pi.appendEntry('future-installed-effect', {args})});",
@@ -561,7 +638,7 @@ try {
     const beforeRestart = readFileSync(sessionFile, "utf8");
 
     assert.ok(beforeRestart.includes("future-beta-effect"));
-    executions.close();
+    await executions.close();
     executions = new RotomExecutions(root, async () => {});
     const retried = await executions.run("generic", "error-once", "/future-beta never-replay");
 
@@ -583,7 +660,7 @@ try {
 
     assert.equal(discovery.status, "handled");
     assert.ok(restartedNames.includes("future-after-install"));
-    assert.equal(existsSync(forbidden), false);
+    assert.equal(existsSync(forbidden), true);
     const configurationEvents: Record<string, unknown>[] = [];
     const configurationWrite = await executions.run(
         "new-after-restart",
@@ -629,14 +706,15 @@ try {
         "new extension without Team code changes",
         "reload and restart discovery",
         "post-effect error remains unknown without replay",
-        "project roles rejected before native startup, late role settings blocked at real native model-only tool boundary, shared direct/package roles load; live private member packages/autodiscovered extensions blocked",
+        "project roles and overrides load; live private member packages/autodiscovered extensions remain blocked",
+        "same PID and extension counter persist between receipts; idle gate denies inference",
         "frozen project context/skills retain current shared base context, skills and prompts without rewriting the snapshot",
         "declared member configuration mutation warns, stays unknown and never changes shared configuration",
     );
     writeFileSync(join(root, "report.json"), JSON.stringify(report, null, 2));
     console.log(`Shared native proof passed: ${root}`);
 } finally {
-    executions.close();
+    await executions.close();
     provider.closeAllConnections();
     await new Promise<void>((resolve) => provider.close(() => resolve()));
 }

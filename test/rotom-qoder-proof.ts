@@ -243,7 +243,7 @@ try {
         compact.id,
     );
     assert.equal(inferenceChecks, 3);
-    executions.close();
+    await executions.close();
     executions = createExecutions();
     assert.equal(
         (
@@ -346,7 +346,7 @@ try {
     const callsAfterFailure = inferenceChecks;
 
     assert.ok(callsAfterFailure > 5);
-    executions.close();
+    await executions.close();
     executions = createExecutions();
     assert.equal(
         (await executions.compact("qoder-conversation", "compact-error", "Preserve outcomes.")).id,
@@ -392,7 +392,7 @@ try {
         inferenceChecks,
     });
 } finally {
-    executions.close();
+    await executions.close();
     writeFileSync(join(root, "report.json"), JSON.stringify(report, null, 2), { mode: 0o600 });
     console.log(JSON.stringify({ ...report, evidence: join(root, "report.json") }));
 }
