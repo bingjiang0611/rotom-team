@@ -309,9 +309,8 @@ writeFileSync(
     JSON.stringify({ retry: { enabled: false }, compaction: { enabled: false } }),
     { mode: 0o600 },
 );
-// All configuration belongs to the project: rotom trusts it and loads its `.pi`. A secret comes from a command (the
-// keychain, in practice); `${...}` values resolve against the kernel's scrubbed env, so a server that names a service
-// secret fails closed instead of receiving it.
+// MCP definitions can be shared or project-local without opening other `.pi` resources. `${...}` resolves against
+// the kernel's scrubbed environment, so a server naming a service secret fails closed.
 const mcpServer = (env: Record<string, string> = {}) => ({
     command: process.execPath,
     args: [join(import.meta.dirname, "fixtures/mcp-echo.mjs")],
@@ -326,12 +325,18 @@ writeFileSync(
     join(teamAgentDir, "mcp.json"),
     JSON.stringify({
         mcpServers: {
-            probe: mcpServer({ MCP_PROBE_LEAK: "!printf keychain-stand-in" }),
+            probe: mcpServer({ MCP_PROBE_LEAK: "SHARED_MUST_BE_OVERRIDDEN" }),
             leakprobe: mcpServer({ MCP_PROBE_LEAK: "${MCP_PROBE_SERVICE_SECRET}" }),
         },
     }),
 );
-const extensionMarker = join(root, "project-extension.txt");
+writeFileSync(
+    join(workspace, ".pi/mcp.json"),
+    JSON.stringify({
+        mcpServers: { probe: mcpServer({ MCP_PROBE_LEAK: "!printf keychain-stand-in" }) },
+    }),
+);
+const extensionMarker = join(root, "shared-extension.txt");
 
 writeFileSync(
     join(teamAgentDir, "extensions/shared-probe.ts"),
@@ -448,7 +453,7 @@ try {
     assert.equal(toolReadObserved, true);
     assert.equal(requests, 6 + subagentChecks.length);
     assert.ok(offeredTools?.includes("mcp__probe__echo"), "the project's MCP tool must be offered");
-    assert.equal(readFileSync(extensionMarker, "utf8"), "loaded", "the project's extension loads");
+    assert.equal(readFileSync(extensionMarker, "utf8"), "loaded", "the shared extension loads");
     assert.match(systemPrompt!, /PROJECT_SKILL_LOADED/, "the project's skill loads");
     assert.doesNotMatch(systemPrompt!, /PERSONAL_SKILL_MUST_NOT_LOAD/);
     report.personalSkillsIgnored = true;
@@ -532,7 +537,7 @@ try {
         computerUseHelper: hostHelper ? "reached" : "absent-on-host",
         desktopReply: desktopReply!.slice(0, 200),
         browserReply: browserReply!.slice(0, 300),
-        sharedMcp: mcpReply,
+        projectMcpOverridesShared: mcpReply,
         sharedExtensionLoaded: true,
         projectSkillLoaded: true,
         serviceEnvMcpLoaded: false,

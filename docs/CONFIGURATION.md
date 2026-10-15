@@ -5,7 +5,7 @@ The Team has one shared base agent, not a customizable agent per member:
 ```mermaid
 flowchart LR
     S["data/team-agent: owner-managed resources and settings"] --> R["verified native rotom"]
-    P["project: AGENTS/context and skills only"] --> R
+    P["project: AGENTS/context, skills and MCP"] --> R
     H["member HOME: credentials, sessions, private runtime state"] --> R
     R --> G["immutable execution payer/model gate"]
 ```
@@ -64,12 +64,15 @@ arbitrary trusted extension's own filesystem reads/writes. Shared extensions rem
 ## Project layer and migration
 
 Native startup uses `--no-approve`, even if `/trust` or an earlier MCP login saved a trust grant. The core native resource
-loader therefore omits project extensions, packages, settings, templates, themes and MCP definitions. Native project and
-ancestor AGENTS/context still load. The Team skill hook uses the native resolver with **only** the project's `skills` key;
+loader therefore omits project extensions, packages, settings, templates and themes. Team loads MCP separately with the
+pinned native `createMcpExtension({ loadConfig })` API and `loadMcpConfig`: shared `<data>/team-agent/mcp.json` plus
+`<cwd>/.pi/mcp.json`, preserving native project replacement/partial-override precedence, exposure and config errors.
+The default builtin MCP instance is disabled so only this native instance connects. Parent, child and frozen-context
+runs all load live project MCP. Native project and ancestor AGENTS/context still load. The Team skill hook uses the native resolver with **only** the project's `skills` key;
 project package/extension settings cannot participate in that resolution. Project `.pi/skills` and ancestor `.agents/skills`
 remain available. Member personal skill directories do not load.
 
-Move previously supported project MCP definitions, extensions and agent settings into the owner-managed shared profile.
+Project MCP definitions stay in `.pi/mcp.json`; move project extensions and base agent settings into the owner-managed shared profile.
 Do not blindly copy `.pi/settings.json`, personal skills or auth files. Frozen legacy context/skill snapshots retain their
 stored identity. Their old context files and receipts are not rewritten: current shared AGENTS, skills and templates are
 additive at native startup, while live project context/skills stay excluded from the frozen selection. This deliberately
@@ -184,10 +187,14 @@ receipts stay readable and are not rewritten. Goal Stop may remain unknown; it d
 
 ## MCP credentials
 
-MCP server definitions are shared; OAuth tokens remain in each member's
+MCP server definitions can be shared or project-local; OAuth tokens remain in each member's
 `kernel-homes/<member>/.pi/agent/mcp-auth.json`. The browserless native sign-in bridge never opens the service user's browser.
-Only the initiating member's loopback callback origin/path is accepted. The native MCP CLI runs from the shared profile,
-not the project, because that subcommand has no `--no-approve` option. Signing in does not grant project extension access.
+Only the initiating member's loopback callback origin/path is accepted. The MCP-only native CLI runs from the project's
+cwd, so relative stdio arguments and config precedence match Agent execution. Its native trust record enables project MCP
+parsing; this CLI exits before project extension/package loading, and Agent/child startup still forces `--no-approve`.
+Signing in therefore does not enable other project Agent resources. Project `auth.provider` remains rejected by the native
+parser: a repository cannot redirect a member's model login token. Config add/edit/remove changes the next startup and
+command freshness; `/reload` reconnects native MCP. Project workspaces remain separately backed up.
 
 Do not put personal access tokens or global-account credentials in shared config. Environment lookups use the scrubbed
 member environment, not the service's ambient secrets. Backups/restores continue to exclude refresh grants; members sign

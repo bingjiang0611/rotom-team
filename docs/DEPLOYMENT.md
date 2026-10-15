@@ -34,7 +34,7 @@ version and hashes come from `runtime/rotom/pin.json`. Do not replace that insta
 Durable sessions retain their backend. Pending/unknown native receipts remain fenced even if native creation is
 disabled; changing the flag does not authorize bypassing quarantine.
 
-The parent remains the model credential refresh writer. Shared agent configuration, project context/skills and private member MCP sign-ins follow
+The parent remains the model credential refresh writer. Shared agent configuration, project context/skills/MCP and private member MCP sign-ins follow
 [CONFIGURATION.md](CONFIGURATION.md). Do not place copied model grants in `kernel-homes`, delete receipts or remove
 an unreconciled lock to force recovery.
 
@@ -82,7 +82,7 @@ Do not auto-open or publish login URLs. Logs may contain the startup owner link;
 
 ## Upgrade and offline backup
 
-This release upgrades the native journal to **schema 5** to retain unresolved queued-command fences. Older releases refuse that schema. Keep the pre-upgrade backup: rolling back only the executable is insufficient after migration. Never drop the fences or lower the schema version. Review the shared-agent migration in [CONFIGURATION.md](CONFIGURATION.md) before starting the new release; project extensions, MCP and base settings no longer configure the agent.
+This release upgrades the native journal to **schema 5** to retain unresolved queued-command fences. Older releases refuse that schema. Keep the pre-upgrade backup: rolling back only the executable is insufficient after migration. Never drop the fences or lower the schema version. Review the shared-agent migration in [CONFIGURATION.md](CONFIGURATION.md) before starting the new release; project extensions and base settings do not configure the agent; `.pi/mcp.json` remains supported through the native MCP loader.
 
 1. Stop launchd/the existing process and wait for `harness.lock` to disappear. Investigate a remaining lock; never delete a live writer's lock. Native kernel executions additionally hold `kernel.lock`: even a dead recorded parent PID is not proof that its tools stopped. Backup refuses this lease; reconcile owned processes and unknown effects before any explicit recovery.
 2. Create the destination parent privately first. Back up to a new directory outside the canonical data tree (ancestor symlink aliases cannot bypass this check):

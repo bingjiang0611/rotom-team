@@ -84,8 +84,18 @@ export function sharedConfigFiles(directory: string): string[] {
 }
 
 /** Bounded, read-only freshness hint: declared configuration and immediate resource metadata, never dependency trees. */
-export function teamResourceRevision(directory: string): string {
+export function teamResourceRevision(directory: string, workspace?: string): string {
     const hash = createHash("sha256");
+
+    if (workspace) {
+        const file = join(workspace, ".pi/mcp.json");
+
+        hash.update(file);
+
+        if (existsSync(file)) {
+            hash.update(readFileSync(file));
+        }
+    }
 
     for (const name of [
         "settings.json",

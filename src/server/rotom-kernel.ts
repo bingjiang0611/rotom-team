@@ -290,8 +290,8 @@ function memberEnvironment(home: string, node: string): Record<string, string> {
 }
 
 /**
- * `rotom mcp <args>` for a member: shared definitions, their private HOME and the scrubbed environment.
- * The subcommand has no --no-approve, so it runs from the shared profile rather than a project's folder.
+ * `rotom mcp <args>` for a member: shared/project definitions, their private HOME and the scrubbed environment.
+ * The MCP-only CLI reads native trust but does not load project extensions or packages.
  * Signing in never opens a browser on the server: a stand-in `open` shadows the real one, and the member opens the
  * address in their own browser. Otherwise the server's browser, signed in as the service user, could answer for them.
  */
@@ -312,13 +312,15 @@ export async function startRotomMcp(options: {
     const teamAgentDir = options.teamAgentDir;
 
     await prepareTeamResources(home, teamAgentDir, workspace);
+    const api = await nativeConfigurationApi();
 
+    // The MCP-only CLI needs native project trust. Agent/child startup still forces --no-approve.
+    new api.ProjectTrustStore(join(home, ".pi/agent")).set(workspace, true);
     const node = realpathSync(process.execPath);
     const environment = memberEnvironment(home, node);
 
     const child = spawn(executable, ["mcp", ...options.args], {
-        // The native mcp subcommand has no --no-approve option. A shared neutral cwd avoids project MCP/trust.
-        cwd: teamAgentDir,
+        cwd: workspace,
         env: {
             ...environment,
             ...teamSubagentEnvironment(teamAgentDir),
@@ -406,12 +408,15 @@ export async function startRotomKernel(options: {
             "--model",
             options.model,
             ...(options.thinkingLevel ? ["--thinking", options.thinkingLevel] : []),
+            "--no-mcp",
+            "--extension",
+            fileURLToPath(new URL("./rotom-mcp.mjs", import.meta.url)),
             "--no-skills",
             "--extension",
             fileURLToPath(new URL("./rotom-skills.mjs", import.meta.url)),
             ...(options.configuration
                 ? [
-                      // A member's stored project trust (MCP sign-in records one) must not reopen the project.
+                      // Native MCP uses its own loader; saved trust must not open other project resources.
                       "--no-approve",
                       "--no-context-files",
                       ...(await sharedContextPaths(teamAgentDir)).flatMap((path) => [
@@ -464,6 +469,9 @@ export async function startRotomKernel(options: {
                           ),
                           ROTOM_TEAM_POLICY: fileURLToPath(
                               new URL("./rotom-policy.mjs", import.meta.url),
+                          ),
+                          ROTOM_TEAM_MCP: fileURLToPath(
+                              new URL("./rotom-mcp.mjs", import.meta.url),
                           ),
                           ROTOM_TEAM_SKILLS: fileURLToPath(
                               new URL("./rotom-skills.mjs", import.meta.url),

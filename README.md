@@ -39,7 +39,7 @@ npm start -- --no-rotom-kernel --cwd /absolute/path/to/project
 4. 其他成员可以查看、评论；空闲后发送新任务即接力，使用发送者自己的账号。运行中不能更换付费人。
 5. 需要独立探索时 fork；项目权限不会因 fork 扩大。worktree 隔离代码分支，不隔离 OS 权限，也不保证代码回到旧消息时点。
 
-Owner 管理共享扩展、MCP、skills 和设置；项目只补充上下文、AGENTS.md 与 skills，不加载项目 agent 配置。OAuth 型 MCP 由成员在 **MCP sign-ins** 独立登录。旧冻结项目快照保留原字节与身份，同时使用当前共享基础 Agent，不改写历史。
+Owner 管理共享扩展、MCP、skills 和设置；项目补充上下文、AGENTS.md、skills 与 `.pi/mcp.json`，不加载项目扩展、包和基础设置。OAuth 型 MCP 由成员在 **MCP sign-ins** 独立登录。旧冻结项目快照保留原字节与身份，同时使用当前共享基础 Agent，不改写历史。
 
 ## 安全与限制
 

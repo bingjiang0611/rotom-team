@@ -703,19 +703,26 @@ try {
     const bobNow = app.config.userById(bob.user.id)!;
     const bobSession = await app.commands.createSession(bobNow, { backend: "rotom" });
 
-    // Project skills remain local; the owner declares MCP servers in the shared agent.
+    // Project skills and MCP remain local, while credentials stay member-owned.
     mkdirSync(join(workspace, ".pi", "skills", "project-proof"), { recursive: true });
     writeFileSync(
         join(workspace, ".pi", "skills", "project-proof", "SKILL.md"),
         "---\nname: project-proof\ndescription: PROJECT_SKILL_DESCRIPTION\n---\nProject skill.\n",
     );
+    const mcpStarts = join(folder, "project-mcp-starts");
+    const mcpScript = join(workspace, ".pi/mcp-probe.mjs");
+
     writeFileSync(
-        join(folder, "team-agent", "mcp.json"),
+        mcpScript,
+        `import {appendFileSync} from 'node:fs'; appendFileSync(${JSON.stringify(mcpStarts)}, (process.env.ROTOM_TEAM_SUBAGENT ?? 'parent') + '\\n'); await import(${JSON.stringify(new URL("./fixtures/mcp-echo.mjs", import.meta.url).href)});`,
+    );
+    writeFileSync(
+        join(workspace, ".pi", "mcp.json"),
         JSON.stringify({
             mcpServers: {
                 probe: {
                     command: process.execPath,
-                    args: [join(import.meta.dirname, "fixtures/mcp-echo.mjs")],
+                    args: [".pi/mcp-probe.mjs"],
                     exposure: "direct",
                 },
                 team: { url: `${oauth.origin}/mcp`, exposure: "direct" },
@@ -786,7 +793,7 @@ try {
         ],
     );
     assert.equal((await request(bob.token, `c/${bobSession.id}/mcp`)).status, 403);
-    report.mcpSheetReportsSharedServers = true;
+    report.mcpSheetReportsProjectServers = true;
     const beforeRejected = app.kernel!.executions.journal.receipts(String(id)).length;
 
     for (const invalid of [
@@ -1886,6 +1893,11 @@ try {
         JSON.stringify("Loaded specialized tools: subagent, subagent_wait"),
     );
     assert.equal(childRequests, 1, "the child reached the model once");
+    assert.ok(
+        readFileSync(mcpStarts, "utf8").split("\n").includes("1"),
+        "child actually connected the project stdio MCP server from the project cwd",
+    );
+    report.projectMcpConnectedByChild = true;
     report.personalSkillsIgnoredByParentAndChild = true;
     const subagentRuns = join(
         folder,

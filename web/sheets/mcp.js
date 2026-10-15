@@ -64,12 +64,12 @@ export function McpSheet() {
 
     return html`<${Sheet} title="MCP sign-ins" onClose=${closeSheet}>
         <p>
-            The shared Team agent's MCP servers, as your runs reach them. A server that uses OAuth needs your own
+            Shared and project MCP servers, as your runs reach them. A server that uses OAuth needs your own
             sign-in: only your runs use it.
         </p>
         ${error && html`<p role="alert">${error}</p>`}
         ${message && html`<p role="status">${message}</p>`}
-        ${!report && !error && html`<${Loader} label="Checking the shared agent's MCP servers" />`}
+        ${!report && !error && html`<${Loader} label="Checking shared and project MCP servers" />`}
         ${
             signIn &&
             html`<form
@@ -111,7 +111,7 @@ export function McpSheet() {
                 )}
                 ${
                     report.servers.length === 0 &&
-                    html`<li class="muted">The shared agent declares no MCP servers.</li>`
+                    html`<li class="muted">No shared or project MCP servers are configured.</li>`
                 }
             </ul>`
         }

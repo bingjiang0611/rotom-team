@@ -1503,7 +1503,10 @@ export class TeamKernel {
                     segmentId: session.segmentId,
                     binding: JSON.stringify(session.binding),
                     capturedAt: Date.now(),
-                    resourceRevision: teamResourceRevision(join(this.#app.dataDir, "team-agent")),
+                    resourceRevision: teamResourceRevision(
+                        join(this.#app.dataDir, "team-agent"),
+                        this.#app.cwdOf(id),
+                    ),
                     commands: commands
                         .filter(
                             (command) =>
@@ -2250,7 +2253,10 @@ export class TeamKernel {
                 ? "undiscovered"
                 : cached.invalidated ||
                     cached.resourceRevision !==
-                        teamResourceRevision(join(this.#app.dataDir, "team-agent"))
+                        teamResourceRevision(
+                            join(this.#app.dataDir, "team-agent"),
+                            this.#app.cwdOf(id),
+                        )
                   ? "configuration-changed"
                   : this.isRunning(id)
                     ? "live"

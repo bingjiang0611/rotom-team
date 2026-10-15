@@ -79,9 +79,13 @@ native persisted effects and session identity in a synthetic fixture. Its receip
 terminal implementation, generic command-completion proof or production backend. `/context` and `/llama` RPC warnings
 are not success. No real accounts or external destructive actions are authorized by these checks.
 
-MCP fixtures now deliberately install server definitions into the shared profile, not project `.pi/mcp.json`; tokens remain
-per-member. The browserless OAuth callback, private token routing and sign-out assertions remain. Frozen context retains
-the shared base agent MCP, while project MCP/configuration stays closed.
+`node --test test/rotom-mcp.test.ts` checks native shared/project precedence, partial disable overrides, project model-token
+routing rejection, visible malformed-config errors and per-workspace freshness. `npm run test:kernel` proves a project
+stdio tool overrides a shared definition and actually executes. `npm run test:kernel:mcp` uses project `.pi/mcp.json`
+with two isolated member HOMEs: browserless OAuth, foreign callback rejection, private token routing, logout and frozen
+context MCP loading. A malicious project extension/package marker stays unexecuted in CLI and Agent startup.
+`npm run test:kernel:app` uses project MCP in the parent/child account-gated workflow. Shared resources remain covered by
+the resource proofs. These are synthetic loopback checks, not real MCP service acceptance.
 
 ## Personal skills do not block native runs
 

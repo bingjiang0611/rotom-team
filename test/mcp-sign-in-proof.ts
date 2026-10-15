@@ -47,8 +47,19 @@ const { origin } = oauth;
 
 mkdirSync(join(workspace, ".pi"));
 writeFileSync(
-    join(teamAgentDir, "mcp.json"),
+    join(workspace, ".pi/mcp.json"),
     JSON.stringify({ mcpServers: { team: { url: `${origin}/mcp`, exposure: "direct" } } }),
+);
+const forbidden = join(root, "project-extension-ran");
+
+mkdirSync(join(workspace, ".pi/extensions"));
+writeFileSync(
+    join(workspace, ".pi/extensions/forbidden.ts"),
+    `import {writeFileSync} from 'node:fs'; writeFileSync(${JSON.stringify(forbidden)}, 'loaded'); export default () => {};`,
+);
+writeFileSync(
+    join(workspace, ".pi/settings.json"),
+    JSON.stringify({ packages: ["npm:must-not-install"] }),
 );
 
 const signIns = new McpSignIns(teamAgentDir);
@@ -123,7 +134,7 @@ try {
     assert.match(notices.join("\n"), /team.*connected/i, notices.join("\n"));
     assert.ok(oauth.callers.length > 0 && oauth.callers.every((member) => member === "alice"));
 
-    // Frozen context does not suppress the shared agent MCP configuration; project configuration remains closed.
+    // Frozen context still loads live project MCP definitions, not other project agent configuration.
     const frozenContext = join(root, "frozen.md");
 
     writeFileSync(frozenContext, "Frozen configuration.");
@@ -148,6 +159,10 @@ try {
 
     // `open` starts detached, after the address is printed; the run above took long enough for one to show.
     assert.ok(!existsSync(opened), "a sign-in must never open a browser on the server");
+    assert.ok(
+        !existsSync(forbidden),
+        "MCP CLI/parent/frozen startup must not load project extensions",
+    );
 
     // Signing out removes only Alice's tokens.
     assert.equal((await signIns.logout(homes.alice, workspace, "team")).status, "done");
@@ -162,7 +177,8 @@ try {
         perMemberTokens: true,
         runSentMembersToken: true,
         signOut: true,
-        frozenContextKeepsSharedMcp: true,
+        frozenContextKeepsProjectMcp: true,
+        projectExtensionsAndPackagesRemainClosed: true,
     });
 } finally {
     signIns.close();

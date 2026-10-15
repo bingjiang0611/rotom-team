@@ -1,5 +1,5 @@
 /**
- * Sign-in to the shared agent's MCP servers that use OAuth. The definitions are shared; the sign-in is each member's own:
+ * Sign-in to shared or project MCP servers that use OAuth. The sign-in is each member's own:
  * `rotom mcp login` runs in the member's kernel HOME, so the tokens land in that member's `mcp-auth.json` and only
  * their runs send them.
  *
