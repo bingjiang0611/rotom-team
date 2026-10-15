@@ -35,7 +35,7 @@
     <body>
         <p>
             同一原型的两个视口。参数：<span id="q"></span>（在 URL 上改
-            scope/tab/open/role/run/fault）
+            page=v2|v3、scope、tab、role、fault）
         </p>
         <div class="grid">
             <figure>
@@ -49,10 +49,11 @@
         </div>
         <script>
             const q = new URLSearchParams(location.search);
+            const file = `${q.get("page") || "v3"}.html?`;
             q.set("embed", "1");
             document.getElementById("q").textContent = q.toString();
-            document.getElementById("d").src = "v2.html?" + q;
-            document.getElementById("m").src = "v2.html?" + q;
+            document.getElementById("d").src = file + q;
+            document.getElementById("m").src = file + q;
         </script>
     </body>
 </html>

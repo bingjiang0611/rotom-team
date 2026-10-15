@@ -110,3 +110,16 @@ v1 三方向并列，没给推荐，也没按真实窗口尺寸画。v2 收敛�
 ### 已渲染核对（Chrome，1440×603 视口；手机通过 390px iframe）
 
 Project/MCP 列表、Shared/Skills + 运行中、Project/Instructions 链、项目 AGENTS.md 编辑、Shared 扩展在项目中的开关、member + 解析失败（桌面与手机）、保存冲突。渲染中修掉：行内文字被 `.list-item > span:first-child` 居中、tab 被 flex 压扁、开关说明横排、只读的 Type 仍像下拉框、项目 Instructions 计数不含加载链。
+
+## v3 只读稿（2026-10-15，`v3.html`）
+
+用户决定：**只扫描并展示列表，显示具体路径，不支持任何操作**。v2 的编辑、开关、新建、保存条、运行锁定、保存冲突、详情页全部删除。
+
+- 入口与结构沿用 v2：`Settings › Team › Agent resources`，Shared / Project ▾，Instructions / Skills / Extensions / MCP 四个 tab。
+- 每行显示绝对路径（可整段选中复制）。MCP 写成 `<mcp.json 绝对路径> → mcpServers.<name>`；package 资源显示解析后的文件路径和 package 来源；内置扩展标“No file”。
+- 每个 tab 上方列出本次扫描的位置，不存在的标 `(none)`，例如项目的 `.agents/skills/`。项目 Instructions 改为按加载顺序列出 AGENTS.md 链，不再重复列扫描位置。
+- 保留扫描问题：同名 Skill、MCP 可执行文件不存在、`settings.json` 解析失败（提示列表可能不完整）。行不可点击，没有 hover 效果。
+- 页脚写明：只读；修改需在部署机器上改文件，再在运行中的会话执行 `/reload`。
+- 权限：owner 和 member 看到的内容相同，都是只读；member 的项目下拉框只列有 view 权限的项目。
+
+仍未确认：package 的实际安装路径（原型中的 `team-agent/npm/node_modules/...` 只是示例），以及扫描是复用原生 resolver 还是由服务端自己按目录扫描。前者结果准确，后者可能与原生加载结果不一致。

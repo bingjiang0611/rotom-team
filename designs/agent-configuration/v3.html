@@ -1,0 +1,728 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Agent resources · design v3 (read only)</title>
+        <!-- The real app stylesheet: tokens, sheet, settings window, rows and controls are the shipped ones. -->
+        <link rel="stylesheet" href="../../web/style.css" />
+        <style>
+            @font-face {
+                font-family: "Pocket Mono";
+                src: url("../../web/fonts/JetBrainsMono.woff2") format("woff2");
+                font-weight: 100 800;
+            }
+            /* The prototype re-renders the whole window on every click; the open animations would replay. */
+            *,
+            *::before {
+                animation: none !important;
+            }
+            body {
+                margin: 0;
+                background: var(--desk);
+                color: var(--body);
+                font-family: var(--mono);
+            }
+
+            /* ── Prototype-only control bar (not product UI) ── */
+            .proto-bar {
+                position: fixed;
+                inset: 0 0 auto 0;
+                z-index: 50;
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.4rem 1rem;
+                align-items: center;
+                padding: 0.45rem 0.8rem;
+                font-size: 0.72rem;
+                background: var(--o-bg-darker);
+                border-bottom: 1px dashed var(--line-strong);
+            }
+            .proto-bar b {
+                color: var(--brand);
+            }
+            .proto-bar .segmented button {
+                font-size: 0.72rem;
+                padding: 0.18rem 0.45rem;
+            }
+            .proto-bar a {
+                color: var(--accent);
+            }
+            body.embed .proto-bar {
+                display: none;
+            }
+            .overlay {
+                top: 2.6rem;
+            }
+            body.embed .overlay {
+                top: 0;
+            }
+            .sheet-head .icon-button {
+                width: 32px;
+                height: 32px;
+                color: var(--muted);
+            }
+
+            /* ── This page, from existing tokens ── */
+            .settings-page .sheet-body > * {
+                flex-shrink: 0;
+            }
+            .ar-scope {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.4rem;
+                align-items: center;
+            }
+            .ar-scope select {
+                width: auto;
+                min-width: 10rem;
+                background: var(--card);
+                border: 1px solid var(--line);
+                padding: 0.28rem 0.4rem;
+                font-size: 0.82rem;
+            }
+            .ar-where {
+                font-size: 0.7rem;
+                color: var(--muted);
+                line-height: 1.5;
+                overflow-wrap: anywhere;
+            }
+            .ar-where code {
+                color: var(--body);
+            }
+            .ar-tabs {
+                display: flex;
+                border-bottom: 1px solid var(--line);
+                overflow-x: auto;
+            }
+            .ar-tabs button {
+                flex: none;
+                padding: 0.45rem 0.7rem;
+                font-size: 0.8rem;
+                color: var(--muted);
+                border-bottom: 2px solid transparent;
+                margin-bottom: -1px;
+            }
+            .ar-tabs button.on {
+                color: var(--accent);
+                border-bottom-color: var(--accent);
+            }
+            .ar-tabs .n {
+                margin-left: 0.3rem;
+                font-size: 0.68rem;
+                color: var(--faint);
+            }
+            .ar-tabs .n.bad {
+                color: var(--err);
+            }
+            .ar-roots {
+                font-size: 0.68rem;
+                color: var(--muted);
+                line-height: 1.6;
+            }
+            .ar-roots code {
+                color: var(--body);
+                overflow-wrap: anywhere;
+            }
+            .ar-roots .none {
+                color: var(--faint);
+            }
+            /* Rows here are a report, not menu entries: no hover, no pointer. */
+            .list-item.ar-row,
+            .list-item.ar-row:hover {
+                cursor: default;
+                align-items: flex-start;
+                background: var(--card);
+                border-color: var(--line);
+            }
+            .list-item.ar-row.inherited,
+            .list-item.ar-row.inherited:hover {
+                background: transparent;
+                border-style: dashed;
+            }
+            .list-item.ar-row > .who:first-child {
+                display: flex;
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.18rem;
+                min-width: 0;
+                flex: 1;
+                color: var(--text);
+            }
+            .ar-row strong {
+                font-weight: 600;
+            }
+            .ar-row.off strong {
+                color: var(--muted);
+                text-decoration: line-through;
+            }
+            .ar-row .path {
+                font-size: 0.7rem;
+                color: var(--body);
+                overflow-wrap: anywhere;
+                user-select: all;
+            }
+            .ar-row .sub {
+                font-size: 0.7rem;
+                color: var(--muted);
+            }
+            .ar-row .sub.bad {
+                color: var(--err);
+            }
+            .ar-row .sub.warn {
+                color: var(--warn);
+            }
+            .ar-row .end {
+                display: flex;
+                flex-wrap: wrap;
+                justify-content: flex-end;
+                gap: 0.3rem;
+                flex: none;
+                max-width: 40%;
+            }
+            .tag {
+                font-size: 0.64rem;
+                padding: 0.08rem 0.32rem;
+                border: 1px solid var(--line-strong);
+                color: var(--muted);
+                white-space: nowrap;
+            }
+            .tag.shared {
+                border-color: var(--accent-line);
+                color: var(--accent);
+            }
+            .tag.project {
+                border-color: color-mix(in srgb, var(--o-magenta) 55%, transparent);
+                color: var(--o-magenta);
+            }
+            .tag.warn {
+                border-color: var(--warn-line);
+                color: var(--warn);
+            }
+            .tag.err {
+                border-color: var(--err-line);
+                color: var(--err);
+            }
+            .note {
+                font-size: 0.74rem;
+                line-height: 1.55;
+                padding: 0.5rem 0.65rem;
+                border: 1px solid var(--line);
+                border-left-width: 2px;
+                overflow-wrap: anywhere;
+            }
+            .note.warn {
+                border-color: var(--warn-line);
+                background: var(--warn-soft);
+            }
+            .note.err {
+                border-color: var(--err-line);
+                background: var(--err-soft);
+            }
+            .note b {
+                color: var(--text);
+            }
+            .note a {
+                color: var(--accent);
+                cursor: pointer;
+            }
+            .ar-chain .list-item {
+                margin-bottom: 0;
+            }
+            .ar-chain .arrow {
+                font-size: 0.66rem;
+                color: var(--faint);
+                padding: 0.15rem 0 0.15rem 0.8rem;
+            }
+            .ar-foot {
+                font-size: 0.7rem;
+                color: var(--muted);
+                line-height: 1.5;
+            }
+            .ar-foot code {
+                overflow-wrap: anywhere;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="proto-bar" id="bar"></div>
+        <div id="app"></div>
+        <script>
+            const qs = new URLSearchParams(location.search);
+
+            if (qs.has("embed")) {
+                document.body.classList.add("embed");
+            }
+
+            const S = {
+                role: qs.get("role") || "owner",
+                fault: qs.get("fault") || "none", // none | parse
+                scope: qs.get("scope") || "shared", // shared | project
+                project: qs.get("project") || "rotom-team",
+                tab: qs.get("tab") || "skills",
+            };
+
+            /* Sample paths: a deployment data folder and two registered projects. */
+            const DATA = "/Users/test/rotom-team-deployment/data";
+            const AGENT = `${DATA}/team-agent`;
+            const PROJECTS = {
+                "rotom-team": "/Users/test/vibecoding/rotom-team",
+                scry: "/Users/test/vibecoding/scry",
+            };
+            const MEMBER_PROJECTS = ["rotom-team"];
+            const PKG = `${AGENT}/npm/node_modules/@example/pi-tools`;
+            const root = () => PROJECTS[S.project];
+
+            /* Where the scan looked, per tab and scope. `found: false` is a place that does not exist. */
+            function roots(tab, scope = S.scope) {
+                const p = root();
+
+                if (scope === "shared") {
+                    return {
+                        instructions: [
+                            [`${AGENT}/AGENTS.md`, true],
+                            [`${AGENT}/SYSTEM.md`, false],
+                            [`${AGENT}/APPEND_SYSTEM.md`, false],
+                        ],
+                        skills: [
+                            [`${AGENT}/skills/`, true],
+                            [`${AGENT}/settings.json → packages`, true],
+                        ],
+                        extensions: [
+                            [`${AGENT}/extensions/`, true],
+                            [`${AGENT}/settings.json → extensions, packages`, true],
+                        ],
+                        mcp: [[`${AGENT}/mcp.json`, true]],
+                    }[tab];
+                }
+
+                const shared = tab === "instructions" ? [] : roots(tab, "shared");
+
+                return shared.concat(
+                    {
+                        instructions: [
+                            [`${AGENT}/AGENTS.md`, true],
+                            ["/Users/test/vibecoding/AGENTS.md", true],
+                            [`${p}/AGENTS.md`, true],
+                        ],
+                        skills: [
+                            [`${p}/.pi/skills/`, true],
+                            [`${p}/.agents/skills/`, false],
+                            [`${p}/.pi/settings.json → skills`, true],
+                        ],
+                        extensions: [
+                            [`${p}/.pi/extensions/`, true],
+                            [`${p}/.pi/settings.json → extensions`, true],
+                        ],
+                        mcp: [[`${p}/.pi/mcp.json`, true]],
+                    }[tab],
+                );
+            }
+
+            const SHARED = {
+                instructions: [
+                    {
+                        name: "AGENTS.md",
+                        path: `${AGENT}/AGENTS.md`,
+                        sub: "1.8 KB · modified 2026-10-02 14:20",
+                    },
+                ],
+                skills: [
+                    {
+                        name: "release-check",
+                        path: `${AGENT}/skills/release-check/SKILL.md`,
+                        sub: "Check release readiness before a publish.",
+                        dupIn: "rotom-team",
+                    },
+                    {
+                        name: "code-review",
+                        path: `${PKG}/skills/code-review/SKILL.md`,
+                        sub: "Review a diff for correctness.",
+                        pkg: "npm:@example/pi-tools@1.0.0",
+                    },
+                ],
+                extensions: [
+                    {
+                        name: "session-note.ts",
+                        path: `${AGENT}/extensions/session-note.ts`,
+                        sub: "Report that the native Agent Extension loaded.",
+                    },
+                    {
+                        name: "pi-tools/index.ts",
+                        path: `${PKG}/extensions/index.ts`,
+                        sub: "",
+                        pkg: "npm:@example/pi-tools@1.0.0",
+                    },
+                    {
+                        name: "builtin:mcp",
+                        path: "",
+                        sub: "Built into rotom. No file.",
+                        builtin: true,
+                    },
+                    {
+                        name: "builtin:codemode",
+                        path: "",
+                        sub: "Built into rotom. No file.",
+                        builtin: true,
+                    },
+                ],
+                mcp: [
+                    {
+                        name: "docs",
+                        path: `${AGENT}/mcp.json → mcpServers.docs`,
+                        sub: "http · https://example.com/mcp · exposure deferred",
+                        offIn: "rotom-team",
+                    },
+                    {
+                        name: "project-tools",
+                        path: `${AGENT}/mcp.json → mcpServers.project-tools`,
+                        sub: "stdio · /opt/mcp/project-tools . · exposure direct",
+                    },
+                ],
+            };
+
+            const projectItems = () => {
+                const p = root();
+
+                return {
+                    skills: [
+                        {
+                            name: "release-check",
+                            path: `${p}/.pi/skills/release-check/SKILL.md`,
+                            sub: "Project release checklist.",
+                            dup: true,
+                        },
+                        {
+                            name: "deploy-notes",
+                            path: `${p}/.pi/skills/deploy-notes/SKILL.md`,
+                            sub: "Write the release notes from merged PRs.",
+                        },
+                    ],
+                    extensions: [
+                        {
+                            name: "repo-guard.ts",
+                            path: `${p}/.pi/extensions/repo-guard.ts`,
+                            sub: "Block writes outside the repository.",
+                        },
+                    ],
+                    mcp: [
+                        {
+                            name: "repo-index",
+                            path: `${p}/.pi/mcp.json → mcpServers.repo-index`,
+                            sub: "stdio · /opt/mcp/repo-index . · exposure codemode",
+                            err: "Executable not found: /opt/mcp/repo-index",
+                        },
+                    ],
+                };
+            };
+
+            /* What a session in the chosen project gets: shared items folded in, each with its source. */
+            function items(tab) {
+                if (S.scope === "shared") {
+                    return SHARED[tab].map((x) => ({ ...x, src: "shared" }));
+                }
+
+                if (tab === "instructions") {
+                    return null; // drawn as the load chain
+                }
+
+                const shared = SHARED[tab].map((x) => {
+                    if (tab === "skills" && x.dupIn) {
+                        return { ...x, src: "shared", dup: true };
+                    }
+
+                    if (tab === "mcp" && x.offIn) {
+                        return {
+                            ...x,
+                            src: "shared",
+                            off: true,
+                            note: `Turned off here by ${root()}/.pi/mcp.json → mcpServers.docs { "enabled": false }`,
+                        };
+                    }
+
+                    return { ...x, src: "shared" };
+                });
+
+                return [...shared, ...projectItems()[tab].map((x) => ({ ...x, src: "project" }))];
+            }
+
+            function problems() {
+                const list = [];
+
+                if (S.fault === "parse") {
+                    list.push({
+                        text: `<b>${S.scope === "shared" ? AGENT : `${root()}/.pi`}/settings.json</b> does not parse (line 14). Lists below may be incomplete; new sessions ${S.scope === "shared" ? "for every member" : "in this project"} fail to start until it is fixed on the machine.`,
+                    });
+                }
+
+                if (S.scope === "project") {
+                    list.push({
+                        short: "release-check: same name in Shared and project",
+                        tab: "skills",
+                    });
+                    list.push({ short: "repo-index: executable not found", tab: "mcp", err: true });
+                }
+
+                return list;
+            }
+
+            const TABS = [
+                ["instructions", "Instructions"],
+                ["skills", "Skills"],
+                ["extensions", "Extensions"],
+                ["mcp", "MCP"],
+            ];
+
+            const esc = (s) =>
+                String(s).replace(
+                    /[&<>"]/g,
+                    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c],
+                );
+
+            function tags(x) {
+                const out = [];
+
+                if (x.builtin) {
+                    out.push(`<span class="tag">built in</span>`);
+                } else if (x.pkg) {
+                    out.push(`<span class="tag">package</span>`);
+                }
+
+                if (S.scope === "project" && !x.builtin && !x.ancestor) {
+                    out.push(`<span class="tag ${x.src}">${x.src}</span>`);
+                }
+
+                if (x.ancestor) {
+                    out.push(`<span class="tag">ancestor</span>`);
+                }
+
+                if (x.err) {
+                    out.push(`<span class="tag err">error</span>`);
+                }
+
+                if (x.dup) {
+                    out.push(`<span class="tag warn">same name</span>`);
+                }
+
+                if (x.off) {
+                    out.push(`<span class="tag">off here</span>`);
+                }
+
+                return out.join("");
+            }
+
+            function row(x) {
+                const cls = ["list-item", "ar-row"];
+
+                if (S.scope === "project" && (x.src === "shared" || x.ancestor)) {
+                    cls.push("inherited");
+                }
+
+                if (x.off) {
+                    cls.push("off");
+                }
+
+                const lines = [`<strong>${esc(x.name)}</strong>`];
+
+                if (x.path) {
+                    lines.push(`<code class="path">${esc(x.path)}</code>`);
+                }
+
+                if (x.pkg) {
+                    lines.push(`<span class="sub">From package ${esc(x.pkg)}</span>`);
+                }
+
+                if (x.sub) {
+                    lines.push(`<span class="sub">${esc(x.sub)}</span>`);
+                }
+
+                if (x.err) {
+                    lines.push(`<span class="sub bad">${esc(x.err)}</span>`);
+                }
+
+                if (x.note) {
+                    lines.push(`<span class="sub warn">${esc(x.note)}</span>`);
+                }
+
+                if (S.scope === "shared" && x.dupIn) {
+                    lines.push(
+                        `<span class="sub warn">Same name also in project ${esc(x.dupIn)}</span>`,
+                    );
+                }
+
+                if (S.scope === "shared" && x.offIn) {
+                    lines.push(
+                        `<span class="sub warn">Turned off in project ${esc(x.offIn)}</span>`,
+                    );
+                }
+
+                return `<div class="${cls.join(" ")}">
+                    <span class="who">${lines.join("")}</span>
+                    <span class="end">${tags(x)}</span>
+                </div>`;
+            }
+
+            function chain() {
+                const p = root();
+                const link = `<div class="arrow">↓ then</div>`;
+
+                return `<div class="ar-foot">Read in this order, each added after the one before.</div>
+                    <div class="ar-chain">
+                        ${row({ ...SHARED.instructions[0], src: "shared" })}
+                        ${link}
+                        ${row({ name: "AGENTS.md", path: "/Users/test/vibecoding/AGENTS.md", sub: "Ancestor folder of the project · 0.6 KB", ancestor: true })}
+                        ${link}
+                        ${row({ name: "AGENTS.md", path: `${p}/AGENTS.md`, sub: "4.1 KB · modified 2026-10-15 19:41", src: "project" })}
+                    </div>`;
+            }
+
+            function page() {
+                const projects = S.role === "owner" ? Object.keys(PROJECTS) : MEMBER_PROJECTS;
+                const probs = problems();
+                const bad = new Set(probs.filter((p) => p.err).map((p) => p.tab));
+                const count = (t) =>
+                    t === "instructions" && S.scope === "project" ? 3 : items(t).length;
+
+                const scope = `<div class="ar-scope">
+                        <div class="segmented">
+                            <button class="${S.scope === "shared" ? "on" : ""}" data-scope="shared">Shared</button>
+                            <button class="${S.scope === "project" ? "on" : ""}" data-scope="project">Project</button>
+                        </div>
+                        ${
+                            S.scope === "project"
+                                ? `<select id="proj" aria-label="Project">${projects.map((p) => `<option ${p === S.project ? "selected" : ""}>${p}</option>`).join("")}</select>`
+                                : ""
+                        }
+                    </div>
+                    <div class="ar-where">${
+                        S.scope === "shared"
+                            ? `Every member and project · <code>${AGENT}</code>`
+                            : `Sessions started in <code>${esc(root())}</code>, with Shared folded in`
+                    } · scanned just now</div>`;
+
+                const notes = [];
+
+                for (const p of probs.filter((p) => !p.tab)) {
+                    notes.push(`<div class="note err">${p.text}</div>`);
+                }
+
+                const perItem = probs.filter((p) => p.tab);
+
+                if (perItem.length) {
+                    notes.push(
+                        `<div class="note ${perItem.some((p) => p.err) ? "err" : "warn"}"><b>${perItem.length} problems</b> · ${perItem
+                            .map((p) => `<a data-tab="${p.tab}">${p.short}</a>`)
+                            .join(" · ")}</div>`,
+                    );
+                }
+
+                const tabs = `<div class="ar-tabs" role="tablist">${TABS.map(
+                    ([t, label]) =>
+                        `<button role="tab" aria-selected="${t === S.tab}" class="${t === S.tab ? "on" : ""}" data-tab="${t}">${label} <span class="n ${bad.has(t) ? "bad" : ""}">${count(t)}</span></button>`,
+                ).join("")}</div>`;
+
+                const isChain = S.scope === "project" && S.tab === "instructions";
+                const scanned = isChain
+                    ? ""
+                    : `<div class="ar-roots"><div>Scanned</div>${roots(S.tab)
+                          .map(([path, found]) =>
+                              found
+                                  ? `<code>${esc(path)}</code>`
+                                  : `<code class="none">${esc(path)} (none)</code>`,
+                          )
+                          .join("<br />")}</div>`;
+
+                const list =
+                    S.scope === "project" && S.tab === "instructions"
+                        ? chain()
+                        : items(S.tab).map(row).join("");
+
+                const foot = {
+                    instructions: "",
+                    skills: "",
+                    extensions: "",
+                    mcp: "Connection and sign-in are per member and session; this list shows definitions only.",
+                }[S.tab];
+
+                return `${scope}${notes.join("")}${tabs}${scanned}<div>${list}</div>
+                    <div class="ar-foot">Read only. Change these files on the deployment machine, then run <code>/reload</code> in a running session.${foot ? ` ${foot}` : ""}</div>`;
+            }
+
+            function nav() {
+                const group = (title, links) =>
+                    `<div class="settings-group"><div class="group-title">${title}</div>${links.join("")}</div>`;
+                const link = (label, on, hint = "") =>
+                    `<button class="settings-link ${on ? "on" : ""}"><span>${label}</span>${hint ? `<span class="settings-hint">${hint}</span>` : ""}</button>`;
+
+                return `<nav class="settings-nav" aria-label="Settings">
+                    ${group("You", [link("Your name"), link("My model accounts"), link("My browser sign-ins"), link("Appearance", false, "Tokyo Night")])}
+                    ${group("Team", [link("People"), link("Projects & access"), link("Agent resources", true), link("Spend")])}
+                    ${group("Server", [link("Running now"), S.role === "owner" ? link("Restart server") : ""])}
+                    <button class="settings-link settings-out">Sign out</button>
+                </nav>`;
+            }
+
+            function render() {
+                document.getElementById("app").innerHTML = `<div class="overlay">
+                    <section class="sheet settings-window" role="dialog" aria-label="Settings">
+                        <header class="sheet-head"><div class="grip"></div><h2>Settings</h2><button class="icon-button" aria-label="Close">✕</button></header>
+                        <div class="sheet-body"><div class="settings">${nav()}
+                            <div class="settings-pane"><section class="settings-page" aria-label="Agent resources">
+                                <header class="sheet-head"><h2>Agent resources</h2></header>
+                                <div class="sheet-body">${page()}</div>
+                            </section></div>
+                        </div></div>
+                    </section>
+                </div>`;
+
+                const app = document.getElementById("app");
+
+                app.querySelectorAll("[data-scope]").forEach(
+                    (b) => (b.onclick = () => set({ scope: b.dataset.scope })),
+                );
+                app.querySelectorAll("[data-tab]").forEach(
+                    (b) => (b.onclick = () => set({ tab: b.dataset.tab })),
+                );
+
+                const select = app.querySelector("#proj");
+
+                if (select) {
+                    select.onchange = () => set({ project: select.value });
+                }
+
+                renderBar();
+            }
+
+            function renderBar() {
+                const seg = (key, options) =>
+                    `<span class="segmented">${options.map(([v, label]) => `<button class="${S[key] === v ? "on" : ""}" data-k="${key}" data-v="${v}">${label}</button>`).join("")}</span>`;
+
+                document.getElementById("bar").innerHTML = `<b>原型 v3 · 只读</b>
+                    角色 ${seg("role", [
+                        ["owner", "owner"],
+                        ["member", "member（只看有权限的项目）"],
+                    ])}
+                    故障 ${seg("fault", [
+                        ["none", "无"],
+                        ["parse", "settings.json 解析失败"],
+                    ])}
+                    <a href="compare.html?page=v3">桌面 + 手机对照 ›</a>`;
+                document
+                    .querySelectorAll("#bar [data-k]")
+                    .forEach((b) => (b.onclick = () => set({ [b.dataset.k]: b.dataset.v })));
+            }
+
+            function set(patch) {
+                Object.assign(S, patch);
+
+                if (S.role !== "owner" && !MEMBER_PROJECTS.includes(S.project)) {
+                    S.project = MEMBER_PROJECTS[0];
+                }
+
+                render();
+            }
+
+            render();
+        </script>
+    </body>
+</html>
