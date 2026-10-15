@@ -1,7 +1,7 @@
 // Agent resources: what a Team session loads from the shared profile and a project, listed with each file's path. It
 // only reads: the files are changed on the deployment machine.
 import { useEffect, useState } from "preact/hooks";
-import { api, closeSheet } from "../store.js";
+import { api, closeSheet, openSheet, store } from "../store.js";
 import { html, Loader, Sheet } from "../ui.js";
 
 const TABS = [
@@ -19,13 +19,34 @@ function label(path) {
     return /^index\.[cm]?[jt]s$|^SKILL\.md$/.test(file) ? parts.at(-2) : file;
 }
 
+/** Past this many characters a description shows two lines until opened: some run to a thousand. */
+const LONG = 160;
+
+function Description({ text }) {
+    const [open, setOpen] = useState(false);
+    const long = text.length > LONG;
+
+    return html`<span class=${`ar-sub ar-desc ${long && !open ? "clamped" : ""}`}>${text}</span>
+        ${
+            long &&
+            html`<button
+                class="link ar-more"
+                aria-expanded=${open}
+                onClick=${() => setOpen(!open)}
+            >
+                ${open ? "Show less" : "Show more"}
+            </button>`
+        }`;
+}
+
 const Tag = ({ kind = "", children }) => html`<span class=${`ar-tag ${kind}`}>${children}</span>`;
 
 /** One resource: name, notes and its path, with tags at the end. Shared rows in a project's view are dashed. */
-function Row({ name, off = false, inherited = false, notes = [], path, tags }) {
+function Row({ name, description = "", off = false, inherited = false, notes = [], path, tags }) {
     return html`<div class=${`ar-row ${inherited ? "inherited" : ""} ${off ? "off" : ""}`}>
         <div class="ar-main">
             <strong>${name}</strong>
+            ${description && html`<${Description} text=${description} />`}
             ${notes
                 .filter(Boolean)
                 .map(([text, kind = ""]) => html`<span class=${`ar-sub ${kind}`}>${text}</span>`)}
@@ -74,8 +95,8 @@ function Skills({ list }) {
                 off=${!skill.enabled}
                 inherited=${list.project && skill.scope === "shared"}
                 path=${skill.path}
+                description=${skill.description}
                 notes=${[
-                    skill.description && [skill.description],
                     origin(skill),
                     skill.sameNameAs && [
                         `Not loaded: ${skill.sameNameAs} has the same name.`,
@@ -205,6 +226,18 @@ export function AgentResourcesSheet() {
                     : "The shared profile every Team session loads."
             }
         </p>
+        ${
+            projects?.length === 0 &&
+            (store.state.me?.role === "owner"
+                ? html`<p class="ar-hint">
+                      No projects yet, so there is no project view. Add one in${" "}
+                      <button class="link" onClick=${() => openSheet({ type: "projects" })}>
+                          Projects & access
+                      </button>
+                      .
+                  </p>`
+                : html`<p class="ar-hint">No projects are shared with you yet.</p>`)
+        }
         <div class="ar-tabs" role="tablist">
             ${TABS.map(
                 ([key, name]) => html`<button

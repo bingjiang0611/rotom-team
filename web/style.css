@@ -2873,6 +2873,24 @@ button.chip:hover {
     color: var(--muted);
 }
 
+.ar-desc.clamped {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+}
+
+/* `.link` comes later and sets its own size. */
+.ar-hint .link {
+    font-size: inherit;
+}
+
+.ar-main .link.ar-more {
+    align-self: flex-start;
+    font-size: 0.7rem;
+}
+
 .ar-sub.warn {
     color: var(--warn);
 }
