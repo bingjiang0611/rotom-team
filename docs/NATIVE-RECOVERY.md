@@ -15,6 +15,7 @@ The command works without starting PocketApp or acquiring/releasing its writer l
 - Whether `kernel.lock` exists and its recorded parent PID. PID existence/identity and descendant closure are **not** inferred.
 - The total number of pending/unknown receipts, at most 100 receipt identities, and an explicit truncation flag.
 - Logical conversation, immutable segment, payer member, operation, recorded status and whether a transcript was bound.
+- Schema 6 also reports the recorded execution/finalization phase and a bounded diagnostic code when available. It never infers a phase for an older receipt.
 - `toolClosure: "unknown"` and `replayPermitted: false`. No prompt, transcript, raw binding, workspace/HOME path, account generation or credential is printed.
 
 The journal counts/rows share one read transaction. The separately sampled lease is diagnostic metadata, not an atomic ownership proof. Non-regular journal/lease paths and unsupported schemas fail closed. This output is private operational metadata; do not publish it. A truncated list is not a full receipt inventory.
@@ -33,7 +34,21 @@ The journal counts/rows share one read transaction. The separately sampled lease
 
 The current product deliberately has no universal `force-unlock`, mark-unknown-success or replay recovery API. Readback can establish an already recorded outcome; it cannot manufacture a missing terminal result or prove arbitrary external side effects. If evidence remains insufficient, preserve the files and stop. Re-login does not reconcile an earlier tool effect, and OAuth refresh tombstones must not be erased to force another attempt.
 
+## Finalization failures
+
+A visible assistant reply does not prove that native state readback and receipt finalization succeeded. The service records
+`finalization` before that readback. Such unknown attempts, RPC size-limit failures, and legacy unknown attempts without
+phase evidence are not eligible for automatic continuation. They retain the same receipt and fence across restarts.
+Only execution-phase ordinary prompts remain candidates for the existing dead-process recovery checks. This distinction
+also applies to saved continuation plans; restarting is not a way to bypass it.
+
+History readback uses the checked local JSONL prefix plus native `get_entries` with `since`, retaining native branch and
+unflushed-entry semantics. The 64 MiB per-record bound is not raised. An oversized event, JSONL entry or in-memory suffix
+still fails closed. The UI shows bounded error categories, not raw native stderr or credentials.
+
 ## Backup/restore and rollback
+
+Schema 6 cannot be opened by older releases. Keep the pre-upgrade backup and use the original-path restore procedure for a downgrade; never delete the phase/failure columns to make an old binary accept new data.
 
 Stop the supervised service, prevent automatic restart and establish writer/tool closure before the existing offline backup procedure. `backup` refuses an unreconciled native lease, even if its parent has died. Use `docs/DEPLOYMENT.md` for the designated service controls and the original-path restore procedure.
 

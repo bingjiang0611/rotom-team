@@ -41,6 +41,8 @@ export type KernelBinding = {
 export class KernelRequestConflict extends Error {}
 
 export type KernelOperation = "prompt" | "handoff" | "fork" | "compact" | "discover" | "command";
+export type KernelFailure =
+    "rpc-record-limit" | "rpc-timeout" | "rpc-disconnected" | "native-error";
 export type KernelReceipt = {
     id: string;
     sessionId: string;
@@ -50,6 +52,10 @@ export type KernelReceipt = {
     /** `interrupted`: the server stopped mid-run and its kernel is gone; the session file holds what happened. */
     status: "dispatch-intent" | "settled" | "handled" | "rejected" | "unknown" | "interrupted";
     binding: KernelBinding;
+    /** Absent on legacy attempts: do not infer restart eligibility from a dead PID alone. */
+    phase?: "execution" | "finalization";
+    /** Bounded diagnostic code, never raw provider output or credentials. */
+    failure?: KernelFailure;
     /** A queued native command crossed dispatch without a confirmed handled outcome. */
     unresolvedCommandInput?: true;
 };
@@ -81,7 +87,9 @@ export function requireNoPendingKernel(data: string): void {
 
     try {
         if (
-            ![1, 2, 3, 4, 5].includes(Number(db.prepare("PRAGMA user_version").get()!.user_version))
+            ![1, 2, 3, 4, 5, 6].includes(
+                Number(db.prepare("PRAGMA user_version").get()!.user_version),
+            )
         ) {
             throw new Error("Unsupported kernel journal version");
         }
@@ -155,7 +163,7 @@ export class RotomJournal {
             this.#db = opened = new DatabaseSync(path);
             const version = Number(this.#db.prepare("PRAGMA user_version").get()!.user_version);
 
-            if (![0, 1, 2, 3, 4, 5].includes(version)) {
+            if (![0, 1, 2, 3, 4, 5, 6].includes(version)) {
                 throw new Error("Unsupported kernel journal version");
             }
 
@@ -201,8 +209,14 @@ export class RotomJournal {
                     PRAGMA user_version=5; COMMIT;`);
             }
 
+            if (version < 6) {
+                this.#db.exec(`BEGIN IMMEDIATE;
+                    ALTER TABLE kernel_attempts ADD COLUMN phase TEXT;
+                    ALTER TABLE kernel_attempts ADD COLUMN failure TEXT;
+                    PRAGMA user_version=6; COMMIT;`);
+            }
+
             // One member may run several sessions at once; each conversation keeps its own single writer.
-            // Dropped without a version bump, so an older release still opens this journal.
             this.#db.exec("DROP INDEX IF EXISTS one_kernel_writer");
 
             // A cleanly released parent lock is not evidence that an unfinished dispatch never happened.
@@ -417,6 +431,8 @@ export class RotomJournal {
             sessionId: String(row.conversation_id),
             segmentId: String(row.session_id),
             operation: row.operation as KernelOperation,
+            ...(row.phase ? { phase: String(row.phase) as KernelReceipt["phase"] } : {}),
+            ...(row.failure ? { failure: String(row.failure) as KernelFailure } : {}),
             requestId: String(row.request_id),
             status: row.status as KernelReceipt["status"],
             binding: JSON.parse(String(row.binding)),
@@ -617,7 +633,7 @@ export class RotomJournal {
         // Synchronous FULL SQLite commit completes before any child launch or stdin send.
         this.#db
             .prepare(
-                "INSERT INTO kernel_attempts(id,session_id,request_id,prompt_hash,binding,home,status,conversation_id,operation) VALUES (?,?,?,?,?,?,'dispatch-intent',?,?)",
+                "INSERT INTO kernel_attempts(id,session_id,request_id,prompt_hash,binding,home,status,conversation_id,operation,phase) VALUES (?,?,?,?,?,?,'dispatch-intent',?,?,'execution')",
             )
             .run(
                 id,
@@ -658,17 +674,43 @@ export class RotomJournal {
         }
     }
 
-    /** Unknown prompts that ran in a recorded kernel process, with what is needed to read their session file. */
+    /** Persist the completion boundary before readback; a crash here must not start another model turn. */
+    setPhase(id: string, phase: "execution" | "finalization"): void {
+        this.#db
+            .prepare("UPDATE kernel_attempts SET phase=? WHERE id=? AND status='dispatch-intent'")
+            .run(phase, id);
+    }
+
+    recordFailure(id: string, failure: KernelFailure): void {
+        this.#db
+            .prepare(
+                "UPDATE kernel_attempts SET failure=COALESCE(failure,?) WHERE id=? AND status='dispatch-intent'",
+            )
+            .run(failure, id);
+    }
+
+    canResume(id: string): boolean {
+        const attempt = this.receipt(id);
+
+        return (
+            attempt.operation === "prompt" &&
+            attempt.phase === "execution" &&
+            attempt.failure !== "rpc-record-limit" &&
+            !attempt.unresolvedCommandInput
+        );
+    }
+
+    /** Only execution-phase unknown prompts can be considered for dead-process recovery. */
     unknownPrompts(): { id: string; pid: number; sessionFile: string; kernelSessionId: string }[] {
         return this.#db
             .prepare(
                 `SELECT a.id, a.pid, s.session_file, s.kernel_session_id FROM kernel_attempts a
                  JOIN kernel_sessions s ON s.id=a.session_id
                  WHERE a.status='unknown' AND a.operation='prompt' AND a.pid IS NOT NULL
-                   AND s.session_file IS NOT NULL AND s.kernel_session_id IS NOT NULL
-                   AND NOT EXISTS (SELECT 1 FROM kernel_command_inputs c WHERE c.attempt_id=a.id)`,
+                   AND s.session_file IS NOT NULL AND s.kernel_session_id IS NOT NULL`,
             )
             .all()
+            .filter((row) => this.canResume(String(row.id)))
             .map((row) => ({
                 id: String(row.id),
                 pid: Number(row.pid),
@@ -685,13 +727,9 @@ export class RotomJournal {
         const attempt = this.receipt(id),
             session = this.segment(attempt.segmentId);
 
-        if (
-            attempt.status !== "unknown" ||
-            attempt.operation !== "prompt" ||
-            this.hasUnresolvedCommandInput(id)
-        ) {
+        if (attempt.status !== "unknown" || attempt.operation !== "prompt" || !this.canResume(id)) {
             throw new Error(
-                "Only an unknown prompt without unresolved command inputs can be interrupted",
+                "Only an unknown prompt in execution phase without unresolved command inputs or a size-limit failure can be interrupted",
             );
         }
 
@@ -717,8 +755,10 @@ export class RotomJournal {
     planResume(attemptId: string): KernelResume {
         const attempt = this.receipt(attemptId);
 
-        if (this.hasUnresolvedCommandInput(attemptId)) {
-            throw new Error("An unresolved queued command cannot be resumed");
+        if (!this.canResume(attemptId)) {
+            throw new Error(
+                "An unresolved command, legacy attempt, finalization or size-limit failure cannot be resumed",
+            );
         }
 
         const previous = /:#resume-(.+)$/.exec(attempt.requestId)?.[1];

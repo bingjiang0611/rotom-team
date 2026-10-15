@@ -31,6 +31,7 @@ import {
     type KernelBinding,
     type KernelEntry,
     type KernelReceipt,
+    type KernelFailure,
 } from "./rotom-journal.ts";
 import {
     nativeBuiltinCommands,
@@ -153,6 +154,7 @@ type Running = {
     aborted: boolean;
     attemptId?: string;
     kernel?: RotomRpc;
+    snapshot?: () => Promise<unknown>;
     closureUnknown?: boolean;
     /** Its prompt was dispatched: messages may join it. */
     prompting?: boolean;
@@ -305,9 +307,7 @@ export class RotomExecutions {
                 const name = nativeCommandName(text);
 
                 const queueInput = async () => {
-                    const goal = currentBranchGoalState(
-                        await run.kernel!.request({ type: "get_entries" }),
-                    );
+                    const goal = currentBranchGoalState(await run.snapshot!());
 
                     if (goalIsActive(goal)) {
                         await run.kernel!.wake(normalizeNativePrompt(text), images, mode);
@@ -1039,6 +1039,9 @@ export class RotomExecutions {
             await this.#authorize(binding, "admission", sessionId);
 
             const tail = new NativeTail(state.sessionFile, state.sessionId, binding.workspace);
+
+            running.snapshot = () => readNativeSnapshot(kernel!, state!, binding.workspace);
+
             let progressFailure: unknown;
             let extensionError: RpcRecord | undefined;
             const detachExtensionErrors = kernel.onEvent((event) => {
@@ -1210,15 +1213,17 @@ export class RotomExecutions {
                 disposition = await kernel.prompt(prompt, undefined, images);
             }
 
+            if (!running.aborted) {
+                this.journal.setPhase(receipt.id, "finalization");
+            }
+
             if (["prompt", "command"].includes(operation)) {
                 // A handled native command may own an active Goal even though it did not start an agent turn.
                 running.prompting = true;
                 let revision = kernel.activityRevision;
 
                 await kernel.barrier();
-                let goalState = currentBranchGoalState(
-                    await kernel.request({ type: "get_entries" }),
-                );
+                let goalState = currentBranchGoalState(await running.snapshot());
 
                 hooks.onNativeGoalState?.(goalState);
 
@@ -1231,6 +1236,8 @@ export class RotomExecutions {
                 // Goal owns the same native process and gate while active. Waiting/recovery has
                 // no agent turn to settle, so wake on native activity instead of polling/relaunching.
                 while (goalIsActive(goalState)) {
+                    this.journal.setPhase(receipt.id, "execution");
+
                     if (kernel.activityRevision === revision) {
                         await kernel.waitForActivity(revision);
                     }
@@ -1244,6 +1251,10 @@ export class RotomExecutions {
                         );
                     }
 
+                    if (!running.aborted) {
+                        this.journal.setPhase(receipt.id, "finalization");
+                    }
+
                     await kernel.barrier();
 
                     if (extensionError) {
@@ -1253,9 +1264,7 @@ export class RotomExecutions {
                         );
                     }
 
-                    goalState = currentBranchGoalState(
-                        await kernel.request({ type: "get_entries" }),
-                    );
+                    goalState = currentBranchGoalState(await running.snapshot());
                     hooks.onNativeGoalState?.(goalState);
                 }
             }
@@ -1378,6 +1387,21 @@ export class RotomExecutions {
                 !activeAttempt.inferenceAdmitted
                     ? "rejected"
                     : "unknown";
+
+            if (failureStatus === "unknown") {
+                const message = error instanceof RpcFailure ? error.message : "";
+                let failure: KernelFailure = "native-error";
+
+                if (/^RPC record exceeds \d+ MiB$/.test(message)) {
+                    failure = "rpc-record-limit";
+                } else if (message === "RPC acknowledgement deadline exceeded") {
+                    failure = "rpc-timeout";
+                } else if (message === "kernel disconnected") {
+                    failure = "rpc-disconnected";
+                }
+
+                this.journal.recordFailure(receipt.id, failure);
+            }
         } finally {
             if (!closed) {
                 gateState.active = undefined;
@@ -1450,6 +1474,31 @@ export class RotomExecutions {
             this.journal.close();
         })();
     }
+}
+
+/**
+ * Native JSONL is an append-only prefix of get_entries. Read that prefix locally, then ask native
+ * for its in-memory suffix and current leaf. This preserves unflushed custom entries and branches
+ * without sending the whole image-heavy history through one bounded RPC record.
+ * The native RPC limit still applies to a single event or an unflushed suffix.
+ */
+export async function readNativeSnapshot(
+    kernel: Pick<RotomRpc, "request">,
+    state: { sessionFile: string; sessionId: string },
+    workspace: string,
+): Promise<{ entries: KernelEntry[]; leafId: string | null }> {
+    const persisted = existsSync(state.sessionFile)
+        ? new NativeTail(state.sessionFile, state.sessionId, workspace)
+              .read()
+              .filter((entry) => entry.type !== "session")
+        : [];
+    const since = persisted.at(-1)?.id;
+    const delta = (await kernel.request({ type: "get_entries", ...(since ? { since } : {}) })) as {
+        entries: KernelEntry[];
+        leafId: string | null;
+    };
+
+    return { entries: [...persisted, ...delta.entries], leafId: delta.leafId };
 }
 
 /** One complete snapshot of a native session file. */
@@ -1531,6 +1580,10 @@ export class NativeTail {
         for (const line of buffer.subarray(0, end).toString("utf8").split("\n")) {
             if (line === "") {
                 continue;
+            }
+
+            if (Buffer.byteLength(line) > NATIVE_LINE_LIMIT) {
+                throw new Error("Native session line exceeds the import bound");
             }
 
             const entry = JSON.parse(line) as KernelEntry;

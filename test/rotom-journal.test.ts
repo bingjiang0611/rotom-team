@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { DatabaseSync } from "node:sqlite";
 import {
     mkdtempSync,
     mkdirSync,
@@ -45,6 +46,84 @@ function setup() {
 
     return { root, data, binding };
 }
+
+test("finalization is durable before readback: restart never turns it into another model request", () => {
+    const f = setup();
+    let journal = new RotomJournal(f.data);
+
+    try {
+        journal.bind("native", f.binding);
+        const run = journal.reserve("native", "finalization", "done");
+
+        journal.attach(run.id, "/tmp/native-finalization.jsonl", "native-id", 999999999);
+        journal.setPhase(run.id, "finalization");
+        // Simulate a server crash before failure handling or finish can record an outcome.
+        journal.close();
+        journal = new RotomJournal(f.data);
+        assert.equal(journal.receipt(run.id).status, "unknown");
+        assert.equal(journal.receipt(run.id).phase, "finalization");
+        assert.deepEqual(journal.unknownPrompts(), []);
+        assert.throws(() => journal.interrupt(run.id, []), /execution phase/);
+        assert.throws(() => journal.planResume(run.id), /cannot be resumed/);
+        assert.throws(() => journal.reserve("native", "retry", "do not replay"), /unknown attempt/);
+    } finally {
+        journal.close();
+        rmSync(f.root, { recursive: true, force: true });
+    }
+});
+
+test("an execution-phase size-limit failure is fenced even with a dead native PID", () => {
+    const f = setup();
+    let journal = new RotomJournal(f.data);
+
+    try {
+        journal.bind("native", f.binding);
+        const run = journal.reserve("native", "large-event", "work");
+
+        journal.attach(run.id, "/tmp/native-large.jsonl", "native-id", 999999999);
+        journal.recordFailure(run.id, "rpc-record-limit");
+        journal.fail(run.id, "unknown");
+        journal.close();
+        journal = new RotomJournal(f.data);
+        assert.equal(journal.receipt(run.id).failure, "rpc-record-limit");
+        assert.equal(inspectNative(f.data).pending?.[0]?.failure, "rpc-record-limit");
+        assert.equal(journal.canResume(run.id), false);
+        assert.deepEqual(journal.unknownPrompts(), []);
+        assert.throws(() => journal.planResume(run.id), /cannot be resumed/);
+    } finally {
+        journal.close();
+        rmSync(f.root, { recursive: true, force: true });
+    }
+});
+
+test("v5 migration preserves legacy unknown records without inventing execution-phase evidence", () => {
+    const f = setup();
+    let journal = new RotomJournal(f.data);
+
+    try {
+        journal.bind("native", f.binding);
+        const run = journal.reserve("native", "legacy", "work");
+
+        journal.attach(run.id, "/tmp/native-legacy.jsonl", "native-id", 999999999);
+        journal.fail(run.id, "unknown");
+        journal.close();
+        const db = new DatabaseSync(join(f.data, "kernel.sqlite"));
+
+        db.exec(
+            "ALTER TABLE kernel_attempts DROP COLUMN phase; ALTER TABLE kernel_attempts DROP COLUMN failure; PRAGMA user_version=5;",
+        );
+        db.close();
+        journal = new RotomJournal(f.data);
+        assert.equal(journal.receipt(run.id).status, "unknown");
+        assert.equal(journal.receipt(run.id).phase, undefined);
+        assert.equal(journal.canResume(run.id), false);
+        assert.deepEqual(journal.unknownPrompts(), []);
+        assert.equal(inspectNative(f.data).version, 6);
+    } finally {
+        journal.close();
+        rmSync(f.root, { recursive: true, force: true });
+    }
+});
 
 const response = (id: string, provider = "fixture"): KernelEntry => ({
     type: "message",

@@ -11,6 +11,47 @@ import type { User } from "../src/server/config.ts";
 import type { ConversationId } from "@earendil-works/pi-durable";
 import { until } from "./helpers.ts";
 
+export async function nativeFailureBannerProof(root: string, base: string, id: ConversationId) {
+    assert.ok(findBrowser(), "Chromium is required for this opt-in proof");
+    const browsers = new Browsers({
+        dataDir: mkdtempSync(join(root, "failure-browser-")),
+        load: async () => undefined,
+        save: () => {},
+    });
+    const page = await browsers.open(1);
+
+    try {
+        // The fixture bootstrap selects the failed session and signs in a synthetic member.
+        for (let i = 0; i < 2; i++) {
+            await page.navigate(i === 0 ? `${base}/native-command-bootstrap` : `${base}/s/${id}`);
+            await until(
+                async () => {
+                    const text = await page.evaluate(
+                        "document.querySelector('.native-banner')?.textContent ?? ''",
+                    );
+
+                    return (
+                        text.includes("finalization") &&
+                        text.includes("exceeded the size limit") &&
+                        text.includes("will not be continued automatically")
+                    );
+                },
+                "durable native failure reason survives page reload",
+                20000,
+            );
+        }
+
+        const image = await page.screenshot();
+        const path = join(root, "native-finalization-failure.jpg");
+
+        writeFileSync(path, Buffer.from(image.data, "base64"), { mode: 0o600 });
+
+        return { finalizationReasonAfterReload: true, screenshot: path };
+    } finally {
+        await browsers.closeAll();
+    }
+}
+
 export async function nativeCommandUiProof(options: {
     root: string;
     base: string;

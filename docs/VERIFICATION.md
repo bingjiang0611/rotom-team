@@ -78,7 +78,11 @@ The browser proof creates an actual abruptly-ended discovery and checks the nati
 The native command proof also executes a genuine effect-then-throw command during an ordinary active prompt. It checks the
 persisted effect, unknown owner with unchanged operation, duplicate refusal, absent recovery eligibility and no restart replay.
 Journal tests cover both unresolved and confirmed-handled inputs; read-only inspection exposes the fence without command text.
-The schema-1 migration fixture is reconstructed without newer tables, and schema-5 inspection preserves operation identity.
+The schema-1 migration fixture is reconstructed without newer tables/columns. Schema-6 inspection preserves operation identity and exposes only bounded phase/failure metadata. The v5 migration regression keeps legacy unknown receipts unchanged and ineligible for automatic continuation.
+
+`node --test test/native-snapshot.test.ts test/rotom-journal.test.ts` checks a synthetic image-bearing history above 64 MiB against the pinned native SessionManager and actual RPC transport: the full response fails at the existing limit, while local-prefix/native-delta readback preserves every entry and the native selected branch. It also checks unflushed entries without a JSONL file, partial append anchors, foreign headers, durable finalization before a crash, and size-limit no-replay fences.
+
+`node test/native-commands-proof.ts --ui` additionally runs a real native prompt with more than 64 MiB of persisted custom history through the Team HTTP path, then verifies settlement. A separate unflushed 70 MiB suffix deliberately exceeds the unchanged bound: its finalization failure is visible through readback and remains unknown across restart without another inference.
 
 The inventory script compares all 45 supplied terminal name/source pairs to actual isolated Team discovery. It records
 39 raw baseline entries and 14 public catalog entries (thirteen commands plus the packaged subagent skill); it does not claim 45 behavioral passes. Five personal skills are deliberately uninstalled by user choice, not replaced by fabricated skills. Read-only terminal SKILL.md metadata evidence is private and stays outside

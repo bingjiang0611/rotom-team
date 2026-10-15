@@ -2144,6 +2144,9 @@ export class TeamKernel {
                           status: pending.status,
                           operation: pending.operation,
                           memberId: pending.binding.memberId,
+                          phase: pending.phase,
+                          failure: pending.failure,
+                          recoveryEligible: journal.canResume(pending.id),
                       },
                   }
                 : {}),
@@ -2155,7 +2158,7 @@ export class TeamKernel {
         const journal = this.executions.journal;
         const latest = journal.latest(String(id));
 
-        if (!latest || this.isRunning(id)) {
+        if (!latest || this.isRunning(id) || latest.status === "unknown") {
             return false;
         }
 
@@ -2694,6 +2697,8 @@ export class TeamKernel {
             requestId: receipt.requestId,
             status: receipt.status,
             operation: configuration ? "configuration" : receipt.operation,
+            phase: receipt.phase,
+            failure: receipt.failure,
         };
     }
 
@@ -2763,9 +2768,9 @@ export class TeamKernel {
     }
 
     /**
-     * After a crash, an unknown prompt whose kernel process no longer exists is over: what its session file holds is
-     * what it did. It becomes interrupted, which releases its account, and is planned to continue. A run whose process
-     * still lives, or that recorded none, stays unknown for a person to reconcile.
+     * Only an execution-phase unknown prompt with a dead recorded kernel can become interrupted.
+     * Legacy attempts, finalization and size-limit failures stay fenced: a dead PID alone is not
+     * evidence that the model needs another turn. External business effects remain unproven.
      */
     #interruptDeadRuns(): void {
         const journal = this.executions.journal;
@@ -2810,7 +2815,11 @@ export class TeamKernel {
             const user = this.#app.config.userById(binding.memberId);
 
             // Someone acted since (a new message, a handoff, a fork seed): their choice stands.
-            if (journal.latest(plan.sessionId)?.id !== attempt.id || !user) {
+            if (
+                journal.latest(plan.sessionId)?.id !== attempt.id ||
+                !user ||
+                !journal.canResume(attempt.id)
+            ) {
                 journal.markResume(plan.attemptId, "skipped");
                 continue;
             }
@@ -2839,7 +2848,7 @@ export class TeamKernel {
         for (const id of new Set([...this.#active].map((run) => run.id))) {
             const pending = this.executions.journal.pendingConversation(String(id));
 
-            if (pending?.operation === "prompt") {
+            if (pending?.operation === "prompt" && this.executions.journal.canResume(pending.id)) {
                 this.executions.journal.planResume(pending.id);
             }
         }

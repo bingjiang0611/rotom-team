@@ -45,6 +45,10 @@ export default function(pi) {
     pi.on("session_start", () => { if (existsSync(${JSON.stringify(join(data, "team-agent/extensions/swap-command.flag"))})) swap(); });
     pi.on("input", async (event, ctx) => {
         if (event.text === "HOLD_MARKER") swap();
+        if (event.text === "FIXTURE_LARGE_HISTORY" || event.text === "FIXTURE_LARGE_MEMORY") {
+            for (let i = 0; i < 5; i++) pi.appendEntry("large-readback-fixture", {padding: "A".repeat(14 * 1024 * 1024)});
+            if (event.text === "FIXTURE_LARGE_MEMORY") return {action: "handled"};
+        }
         if (event.text === "FIXTURE_CUSTOM_MESSAGE") {
             pi.sendMessage({customType: "fixture-text", content: [{type: "text", text: "CUSTOM_"}, {type: "text", text: "DRAFT"}], display: true}, {triggerTurn: false});
             pi.appendEntry("fixture-after-custom", {});
@@ -921,6 +925,36 @@ try {
         startsAfterUnknown,
         "unknown discovery cannot start a second native process, even with a new request id",
     );
+    const largeHistory = await json(
+        await request(alice, "sessions", { backend: "rotom", cwd: workspace }),
+    );
+
+    await json(await submit(alice, "MATERIALIZE_LARGE_HISTORY", {}, largeHistory.id));
+    const largeSettled = await json(
+        await submit(alice, "FIXTURE_LARGE_HISTORY", {}, largeHistory.id),
+    );
+
+    assert.equal(
+        largeSettled.status,
+        "settled",
+        "persisted history above 64 MiB must not become unknown at readback",
+    );
+    assert.equal(largeSettled.phase, "finalization");
+    const largeMemory = await json(
+        await request(alice, "sessions", { backend: "rotom", cwd: workspace }),
+    );
+    const memoryFailure = await json(
+        await submit(alice, "FIXTURE_LARGE_MEMORY", {}, largeMemory.id),
+    );
+
+    assert.equal(memoryFailure.status, "unknown");
+    assert.equal(memoryFailure.phase, "finalization");
+    assert.equal(memoryFailure.failure, "rpc-record-limit");
+    const failedRoom = app.kernel!.roomState(largeMemory.id, alice);
+
+    assert.ok("pending" in failedRoom);
+    assert.equal(failedRoom.pending?.failure, "rpc-record-limit");
+    assert.equal(failedRoom.pending?.recoveryEligible, false);
     const beforeFailure = calls.length;
     const failed = await app.kernel!.executions.run(
         String(failureSession.id),
@@ -948,6 +982,25 @@ try {
     handler = createHandler({ app, listen: { host: "127.0.0.1", port: 0 }, restart: () => {} });
     await new Promise((resolve) => setTimeout(resolve, 350));
     assert.equal(app.kernel!.executions.journal.receipt(failed.id).status, "unknown");
+    assert.equal(app.kernel!.executions.journal.receipt(memoryFailure.id).status, "unknown");
+    assert.equal(
+        app.kernel!.executions.journal.receipt(memoryFailure.id).failure,
+        "rpc-record-limit",
+    );
+    assert.equal(app.kernel!.executions.journal.resume(memoryFailure.id), undefined);
+    assert.equal(app.kernel!.executions.journal.receipts(String(largeMemory.id)).length, 1);
+
+    if (process.argv.includes("--ui")) {
+        bootstrap = { token: tokens.get(alice.id)!, id: Number(largeMemory.id) };
+        const { nativeFailureBannerProof } = await import("./native-commands-ui-proof.ts");
+
+        report.failureBanner = await nativeFailureBannerProof(
+            data,
+            base.replace(/\/api\/$/, ""),
+            largeMemory.id,
+        );
+    }
+
     assert.equal(app.kernel!.executions.journal.receipt(queuedOwner.id).status, "unknown");
     assert.equal(app.kernel!.executions.journal.resume(queuedOwner.id), undefined);
     assert.equal(readFileSync(queuedFile, "utf8"), queuedBytes);
@@ -989,6 +1042,11 @@ try {
         effectCount: 1,
         recoveryEligible: false,
         restartedWithoutReplay: true,
+    };
+    report.largeReadback = {
+        persistedHistoryOver64MiB: largeSettled.status,
+        unflushedSuffix: memoryFailure.failure,
+        finalizationFencedAfterRestart: true,
     };
     report.passed = true;
     report.inferences = calls.length;

@@ -110,9 +110,17 @@ startup fails closed on missing packages and never installs them automatically. 
 reviewed backup/migration. Other links, including external linked-package paths outside this specific cache, remain refused
 by the existing backup contract. Never keep configuration/runtime state inside a rebuildable dependency tree.
 
-Opening this release upgrades the execution journal to schema 5 for queued-command no-replay fences. Older releases refuse
-that schema; do not drop its markers or change the version number. Rollback requires the pre-upgrade backup at its original
-absolute path, not opening newer execution data with an older binary.
+Opening this release upgrades the execution journal to schema 6, retaining queued-command fences and adding durable
+execution/finalization phases and bounded failure codes. Older releases refuse that schema; do not drop columns or change
+the version number. Rollback requires the pre-upgrade backup at its original absolute path, not opening newer execution
+data with an older binary. Legacy attempts have no phase evidence: their unknown receipts remain fenced rather than being
+automatically reclassified after a dead PID is found. No migration marks them successful.
+
+Native history readback combines the validated local JSONL prefix with native `get_entries` using `since`; native still
+supplies unflushed entries and the current branch leaf. A persisted history can exceed 64 MiB without one oversized RPC
+response. The 64 MiB limit still applies to a single native event, JSONL entry or unflushed RPC suffix. Those failures stay
+unknown and are not automatically continued. If larger in-memory suffixes are required, the next step is a bounded native
+paging/streaming protocol, not silently truncating data or raising limits without a memory bound.
 
 ## Native pin and subagent defaults
 

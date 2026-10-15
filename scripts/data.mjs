@@ -159,7 +159,7 @@ export function inspectNative(data) {
         db.exec("BEGIN");
         const version = Number(db.prepare("PRAGMA user_version").get().user_version);
 
-        if (![1, 2, 3, 4, 5].includes(version)) {
+        if (![1, 2, 3, 4, 5, 6].includes(version)) {
             throw new Error("Unsupported native journal version; no migration was attempted.");
         }
 
@@ -173,6 +173,7 @@ export function inspectNative(data) {
         const rows = db
             .prepare(
                 `SELECT a.id, a.session_id, a.request_id, a.binding, a.status, s.session_file,
+            ${version >= 6 ? "a.phase, a.failure," : ""}
             ${version >= 5 ? "EXISTS(SELECT 1 FROM kernel_command_inputs c WHERE c.attempt_id=a.id) AS unresolved_command_input," : ""}
             ${version >= 2 ? "a.conversation_id, a.operation" : "a.session_id AS conversation_id, 'prompt' AS operation"}
             FROM kernel_attempts a JOIN kernel_sessions s ON s.id=a.session_id
@@ -188,6 +189,8 @@ export function inspectNative(data) {
             operation: String(row.operation),
             recordedStatus: String(row.status),
             transcriptBound: row.session_file !== null,
+            ...(row.phase ? { phase: String(row.phase) } : {}),
+            ...(row.failure ? { failure: String(row.failure) } : {}),
             ...(row.unresolved_command_input ? { unresolvedCommandInput: true } : {}),
             outcome: "unresolved",
         }));

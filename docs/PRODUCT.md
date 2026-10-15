@@ -51,7 +51,7 @@ flowchart LR
 
 ## 中断、恢复与数据
 
-- 干净停止为运行中的 prompt 记录续跑计划；重启后以原成员继续一次。崩溃后只有确认旧 rotom 进程已结束，才能将 prompt 标为 interrupted 并安排继续。
+- 干净停止为 execution 阶段的 prompt 记录续跑计划；重启后以原成员继续一次。崩溃后还须确认旧 rotom 进程已结束、原生记录可读且没有超限/排队命令围栏。收尾前持久化 finalization 阶段；收尾失败、超限失败和缺少阶段证据的旧 unknown 不自动续接，也不因已有回复而改成成功。
 - 连续 3 次普通 prompt 自动续跑后，下一次中断等待成员手动 **Continue**。副作用型原生命令使用 `command` receipt；unknown 后不按普通 prompt 自动续跑。只有原生注册表确认的 prompt template/skill 展开才保留普通 prompt 恢复行为。排队到普通 prompt 的副作用命令在发送前保存 durable 输入标记；只有确认 handled 才清除。未知输入使原 attempt 保持 unknown，禁止自动续跑，不改写其 operation。既有 receipt 不改写。仍可能存活的进程、unknown 操作、未核清 lease 不自动重放；compaction、handoff、fork 和 discovery 的中断需要对账。
 - Stop 请求、PID 消失、旧 PASS 或 receipt 存在，单独都不能证明工具已关闭或业务成功。操作步骤见 [NATIVE-RECOVERY.md](NATIVE-RECOVERY.md)。
 - 离线备份含秘密，要求停止 writer、核清 lease，并验证逐文件摘要。恢复只能使用原绝对路径且不能覆盖现有目录；模型和 MCP refresh grants 不恢复，须独立重登。项目工作区另行备份。

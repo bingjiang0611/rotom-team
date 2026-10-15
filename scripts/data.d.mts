@@ -17,6 +17,8 @@ export function inspectNative(data: string): {
         operation: string;
         recordedStatus: string;
         transcriptBound: boolean;
+        phase?: string;
+        failure?: string;
         unresolvedCommandInput?: true;
         outcome: string;
     }[];

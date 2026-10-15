@@ -95,8 +95,8 @@ function Question({ dialog, yours, memberName }) {
 }
 
 /**
- * Above the composer of a rotom session. A run cut off by a server stop has an unknown outcome: it may have changed
- * files or spent quota, so it is never resent by itself.
+ * Above the composer: distinguish a known interruption from an uncertain execution or finalization.
+ * Restart eligibility comes from the journal, never from whether a reply happens to be visible.
  */
 export function NativeBanner() {
     const kernel = store.state.view.kernel;
@@ -145,8 +145,28 @@ export function NativeBanner() {
         return null;
     }
 
+    const reason = {
+        "rpc-record-limit": "A native RPC response exceeded the size limit.",
+        "rpc-timeout": "Native RPC acknowledgement timed out.",
+        "rpc-disconnected": "The native process disconnected.",
+        "native-error": "The native operation could not be confirmed.",
+    }[pending.failure];
+
     return html`<div class="native-banner" role="status">
-        The last ${pending.operation === "prompt" ? "run" : pending.operation} stopped with an unknown
-        outcome. It is not sent again by itself.
+        <div>
+            The last ${pending.operation === "prompt" ? "run" : pending.operation} stopped with an unknown outcome.
+        </div>
+        ${
+            pending.phase === "finalization" &&
+            html`<div>
+                This happened during finalization, after native dispatch ended.
+            </div>`
+        }
+        ${reason && html`<div>${reason}</div>`}
+        <div>${
+            pending.recoveryEligible
+                ? "It is not retried here. A server restart may continue it after recovery checks."
+                : "It will not be continued automatically. Existing effects still need to be checked."
+        }</div>
     </div>`;
 }
