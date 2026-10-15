@@ -1,6 +1,6 @@
 # Supported native commands
 
-Team exposes exactly these thirteen builtins/extensions from rotom 0.1.21:
+Team exposes exactly these thirteen builtins/extensions from rotom 0.1.22:
 `settings, model, thinking, tree, fork, clone, compact, reload, goal, browser, computer-use, mcp, qoder-credits`.
 Installed skills and prompt templates remain available. This is **web alignment within Team boundaries**, not a PTY
 frontend or a claim of complete terminal equivalence.
@@ -96,7 +96,7 @@ Native injection resolves sources; Team no longer assumes every owned child has 
 User memory is member-private, project memory is shared, and neither is copied into the shared base profile.
 Named skills advertise descriptions/locations; the fixture verifies an actual child read, not just prompt metadata.
 
-Workflow support still needs a supported native RPC drain bridge. In 0.1.21, RPC has UI and skips the native headless
+Workflow support still needs a supported native RPC drain bridge. In 0.1.22, RPC has UI and skips the native headless
 auto-drain; agent settlement does not prove workflow-controller closure. Native refinement generation uses a standalone
 foreground reviewer that owned scope rejects. Existing overlays are supported; generation is not.
 
