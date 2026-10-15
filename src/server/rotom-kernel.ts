@@ -2,6 +2,7 @@
 import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { once } from "node:events";
+import { clampThinkingLevel, type Model, type ModelThinkingLevel } from "@earendil-works/pi-ai";
 import { teamSubagentEnvironment } from "./rotom-resource-policy.ts";
 import { accessSync, constants, lstatSync, readFileSync, realpathSync } from "node:fs";
 import { connect } from "node:net";
@@ -474,7 +475,7 @@ export async function startRotomKernel(options: {
 
     try {
         const state = (await client.request({ type: "get_state" })) as {
-            model?: { provider: string; id: string };
+            model?: Model<any>;
             isStreaming?: boolean;
             thinkingLevel?: string;
         };
@@ -483,7 +484,10 @@ export async function startRotomKernel(options: {
             state.model?.provider !== options.provider ||
             state.model.id !== options.model ||
             state.isStreaming !== false ||
-            (options.thinkingLevel !== undefined && state.thinkingLevel !== options.thinkingLevel)
+            // Pi clamps a restored level to the model without recording it; a new model may lack "off".
+            (options.thinkingLevel !== undefined &&
+                state.thinkingLevel !==
+                    clampThinkingLevel(state.model, options.thinkingLevel as ModelThinkingLevel))
         ) {
             throw new Error("Kernel startup model/state mismatch; no fallback allowed");
         }

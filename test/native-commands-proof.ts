@@ -190,13 +190,15 @@ const configureUserModels = (models: Runtime, user: User) => {
             },
         },
         getModels: () =>
-            ["model-a", "model-b"].map((id) => ({
+            ["model-a", "model-b", "model-c"].map((id) => ({
                 id,
                 name: id,
                 api: "openai-completions" as const,
                 provider: "openai",
                 baseUrl,
                 reasoning: true,
+                // Like Qoder's reasoning-only tiers: "off" clamps to "low".
+                ...(id === "model-c" ? { thinkingLevelMap: { off: null, minimal: null } } : {}),
                 input: ["text" as const],
                 contextWindow: 32000,
                 maxTokens: 1024,
@@ -469,6 +471,25 @@ try {
     }
 
     assert.equal((await submit(viewer, "/name denied")).status, 403);
+    assert.equal(app.kernel!.executions.thinkingLevel(String(id)), "off");
+    const reasoningOnly = await json(await submit(alice, "/model openai/model-c"));
+
+    assert.equal(
+        reasoningOnly.status,
+        "handled",
+        "a model without the current level restarts with its clamped level",
+    );
+    assert.equal(app.kernel!.executions.thinkingLevel(String(id)), "low");
+    // Native history still ends at "off": a later ordinary startup must accept Pi's clamp too.
+    await app.close();
+    app = await open();
+    handler = createHandler({ app, listen: { host: "127.0.0.1", port: 0 }, restart: () => {} });
+    assert.equal(
+        (await json(await submit(alice, "/thinking medium"))).status,
+        "handled",
+        "a restarted reasoning-only model starts from its clamped level",
+    );
+    assert.equal(app.kernel!.executions.thinkingLevel(String(id)), "medium");
     const beforeModel = app.kernel!.executions.journal.session(String(id));
     const changed = await json(
         await submit(alice, "/model openai/model-b", { requestId: "model-change" }),
