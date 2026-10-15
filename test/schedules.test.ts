@@ -325,12 +325,16 @@ test("a schedule Pi sets up is the work of whom it worked for, and is cancelled 
     await say(id, "remind yourself", hal);
     await say(id, "remind yourself", ida);
     await say(id, "something else");
+    // Items are keyed by random schedule ids, so their order is not meaningful.
+    const byRequester = (pairs: [string | undefined, string | undefined][]) =>
+        pairs.sort(([, a], [, b]) => String(a).localeCompare(String(b)));
+
     assert.deepEqual(
-        (await items(id)).map((each) => [each.by, each.requestedBy]),
-        [
+        byRequester((await items(id)).map((each) => [each.by, each.requestedBy])),
+        byRequester([
             [undefined, hal.id],
             [undefined, ida.id],
-        ],
+        ]),
         "Pi's, for Hal and for Ida",
     );
     app.config.updateUser(ida.id, { role: "viewer" });
