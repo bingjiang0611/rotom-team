@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Native question specimen</title>
+        <link rel="stylesheet" href="/style.css" />
+        <script type="importmap">
+            {
+                "imports": {
+                    "preact": "/vendor/preact.mjs",
+                    "preact/hooks": "/vendor/preact-hooks.mjs",
+                    "htm": "/vendor/htm.mjs",
+                    "marked": "/vendor/marked.mjs",
+                    "dompurify": "/vendor/purify.mjs"
+                }
+            }
+        </script>
+        <style>
+            body {
+                overflow: auto;
+                padding: 24px 16px;
+            }
+            main {
+                max-width: 1000px;
+                margin: auto;
+            }
+            #controls {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px;
+                margin-bottom: 24px;
+            }
+            #result {
+                white-space: pre-wrap;
+                overflow-wrap: anywhere;
+                margin: 16px auto;
+                max-width: 48rem;
+            }
+            #specimen {
+                padding: 8px;
+            }
+        </style>
+    </head>
+    <body>
+        <main>
+            <nav id="controls" aria-label="Specimen states"></nav>
+            <div id="specimen"></div>
+            <pre id="result" role="status"></pre>
+        </main>
+        <script type="module">
+            import { render } from "preact";
+            import { NativeBanner } from "/native.js";
+            import { html } from "/ui.js";
+            import { store } from "/store.js";
+
+            const title =
+                "[重放方式] 正式 rate-workflow 会建立新 generation，并自动上报阶段产物。为满足本次“不上报”，是否改为隔离演练：执行最新版 P0–P2 的分析、澄清和方案核查步骤，但不启动正式工作流控制器？";
+            const options = [
+                "1. 隔离演练（推荐） — 旧代码、旧知识库配合最新流程；只保存本地方向和遗漏对照，不建需求代次、不推送产物。验证分析效果，不宣称正式状态机验收通过。",
+                "2. 先准备重放计划 — 仅核验历史起点、版本和执行条件，先给你计划，不开始需求分析。",
+                "3. Type something.",
+            ];
+            const base = { id: "specimen-question", method: "select", title, options };
+            const scenarios = {
+                long: base,
+                plain: {
+                    ...base,
+                    title: "Choose a destination",
+                    options: [
+                        "Workspace",
+                        "A — label that is not numbered",
+                        "/a/very/long/" + "unbroken-path/".repeat(20),
+                    ],
+                },
+                confirm: {
+                    ...base,
+                    method: "confirm",
+                    title: "Proceed with the local change?",
+                    message: "No external request will be sent.",
+                },
+                input: {
+                    ...base,
+                    method: "input",
+                    title: "Type your answer:",
+                    placeholder: "Your answer",
+                },
+                editor: {
+                    ...base,
+                    method: "editor",
+                    title: "Review the draft",
+                    prefill: "Keep the current workspace.",
+                },
+                viewer: base,
+                unknown: null,
+            };
+            store.state.conversationId = 1;
+            window.questionFixture = { options };
+            window.showQuestion = (name) => {
+                document.querySelector("#result").textContent = "";
+                const kernel = {
+                    yours: name !== "viewer",
+                    memberName: "Alex",
+                    dialogs: scenarios[name] ? [scenarios[name]] : [],
+                    pending: name === "unknown" ? { status: "unknown", operation: "prompt" } : null,
+                };
+                store.state.view.kernel = kernel;
+                render(null, document.querySelector("#specimen"));
+                render(html`<${NativeBanner} />`, document.querySelector("#specimen"));
+            };
+            for (const name of Object.keys(scenarios)) {
+                const button = document.createElement("button");
+                button.className = "button";
+                button.textContent = name;
+                button.onclick = () => window.showQuestion(name);
+                document.querySelector("#controls").append(button);
+            }
+            store.subscribe(() => {
+                document.querySelector("#result").textContent = store.state.notices
+                    .map((n) => n.message)
+                    .join("\n");
+            });
+            window.showQuestion("long");
+        </script>
+    </body>
+</html>
