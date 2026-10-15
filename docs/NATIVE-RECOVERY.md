@@ -39,12 +39,25 @@ The current product deliberately has no universal `force-unlock`, mark-unknown-s
 A visible assistant reply does not prove that native state readback and receipt finalization succeeded. The service records
 `finalization` before that readback. Such unknown attempts, RPC size-limit failures, and legacy unknown attempts without
 phase evidence are not eligible for automatic continuation. They retain the same receipt and fence across restarts.
-Only execution-phase ordinary prompts remain candidates for the existing dead-process recovery checks. This distinction
-also applies to saved continuation plans; restarting is not a way to bypass it.
+The finalization marker also prevents planning a shutdown continuation after native dispatch has already ended.
+It is not an authorization to continue execution-phase unknowns: the stricter startup policy below applies.
 
 History readback uses the checked local JSONL prefix plus native `get_entries` with `since`, retaining native branch and
 unflushed-entry semantics. The 64 MiB per-record bound is not raised. An oversized event, JSONL entry or in-memory suffix
 still fails closed. The UI shows bounded error categories, not raw native stderr or credentials.
+
+## Startup continuation policy
+
+Startup never turns an `unknown` prompt into `interrupted` just because its native PID is gone or its
+transcript is readable. It preserves the receipt, conversation/HOME fence and any legacy pending resume
+plan without submitting a new request. Legacy `interrupted` classifications are not automatically resumed
+because older releases could derive them from an unknown outcome without authoritative closure evidence.
+
+Only an explicitly planned shutdown continuation whose original receipt is already `settled` can start
+automatically, under the same member and the ordinary admission checks. This preserves known clean-stop
+continuation without treating an unsuccessful/unknown stop as safe. A recovered browser login does not
+clear execution fences. Operators must reconcile unknown task effects separately. Known settled legacy shutdown plans
+remain eligible; legacy unknown or interrupted receipts do not. Finalization and size-limit failures never bypass this gate.
 
 ## Backup/restore and rollback
 
@@ -58,5 +71,7 @@ Restore excludes model refresh credentials, including native child auth stores. 
 
 - `test/native-recovery.test.ts` checks CLI readback, unchanged receipt/lease state, bounded output, private-field exclusion, symlink refusal and schema-1 inspection without migration.
 - Its controlled OS fixture reserves a durable intent, starts a detached Node descendant and kills the journal-owning parent with SIGKILL. The descendant demonstrably survives; journal reopen and backup stay blocked, and inspection leaves the lease/intent untouched. Teardown terminates only the fixture's known descendant and confirms its exit before removing fixture data. This is not a production force-unlock implementation or a test of every native tool's process tree.
+- `test/startup-recovery.test.ts` checks two real app reopen cycles with dead-PID unknown attempts, legacy pending plans and legacy interrupted classifications. It asserts unchanged receipts/plans and zero automatic submissions. Regressions in startup classification, plan preservation or dispatch fail these checks.
+- `test/team-kernel-proof.ts` retains the clean, settled shutdown continuation check and verifies a genuinely killed native process stays unknown across two restarts with no additional loopback model requests.
 - Existing pinned-process app/RPC tests cover cancellation/revocation, direct-child closure, persisted receipts and restart non-replay. They do not prove that arbitrary descendants or remote jobs have terminated.
 - Actual host power loss, hardware failure, filesystem durability under power failure and arbitrary remote-effect reconciliation remain unverified. No guarantee of those scenarios is inferred from SIGKILL, fsync calls or a clean backup/restore test.

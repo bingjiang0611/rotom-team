@@ -861,9 +861,7 @@ try {
         1,
         "queued retry cannot repeat the effect",
     );
-    const queuedRecoverable = app
-        .kernel!.executions.journal.unknownPrompts()
-        .some((row) => row.id === queuedOwner.id);
+    const queuedRecoverable = app.kernel!.executions.journal.canResume(queuedOwner.id);
 
     writeFileSync(
         join(data, "queued-effect-evidence.json"),
@@ -954,7 +952,6 @@ try {
 
     assert.ok("pending" in failedRoom);
     assert.equal(failedRoom.pending?.failure, "rpc-record-limit");
-    assert.equal(failedRoom.pending?.recoveryEligible, false);
     const beforeFailure = calls.length;
     const failed = await app.kernel!.executions.run(
         String(failureSession.id),

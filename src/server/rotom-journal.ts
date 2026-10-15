@@ -49,7 +49,7 @@ export type KernelReceipt = {
     segmentId: string;
     operation: KernelOperation;
     requestId: string;
-    /** `interrupted`: the server stopped mid-run and its kernel is gone; the session file holds what happened. */
+    /** `interrupted` is retained for legacy records; it is not proof of a safe outcome or recovery. */
     status: "dispatch-intent" | "settled" | "handled" | "rejected" | "unknown" | "interrupted";
     binding: KernelBinding;
     /** Absent on legacy attempts: do not infer restart eligibility from a dead PID alone. */
@@ -669,7 +669,7 @@ export class RotomJournal {
             .run(sessionFile, kernelSessionId, receipt.segmentId);
 
         if (pid !== undefined) {
-            // After a crash, a dead kernel process is what lets its unknown run count as interrupted.
+            // PID is diagnostic evidence only; a dead process never authorizes replay of an unknown run.
             this.#db.prepare("UPDATE kernel_attempts SET pid=? WHERE id=?").run(pid, id);
         }
     }
@@ -689,63 +689,18 @@ export class RotomJournal {
             .run(failure, id);
     }
 
+    /** Eligibility for planning a clean stop; startup additionally requires an already settled receipt. */
     canResume(id: string): boolean {
         const attempt = this.receipt(id);
 
         return (
             attempt.operation === "prompt" &&
-            attempt.phase === "execution" &&
+            ["dispatch-intent", "settled"].includes(attempt.status) &&
+            (attempt.phase === "execution" ||
+                (attempt.phase === undefined && attempt.status === "settled")) &&
             attempt.failure !== "rpc-record-limit" &&
             !attempt.unresolvedCommandInput
         );
-    }
-
-    /** Only execution-phase unknown prompts can be considered for dead-process recovery. */
-    unknownPrompts(): { id: string; pid: number; sessionFile: string; kernelSessionId: string }[] {
-        return this.#db
-            .prepare(
-                `SELECT a.id, a.pid, s.session_file, s.kernel_session_id FROM kernel_attempts a
-                 JOIN kernel_sessions s ON s.id=a.session_id
-                 WHERE a.status='unknown' AND a.operation='prompt' AND a.pid IS NOT NULL
-                   AND s.session_file IS NOT NULL AND s.kernel_session_id IS NOT NULL`,
-            )
-            .all()
-            .filter((row) => this.canResume(String(row.id)))
-            .map((row) => ({
-                id: String(row.id),
-                pid: Number(row.pid),
-                sessionFile: String(row.session_file),
-                kernelSessionId: String(row.kernel_session_id),
-            }));
-    }
-
-    /**
-     * An unknown prompt whose kernel process is gone: record what its session file holds, and release its fence. The
-     * caller proves the process is gone; what the run did outside the session file stays unproven.
-     */
-    interrupt(id: string, entries: KernelEntry[]): KernelReceipt {
-        const attempt = this.receipt(id),
-            session = this.segment(attempt.segmentId);
-
-        if (attempt.status !== "unknown" || attempt.operation !== "prompt" || !this.canResume(id)) {
-            throw new Error(
-                "Only an unknown prompt in execution phase without unresolved command inputs or a size-limit failure can be interrupted",
-            );
-        }
-
-        this.#db.exec("BEGIN IMMEDIATE");
-
-        try {
-            this.#ingest(attempt, session.kernelSessionId!, entries);
-            this.#db.prepare("UPDATE kernel_attempts SET status='interrupted' WHERE id=?").run(id);
-            this.#db.exec("COMMIT");
-        } catch (error) {
-            this.#db.exec("ROLLBACK");
-
-            throw error;
-        }
-
-        return this.receipt(id);
     }
 
     /**
@@ -757,7 +712,7 @@ export class RotomJournal {
 
         if (!this.canResume(attemptId)) {
             throw new Error(
-                "An unresolved command, legacy attempt, finalization or size-limit failure cannot be resumed",
+                "An unresolved command, unknown/interrupted outcome, unproven phase, finalization or size-limit failure cannot be resumed",
             );
         }
 

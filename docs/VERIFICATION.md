@@ -204,8 +204,11 @@ while native branch checks exclude the abandoned user entries.
 
 Error fixtures call the trusted executor below HTTP admission; their extra slash names are explicitly rejected over HTTP.
 A fixture appends a real native effect and then throws. The command remains `unknown`; restart and same-request retry
-add neither inference nor native bytes. The separate Team proof retains ordinary prompt clean-stop/crash continuation
-checks and asserts that native skill expansion receipts remain `prompt`, not non-recoverable extension handlers.
+add neither inference nor native bytes. The separate Team proof retains known clean-stop continuation and checks
+that crashed unknown prompts remain fenced across restarts without another model request. It asserts that native
+skill expansion receipts remain `prompt`, not non-recoverable extension handlers.
+`test/startup-recovery.test.ts` also covers dead-PID unknown attempts and legacy pending/interrupted plans through
+two real app reopen cycles, with zero automatic submissions and unchanged receipt/plan readback.
 
 The browser uses ordinary fixture input hooks to send 20 native status/widget updates and verifies one keyed slot per key,
 followed by removal while the handler is still live. Goal waiting controls remain usable without a status-toast pile-up; plain composer input wakes

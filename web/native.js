@@ -96,7 +96,7 @@ function Question({ dialog, yours, memberName }) {
 
 /**
  * Above the composer: distinguish a known interruption from an uncertain execution or finalization.
- * Restart eligibility comes from the journal, never from whether a reply happens to be visible.
+ * Unknown outcomes are never automatically continued, even when a reply happens to be visible.
  */
 export function NativeBanner() {
     const kernel = store.state.view.kernel;
@@ -163,10 +163,8 @@ export function NativeBanner() {
             </div>`
         }
         ${reason && html`<div>${reason}</div>`}
-        <div>${
-            pending.recoveryEligible
-                ? "It is not retried here. A server restart may continue it after recovery checks."
-                : "It will not be continued automatically. Existing effects still need to be checked."
-        }</div>
+        <div>
+            It will not be continued automatically. Existing effects still need to be checked.
+        </div>
     </div>`;
 }

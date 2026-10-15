@@ -57,13 +57,13 @@ test("finalization is durable before readback: restart never turns it into anoth
 
         journal.attach(run.id, "/tmp/native-finalization.jsonl", "native-id", 999999999);
         journal.setPhase(run.id, "finalization");
+        assert.throws(() => journal.planResume(run.id), /cannot be resumed/);
         // Simulate a server crash before failure handling or finish can record an outcome.
         journal.close();
         journal = new RotomJournal(f.data);
         assert.equal(journal.receipt(run.id).status, "unknown");
         assert.equal(journal.receipt(run.id).phase, "finalization");
-        assert.deepEqual(journal.unknownPrompts(), []);
-        assert.throws(() => journal.interrupt(run.id, []), /execution phase/);
+        assert.equal(journal.canResume(run.id), false);
         assert.throws(() => journal.planResume(run.id), /cannot be resumed/);
         assert.throws(() => journal.reserve("native", "retry", "do not replay"), /unknown attempt/);
     } finally {
@@ -88,7 +88,6 @@ test("an execution-phase size-limit failure is fenced even with a dead native PI
         assert.equal(journal.receipt(run.id).failure, "rpc-record-limit");
         assert.equal(inspectNative(f.data).pending?.[0]?.failure, "rpc-record-limit");
         assert.equal(journal.canResume(run.id), false);
-        assert.deepEqual(journal.unknownPrompts(), []);
         assert.throws(() => journal.planResume(run.id), /cannot be resumed/);
     } finally {
         journal.close();
@@ -96,7 +95,7 @@ test("an execution-phase size-limit failure is fenced even with a dead native PI
     }
 });
 
-test("v5 migration preserves legacy unknown records without inventing execution-phase evidence", () => {
+test("v5 migration fences legacy unknowns while preserving settled shutdown plans", () => {
     const f = setup();
     let journal = new RotomJournal(f.data);
 
@@ -106,6 +105,12 @@ test("v5 migration preserves legacy unknown records without inventing execution-
 
         journal.attach(run.id, "/tmp/native-legacy.jsonl", "native-id", 999999999);
         journal.fail(run.id, "unknown");
+        journal.bind("clean", f.binding);
+        const clean = journal.reserve("clean", "legacy-clean", "work");
+
+        journal.attach(clean.id, "clean.jsonl", "clean-native", 4242);
+        journal.planResume(clean.id);
+        journal.finish(clean.id, "settled", [response("clean-response")]);
         journal.close();
         const db = new DatabaseSync(join(f.data, "kernel.sqlite"));
 
@@ -117,7 +122,9 @@ test("v5 migration preserves legacy unknown records without inventing execution-
         assert.equal(journal.receipt(run.id).status, "unknown");
         assert.equal(journal.receipt(run.id).phase, undefined);
         assert.equal(journal.canResume(run.id), false);
-        assert.deepEqual(journal.unknownPrompts(), []);
+        assert.equal(journal.receipt(clean.id).phase, undefined);
+        assert.equal(journal.canResume(clean.id), true);
+        assert.equal(journal.resume(clean.id)?.state, "pending");
         assert.equal(inspectNative(f.data).version, 6);
     } finally {
         journal.close();
@@ -408,7 +415,7 @@ test("subagent usage is charged to the run's member while the run is active, nev
     }
 });
 
-test("an unknown prompt whose kernel is gone becomes interrupted, frees its account, and plans one continuation", () => {
+test("an explicitly planned and settled stop retains one bounded continuation across restart", () => {
     const f = setup();
     let journal = new RotomJournal(f.data);
 
@@ -417,24 +424,15 @@ test("an unknown prompt whose kernel is gone becomes interrupted, frees its acco
         const run = journal.reserve("native", "run", "work");
 
         journal.attach(run.id, "session.jsonl", "native-session", 4242);
+        journal.planResume(run.id);
+        journal.finish(run.id, "settled", [response("partial")]);
         journal.close();
         journal = new RotomJournal(f.data);
-        assert.deepEqual(journal.unknownPrompts(), [
-            {
-                id: run.id,
-                pid: 4242,
-                sessionFile: "session.jsonl",
-                kernelSessionId: "native-session",
-            },
-        ]);
-        journal.interrupt(run.id, [response("partial")]);
-        assert.equal(journal.receipt(run.id).status, "interrupted");
+        assert.equal(journal.receipt(run.id).status, "settled");
         assert.equal(journal.pending("alice"), undefined);
-        assert.deepEqual(journal.unknownPrompts(), []);
-        assert.throws(() => journal.interrupt(run.id, []), /Only an unknown prompt/);
 
-        // Each continuation that is cut off again counts up, until a person has to say Continue.
-        let plan = journal.planResume(run.id);
+        // Each cleanly stopped continuation counts up, until a person has to say Continue.
+        let plan = journal.resume(run.id)!;
 
         assert.deepEqual([plan.chain, plan.state], [1, "pending"]);
         assert.equal(journal.planResume(run.id).chain, 1, "planning twice keeps the first plan");
@@ -442,8 +440,8 @@ test("an unknown prompt whose kernel is gone becomes interrupted, frees its acco
         for (let chain = 2; chain <= MAX_RESUME_CHAIN + 1; chain++) {
             const next = journal.reserve("native", `alice:#resume-${plan.attemptId}`, "continue");
 
-            journal.fail(next.id, "rejected");
             plan = journal.planResume(next.id);
+            journal.finish(next.id, "settled", [response(`partial-${chain}`)]);
             assert.equal(plan.chain, chain);
         }
 
@@ -572,8 +570,7 @@ test("queued command intent fences prompt settlement and recovery until confirme
         assert.equal(inspected.pending![0]!.operation, "prompt");
         assert.equal(inspected.pending![0]!.unresolvedCommandInput, true);
         assert.ok(!JSON.stringify(inspected).includes("effect-then-error"));
-        assert.deepEqual(journal.unknownPrompts(), []);
-        assert.throws(() => journal.interrupt(receipt.id, []), /unresolved/);
+        assert.equal(journal.canResume(receipt.id), false);
         assert.throws(() => journal.planResume(receipt.id), /unresolved/);
         assert.equal(journal.resume(receipt.id), undefined);
         assert.equal(journal.existing("native", "owner", "ordinary prompt")?.id, receipt.id);
