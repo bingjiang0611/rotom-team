@@ -21,6 +21,10 @@ let id: ConversationId;
 let home: string;
 const report = ".local/state/runtime-verify/证据 report.md";
 const content = "# Native report\n\nRead from the execution HOME.\n";
+const shortPath = "references/evidence-and-verdict.md";
+const skillPaths = [".claude/skills/verify", ".agents/skills/second"];
+const document =
+    "# Skill notes\n\n[Evidence](references/evidence-and-verdict.md)\n\n`references/evidence-and-verdict.md`\n";
 const get = (path: string, route = "view", token = app.config.ownerToken) =>
     fetch(`${base}/api/c/${id}/${route}?path=${encodeURIComponent(path)}`, {
         headers: { authorization: `Bearer ${token}` },
@@ -74,6 +78,15 @@ before(async () => {
     mkdirSync(join(home, ".local/state/runtime-verify"), { recursive: true });
     writeFileSync(join(home, report), content);
     writeFileSync(join(work, "native-workspace-report.md"), "Workspace report");
+    // Both folders are hidden and ignored by git; they must still be discoverable by explicit lookup.
+    writeFileSync(join(work, ".gitignore"), ".claude/\n.agents/\n");
+
+    for (const skill of skillPaths) {
+        mkdirSync(join(work, skill, "references"), { recursive: true });
+        writeFileSync(join(work, skill, shortPath), `# Evidence from ${skill}\n`);
+        writeFileSync(join(work, skill, "SKILL.md"), document);
+    }
+
     server = createServer(
         createHandler({ app, listen: { host: "127.0.0.1", port: 0 }, restart: () => {} }),
     );
@@ -154,6 +167,52 @@ test("missing native files explain how to recover without trying the server HOME
     assert.match((await missing.json()).error, /Ask the agent.*workspace/);
 });
 
+test("short paths locate hidden/ignored workspace files without silently substituting them", async () => {
+    assert.equal((await get(shortPath)).status, 404);
+    const found = await get(shortPath, "file-locations");
+
+    assert.equal(found.status, 200);
+    const locations = await found.json();
+
+    assert.deepEqual(locations, {
+        files: [...skillPaths].sort().map((skill) => ({
+            path: join(work, skill, shortPath),
+            display: `${skill}/${shortPath}`,
+        })),
+        truncated: false,
+    });
+    assert.deepEqual(await (await get(join(work, shortPath), "file-locations")).json(), locations);
+    assert.equal((await get("../../outside.md", "file-locations")).status, 400);
+    const scoped = app.config.addUser("Search member", "guest", [String(id)]);
+    const viewer = app.config.addUser("Search viewer", "viewer", [String(id)]);
+
+    assert.deepEqual(
+        await (await get(shortPath, "file-locations", scoped.token)).json(),
+        locations,
+    );
+    assert.deepEqual(
+        (await (await get("native-private-report.md", "file-locations", scoped.token)).json())
+            .files,
+        [],
+    );
+    assert.equal((await get(shortPath, "file-locations", viewer.token)).status, 403);
+    const unsigned = await fetch(`${base}/api/c/${id}/file-locations?path=${shortPath}`);
+
+    assert.equal(unsigned.status, 401);
+});
+
+test("candidate lists report truncation rather than declaring a unique match", async () => {
+    for (let n = 0; n < 51; n++) {
+        mkdirSync(join(work, "many-matches", String(n)), { recursive: true });
+        writeFileSync(join(work, "many-matches", String(n), "same.txt"), String(n));
+    }
+
+    const result = await (await get("same.txt", "file-locations")).json();
+
+    assert.equal(result.files.length, 50);
+    assert.equal(result.truncated, true);
+});
+
 test(
     "native home links open in both the sheet and the Files panel",
     {
@@ -221,8 +280,106 @@ test(
                 ),
                 true,
             );
+            // The Files panel passes absolute paths; recovery must still search by workspace-relative suffix.
+            await page.evaluate(`(await import('/ui.js')).openFile(${JSON.stringify(shortPath)})`);
+            await until(
+                () => ready(`document.querySelectorAll('.files-body .file-location').length === 2`),
+                "panel file candidates",
+            );
+            await page.evaluate(
+                `document.querySelector('.files-body .file-location').closest('button').click()`,
+            );
+            await until(
+                () =>
+                    ready(
+                        `document.querySelector('.files-body .md')?.textContent.includes('Evidence from') === true`,
+                    ),
+                "candidate opens the actual file",
+            );
+            await page.evaluate(`(await import('/files-panel.js')).setFilesOpen(false)`);
+            await until(
+                () => ready(`document.querySelector('.files-tile') === null`),
+                "panel closed",
+            );
+            await page.evaluate(`(await import('/ui.js')).openFile(${JSON.stringify(shortPath)})`);
+            await until(
+                () => ready(`document.querySelectorAll('.file-location').length === 2`),
+                "sheet file candidates",
+            );
+            await page.evaluate(
+                `await Promise.all(document.getAnimations().filter(a => a.effect?.getComputedTiming().iterations !== Infinity).map(a => a.finished.catch(() => {})))`,
+            );
+            const sheetShot = await page.screenshot();
+
+            writeFileSync(
+                "/tmp/rotom-file-locations-desktop.jpg",
+                Buffer.from(sheetShot.data, "base64"),
+            );
+            await page.setViewport({ width: 390, height: 844, scale: 1, mobile: true });
+            await page.evaluate(
+                `await Promise.all(document.getAnimations().filter(a => a.effect?.getComputedTiming().iterations !== Infinity).map(a => a.finished.catch(() => {})))`,
+            );
+            assert.equal(await ready(`document.documentElement.scrollWidth <= innerWidth`), true);
+            const mobileShot = await page.screenshot();
+
+            writeFileSync(
+                "/tmp/rotom-file-locations-mobile.jpg",
+                Buffer.from(mobileShot.data, "base64"),
+            );
+            // Complete server paths remain usable even when the short path has no unique answer.
+            await page.evaluate(`
+                const input = document.querySelector('input[aria-label="File path"]');
+                input.value = ${JSON.stringify(join(home, report))};
+                input.dispatchEvent(new Event('input', {bubbles:true}));
+                input.focus();
+            `);
+            await page.press("Enter");
+            await until(
+                () =>
+                    ready(
+                        `document.querySelector('.file-viewer .md')?.textContent.includes('Read from the execution HOME.') === true`,
+                    ),
+                "manual absolute path opens",
+            );
+
+            // Identical Markdown in two files must not share a cache entry with the wrong link base.
+            for (const skill of skillPaths) {
+                await page.evaluate(
+                    `(await import('/ui.js')).openFile(${JSON.stringify(`${skill}/SKILL.md`)})`,
+                );
+                await until(
+                    () =>
+                        ready(
+                            `document.querySelector('.file-viewer .md')?.textContent.includes('Skill notes') === true && document.querySelector('.file-path')?.title === ${JSON.stringify(join(work, skill, "SKILL.md"))}`,
+                        ),
+                    "skill document loaded",
+                );
+                assert.equal(
+                    await ready(
+                        `document.querySelector('.file-viewer .md a').dataset.path === ${JSON.stringify(join(work, skill, shortPath))}`,
+                    ),
+                    true,
+                );
+                assert.equal(
+                    await ready(
+                        `document.querySelector('.file-viewer .md code').dataset.path === ${JSON.stringify(join(work, skill, shortPath))}`,
+                    ),
+                    true,
+                );
+                await page.evaluate(`document.querySelector('.file-viewer .md a').click()`);
+                await until(
+                    () =>
+                        ready(
+                            `document.querySelector('.file-viewer .md')?.textContent.includes(${JSON.stringify(`Evidence from ${skill}`)}) === true`,
+                        ),
+                    "document-relative link opens",
+                );
+            }
+
             assert.deepEqual(
-                page.logs().filter((entry) => entry.level === "error"),
+                page
+                    .logs()
+                    .filter((entry) => entry.level === "error" && !entry.text.includes("404")),
                 [],
             );
         } finally {

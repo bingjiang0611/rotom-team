@@ -6643,6 +6643,23 @@ textarea.notes {
     height: 32px;
 }
 
+.file-location-form {
+    display: flex;
+    align-items: end;
+    gap: 0.5rem;
+}
+
+.file-location-form .field {
+    flex: 1;
+    min-width: 0;
+    gap: 0.35rem;
+}
+
+.file-location {
+    overflow-wrap: anywhere;
+    text-align: left;
+}
+
 /* ─── Browser ──────────────────────────────────────────────── */
 
 /* Phones and narrow windows: the page full screen, over the conversation and under sheets. Wide screens: a window

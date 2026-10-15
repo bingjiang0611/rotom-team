@@ -256,6 +256,7 @@ export async function conversationRoutes(
                     "export",
                     "file",
                     "download",
+                    "file-locations",
                     "files",
                     "view",
                     "changes",
@@ -628,6 +629,14 @@ export async function conversationRoutes(
         }
 
         return json(response, 200, []);
+    }
+
+    if (third === "file-locations" && method === "GET") {
+        return json(
+            response,
+            200,
+            await app.workspace.fileLocations(id, user, url.searchParams.get("path") ?? ""),
+        );
     }
 
     if (third === "view" && method === "GET") {

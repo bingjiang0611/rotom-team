@@ -79,7 +79,7 @@ export function FileView({ path, line, onOpen = openFile, onLoad }) {
                     onLoad?.(each);
                 }
             },
-            (failure) => live && setError(failure.message),
+            (failure) => live && setError(failure),
         );
 
         return () => {
@@ -117,7 +117,7 @@ export function FileView({ path, line, onOpen = openFile, onLoad }) {
                 onRun=${setRunning}
             />
         </div>
-        ${error && html`<p class="muted">${error}</p>`}
+        ${error && html`<${FileRecovery} key=${path} path=${path} error=${error} onOpen=${onOpen} />`}
         ${!file && !error && html`<${Loader} label="Opening" />`}
         ${
             file?.kind === "image" &&
@@ -158,7 +158,7 @@ export function FileView({ path, line, onOpen = openFile, onLoad }) {
                 }
             </div>`
         }
-        ${file?.kind === "text" && preview && markdown && html`<${Markdown} text=${file.text} />`}
+        ${file?.kind === "text" && preview && markdown && html`<${Markdown} text=${file.text} basePath=${file.path} />`}
         ${
             file?.kind === "text" &&
             preview &&
@@ -202,6 +202,80 @@ export function FileView({ path, line, onOpen = openFile, onLoad }) {
 }
 
 /** A file's lines, numbered, colored when there are colors, the first `FILE_LINES` of them unless `all`. */
+/** A failed lookup is recoverable without asking the agent to repeat its work or guessing a same-named file. */
+function FileRecovery({ path, error, onOpen }) {
+    const [written, setWritten] = useState(path);
+    const [locations, setLocations] = useState(null);
+    const [lookupError, setLookupError] = useState(null);
+    const { view } = store.state;
+    const cwd = view.agent?.cwd ?? view.conversation?.cwd;
+    const searchable =
+        error.status === 404 &&
+        !path.startsWith("~") &&
+        (!path.startsWith("/") || (cwd && path.startsWith(`${cwd}/`))) &&
+        !path.split("/").includes("..");
+
+    useEffect(() => {
+        if (!searchable) {
+            return;
+        }
+
+        let live = true;
+
+        actions.fileLocations(path).then(
+            (result) => live && setLocations(result),
+            (failure) => live && setLookupError(failure.message),
+        );
+
+        return () => {
+            live = false;
+        };
+    }, [path, searchable]);
+
+    return html`<div class="file-recovery">
+        <p class="muted">${locations?.files.length ? "No file at this location. Choose a matching path below, or enter the full path." : error.message}</p>
+        <form class="file-location-form" onSubmit=${(event) => {
+            event.preventDefault();
+
+            if (written.trim()) {
+                onOpen(written.trim());
+            }
+        }}>
+            <label class="field">
+                Open a file or folder on the server
+                    <input
+                        aria-label="File path"
+                        class="mono"
+                        value=${written}
+                        onInput=${(event) => setWritten(event.currentTarget.value)}
+                        placeholder="Absolute path, ~/path, or workspace-relative path"
+                        spellcheck="false"
+                    />
+            </label>
+            <button class="button" type="submit" disabled=${!written.trim()}>Open</button>
+        </form>
+        ${searchable && !locations && !lookupError && html`<${Loader} label="Finding matching paths in this workspace" />`}
+        ${lookupError && html`<p role="alert" class="muted">Search failed: ${lookupError}</p>`}
+        ${
+            locations &&
+            html`<div aria-live="polite">
+            <p class="muted small">${locations.files.length ? "Matching paths — choose the intended file:" : "No matching path found in the searched folders."}</p>
+            <div class="group">
+                ${locations.files.map((file) =>
+                    item(html`<span class="file-location mono">${file.display}</span>`, () =>
+                        onOpen(file.path),
+                    ),
+                )}
+            </div>
+            <p class="muted small">
+                Search includes hidden workspace folders, but skips dependencies, Git internals and linked folders.
+                ${locations.truncated ? " Search was incomplete or more than 50 matches were found; enter a more specific path." : " For files elsewhere, enter the full path above."}
+            </p>
+        </div>`
+        }
+    </div>`;
+}
+
 function FileLines({ lines, colored, all, line }) {
     return (all ? lines : lines.slice(0, FILE_LINES)).map(
         (text, index) =>

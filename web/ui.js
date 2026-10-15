@@ -28,7 +28,7 @@ export const entryImageUrl = (entryId, index, conversationId = currentConversati
     `/api/c/${conversationId}/image/${entryId}/${index}`;
 
 /** Where the browser loads `![alt](src)` from. Web and data URLs stay; paths and file:// URLs point at the server. */
-function imageSource(src, conversationId) {
+function imageSource(src, conversationId, basePath) {
     const value = String(src ?? "").trim();
 
     if (value === "" || conversationId === undefined || conversationId === null) {
@@ -47,7 +47,7 @@ function imageSource(src, conversationId) {
         return value;
     }
 
-    return fileUrl(localPath(value), conversationId);
+    return fileUrl(relativeFilePath(localPath(value), basePath), conversationId);
 }
 
 /** URL-encoded local paths and file:// URLs as filesystem paths, shared by images and delivery links. */
@@ -64,6 +64,13 @@ function localPath(value) {
     }
 
     return path;
+}
+
+/** A document's relative links belong beside that document, not at the session's workspace root. */
+function relativeFilePath(path, basePath) {
+    return basePath && !/^(?:\/|~|[a-z]:[\\/])/i.test(path)
+        ? basePath.slice(0, basePath.lastIndexOf("/") + 1) + path
+        : path;
 }
 
 /** A tappable image thumbnail that opens full screen, or a chip when the image cannot load. */
@@ -258,7 +265,7 @@ function sanitize(html, fold) {
     // `src/app.ts` in a reply opens the file: inline code that is a path, not code blocks.
     for (const code of fragment.querySelectorAll("code")) {
         if (!code.closest("pre, a") && looksLikePath(code.textContent ?? "")) {
-            code.dataset.path = code.textContent;
+            code.dataset.path = relativeFilePath(code.textContent, renderingBase);
         }
     }
 
@@ -370,11 +377,12 @@ function fencePage(text) {
 
 /** The conversation whose markdown is being sanitized, for file paths relative to its folder. */
 let rendering = null;
+let renderingBase = null;
 
 DOMPurify.addHook("uponSanitizeAttribute", (node, data) => {
     // Before the URL check, so file:// and plain paths become app URLs instead of being dropped.
     if (node.nodeName === "IMG" && data.attrName === "src") {
-        data.attrValue = imageSource(data.attrValue, rendering);
+        data.attrValue = imageSource(data.attrValue, rendering, renderingBase);
     } else if (node.nodeName === "A" && data.attrName === "href" && rendering !== null) {
         const href = data.attrValue.trim();
 
@@ -387,7 +395,7 @@ DOMPurify.addHook("uponSanitizeAttribute", (node, data) => {
             return;
         }
 
-        data.attrValue = downloadUrl(localPath(href), rendering);
+        data.attrValue = downloadUrl(relativeFilePath(localPath(href), renderingBase), rendering);
     }
 });
 
@@ -410,8 +418,13 @@ const MARKDOWN_CACHE = 500;
  * order, and evicting the oldest insert would miss on every row once a thread outgrew the cache. Text still changing
  * (`cache` false) is not kept, and its long code blocks are not folded while they grow.
  */
-function markdownParts(text, conversationId = currentConversation(), cache = true) {
-    const key = `${conversationId ?? ""}\u0000${text}`;
+function markdownParts(
+    text,
+    conversationId = currentConversation(),
+    cache = true,
+    basePath = null,
+) {
+    const key = `${conversationId ?? ""}\u0000${basePath ?? ""}\u0000${text}`;
     let out = markdownCache.get(key);
 
     if (out !== undefined) {
@@ -422,8 +435,10 @@ function markdownParts(text, conversationId = currentConversation(), cache = tru
     }
 
     rendering = conversationId ?? null;
+    renderingBase = basePath;
     out = partsOf(sanitize(marked.parse(fencePage(text), { async: false }), cache));
     rendering = null;
+    renderingBase = null;
 
     if (cache) {
         if (markdownCache.size >= MARKDOWN_CACHE) {
@@ -447,8 +462,8 @@ export function setRichBlock(component) {
  * Rendered markdown. `cache={false}` for text that is still changing, such as a streaming answer: its pages, images, and
  * diffs show as code until it is whole.
  */
-export function Markdown({ text, class: className = "", cache = true }) {
-    const parts = markdownParts(text, undefined, cache);
+export function Markdown({ text, class: className = "", cache = true, basePath = null }) {
+    const parts = markdownParts(text, undefined, cache, basePath);
 
     if (parts.length === 1 && parts[0].kind === undefined) {
         return html`<div

@@ -106,6 +106,7 @@ async function walkFiles(
     cwd: string,
     max: number,
     ms: number,
+    includeHidden = false,
 ): Promise<{ files: string[]; truncated: boolean }> {
     const deadline = Date.now() + ms;
     const files: string[] = [];
@@ -127,6 +128,7 @@ async function walkFiles(
                 deadline,
             );
         } catch {
+            truncated = true;
             continue;
         }
 
@@ -142,7 +144,7 @@ async function walkFiles(
             // Linked folders are not followed: they can lead back up, or anywhere. The queue holds no more than fits.
             if (entry.isDirectory()) {
                 if (
-                    !entry.name.startsWith(".") &&
+                    (includeHidden ? entry.name !== ".git" : !entry.name.startsWith(".")) &&
                     !SKIP.has(entry.name) &&
                     queue.length - index <= max
                 ) {
@@ -199,6 +201,16 @@ export async function listFiles(cwd: string, max = MAX_FILES): Promise<FileList>
         .slice(0, 16);
 
     return { files, truncated, version };
+}
+
+/** Explicit recovery of a short relative path: include hidden/ignored skill folders, but never follow linked folders. */
+export async function locateFiles(cwd: string, path: string) {
+    const listed = await walkFiles(cwd, WALK_FILES, WALK_MS, true);
+
+    return {
+        files: listed.files.filter((file) => file === path || file.endsWith(`/${path}`)).sort(),
+        truncated: listed.truncated,
+    };
 }
 
 /** Lists of files by folder, made at most once at a time per folder and kept while fresh. */

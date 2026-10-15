@@ -147,6 +147,15 @@ claiming that a restricted file exists. Native `~` follows the current segment a
 artifact identifier. Keep shared deliverables in the session workspace and link by workspace-relative or absolute
 path. Private HOME contents are still owner-only; this fix does not publish them to other members or recover deleted files.
 
+Failed relative file opens offer matching workspace paths, including hidden/ignored skill folders, without silently
+choosing a different file. Lookup walks at most 50,000 files for 3 seconds, skips dependency directories and `.git`,
+and never traverses linked directories. At most 50 readable matches are returned; incomplete results are labeled.
+Use an exact server path when lookup is incomplete or the file is outside the workspace; a broader indexed search
+is warranted only if repeated lookup limits make this insufficient. Normal session/private-data permissions still apply.
+The same fixture checks duplicate candidates, hidden ignored skills, unauthorized/scoped access, candidate selection
+in both viewers, manual absolute-path entry, 390px layout, and document-relative Markdown links/cache isolation.
+Binary files still download instead of pretending to be previewable; missing files are not reconstructed.
+
 ## Acceptance boundaries
 
 - Type checking and automated tests do not establish real-account authorization, provider approval, complete billing or target-device readiness.

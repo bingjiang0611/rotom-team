@@ -848,6 +848,7 @@ export const actions = {
     stopShell: (taskId) => api(`c/${current()}/shell/${taskId}/stop`, {}),
     /** A file or folder for the viewer. */
     view: (path) => api(`c/${current()}/view?path=${encodeURIComponent(path)}`),
+    fileLocations: (path) => api(`c/${current()}/file-locations?path=${encodeURIComponent(path)}`),
     /** What changed in the session's folder: git's uncommitted changes, and Pi's edits. */
     changes: (id = current()) => api(`c/${id}/changes`),
     branches: () => api(`c/${current()}/branches`),

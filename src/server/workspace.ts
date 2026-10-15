@@ -5,7 +5,7 @@
  * `readableFile`, `uploadDirectory`) leave seeing the conversation to their callers.
  */
 import { lstatSync, mkdirSync, realpathSync, statSync } from "node:fs";
-import { isAbsolute, join, resolve, sep } from "node:path";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import type { ConversationId } from "@earendil-works/pi-durable";
 import type { PocketApp } from "./app.ts";
@@ -23,7 +23,7 @@ import {
 import { type Changes, changesIn, diffOf, revertFile } from "./changes.ts";
 import type { User } from "./config.ts";
 import { describe, HttpError } from "./errors.ts";
-import { FileLists, type FileListing, type FileView, viewFile } from "./files.ts";
+import { FileLists, type FileListing, type FileView, locateFiles, viewFile } from "./files.ts";
 import { displayPath, expandHome } from "./paths.ts";
 
 export class Workspace {
@@ -370,6 +370,42 @@ export class Workspace {
         await this.#app.conversation(id);
 
         return this.#files.get(this.#app.cwdOf(id));
+    }
+
+    /** Candidate locations, not an automatic substitute for a missing path. Each retains normal read permissions. */
+    async fileLocations(id: ConversationId, user: User, path: string) {
+        this.#app.requireSee(user, id);
+        this.#app.requireSteer(user);
+        await this.#app.conversation(id);
+        const cwd = this.#app.cwdOf(id);
+        const requested = relative(cwd, this.conversationPath(id, path));
+
+        if (
+            path.trim() === "" ||
+            requested === "" ||
+            requested.includes("\0") ||
+            isAbsolute(requested) ||
+            requested.split(sep).includes("..")
+        ) {
+            throw new HttpError(400, "Search with a file name or path inside the workspace.");
+        }
+
+        const found = await locateFiles(cwd, requested);
+        const files: { path: string; display: string }[] = [];
+
+        for (const candidate of found.files) {
+            try {
+                const file = this.readableFile(user, id, candidate);
+
+                files.push({ path: file, display: displayPath(file, cwd) });
+            } catch (error) {
+                if (!(error instanceof HttpError && error.status === 404)) {
+                    throw error;
+                }
+            }
+        }
+
+        return { files: files.slice(0, 50), truncated: found.truncated || files.length > 50 };
     }
 
     /**
