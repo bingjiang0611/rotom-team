@@ -1,0 +1,991 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Agent resources · design v2</title>
+        <!-- The real app stylesheet, so tokens, sheet, settings window, rows and controls are the shipped ones. -->
+        <link rel="stylesheet" href="../../web/style.css" />
+        <style>
+            @font-face {
+                font-family: "Pocket Mono";
+                src: url("../../web/fonts/JetBrainsMono.woff2") format("woff2");
+                font-weight: 100 800;
+            }
+            body {
+                margin: 0;
+                background: var(--desk);
+                color: var(--body);
+                font-family: var(--mono);
+            }
+
+            /* The prototype re-renders the whole window on every click; the open animations would replay each time. */
+            *,
+            *::before {
+                animation: none !important;
+            }
+
+            /* ── Prototype-only control bar (not product UI) ── */
+            .proto-bar {
+                position: fixed;
+                inset: 0 0 auto 0;
+                z-index: 50;
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.4rem 1rem;
+                align-items: center;
+                padding: 0.45rem 0.8rem;
+                font-size: 0.72rem;
+                background: var(--o-bg-darker);
+                border-bottom: 1px dashed var(--line-strong);
+            }
+            .proto-bar b {
+                color: var(--brand);
+            }
+            .proto-bar .segmented button {
+                font-size: 0.72rem;
+                padding: 0.18rem 0.45rem;
+            }
+            body.embed .proto-bar {
+                display: none;
+            }
+            .overlay {
+                top: 2.6rem;
+            }
+            body.embed .overlay {
+                top: 0;
+            }
+            .sheet-head .icon-button {
+                width: 32px;
+                height: 32px;
+                color: var(--muted);
+            }
+
+            /* ── New pieces for this page, built from existing tokens ── */
+            .ar-scope {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.4rem;
+                align-items: center;
+            }
+            .ar-scope select {
+                width: auto;
+                min-width: 10rem;
+                background: var(--card);
+                border: 1px solid var(--line);
+                padding: 0.28rem 0.4rem;
+                font-size: 0.82rem;
+            }
+            .ar-where {
+                font-size: 0.7rem;
+                color: var(--muted);
+                line-height: 1.5;
+            }
+            .ar-where code {
+                color: var(--body);
+            }
+            .ar-tabs {
+                display: flex;
+                gap: 0;
+                border-bottom: 1px solid var(--line);
+                overflow-x: auto;
+            }
+            .ar-tabs button {
+                flex: none;
+                padding: 0.45rem 0.7rem;
+                font-size: 0.8rem;
+                color: var(--muted);
+                border-bottom: 2px solid transparent;
+                margin-bottom: -1px;
+            }
+            .ar-tabs button.on {
+                color: var(--accent);
+                border-bottom-color: var(--accent);
+            }
+            .ar-tabs .n {
+                margin-left: 0.3rem;
+                font-size: 0.68rem;
+                color: var(--faint);
+            }
+            .ar-tabs .n.bad {
+                color: var(--err);
+            }
+            .ar-row {
+                cursor: pointer;
+            }
+            .settings-page .sheet-body > * {
+                flex-shrink: 0;
+            }
+            .list-item.ar-row > .who {
+                display: flex;
+                flex-direction: column;
+                align-items: flex-start;
+                text-align: left;
+                flex: 1;
+                gap: 0.15rem;
+                min-width: 0;
+            }
+            .ar-row .who strong {
+                font-weight: 600;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+            .ar-row .sub {
+                font-size: 0.7rem;
+                color: var(--muted);
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+            .ar-row .sub.bad {
+                color: var(--err);
+                white-space: normal;
+            }
+            .ar-row .sub.warn {
+                color: var(--warn);
+                white-space: normal;
+            }
+            .ar-row .end {
+                display: flex;
+                align-items: center;
+                gap: 0.4rem;
+                flex: none;
+            }
+            .ar-row.inherited {
+                background: transparent;
+                border-style: dashed;
+            }
+            .ar-row.off .who strong {
+                color: var(--muted);
+                text-decoration: line-through;
+            }
+            .tag {
+                font-size: 0.64rem;
+                padding: 0.08rem 0.32rem;
+                border: 1px solid var(--line-strong);
+                color: var(--muted);
+                white-space: nowrap;
+            }
+            .tag.shared {
+                border-color: var(--accent-line);
+                color: var(--accent);
+            }
+            .tag.project {
+                border-color: color-mix(in srgb, var(--o-magenta) 55%, transparent);
+                color: var(--o-magenta);
+            }
+            .tag.warn {
+                border-color: var(--warn-line);
+                color: var(--warn);
+            }
+            .tag.err {
+                border-color: var(--err-line);
+                color: var(--err);
+            }
+            .note {
+                font-size: 0.74rem;
+                line-height: 1.55;
+                padding: 0.5rem 0.65rem;
+                border: 1px solid var(--line);
+                border-left-width: 2px;
+                color: var(--body);
+            }
+            .note.warn {
+                border-color: var(--warn-line);
+                background: var(--warn-soft);
+            }
+            .note.err {
+                border-color: var(--err-line);
+                background: var(--err-soft);
+            }
+            .note.info {
+                border-color: var(--accent-line);
+                background: var(--accent-soft);
+            }
+            .note b {
+                color: var(--text);
+            }
+            .note a,
+            .ar-link {
+                color: var(--accent);
+                cursor: pointer;
+                text-decoration: none;
+            }
+            .ar-actions {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.4rem;
+                align-items: center;
+            }
+            .ar-foot {
+                font-size: 0.7rem;
+                color: var(--muted);
+                line-height: 1.5;
+            }
+            .ar-chain {
+                display: flex;
+                flex-direction: column;
+                gap: 0;
+            }
+            .ar-chain .list-item {
+                margin-bottom: 0;
+            }
+            .ar-chain .arrow {
+                font-size: 0.66rem;
+                color: var(--faint);
+                padding: 0.1rem 0 0.1rem 0.8rem;
+            }
+            .list-item > span.ar-swl:first-child {
+                display: flex;
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.2rem;
+                font-size: 0.8rem;
+            }
+            .ar-back {
+                font-size: 0.78rem;
+                color: var(--accent);
+                align-self: flex-start;
+            }
+            .ar-meta {
+                display: grid;
+                grid-template-columns: 6.5rem minmax(0, 1fr);
+                gap: 0.25rem 0.6rem;
+                font-size: 0.72rem;
+            }
+            .ar-meta dt {
+                color: var(--muted);
+            }
+            .ar-meta dd {
+                margin: 0;
+                overflow-wrap: anywhere;
+            }
+            .ar-editor {
+                width: 100%;
+                min-height: 15rem;
+                resize: vertical;
+                font-family: var(--mono);
+                font-size: 0.76rem;
+                line-height: 1.55;
+                padding: 0.6rem 0.7rem;
+                background: var(--code-bg);
+                border: 1px solid var(--line);
+                color: var(--text);
+                tab-size: 4;
+            }
+            .ar-editor[readonly] {
+                color: var(--body);
+                border-style: dashed;
+            }
+            .ar-form {
+                display: grid;
+                grid-template-columns: 7rem minmax(0, 1fr);
+                gap: 0.45rem 0.7rem;
+                align-items: center;
+                font-size: 0.78rem;
+            }
+            .ar-form label {
+                color: var(--muted);
+            }
+            .ar-form input,
+            .ar-form select {
+                background: var(--card);
+                border: 1px solid var(--line);
+                padding: 0.35rem 0.5rem;
+                font-size: 0.78rem;
+                width: 100%;
+            }
+            .ar-form input[readonly] {
+                border-style: dashed;
+                color: var(--muted);
+            }
+            .ar-form .why {
+                grid-column: 2;
+                font-size: 0.68rem;
+                color: var(--muted);
+                margin-top: -0.25rem;
+            }
+            .ar-savebar {
+                position: sticky;
+                bottom: -1rem;
+                margin: 0 -1rem -1rem;
+                padding: 0.6rem 1rem;
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.5rem;
+                align-items: center;
+                background: var(--panel);
+                border-top: 1px solid var(--line);
+            }
+            .ar-savebar .why {
+                flex: 1 1 14rem;
+                font-size: 0.7rem;
+                color: var(--muted);
+                line-height: 1.45;
+            }
+            .ar-savebar .why.warn {
+                color: var(--warn);
+            }
+            .ar-toast {
+                font-size: 0.74rem;
+                padding: 0.5rem 0.65rem;
+                border: 1px solid var(--ok);
+                color: var(--ok);
+                background: color-mix(in srgb, var(--ok) 9%, transparent);
+            }
+        </style>
+    </head>
+    <body>
+        <div class="proto-bar" id="bar"></div>
+        <div id="app"></div>
+        <script>
+            const qs = new URLSearchParams(location.search);
+            if (qs.has("embed")) document.body.classList.add("embed");
+
+            const S = {
+                role: qs.get("role") || "owner",
+                run: Number(qs.get("run") || 0),
+                fault: qs.get("fault") || "none", // none | parse | stale
+                scope: qs.get("scope") || "shared", // shared | project
+                project: qs.get("project") || "rotom-team",
+                tab: qs.get("tab") || "skills",
+                open: qs.get("open") || "", // detail key
+                saved: false,
+            };
+
+            const PROJECTS = {
+                "rotom-team": {
+                    path: "~/vibecoding/rotom-team",
+                    git: "2 uncommitted changes in .pi/",
+                },
+                scry: { path: "~/vibecoding/scry", git: "clean" },
+            };
+            const MEMBER_PROJECTS = ["rotom-team"];
+
+            /* Sample data. Shared = <data>/team-agent. Project = <project>/.pi and <project>/AGENTS.md. */
+            const SHARED = {
+                instructions: [
+                    {
+                        id: "s-agents",
+                        name: "AGENTS.md",
+                        sub: "Team instructions · 1.8 KB · edited Oct 02",
+                        file: "<data>/team-agent/AGENTS.md",
+                    },
+                    {
+                        id: "s-append",
+                        name: "APPEND_SYSTEM.md",
+                        sub: "Not created",
+                        file: "<data>/team-agent/APPEND_SYSTEM.md",
+                        missing: true,
+                    },
+                ],
+                skills: [
+                    {
+                        id: "s-release",
+                        name: "release-check",
+                        sub: "Check release readiness before a publish.",
+                        file: "<data>/team-agent/skills/release-check/SKILL.md",
+                    },
+                    {
+                        id: "s-review",
+                        name: "code-review",
+                        sub: "From package npm:@example/pi-tools@1.0.0",
+                        pkg: true,
+                        file: "…/node_modules/@example/pi-tools/skills/code-review/SKILL.md",
+                    },
+                ],
+                extensions: [
+                    {
+                        id: "s-note",
+                        name: "session-note.ts",
+                        sub: "Reports that the native Agent Extension loaded.",
+                        file: "<data>/team-agent/extensions/session-note.ts",
+                        on: true,
+                    },
+                    {
+                        id: "s-tools",
+                        name: "pi-tools",
+                        sub: "From package npm:@example/pi-tools@1.0.0 · 2 files",
+                        pkg: true,
+                        on: true,
+                    },
+                    {
+                        id: "b-mcp",
+                        name: "builtin:mcp",
+                        sub: "Built in · MCP client",
+                        builtin: true,
+                        on: true,
+                    },
+                    {
+                        id: "b-code",
+                        name: "builtin:codemode",
+                        sub: "Built in · codemode",
+                        builtin: true,
+                        on: true,
+                    },
+                ],
+                mcp: [
+                    {
+                        id: "s-docs",
+                        name: "docs",
+                        sub: "http · https://example.com/mcp · Team docs",
+                        type: "http",
+                        url: "https://example.com/mcp",
+                        exposure: "deferred",
+                        on: true,
+                    },
+                    {
+                        id: "s-ptools",
+                        name: "project-tools",
+                        sub: "stdio · /opt/mcp/project-tools .",
+                        type: "stdio",
+                        command: "/opt/mcp/project-tools",
+                        args: ".",
+                        exposure: "direct",
+                        on: true,
+                    },
+                ],
+            };
+
+            const PROJECT = {
+                instructions: [
+                    {
+                        id: "p-agents",
+                        name: "AGENTS.md",
+                        sub: "Project instructions · 4.1 KB · tracked by Git",
+                        file: "<project>/AGENTS.md",
+                    },
+                ],
+                ancestors: [
+                    { name: "~/vibecoding/AGENTS.md", sub: "Ancestor directory · read only here" },
+                ],
+                skills: [
+                    {
+                        id: "p-release",
+                        name: "release-check",
+                        sub: ".pi/skills/release-check/SKILL.md",
+                        file: "<project>/.pi/skills/release-check/SKILL.md",
+                        dup: true,
+                    },
+                    {
+                        id: "p-deploy",
+                        name: "deploy-notes",
+                        sub: "Write the release notes from merged PRs.",
+                        file: "<project>/.pi/skills/deploy-notes/SKILL.md",
+                    },
+                ],
+                extensions: [
+                    {
+                        id: "p-guard",
+                        name: "repo-guard.ts",
+                        sub: "Blocks writes outside the repository.",
+                        file: "<project>/.pi/extensions/repo-guard.ts",
+                        on: true,
+                    },
+                ],
+                mcp: [
+                    {
+                        id: "p-docs",
+                        name: "docs",
+                        override: { enabled: false },
+                        sub: "Override of shared “docs”: enabled = false",
+                    },
+                    {
+                        id: "p-index",
+                        name: "repo-index",
+                        sub: "stdio · /opt/mcp/repo-index",
+                        type: "stdio",
+                        command: "/opt/mcp/repo-index",
+                        args: ".",
+                        exposure: "codemode",
+                        on: true,
+                        err: "Executable not found: /opt/mcp/repo-index",
+                    },
+                ],
+            };
+
+            const owner = () => S.role === "owner";
+            const locked = () => S.run > 0;
+            const esc = (s) =>
+                String(s).replace(
+                    /[&<>"]/g,
+                    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c],
+                );
+            const shown = (file) => String(file).replace("<project>", PROJECTS[S.project].path);
+            const where = () =>
+                S.scope === "shared" ? "<data>/team-agent" : `${PROJECTS[S.project].path}`;
+
+            /* What a session in the chosen project actually gets: shared items folded in, with their source. */
+            function effective(tab) {
+                if (S.scope === "shared") {
+                    return SHARED[tab].map((x) => ({
+                        ...x,
+                        src: "shared",
+                        overriddenIn:
+                            tab === "mcp" && x.name === "docs"
+                                ? "rotom-team"
+                                : tab === "skills" && x.name === "release-check"
+                                  ? "rotom-team"
+                                  : "",
+                    }));
+                }
+                const out = [];
+                if (tab === "mcp") {
+                    for (const s of SHARED.mcp) {
+                        const o = PROJECT.mcp.find((p) => p.name === s.name);
+                        out.push(
+                            o?.override
+                                ? {
+                                      ...s,
+                                      src: "shared",
+                                      on: o.override.enabled !== false,
+                                      overridden: true,
+                                      sub: s.sub,
+                                  }
+                                : { ...s, src: "shared" },
+                        );
+                    }
+                    for (const p of PROJECT.mcp)
+                        if (!p.override) out.push({ ...p, src: "project" });
+                    return out;
+                }
+                if (tab === "extensions") {
+                    for (const s of SHARED.extensions)
+                        out.push({
+                            ...s,
+                            src: "shared",
+                            on: !(s.name === "session-note.ts" && S.noteOffInProject) && s.on,
+                        });
+                    for (const p of PROJECT.extensions) out.push({ ...p, src: "project" });
+                    return out;
+                }
+                if (tab === "skills") {
+                    for (const s of SHARED.skills)
+                        out.push({ ...s, src: "shared", dup: s.name === "release-check" });
+                    for (const p of PROJECT.skills) out.push({ ...p, src: "project" });
+                    return out;
+                }
+                return PROJECT.instructions.map((x) => ({ ...x, src: "project" }));
+            }
+
+            function problems() {
+                const list = [];
+                if (S.fault === "parse")
+                    list.push({
+                        text: `<b>${S.scope === "shared" ? "&lt;data&gt;/team-agent/settings.json" : ".pi/settings.json"}</b> does not parse (line 14). New sessions ${S.scope === "shared" ? "for every member" : "in this project"} fail to start until it is fixed. Switches are off until then.`,
+                    });
+                if (S.scope === "project") {
+                    list.push({
+                        short: "release-check: same name in Shared (Skills)",
+                        tab: "skills",
+                    });
+                    list.push({
+                        short: "repo-index: executable not found (MCP)",
+                        err: true,
+                        tab: "mcp",
+                    });
+                }
+                return list;
+            }
+
+            const TABS = [
+                ["instructions", "Instructions"],
+                ["skills", "Skills"],
+                ["extensions", "Extensions"],
+                ["mcp", "MCP"],
+            ];
+
+            function srcTag(x) {
+                if (x.builtin) return `<span class="tag">built in</span>`;
+                if (x.pkg) return `<span class="tag">package</span>`;
+                if (S.scope === "shared") return "";
+                return x.src === "shared"
+                    ? `<span class="tag shared">shared</span>`
+                    : `<span class="tag project">project</span>`;
+            }
+
+            function stateTag(x, tab) {
+                if (x.err) return `<span class="tag err">error</span>`;
+                if (x.dup) return `<span class="tag warn">same name</span>`;
+                if (x.missing) return `<span class="tag">not created</span>`;
+                if (tab === "mcp" || tab === "extensions") {
+                    if (x.on === false)
+                        return `<span class="tag">off${S.scope === "project" && x.src === "shared" ? " here" : ""}</span>`;
+                }
+                return "";
+            }
+
+            function rowSub(x) {
+                if (x.err) return `<span class="sub bad">${esc(x.err)}</span>`;
+                if (S.scope === "shared" && x.overriddenIn)
+                    return `<span class="sub">${esc(x.sub)}</span><span class="sub warn">${S.tab === "skills" ? "Same name also defined in project" : "Turned off in project"} ${esc(x.overriddenIn)}</span>`;
+                if (x.overridden)
+                    return `<span class="sub">${esc(x.sub)}</span><span class="sub warn">Turned off by this project’s mcp.json</span>`;
+                return `<span class="sub">${esc(x.sub)}</span>`;
+            }
+
+            function row(x, tab) {
+                const cls = ["list-item", "ar-row"];
+                if (S.scope === "project" && x.src === "shared") cls.push("inherited");
+                if (x.on === false) cls.push("off");
+                return `<button class="${cls.join(" ")}" data-open="${x.id}">
+                    <span class="who"><strong>${esc(x.name)}</strong>${rowSub(x)}</span>
+                    <span class="end">${srcTag(x)}${stateTag(x, tab)}<span class="muted">›</span></span>
+                </button>`;
+            }
+
+            function listView() {
+                const items = effective(S.tab);
+                const probs = problems();
+                const projList = owner() ? Object.keys(PROJECTS) : MEMBER_PROJECTS;
+                const counts = Object.fromEntries(TABS.map(([t]) => [t, effective(t).length]));
+                if (S.scope === "project") counts.instructions = 2 + PROJECT.ancestors.length;
+                const bad = new Set(probs.filter((p) => p.tab).map((p) => p.tab));
+
+                const scope = `<div class="ar-scope">
+                    <div class="segmented">
+                        ${owner() ? `<button class="${S.scope === "shared" ? "on" : ""}" data-scope="shared">Shared</button>` : `<button class="${S.scope === "shared" ? "on" : ""}" data-scope="shared">Shared</button>`}
+                        <button class="${S.scope === "project" ? "on" : ""}" data-scope="project">Project</button>
+                    </div>
+                    ${S.scope === "project" ? `<select id="proj">${projList.map((p) => `<option ${p === S.project ? "selected" : ""}>${p}</option>`).join("")}</select>` : ""}
+                </div>
+                <div class="ar-where">${
+                    S.scope === "shared"
+                        ? `Every member, every project · <code>&lt;data&gt;/team-agent</code>`
+                        : `Sessions whose folder is this project · <code>${esc(PROJECTS[S.project].path)}</code> · Git: ${esc(PROJECTS[S.project].git)}`
+                }</div>`;
+
+                const banners = [];
+                if (!owner())
+                    banners.push(
+                        `<div class="note info">View only. The owner manages agent resources.</div>`,
+                    );
+                else if (locked())
+                    banners.push(
+                        `<div class="note warn"><b>${S.run} Team runs are active.</b> You can read and draft; saving waits until they finish or stop. <a data-goto="running">Running now ›</a></div>`,
+                    );
+                const blocking = probs.filter((p) => !p.tab);
+                const perItem = probs.filter((p) => p.tab);
+                for (const p of blocking) banners.push(`<div class="note err">${p.text}</div>`);
+                if (perItem.length)
+                    banners.push(
+                        `<div class="note ${perItem.some((p) => p.err) ? "err" : "warn"}"><b>${perItem.length} problems</b> · ${perItem
+                            .map((p) => `<a data-tab="${p.tab}">${p.short}</a>`)
+                            .join(" · ")}</div>`,
+                    );
+
+                const tabs = `<div class="ar-tabs" role="tablist">${TABS.map(
+                    ([t, label]) =>
+                        `<button role="tab" aria-selected="${t === S.tab}" class="${t === S.tab ? "on" : ""}" data-tab="${t}">${label} <span class="n ${bad.has(t) ? "bad" : ""}">${counts[t]}</span></button>`,
+                ).join("")}</div>`;
+
+                let body = "";
+                if (S.tab === "instructions" && S.scope === "project") {
+                    body = `<div class="ar-foot">Loaded in this order, each added after the one before:</div>
+                    <div class="ar-chain">
+                        ${row({ ...SHARED.instructions[0], src: "shared" }, "instructions")}
+                        <div class="arrow">↓ then</div>
+                        <div class="list-item ar-row inherited"><span class="who"><strong>${esc(PROJECT.ancestors[0].name)}</strong><span class="sub">${esc(PROJECT.ancestors[0].sub)}</span></span><span class="end"><span class="tag">ancestor</span></span></div>
+                        <div class="arrow">↓ then</div>
+                        ${row({ ...PROJECT.instructions[0], src: "project" }, "instructions")}
+                    </div>`;
+                } else {
+                    body = items.map((x) => row(x, S.tab)).join("");
+                }
+
+                const add = {
+                    instructions: "",
+                    skills: owner()
+                        ? `<button class="button small" data-new="skill">New skill</button>`
+                        : "",
+                    extensions: "",
+                    mcp: owner()
+                        ? `<button class="button small" data-new="mcp">New server</button>`
+                        : "",
+                }[S.tab];
+
+                const foot = {
+                    instructions:
+                        S.scope === "shared"
+                            ? "Every session reads this first, then the project’s ancestors and its own AGENTS.md."
+                            : "",
+                    skills: "Sessions see each skill’s name and description; the full text is read only when a task matches.",
+                    extensions: `Extensions are code: view them here, switch them on or off per scope. Add or change the code on the deployment machine in <code>${S.scope === "shared" ? "&lt;data&gt;/team-agent/extensions/" : ".pi/extensions/"}</code>.`,
+                    mcp: `Connection and sign-in are per member and per session, so they are not shown here. Check yours in <a class="ar-link">MCP sign-ins</a>.`,
+                }[S.tab];
+
+                return `${scope}${banners.join("")}${tabs}<div>${body}</div>
+                    ${add || foot ? `<div class="ar-actions">${add}<span class="ar-foot">${foot}</span></div>` : ""}`;
+            }
+
+            function find(id) {
+                for (const set of [SHARED, PROJECT])
+                    for (const k of ["instructions", "skills", "extensions", "mcp"]) {
+                        const x = set[k]?.find((y) => y.id === id);
+                        if (x) return { x, kind: k, src: set === SHARED ? "shared" : "project" };
+                    }
+                return null;
+            }
+
+            const SAMPLES = {
+                "s-agents": `# Team instructions\n\n- Answer in the user's language.\n- Run the project's own checks before you report a change as done.\n- Never write credentials into shared files.\n`,
+                "p-agents": `# Working on rotom team\n\nRead docs/PRODUCT.md, docs/CONFIGURATION.md and docs/VERIFICATION.md…\n`,
+                "s-release": `---\nname: release-check\ndescription: Check release readiness before a publish.\n---\n\n# Release check\n\nRead the project's release docs and package.json first.\nRun only checks that exist.\nReport results, unverified items and risks. Do not deploy.\n`,
+                "p-release": `---\nname: release-check\ndescription: Project release checklist.\n---\n\n# Release check (rotom-team)\n\nFollow docs/DEPLOYMENT.md steps 1–2 only.\n`,
+                "p-deploy": `---\nname: deploy-notes\ndescription: Write the release notes from merged PRs.\n---\n\n# Deploy notes\n`,
+                "s-review": `---\nname: code-review\ndescription: Review a diff for correctness.\n---\n…`,
+                "s-note": `/** Report that the native Agent Extension loaded. */\nexport default function (pi) {\n    pi.on("session_start", async (_event, ctx) => {\n        ctx.ui.notify("Agent Extension loaded", "info");\n    });\n}\n`,
+                "p-guard": `/** Block writes outside the repository. */\nexport default function (pi) {\n    pi.on("tool_call", async (event) => { /* … */ });\n}\n`,
+                newskill: `---\nname: \ndescription: \n---\n\n# \n`,
+            };
+
+            function saveBar({ file, canEdit, extra = "" }) {
+                if (!owner()) return "";
+                let why = `Writes <code>${esc(shown(file))}</code>${S.scope === "project" ? " in the project folder (commit it with the project)" : " for every member"}. New sessions read it; a running agent needs <code>/reload</code>.`;
+                let disabled = !canEdit;
+                let cls = "";
+                if (locked()) {
+                    why = `${S.run} Team runs are active. Save when they finish or stop.`;
+                    disabled = true;
+                    cls = "warn";
+                }
+                if (S.fault === "stale") {
+                    why = `This file changed on the machine after you opened it. Saving would overwrite that change.`;
+                    cls = "warn";
+                    return `<div class="ar-savebar"><span class="why ${cls}">${why}</span><button class="button small">Compare</button><button class="button small">Load theirs</button></div>`;
+                }
+                return `<div class="ar-savebar"><span class="why ${cls}">${why}</span>${extra}<button class="button small" data-back>Discard</button><button class="button small primary" ${disabled ? "disabled" : ""} data-save>Save</button></div>`;
+            }
+
+            function detailView() {
+                const back = `<button class="ar-back" data-back>‹ ${TABS.find(([t]) => t === S.tab)[1]}</button>`;
+                const toast = S.saved
+                    ? `<div class="ar-toast" role="status">Saved. New sessions use it. Running agents keep the old version until <code>/reload</code>; frozen past sessions never change.</div>`
+                    : "";
+
+                if (S.open === "newskill") {
+                    return `${back}<div class="ar-form"><label>Name</label><input placeholder="lowercase-with-dashes" /><span class="why">Folder and command name: /skill:name</span>
+                        <label>Saved in</label><input readonly value="${S.scope === "shared" ? "<data>/team-agent/skills/…/SKILL.md" : ".pi/skills/…/SKILL.md"}" /></div>
+                        <textarea class="ar-editor" spellcheck="false">${esc(SAMPLES.newskill)}</textarea>
+                        ${saveBar({ file: S.scope === "shared" ? "<data>/team-agent/skills/<name>/SKILL.md" : "<project>/.pi/skills/<name>/SKILL.md", canEdit: true })}`;
+                }
+                if (S.open === "newmcp") return mcpForm(null);
+
+                const f = find(S.open);
+                if (!f) return back;
+                const { x, kind, src } = f;
+                const editableHere = owner() && !x.pkg && !x.builtin && S.scope === src;
+                const scopeLabel = src === "shared" ? "Shared" : `Project ${S.project}`;
+
+                const meta = (rows) =>
+                    `<dl class="ar-meta">${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>`;
+
+                if (kind === "mcp") return mcpForm(x, src);
+
+                if (kind === "extensions") {
+                    const sw = (label, on, dis) =>
+                        `<div class="list-item"><span class="ar-swl">${label}</span><button class="switch ${on ? "on" : ""}" ${dis ? "disabled" : ""} data-toggle><span></span></button></div>`;
+                    let toggles = "";
+                    if (owner()) {
+                        if (S.scope === "project" && src === "shared")
+                            toggles = sw(
+                                `<span>On in project ${S.project}</span><span class="muted small">Writes an exclusion to this project’s .pi/settings.json, like <code>pi config --local</code>.</span>`,
+                                !S.noteOffInProject,
+                                locked() || S.fault === "parse",
+                            );
+                        else
+                            toggles = sw(
+                                `<span>On for ${S.scope === "shared" ? "every project" : "this project"}</span><span class="muted small">Same change <code>pi config${S.scope === "shared" ? "" : " --local"}</code> makes.</span>`,
+                                true,
+                                locked() || S.fault === "parse",
+                            );
+                    }
+                    return `${back}<h3 style="margin:0;font-size:.9rem;color:var(--text)">${esc(x.name)}</h3>
+                        ${meta([
+                            ["Scope", scopeLabel],
+                            ["File", `<code>${esc(shown(x.file || "—"))}</code>`],
+                            ["Runs as", "the service’s OS user · not sandboxed"],
+                        ])}
+                        ${toggles}
+                        ${SAMPLES[x.id] ? `<textarea class="ar-editor" readonly spellcheck="false">${esc(SAMPLES[x.id])}</textarea>` : ""}
+                        <div class="ar-foot">Read only here. Change the code on the deployment machine, then <code>/reload</code>.</div>`;
+                }
+
+                // Instructions and skills: text editors.
+                const readOnlyWhy = x.pkg
+                    ? "From an installed package: read only. Use package filters in settings.json to leave it out."
+                    : !owner()
+                      ? ""
+                      : S.scope !== src
+                        ? `Defined in ${scopeLabel}. Switch to that scope to edit it.`
+                        : "";
+                const dupNote = x.dup
+                    ? `<div class="note warn"><b>Same name in Shared and in this project.</b> Native keeps one and warns. Rename one; do not rely on discovery order.</div>`
+                    : "";
+                return `${back}<h3 style="margin:0;font-size:.9rem;color:var(--text)">${esc(x.name)}</h3>
+                    ${meta([["Scope", scopeLabel], ["File", `<code>${esc(shown(x.file))}</code>`], ...(src === "project" ? [["Git", "tracked · uncommitted after save"]] : [])])}
+                    ${toast}${dupNote}
+                    ${readOnlyWhy ? `<div class="ar-foot">${readOnlyWhy}</div>` : ""}
+                    <textarea class="ar-editor" spellcheck="false" ${editableHere ? "" : "readonly"}>${esc(SAMPLES[x.id] || "")}</textarea>
+                    ${editableHere ? saveBar({ file: x.file, canEdit: true }) : ""}`;
+            }
+
+            function mcpForm(x, src) {
+                const back = `<button class="ar-back" data-back>‹ MCP</button>`;
+                const isNew = !x;
+                const overrideView = S.scope === "project" && src === "shared";
+                const projectOverride =
+                    overrideView && PROJECT.mcp.find((p) => p.name === x.name && p.override);
+                const canEdit = owner() && (isNew || S.scope === src || overrideView);
+                const ro = (v) => (canEdit && !overrideView ? "" : "readonly");
+                const v = x || {
+                    name: "",
+                    type: "stdio",
+                    command: "",
+                    args: "",
+                    exposure: "direct",
+                };
+                const toast = S.saved
+                    ? `<div class="ar-toast" role="status">Saved. Definitions load at the next start or <code>/reload</code>. Loading is not the same as connecting: each member checks theirs in MCP sign-ins.</div>`
+                    : "";
+
+                let head = "";
+                if (overrideView)
+                    head = `<div class="note">Defined in <b>Shared</b>. From this project you can only turn it on or off and change how its tools are exposed. ${projectOverride ? `This project currently <b>turns it off</b>. <a>Remove the override</a> to follow Shared again.` : ""}</div>`;
+
+                const fields = `<div class="ar-form">
+                    <label>Name</label><input ${isNew ? "" : "readonly"} value="${esc(v.name)}" placeholder="docs" />
+                    <label>Type</label>${
+                        canEdit && !overrideView
+                            ? `<select><option ${v.type === "stdio" ? "selected" : ""}>stdio</option><option ${v.type === "http" ? "selected" : ""}>http</option></select>`
+                            : `<input readonly value="${esc(v.type)}" />`
+                    }
+                    ${
+                        v.type === "http"
+                            ? `<label>URL</label><input ${ro()} value="${esc(v.url || "")}" />`
+                            : `<label>Command</label><input ${ro()} value="${esc(v.command || "")}" placeholder="/absolute/path/to/server" /><span class="why">One executable, not a shell line.</span>
+                               <label>Arguments</label><input ${ro()} value="${esc(v.args || "")}" />`
+                    }
+                    <label>Exposure</label><select ${!canEdit ? "disabled" : ""}>${["direct", "codemode", "deferred"].map((e) => `<option ${e === v.exposure ? "selected" : ""}>${e}</option>`).join("")}</select>
+                    <label>Enabled</label><span><button class="switch ${projectOverride ? "" : "on"}" ${!canEdit || locked() ? "disabled" : ""}><span></span></button></span>
+                </div>`;
+
+                const err = x?.err
+                    ? `<div class="note err"><b>Check failed:</b> ${esc(x.err)}</div>`
+                    : "";
+                const tokenNote = `<div class="ar-foot">No tokens here. Headers and environment with secrets stay out of shared and project files; members sign in themselves.</div>`;
+                const file = isNew
+                    ? S.scope === "shared"
+                        ? "<data>/team-agent/mcp.json"
+                        : "<project>/.pi/mcp.json"
+                    : overrideView || src === "project"
+                      ? "<project>/.pi/mcp.json"
+                      : "<data>/team-agent/mcp.json";
+                const json = `<button class="button small">Edit as JSON</button>`;
+                return `${back}<h3 style="margin:0;font-size:.9rem;color:var(--text)">${isNew ? "New MCP server" : esc(v.name)}</h3>
+                    ${toast}${head}${err}${fields}${tokenNote}
+                    ${canEdit ? saveBar({ file, canEdit, extra: overrideView ? "" : json }) : ""}`;
+            }
+
+            function nav() {
+                const group = (title, items) =>
+                    `<div class="settings-group"><div class="group-title">${title}</div>${items.join("")}</div>`;
+                const link = (label, on, hint = "") =>
+                    `<button class="settings-link ${on ? "on" : ""}"><span>${label}</span>${hint ? `<span class="settings-hint">${hint}</span>` : ""}</button>`;
+                const n = problems().length;
+                return `<nav class="settings-nav" aria-label="Settings">
+                    ${group("You", [link("Your name"), link("My model accounts"), link("My browser sign-ins"), link("Appearance", false, "Tokyo Night")])}
+                    ${group("Team", [link("People"), link("Projects & access"), link("Agent resources", true, n ? `${n} !` : ""), link("Spend")])}
+                    ${group("Server", [link("Running now", false, S.run ? String(S.run) : ""), owner() ? link("Restart server") : ""])}
+                    <button class="settings-link settings-out">Sign out</button>
+                </nav>`;
+            }
+
+            function render() {
+                document.getElementById("app").innerHTML =
+                    `<div class="overlay"><section class="sheet settings-window" role="dialog" aria-label="Settings">
+                    <header class="sheet-head"><div class="grip"></div><h2>Settings</h2><button class="icon-button" aria-label="Close">✕</button></header>
+                    <div class="sheet-body"><div class="settings">${nav()}
+                        <div class="settings-pane"><section class="settings-page" aria-label="Agent resources">
+                            <header class="sheet-head"><h2>Agent resources</h2></header>
+                            <div class="sheet-body">${S.open ? detailView() : listView()}</div>
+                        </section></div>
+                    </div></div>
+                </section></div>`;
+                bindApp();
+                renderBar();
+            }
+
+            function bindApp() {
+                const app = document.getElementById("app");
+                app.querySelectorAll("[data-scope]").forEach(
+                    (b) => (b.onclick = () => set({ scope: b.dataset.scope, open: "" })),
+                );
+                app.querySelectorAll("[data-tab]").forEach(
+                    (b) => (b.onclick = () => set({ tab: b.dataset.tab, open: "" })),
+                );
+                app.querySelectorAll("[data-open]").forEach(
+                    (b) => (b.onclick = () => set({ open: b.dataset.open, saved: false })),
+                );
+                app.querySelectorAll("[data-new]").forEach(
+                    (b) =>
+                        (b.onclick = () =>
+                            set({
+                                open: b.dataset.new === "skill" ? "newskill" : "newmcp",
+                                saved: false,
+                            })),
+                );
+                app.querySelectorAll("[data-back]").forEach(
+                    (b) => (b.onclick = () => set({ open: "", saved: false })),
+                );
+                app.querySelectorAll("[data-save]").forEach(
+                    (b) => (b.onclick = () => set({ saved: true })),
+                );
+                app.querySelectorAll("[data-toggle]").forEach(
+                    (b) => (b.onclick = () => set({ noteOffInProject: !S.noteOffInProject })),
+                );
+                const sel = app.querySelector("#proj");
+                if (sel) sel.onchange = () => set({ project: sel.value });
+            }
+
+            function renderBar() {
+                const seg = (key, opts) =>
+                    `<span class="segmented">${opts.map(([v, l]) => `<button class="${String(S[key]) === String(v) ? "on" : ""}" data-k="${key}" data-v="${v}">${l}</button>`).join("")}</span>`;
+                document.getElementById("bar").innerHTML = `<b>原型 v2</b>
+                    角色 ${seg("role", [
+                        ["owner", "owner"],
+                        ["member", "member"],
+                    ])}
+                    运行 ${seg("run", [
+                        [0, "空闲"],
+                        [2, "2 个运行中"],
+                    ])}
+                    故障 ${seg("fault", [
+                        ["none", "无"],
+                        ["parse", "settings.json 解析失败"],
+                        ["stale", "保存冲突"],
+                    ])}
+                    <a class="ar-link" href="compare.html">桌面 + 手机对照 ›</a>`;
+                document.querySelectorAll("#bar [data-k]").forEach(
+                    (b) =>
+                        (b.onclick = () =>
+                            set({
+                                [b.dataset.k]:
+                                    b.dataset.k === "run" ? Number(b.dataset.v) : b.dataset.v,
+                                saved: false,
+                            })),
+                );
+            }
+
+            function set(patch) {
+                Object.assign(S, patch);
+                if (!owner() && S.scope === "project" && !MEMBER_PROJECTS.includes(S.project))
+                    S.project = MEMBER_PROJECTS[0];
+                render();
+            }
+
+            render();
+        </script>
+    </body>
+</html>

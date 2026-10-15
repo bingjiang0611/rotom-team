@@ -1,0 +1,1082 @@
+<!doctype html>
+<html lang="zh">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>rotom team · Agent 配置入口（原型 A/B/C）</title>
+        <style>
+            :root {
+                --bg: #1a1b26;
+                --bg-dark: #13141c;
+                --bg-darker: #0e0e14;
+                --card: #1f2130;
+                --card-2: #24283b;
+                --line: #2a2e42;
+                --edge: #3b4261;
+                --text: #c0caf5;
+                --body: #a9b1d6;
+                --muted: #565f89;
+                --accent: #7aa2f7;
+                --accent-soft: rgba(122, 162, 247, 0.12);
+                --accent-line: rgba(122, 162, 247, 0.45);
+                --green: #9ece6a;
+                --green-soft: rgba(158, 206, 106, 0.1);
+                --yellow: #e0af68;
+                --yellow-soft: rgba(224, 175, 104, 0.1);
+                --red: #f7768e;
+                --red-soft: rgba(247, 118, 142, 0.1);
+                --magenta: #ad8ee6;
+                --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+            }
+            * {
+                box-sizing: border-box;
+            }
+            body {
+                margin: 0;
+                background: var(--bg-darker);
+                color: var(--body);
+                font: 13px/1.55 var(--mono);
+            }
+            button {
+                font: inherit;
+                color: inherit;
+                background: none;
+                border: 0;
+                cursor: pointer;
+                text-align: left;
+            }
+            .top {
+                display: flex;
+                align-items: center;
+                gap: 1rem;
+                padding: 0.8rem 1rem;
+                border-bottom: 1px solid var(--line);
+                flex-wrap: wrap;
+            }
+            .top h1 {
+                font-size: 0.9rem;
+                margin: 0;
+                color: var(--text);
+            }
+            .seg {
+                display: flex;
+                border: 1px solid var(--edge);
+            }
+            .seg button {
+                padding: 0.35rem 0.8rem;
+                color: var(--muted);
+                white-space: nowrap;
+            }
+            .seg button.on {
+                background: var(--accent-soft);
+                color: var(--accent);
+            }
+            .note {
+                color: var(--muted);
+                font-size: 0.75rem;
+            }
+            .stage {
+                padding: 12px;
+                min-height: calc(100vh - 56px);
+            }
+            /* ---------- shared chrome ---------- */
+            .window {
+                border: 1px solid var(--edge);
+                background: var(--bg);
+                height: calc(100vh - 80px);
+                min-height: 660px;
+                display: flex;
+                flex-direction: column;
+            }
+            .window > header {
+                display: flex;
+                align-items: center;
+                gap: 0.6rem;
+                padding: 0.55rem 0.8rem;
+                border-bottom: 1px solid var(--line);
+                color: var(--text);
+            }
+            .window > header .x {
+                margin-left: auto;
+                color: var(--muted);
+            }
+            .cols {
+                display: grid;
+                flex: 1;
+                min-height: 0;
+            }
+            .nav {
+                border-right: 1px solid var(--line);
+                padding: 0.6rem;
+                overflow: auto;
+                background: var(--bg-dark);
+            }
+            .group-h {
+                font-size: 0.62rem;
+                letter-spacing: 0.08em;
+                color: var(--muted);
+                text-transform: uppercase;
+                padding: 0.7rem 0.3rem 0.25rem;
+            }
+            .nav button,
+            .rail button {
+                display: flex;
+                align-items: center;
+                width: 100%;
+                gap: 0.5rem;
+                padding: 0.32rem 0.45rem;
+                color: var(--body);
+            }
+            .nav button:hover,
+            .rail button:hover {
+                background: var(--card-2);
+            }
+            .nav button.on,
+            .rail button.on {
+                background: var(--accent-soft);
+                color: var(--accent);
+                box-shadow: inset 2px 0 0 var(--accent);
+            }
+            .hint {
+                margin-left: auto;
+                color: var(--muted);
+                font-size: 0.72rem;
+                flex: none;
+            }
+            .pane {
+                padding: 0.9rem 1.1rem;
+                overflow: auto;
+            }
+            .pane h2 {
+                margin: 0;
+                font-size: 0.92rem;
+                color: var(--text);
+            }
+            .pane h3 {
+                margin: 1.3rem 0 0.4rem;
+                font-size: 0.78rem;
+                letter-spacing: 0.05em;
+                text-transform: uppercase;
+                color: var(--muted);
+            }
+            .pane-head {
+                display: flex;
+                align-items: center;
+                gap: 0.8rem;
+                flex-wrap: wrap;
+                padding-bottom: 0.7rem;
+                border-bottom: 1px solid var(--line);
+            }
+            .path {
+                color: var(--muted);
+                font-size: 0.74rem;
+            }
+            /* ---------- bits ---------- */
+            .chip {
+                font-size: 0.68rem;
+                border: 1px solid var(--line);
+                color: var(--muted);
+                padding: 0 0.35rem;
+                white-space: nowrap;
+            }
+            .chip.ok {
+                color: var(--green);
+                border-color: rgba(158, 206, 106, 0.4);
+                background: var(--green-soft);
+            }
+            .chip.warn {
+                color: var(--yellow);
+                border-color: rgba(224, 175, 104, 0.45);
+                background: var(--yellow-soft);
+            }
+            .chip.bad {
+                color: var(--red);
+                border-color: rgba(247, 118, 142, 0.45);
+                background: var(--red-soft);
+            }
+            .chip.sh {
+                color: var(--magenta);
+                border-color: rgba(173, 142, 230, 0.4);
+            }
+            .chip.pr {
+                color: var(--accent);
+                border-color: var(--accent-line);
+            }
+            .banner {
+                display: flex;
+                gap: 0.6rem;
+                align-items: flex-start;
+                border: 1px solid var(--line);
+                padding: 0.5rem 0.65rem;
+                margin: 0.7rem 0;
+            }
+            .banner.lock {
+                border-color: rgba(224, 175, 104, 0.45);
+                background: var(--yellow-soft);
+                color: var(--yellow);
+            }
+            .banner.stop {
+                border-color: rgba(247, 118, 142, 0.45);
+                background: var(--red-soft);
+                color: var(--red);
+            }
+            .banner.info {
+                border-color: var(--accent-line);
+                background: var(--accent-soft);
+                color: var(--accent);
+            }
+            .banner b {
+                font-weight: 600;
+            }
+            .banner .act {
+                margin-left: auto;
+                display: flex;
+                gap: 0.4rem;
+            }
+            .btn {
+                border: 1px solid var(--edge);
+                padding: 0.25rem 0.6rem;
+                color: var(--body);
+            }
+            .btn:hover {
+                background: var(--card-2);
+            }
+            .btn.primary {
+                background: var(--accent);
+                border-color: var(--accent);
+                color: var(--bg-darker);
+                font-weight: 600;
+            }
+            .btn[disabled] {
+                opacity: 0.45;
+                cursor: not-allowed;
+            }
+            .row {
+                display: flex;
+                align-items: center;
+                gap: 0.55rem;
+                padding: 0.45rem 0.55rem;
+                border: 1px solid var(--line);
+                border-top: 0;
+            }
+            .row:first-of-type {
+                border-top: 1px solid var(--line);
+            }
+            .row:hover {
+                background: var(--card);
+            }
+            .row.on {
+                background: var(--card-2);
+                border-left: 2px solid var(--accent);
+            }
+            .row b {
+                color: var(--text);
+                font-weight: 500;
+            }
+            .row .sub {
+                color: var(--muted);
+                font-size: 0.72rem;
+            }
+            .row .stack > * {
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+            .row .right {
+                margin-left: auto;
+                display: flex;
+                align-items: center;
+                gap: 0.4rem;
+                flex: none;
+            }
+            .stack {
+                display: flex;
+                flex-direction: column;
+                min-width: 0;
+            }
+            .sw {
+                width: 28px;
+                height: 15px;
+                border: 1px solid var(--edge);
+                position: relative;
+                flex: none;
+            }
+            .sw i {
+                position: absolute;
+                top: 1px;
+                left: 1px;
+                width: 11px;
+                height: 11px;
+                background: var(--muted);
+            }
+            .sw.on {
+                border-color: var(--accent-line);
+                background: var(--accent-soft);
+            }
+            .sw.on i {
+                left: auto;
+                right: 1px;
+                background: var(--accent);
+            }
+            .editor {
+                border: 1px solid var(--line);
+                background: var(--bg-dark);
+                padding: 0.6rem 0.7rem;
+                white-space: pre;
+                overflow: auto;
+                color: var(--body);
+                font-size: 0.78rem;
+                max-height: 240px;
+            }
+            .editor.ro {
+                color: var(--muted);
+                background: var(--bg-darker);
+            }
+            .field {
+                display: grid;
+                grid-template-columns: 130px 1fr;
+                gap: 0.5rem;
+                align-items: center;
+                padding: 0.22rem 0;
+            }
+            .field span {
+                color: var(--muted);
+                font-size: 0.74rem;
+            }
+            .field div {
+                border: 1px solid var(--line);
+                padding: 0.25rem 0.5rem;
+                color: var(--text);
+            }
+            .field div.ro {
+                border-style: dashed;
+                color: var(--muted);
+            }
+            .box {
+                border: 1px solid var(--line);
+                padding: 0.55rem 0.7rem;
+                margin-top: 0.8rem;
+            }
+            .box h4 {
+                margin: 0 0 0.35rem;
+                font-size: 0.72rem;
+                letter-spacing: 0.05em;
+                text-transform: uppercase;
+                color: var(--muted);
+                font-weight: 500;
+            }
+            .box ul {
+                margin: 0;
+                padding-left: 1.1rem;
+            }
+            .box li {
+                font-size: 0.76rem;
+            }
+            .savebar {
+                display: flex;
+                align-items: center;
+                gap: 0.6rem;
+                border-top: 1px solid var(--line);
+                padding: 0.55rem 0;
+                margin-top: 0.8rem;
+            }
+            .legend {
+                padding: 0 12px 16px;
+                color: var(--muted);
+                font-size: 0.75rem;
+            }
+            .legend b {
+                color: var(--text);
+            }
+            .legend ul {
+                margin: 0.3rem 0 0;
+                padding-left: 1.1rem;
+            }
+            /* ---------- B workbench ---------- */
+            .wb {
+                display: grid;
+                grid-template-columns: 190px 300px 1fr;
+                flex: 1;
+                min-height: 0;
+            }
+            .wb > div {
+                overflow: auto;
+            }
+            .wb .rail {
+                border-right: 1px solid var(--line);
+                background: var(--bg-dark);
+                padding: 0.6rem;
+            }
+            .wb .mid {
+                border-right: 1px solid var(--line);
+                padding: 0.6rem;
+            }
+            .wb .det {
+                padding: 0.9rem 1.1rem;
+            }
+            .scopebar {
+                display: flex;
+                align-items: center;
+                gap: 0.6rem;
+                padding: 0.5rem 0.8rem;
+                border-bottom: 1px solid var(--line);
+                background: var(--bg-dark);
+                flex-wrap: wrap;
+            }
+            .picker {
+                border: 1px solid var(--edge);
+                padding: 0.25rem 0.55rem;
+                color: var(--text);
+            }
+            .search {
+                border: 1px solid var(--line);
+                padding: 0.25rem 0.55rem;
+                color: var(--muted);
+                min-width: 180px;
+            }
+            /* ---------- C object-first ---------- */
+            .section {
+                border: 1px solid var(--line);
+                margin-top: 0.8rem;
+            }
+            .section > header {
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+                padding: 0.45rem 0.6rem;
+                background: var(--card);
+                border-bottom: 1px solid var(--line);
+                color: var(--text);
+            }
+            .section > header .right {
+                margin-left: auto;
+                display: flex;
+                gap: 0.4rem;
+                align-items: center;
+            }
+            .section .body {
+                padding: 0.6rem;
+            }
+            .section .row {
+                border-left: 0;
+                border-right: 0;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="top">
+            <h1>rotom team · Agent 配置入口</h1>
+            <div class="seg" id="dir">
+                <button data-d="A" class="on">A 设置窗口分页</button>
+                <button data-d="B">B 独立工作台</button>
+                <button data-d="C">C 对象优先</button>
+            </div>
+            <div class="seg" id="role">
+                <button data-r="owner" class="on">owner</button>
+                <button data-r="member">member（有项目 view）</button>
+            </div>
+            <div class="seg" id="run">
+                <button data-n="0" class="on">空闲</button>
+                <button data-n="2">2 个运行中</button>
+            </div>
+            <span class="note">原型，不连后端。相同数据对照三种结构。</span>
+        </div>
+        <div class="stage" id="stage"></div>
+        <div class="legend" id="legend"></div>
+
+        <script>
+            const S = {
+                dir: "A",
+                role: "owner",
+                run: 0,
+                pageA: "mcp",
+                scope: "shared", // shared | project | effective
+                typeB: "mcp",
+                pickB: "docs",
+                pageC: "shared",
+            };
+
+            const SCOPES = {
+                shared: { label: "Shared（全局）", path: "<data>/team-agent", chip: "sh" },
+                project: {
+                    label: "rotom-team（项目）",
+                    path: "/srv/work/rotom-team/.pi",
+                    chip: "pr",
+                },
+                effective: {
+                    label: "Effective（合并后）",
+                    path: "本项目下一次启动实际加载",
+                    chip: "",
+                },
+            };
+
+            const DATA = {
+                instructions: {
+                    shared: [
+                        {
+                            n: "AGENTS.md",
+                            s: "团队共享指令 · 1.8 KB · 2026-10-02",
+                            st: ["ok", "生效"],
+                        },
+                        { n: "APPEND_SYSTEM.md", s: "未创建", st: ["", "—"] },
+                    ],
+                    project: [
+                        {
+                            n: "AGENTS.md",
+                            s: "项目根目录 · 随 Git 管理 · 4.1 KB",
+                            st: ["ok", "生效"],
+                        },
+                        {
+                            n: ".pi/SYSTEM.md",
+                            s: "项目 system 文件优先于共享同名文件",
+                            st: ["warn", "覆盖共享"],
+                        },
+                    ],
+                },
+                skills: {
+                    shared: [
+                        {
+                            n: "release-check",
+                            s: "skills/release-check/SKILL.md · 检查发布准备",
+                            st: ["ok", "已发现"],
+                        },
+                        {
+                            n: "dws",
+                            s: "来自 package @example/pi-tools@1.0.0",
+                            st: ["ok", "已发现"],
+                        },
+                    ],
+                    project: [
+                        {
+                            n: "release-check",
+                            s: ".pi/skills/release-check/SKILL.md",
+                            st: ["warn", "同名：保留先发现者"],
+                        },
+                        {
+                            n: "deploy-rotom",
+                            s: ".pi/skills/deploy-rotom/SKILL.md",
+                            st: ["ok", "已发现"],
+                        },
+                    ],
+                },
+                extensions: {
+                    shared: [
+                        {
+                            n: "session-note.ts",
+                            s: "原生 Agent Extension · 以服务 OS 用户权限运行",
+                            st: ["ok", "已启用"],
+                            sw: true,
+                        },
+                        {
+                            n: "pi-computer-use.json",
+                            s: "已声明的配置文件",
+                            st: ["", "配置"],
+                            sw: true,
+                        },
+                    ],
+                    project: [
+                        {
+                            n: "repo-guard.ts",
+                            s: ".pi/extensions/repo-guard.ts · 受信任，非沙箱",
+                            st: ["warn", "需信任确认"],
+                            sw: false,
+                        },
+                    ],
+                },
+                mcp: {
+                    shared: [
+                        {
+                            n: "docs",
+                            s: "https://example.com/mcp · 查询团队文档",
+                            st: ["ok", "connected · 7 tools"],
+                        },
+                        {
+                            n: "project-tools",
+                            s: "stdio · /opt/mcp/project-tools",
+                            st: ["warn", "needs your sign-in"],
+                        },
+                    ],
+                    project: [
+                        {
+                            n: "docs",
+                            s: '仅覆盖 { "enabled": false }',
+                            st: ["warn", "关闭共享定义"],
+                        },
+                        {
+                            n: "repo-index",
+                            s: "stdio · ./scripts/mcp-index",
+                            st: ["bad", "failed: ENOENT"],
+                        },
+                    ],
+                },
+                packages: {
+                    shared: [
+                        {
+                            n: "@example/pi-tools@1.0.0",
+                            s: "已安装 · 由 CLI 管理",
+                            st: ["", "只读"],
+                        },
+                    ],
+                    project: [],
+                },
+            };
+
+            const EFFECTIVE = [
+                {
+                    n: "docs (MCP)",
+                    s: "项目覆盖 enabled=false → 本项目不启动",
+                    st: ["warn", "项目覆盖共享"],
+                },
+                {
+                    n: "project-tools (MCP)",
+                    s: "来自共享 mcp.json，按项目 cwd 运行",
+                    st: ["ok", "共享生效"],
+                },
+                { n: "repo-index (MCP)", s: "仅项目定义", st: ["bad", "failed: ENOENT"] },
+                {
+                    n: "release-check (Skill)",
+                    s: "共享与项目同名 → 保留共享版本并告警",
+                    st: ["warn", "同名冲突"],
+                },
+                {
+                    n: "AGENTS.md",
+                    s: "共享 → 祖先 → cwd 依次叠加（3 个文件）",
+                    st: ["ok", "叠加生效"],
+                },
+                {
+                    n: "repo-guard.ts (Extension)",
+                    s: "项目扩展未信任 → 不加载",
+                    st: ["", "未加载"],
+                },
+            ];
+
+            const TYPES = [
+                { id: "instructions", cap: "通用指令", hint: "AGENTS.md" },
+                { id: "skills", cap: "Skills", hint: "SKILL.md" },
+                { id: "extensions", cap: "Extensions", hint: ".ts" },
+                { id: "mcp", cap: "MCP 服务器", hint: "mcp.json" },
+                { id: "packages", cap: "Packages", hint: "只读" },
+            ];
+
+            const esc = (s) =>
+                String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
+            const locked = () => S.run > 0;
+            const writable = (scope) => S.role === "owner" && !locked() && scope !== "effective";
+
+            function chip(st) {
+                return st && st[1] && st[1] !== "—"
+                    ? `<span class="chip ${st[0]}">${esc(st[1])}</span>`
+                    : "";
+            }
+
+            function rows(list, { pick, switches } = {}) {
+                if (!list.length) {
+                    return `<div class="row"><span class="sub">这一层没有条目。</span></div>`;
+                }
+
+                return list
+                    .map(
+                        (
+                            x,
+                        ) => `<div class="row ${pick === x.n ? "on" : ""}" data-pick="${esc(x.n)}">
+                    ${switches && "sw" in x ? `<span class="sw ${x.sw ? "on" : ""}"><i></i></span>` : ""}
+                    <span class="stack"><b>${esc(x.n)}</b><span class="sub">${esc(x.s)}</span></span>
+                    <span class="right">${chip(x.st)}</span>
+                </div>`,
+                    )
+                    .join("");
+            }
+
+            /** 状态/权限条：任何方向都必须出现，否则编辑语义不成立。 */
+            function banners(scope) {
+                const out = [];
+
+                if (locked()) {
+                    out.push(`<div class="banner lock">
+                        <span><b>2 个 Team run 正在进行，配置编辑已锁定。</b> 改配置会改变下一次启动派生的成员 profile；运行中保存会让正在跑的会话处于 unknown 状态。</span>
+                        <span class="act"><button class="btn">查看运行中</button></span>
+                    </div>`);
+                }
+
+                if (S.role !== "owner") {
+                    out.push(`<div class="banner info">
+                        <span>你是成员：共享与项目配置<b> 只读</b>。你自己的 MCP 授权在 <b>MCP sign-ins</b>。</span>
+                        <span class="act"><button class="btn">打开 MCP sign-ins</button></span>
+                    </div>`);
+                }
+
+                if (scope === "project") {
+                    out.push(`<div class="banner stop">
+                        <span><b>项目 .pi 是受信任的可执行配置。</b> 项目 Extension 以服务 OS 用户权限运行，没有沙箱。先审查代码再启用。</span>
+                    </div>`);
+                }
+
+                return out.join("");
+            }
+
+            function applyNote() {
+                return `<div class="box">
+                    <h4>保存之后会发生什么</h4>
+                    <ul>
+                        <li>写入 ${esc(SCOPES[S.scope === "effective" ? "shared" : S.scope].path)}，只改动过的字段，其余内容保持原样。</li>
+                        <li>对已有原生进程执行 <b>/reload</b>；各成员在下一次授权启动时派生新配置。</li>
+                        <li>历史冻结会话保留旧快照，不会因此改变。</li>
+                        <li>连接成功与否要到真实运行才知道：定义保存成功 ≠ MCP 连上 ≠ 工具可用。</li>
+                    </ul>
+                </div>`;
+            }
+
+            function detail(type, scope, name) {
+                const list = DATA[type][scope === "effective" ? "shared" : scope] || [];
+                const item = list.find((x) => x.n === name) || list[0];
+
+                if (!item) {
+                    return `<p class="note">这一层还没有条目。<button class="btn">新建</button></p>`;
+                }
+
+                const canWrite = writable(scope);
+                // 成员根本没有写权限：不显示死按钮，只留只读通道。运行中的 owner 仍显示禁用按钮 + 原因。
+                const showWrite = S.role === "owner";
+                const head = `<div class="pane-head">
+                    <h2>${esc(item.n)}</h2>${chip(item.st)}
+                    <span class="path">${esc(SCOPES[scope].path)}</span>
+                </div>`;
+
+                if (type === "mcp") {
+                    // 项目里只有覆盖项（没有 command/url）：原生只允许改 enabled/exposure/toolExposure。
+                    const overrideOnly = scope === "project" && item.n === "docs";
+                    const field = (name, value, editable, why = "") =>
+                        `<div class="field"><span>${name}</span><div${editable && canWrite ? "" : ' class="ro"'}>${esc(value)}</div>${why ? `<span></span><span class="note">${esc(why)}</span>` : ""}</div>`;
+
+                    return `${head}
+                    <h3>表单（受支持字段）</h3>
+                    ${field("name", item.n, false)}
+                    ${field("transport", overrideOnly ? "http（继承共享）" : "http", !overrideOnly, overrideOnly ? "覆盖项不含 command/url，不能改传输与地址" : "")}
+                    ${field("url", "https://example.com/mcp", !overrideOnly)}
+                    ${field("exposure", "direct ▾", true)}
+                    ${field("enabled", overrideOnly ? "false ▾" : "true ▾", true)}
+                    ${overrideOnly ? `<div class="savebar" style="border-top:0;padding-top:0"><button class="btn" ${canWrite ? "" : "disabled"}>改成项目完整替换定义</button><button class="btn" ${canWrite ? "" : "disabled"}>删除项目覆盖（恢复共享）</button></div>` : ""}
+                    <p class="note">凭据不写在这里。成员各自在 MCP sign-ins 授权，token 存在该成员的 mcp-auth.json。</p>
+                    <div class="box">
+                        <h4>合并后的效果</h4>
+                        <ul>
+                            <li>共享定义：<b>url + exposure</b>（来自 ${esc(SCOPES.shared.path)}/mcp.json）。</li>
+                            <li>项目覆盖：<b>enabled=false</b>（项目项不含 command/url，只能覆盖 enabled/exposure/toolExposure）。</li>
+                            <li>本项目实际：<b>不启动</b>。删掉项目覆盖即恢复共享定义，不等于全局关闭。</li>
+                        </ul>
+                    </div>
+                    ${applyNote()}
+                    <div class="savebar">
+                        ${showWrite ? `<button class="btn primary" ${canWrite ? "" : "disabled"}>保存</button><button class="btn" ${canWrite ? "" : "disabled"}>放弃修改</button>` : ""}
+                        <button class="btn">打开 mcp.json</button>
+                        <span class="note">${canWrite ? "改动 1 项未保存" : locked() ? "运行中：保存不可用" : "只读（成员）"}</span>
+                    </div>`;
+                }
+
+                if (type === "extensions") {
+                    return `${head}
+                    <div class="banner stop"><span>可执行代码在网页上<b>只读</b>。开关与信任确认在网页，代码仍在机器上改（约定 A1，可改）。</span></div>
+                    <div class="editor ro">/** Report that the native Agent Extension loaded. */
+export default function (pi) {
+    pi.on("session_start", async (_event, ctx) =&gt; {
+        ctx.ui.notify("Agent Extension loaded", "info");
+    });
+}</div>
+                    <div class="box">
+                        <h4>加载状态</h4>
+                        <ul>
+                            <li>发现于 ${esc(SCOPES[scope].path)}/extensions/</li>
+                            <li>${scope === "project" ? "未信任：本次不加载。启用需要 owner 明确确认已审查代码。" : "已启用：下一次成员启动时随派生配置生效。"}</li>
+                        </ul>
+                    </div>
+                    <div class="savebar">
+                        ${showWrite ? `<button class="btn primary" ${canWrite ? "" : "disabled"}>${scope === "project" ? "我已审查，信任并启用" : "停用"}</button>` : ""}
+                        <span class="note">${canWrite ? "" : locked() ? "运行中：不可更改" : "只读（成员）"}</span>
+                    </div>`;
+                }
+
+                const text =
+                    type === "skills"
+                        ? `---
+name: release-check
+description: 检查发布准备情况。用户要求发布前检查时使用。
+---
+
+# 发布检查
+
+先读取项目发布文档和 package.json。
+只运行项目实际存在的检查命令。`
+                        : `# 团队共享指令
+
+- 交付前运行 npm run check 与 npm test。
+- 不在共享配置里写任何凭据。`;
+
+                return `${head}
+                <div class="editor${canWrite ? "" : " ro"}">${esc(text)}</div>
+                ${type === "skills" ? `<div class="box"><h4>同名冲突</h4><ul><li>共享与项目都有 <b>release-check</b>：原生保留先发现者并告警，不靠覆盖顺序定制。</li><li>建议一个 Skill 只放一层。</li></ul></div>` : ""}
+                ${applyNote()}
+                <div class="savebar">
+                    ${showWrite ? `<button class="btn primary" ${canWrite ? "" : "disabled"}>保存</button><button class="btn" ${canWrite ? "" : "disabled"}>放弃修改</button>` : ""}
+                    <button class="btn">打开原文件</button>
+                    <span class="note">${canWrite ? "草稿未保存" : locked() ? "运行中：保存不可用" : "只读（成员）"}</span>
+                </div>`;
+            }
+
+            function scopeSeg(ids) {
+                return `<div class="seg" id="scope">
+                    ${ids
+                        .map(
+                            (id) =>
+                                `<button data-s="${id}" class="${S.scope === id ? "on" : ""}">${esc(SCOPES[id].label)}</button>`,
+                        )
+                        .join("")}
+                </div>`;
+            }
+
+            /* ---------- A: 设置窗口内分页 ---------- */
+            function viewA() {
+                const nav = [
+                    {
+                        t: "You",
+                        items: [
+                            ["name", "Your name"],
+                            ["providers", "My model accounts"],
+                            ["signins", "My browser sign-ins"],
+                            ["appearance", "Appearance"],
+                        ],
+                    },
+                    {
+                        t: "Agent 配置",
+                        items: [
+                            ["instructions", "通用指令"],
+                            ["skills", "Skills"],
+                            ["extensions", "Extensions"],
+                            ["mcp", "MCP 服务器"],
+                            ["packages", "Settings & packages"],
+                        ],
+                    },
+                    {
+                        t: "Team",
+                        items: [
+                            ["people", "People"],
+                            ["projects", "Projects & access"],
+                            ["spend", "Spend"],
+                        ],
+                    },
+                    {
+                        t: "Server",
+                        items: [
+                            ["running", "Running now"],
+                            ["restart", "Restart server"],
+                        ],
+                    },
+                ];
+                const type = DATA[S.pageA] ? S.pageA : "mcp";
+                const list = S.scope === "effective" ? EFFECTIVE : DATA[type][S.scope];
+                const pick = list.some((x) => x.n === S.pickB) ? S.pickB : list[0] && list[0].n;
+                const cap = TYPES.find((x) => x.id === type).cap;
+
+                return `<div class="window">
+                    <header>Settings <span class="x">✕</span></header>
+                    <div class="cols" style="grid-template-columns: 220px 1fr">
+                        <div class="nav">
+                            ${nav
+                                .map(
+                                    (g) =>
+                                        `<div class="group-h">${g.t}</div>` +
+                                        g.items
+                                            .map(
+                                                ([id, cap]) =>
+                                                    `<button data-pa="${id}" class="${id === S.pageA ? "on" : ""}">${esc(cap)}${id === "running" && S.run ? `<span class="hint">${S.run}</span>` : ""}</button>`,
+                                            )
+                                            .join(""),
+                                )
+                                .join("")}
+                        </div>
+                        <div class="pane">
+                            <div class="pane-head">
+                                <h2>${esc(cap)}</h2>
+                                ${scopeSeg(["shared", "project", "effective"])}
+                                <span class="path">${esc(SCOPES[S.scope].path)}</span>
+                            </div>
+                            ${banners(S.scope)}
+                            ${S.scope === "effective" ? `<p class="note">这一列不是文件，是下一次在本项目启动时各层合并后的结果。</p>` : ""}
+                            <h3>${S.scope === "effective" ? "合并结果" : "条目"}</h3>
+                            ${rows(list, { pick, switches: type === "extensions" })}
+                            ${S.scope !== "effective" ? `<div class="savebar">${S.role === "owner" ? `<button class="btn" ${writable(S.scope) ? "" : "disabled"}>新建 ${esc(cap)}</button>` : ""}<button class="btn">打开原文件</button><span class="note">点条目在本页下方展开</span></div>` : ""}
+                            ${S.scope !== "effective" ? `<h3>${S.role === "owner" ? "编辑" : "查看"}</h3>${detail(type, S.scope, pick)}` : ""}
+                        </div>
+                    </div>
+                </div>`;
+            }
+
+            /* ---------- B: 独立工作台 ---------- */
+            function viewB() {
+                const list = S.scope === "effective" ? EFFECTIVE : DATA[S.typeB][S.scope];
+
+                return `<div class="window">
+                    <header>Agent configuration <span class="x">✕</span></header>
+                    <div class="scopebar">
+                        <span class="note">范围</span>
+                        ${scopeSeg(["shared", "project", "effective"])}
+                        <span class="picker">项目：rotom-team ▾</span>
+                        <span class="search">搜索 skill / server / 文件…</span>
+                        <span class="right"></span>
+                        ${locked() ? '<span class="chip warn">2 运行中 · 编辑锁定</span>' : '<span class="chip ok">空闲 · 可编辑</span>'}
+                    </div>
+                    <div class="wb">
+                        <div class="rail">
+                            <div class="group-h">资源</div>
+                            ${TYPES.map(
+                                (t) =>
+                                    `<button data-tb="${t.id}" class="${t.id === S.typeB ? "on" : ""}">${esc(t.cap)}<span class="hint">${esc(t.hint)}</span></button>`,
+                            ).join("")}
+                            <div class="group-h">层</div>
+                            <button class="${S.scope === "shared" ? "on" : ""}" data-s="shared">Shared<span class="hint">${DATA[S.typeB].shared.length}</span></button>
+                            <button class="${S.scope === "project" ? "on" : ""}" data-s="project">项目<span class="hint">${DATA[S.typeB].project.length}</span></button>
+                        </div>
+                        <div class="mid">
+                            ${banners(S.scope)}
+                            ${rows(list, { pick: S.pickB, switches: S.typeB === "extensions" })}
+                        </div>
+                        <div class="det">
+                            ${S.scope === "effective" ? `<div class="pane-head"><h2>Effective</h2><span class="path">本项目下一次启动实际加载</span></div><p class="note">只读：解释哪一层赢了，以及为什么。</p>${rows(EFFECTIVE)}` : detail(S.typeB, S.scope, S.pickB)}
+                        </div>
+                    </div>
+                </div>`;
+            }
+
+            /* ---------- C: 对象优先 ---------- */
+            function viewC() {
+                const scope = S.pageC === "shared" ? "shared" : "project";
+                const nav = [
+                    { t: "Agent", items: [["shared", "Shared agent base"]] },
+                    {
+                        t: "Projects",
+                        items: [
+                            ["rotom-team", "rotom-team"],
+                            ["scry", "scry"],
+                        ],
+                    },
+                    {
+                        t: "Team",
+                        items: [
+                            ["people", "People"],
+                            ["spend", "Spend"],
+                        ],
+                    },
+                ];
+                const section = (type) => {
+                    const t = TYPES.find((x) => x.id === type);
+
+                    return `<div class="section">
+                        <header>${esc(t.cap)}<span class="chip">${esc(t.hint)}</span>
+                            <span class="right">
+                                <span class="note">${DATA[type][scope].length} 项</span>
+                                ${type === "packages" ? `<span class="note">安装仍在 CLI</span>` : S.role === "owner" ? `<button class="btn" ${writable(scope) ? "" : "disabled"}>新建</button>` : ""}
+                                <button class="btn">打开目录</button>
+                            </span>
+                        </header>
+                        <div class="body">${rows(DATA[type][scope], { switches: type === "extensions" })}</div>
+                    </div>`;
+                };
+
+                return `<div class="window">
+                    <header>Settings <span class="x">✕</span></header>
+                    <div class="cols" style="grid-template-columns: 220px 1fr">
+                        <div class="nav">
+                            ${nav
+                                .map(
+                                    (g) =>
+                                        `<div class="group-h">${g.t}</div>` +
+                                        g.items
+                                            .map(
+                                                ([id, cap]) =>
+                                                    `<button data-pc="${id}" class="${id === S.pageC ? "on" : ""}">${esc(cap)}</button>`,
+                                            )
+                                            .join(""),
+                                )
+                                .join("")}
+                        </div>
+                        <div class="pane">
+                            <div class="pane-head">
+                                <h2>${S.pageC === "shared" ? "Shared agent base" : "rotom-team"}</h2>
+                                <span class="chip ${SCOPES[scope].chip}">${S.pageC === "shared" ? "全局 · 影响所有成员" : "项目 · 随 Git 管理"}</span>
+                                <span class="path">${esc(SCOPES[scope].path)}</span>
+                            </div>
+                            ${banners(scope)}
+                            <div class="box">
+                                <h4>${S.pageC === "shared" ? "在 rotom-team 中合并后的效果（切项目 ▾）" : "本项目合并后的效果"}</h4>
+                                ${rows(EFFECTIVE.slice(0, 4))}
+                                <p class="note" style="margin-bottom:0">共 ${EFFECTIVE.length} 条 · <b>查看完整合并结果 ›</b></p>
+                            </div>
+                            ${["instructions", "skills", "extensions", "mcp", "packages"].map(section).join("")}
+                            ${applyNote()}
+                        </div>
+                    </div>
+                </div>`;
+            }
+
+            const LEGEND = {
+                A: `<b>A 设置窗口内分页</b>：Agent 配置成为 Settings 的一组页面，scope 在页内切换。沿用上次 sidebar-app-menu 的“应用级功能只有一个入口”决定，改动最小；代价是编辑区宽度受限，一屏只看一类资源。`,
+                B: `<b>B 独立工作台</b>：资源 / 条目 / 详情三栏，最接近 VS Code 的 Agent Customizations 编辑器，适合内容量大、要并排看 JSON 与生效来源；代价是多出一个应用级窗口，与“单一入口”的既定方向冲突。`,
+                C: `<b>C 对象优先</b>：按“哪一层”分页——Shared agent base 一页，每个项目一页，一屏看完该层全部资源；最贴合“全局 vs 项目”的心智，代价是同名/覆盖关系必须靠页内 Effective 区解释，编辑要再下一层。`,
+            };
+
+            function render() {
+                const stage = document.getElementById("stage");
+
+                stage.innerHTML = S.dir === "A" ? viewA() : S.dir === "B" ? viewB() : viewC();
+                document.getElementById("legend").innerHTML = `${LEGEND[S.dir]}<ul>
+                        <li>三个方向共用同一套状态：owner/member 权限、运行中锁定、项目可执行配置的信任确认、合并与冲突说明、保存后的 /reload 语义。</li>
+                        <li>约定（待确认）：可执行 .ts 只读；项目层写入仅 owner；项目来自已登记 projects；npm/git 安装仍在 CLI。</li>
+                    </ul>`;
+                stage
+                    .querySelectorAll("[data-pa]")
+                    .forEach((b) => (b.onclick = () => set({ pageA: b.dataset.pa })));
+                stage
+                    .querySelectorAll("[data-pc]")
+                    .forEach((b) => (b.onclick = () => set({ pageC: b.dataset.pc })));
+                stage.querySelectorAll("[data-tb]").forEach(
+                    (b) =>
+                        (b.onclick = () =>
+                            set({
+                                typeB: b.dataset.tb,
+                                pickB: DATA[b.dataset.tb][
+                                    S.scope === "effective" ? "shared" : S.scope
+                                ][0]?.n,
+                            })),
+                );
+                stage
+                    .querySelectorAll("[data-s]")
+                    .forEach((b) => (b.onclick = () => set({ scope: b.dataset.s })));
+                stage
+                    .querySelectorAll("[data-pick]")
+                    .forEach((b) => (b.onclick = () => set({ pickB: b.dataset.pick })));
+            }
+
+            function set(patch) {
+                Object.assign(S, patch);
+                render();
+            }
+
+            function bind(id, key, attr, cast = (v) => v) {
+                const box = document.getElementById(id);
+
+                box.querySelectorAll("button").forEach(
+                    (b) =>
+                        (b.onclick = () => {
+                            box.querySelectorAll("button").forEach((x) => x.classList.remove("on"));
+                            b.classList.add("on");
+                            set({ [key]: cast(b.dataset[attr]) });
+                        }),
+                );
+            }
+
+            bind("dir", "dir", "d");
+            bind("role", "role", "r");
+            bind("run", "run", "n", Number);
+            render();
+        </script>
+    </body>
+</html>

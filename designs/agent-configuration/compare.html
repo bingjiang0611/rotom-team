@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="zh">
+    <head>
+        <meta charset="utf-8" />
+        <title>Agent resources · 桌面与手机对照</title>
+        <style>
+            body {
+                margin: 0;
+                padding: 12px;
+                background: #0e0e14;
+                color: #a9b1d6;
+                font:
+                    12px ui-monospace,
+                    Menlo,
+                    monospace;
+            }
+            .grid {
+                display: flex;
+                gap: 16px;
+                align-items: flex-start;
+                flex-wrap: wrap;
+            }
+            figure {
+                margin: 0;
+            }
+            figcaption {
+                margin-bottom: 6px;
+            }
+            iframe {
+                border: 1px dashed #565f89;
+                background: #13141c;
+            }
+        </style>
+    </head>
+    <body>
+        <p>
+            同一原型的两个视口。参数：<span id="q"></span>（在 URL 上改
+            scope/tab/open/role/run/fault）
+        </p>
+        <div class="grid">
+            <figure>
+                <figcaption>桌面 1000×680</figcaption>
+                <iframe id="d" width="1000" height="680"></iframe>
+            </figure>
+            <figure>
+                <figcaption>手机 390×760</figcaption>
+                <iframe id="m" width="390" height="760"></iframe>
+            </figure>
+        </div>
+        <script>
+            const q = new URLSearchParams(location.search);
+            q.set("embed", "1");
+            document.getElementById("q").textContent = q.toString();
+            document.getElementById("d").src = "v2.html?" + q;
+            document.getElementById("m").src = "v2.html?" + q;
+        </script>
+    </body>
+</html>
