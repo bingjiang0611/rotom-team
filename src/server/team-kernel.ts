@@ -1142,7 +1142,8 @@ export class TeamKernel {
 
     /**
      * Choosing a model in a native session takes it over on the chooser's account with that model: a new segment with
-     * public history, as any change of payer. The choice is also remembered as the person's default.
+     * public history, as any change of payer. A thinking-only change by the paying member stays in the same session.
+     * The choice is also remembered as the person's default.
      */
     async chooseModel(id: ConversationId, user: User, body: unknown, requestId?: string) {
         const request = body as {
@@ -1173,6 +1174,26 @@ export class TeamKernel {
         const prior = requestId
             ? this.executions.journal.request(String(id), this.#request(id, user, requestId))
             : undefined;
+
+        if (prior?.operation === "command" && request.model === undefined) {
+            // An idle thinking change ran as the native /thinking command in the same session.
+            try {
+                this.executions.journal.existing(
+                    String(id),
+                    prior.requestId,
+                    `/thinking ${String(request.thinkingLevel)}`,
+                    "command",
+                );
+            } catch (error) {
+                if (error instanceof KernelRequestConflict) {
+                    throw new HttpError(409, "Model command request identity changed.");
+                }
+
+                throw error;
+            }
+
+            return { receipt: this.#receipt(prior) };
+        }
 
         if (prior) {
             const model = request.model;
@@ -1289,6 +1310,36 @@ export class TeamKernel {
 
         if (this.isRunning(id)) {
             throw new HttpError(409, "Pi is working. Stop it or wait before switching the model.");
+        }
+
+        // Thinking alone is mutable native session state: keep the session (and its identity seen
+        // by project hooks) instead of seeding a new one. A payer, account, model or kernel change still hands off.
+        if (
+            request.model === undefined &&
+            binding.memberId === user.id &&
+            binding.accountGeneration === ref.provider &&
+            binding.kernelVersion === verifyRotomKernel().version
+        ) {
+            const thinking = await this.#track(
+                id,
+                binding,
+                this.executions.run(
+                    String(id),
+                    this.#request(id, user, requestId ?? `thinking-${randomUUID()}`),
+                    `/thinking ${String(request.thinkingLevel)}`,
+                    this.#hooks(id),
+                ),
+            );
+
+            if (thinking.status === "handled") {
+                this.#app.accounts.choose(user, {
+                    ...ref,
+                    thinkingLevel: this.executions.thinkingLevel(String(id)),
+                });
+                this.#app.roomChanged(id);
+            }
+
+            return { receipt: thinking };
         }
 
         const receipt = await this.#handoff(

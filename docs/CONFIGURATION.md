@@ -196,7 +196,9 @@ the next model request uses it, not the response already streaming. The same pro
 receipt binding remain unchanged. Native thinking history preserves the level after process retirement/restart; current
 live readback takes precedence while the process is retained. A durable command-input fence prevents unknown writes
 from being replayed or making the parent prompt eligible for automatic continuation. Startup, finalization, Stop and
-unknown operations still refuse live changes. Idle model/thinking selection retains the existing handoff path.
+unknown operations still refuse live changes. When idle, the paying member's thinking-only change runs as the native
+`/thinking` command receipt in the same native session and segment, so project hooks keep seeing one session id; a
+model, payer or kernel change still uses the existing handoff path.
 
 Browser/computer-use refer to the service host, not the viewer's device. Quota results remain member-private account
 snapshots. See [NATIVE-COMMAND-COMPATIBILITY.md](NATIVE-COMMAND-COMPATIBILITY.md) for every supported interaction and limit.
