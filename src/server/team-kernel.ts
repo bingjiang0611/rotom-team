@@ -1142,7 +1142,7 @@ export class TeamKernel {
 
     /**
      * Choosing a model in a native session takes it over on the chooser's account with that model: a new segment with
-     * public history, as any change of payer. A thinking-only change by the paying member stays in the same session.
+     * public history, as any change of payer. The paying member's own model or thinking change stays in the same session.
      * The choice is also remembered as the person's default.
      */
     async chooseModel(id: ConversationId, user: User, body: unknown, requestId?: string) {
@@ -1198,7 +1198,8 @@ export class TeamKernel {
         if (prior) {
             const model = request.model;
             const matches =
-                prior.operation === "handoff" &&
+                (prior.operation === "handoff" ||
+                    (prior.operation === "command" && model !== undefined)) &&
                 (!model ||
                     ((model.provider === prior.binding.provider ||
                         model.provider === prior.binding.accountGeneration) &&
@@ -1313,7 +1314,7 @@ export class TeamKernel {
         }
 
         // Thinking alone is mutable native session state: keep the session (and its identity seen
-        // by project hooks) instead of seeding a new one. A payer, account, model or kernel change still hands off.
+        // by project hooks) and its retained process instead of seeding a new one.
         if (
             request.model === undefined &&
             binding.memberId === user.id &&
@@ -1340,6 +1341,38 @@ export class TeamKernel {
             }
 
             return { receipt: thinking };
+        }
+
+        // The paying member's model lives in its own HOME's native session: switch there, keeping the
+        // session id. Another member or kernel version still takes over through a handoff.
+        if (binding.memberId === user.id && binding.kernelVersion === verifyRotomKernel().version) {
+            const next: KernelBinding = {
+                ...binding,
+                accountGeneration: ref.provider,
+                provider: model.provider,
+                model: model.id,
+                thinkingLevel: chosen.thinkingLevel,
+            };
+            const switched = await this.#track(
+                id,
+                next,
+                this.executions.setModel(
+                    String(id),
+                    this.#request(id, user, requestId ?? `model-${randomUUID()}`),
+                    { expectedHead: segmentId, binding: next },
+                    this.#hooks(id),
+                ),
+            );
+
+            if (switched.status === "handled") {
+                this.#app.accounts.choose(user, {
+                    ...ref,
+                    thinkingLevel: this.executions.thinkingLevel(String(id)),
+                });
+                this.#app.roomChanged(id);
+            }
+
+            return { receipt: switched };
         }
 
         const receipt = await this.#handoff(

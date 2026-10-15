@@ -469,11 +469,28 @@ try {
     }
 
     assert.equal((await submit(viewer, "/name denied")).status, 403);
+    const beforeModel = app.kernel!.executions.journal.session(String(id));
     const changed = await json(
         await submit(alice, "/model openai/model-b", { requestId: "model-change" }),
     );
 
-    assert.equal(changed.status, "settled");
+    assert.equal(changed.status, "handled");
+    const afterModel = app.kernel!.executions.journal.session(String(id));
+
+    assert.equal(afterModel.segmentId, beforeModel.segmentId, "own model change keeps the segment");
+    assert.equal(
+        afterModel.sessionFile,
+        beforeModel.sessionFile,
+        "own model change keeps the session",
+    );
+    assert.ok(beforeModel.sessionFile, "the model change runs on an existing native session");
+    assert.equal(afterModel.kernelSessionId, beforeModel.kernelSessionId);
+    assert.ok(
+        app
+            .kernel!.executions.journal.segmentEntries(afterModel.segmentId)
+            .some((entry) => entry.type === "model_change" && entry.modelId === "model-b"),
+        "native history records the in-place model change",
+    );
     const replayedModel = await json(
         await submit(alice, "/model openai/model-b", { requestId: "model-change" }),
     );

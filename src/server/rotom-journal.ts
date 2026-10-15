@@ -37,6 +37,8 @@ export type KernelBinding = {
     home: string;
     workspace: string;
 };
+/** An in-place model change of the observed head segment. */
+export type KernelRebind = { expectedHead: string; binding: KernelBinding };
 /** A confirmed pre-dispatch identity conflict, not an uncertain external outcome. */
 export class KernelRequestConflict extends Error {}
 
@@ -218,6 +220,11 @@ export class RotomJournal {
 
             // One member may run several sessions at once; each conversation keeps its own single writer.
             this.#db.exec("DROP INDEX IF EXISTS one_kernel_writer");
+            // The paying member's current model; kernel_sessions.binding stays the immutable identity anchor.
+            // Unversioned on purpose: an older release ignores it and still opens this journal after a rollback.
+            this.#db.exec(
+                "CREATE TABLE IF NOT EXISTS kernel_segment_models (segment_id TEXT PRIMARY KEY REFERENCES kernel_sessions(id), binding TEXT NOT NULL)",
+            );
 
             // A cleanly released parent lock is not evidence that an unfinished dispatch never happened.
             this.#db.exec(
@@ -372,6 +379,7 @@ export class RotomJournal {
                 }
 
                 this.#db.prepare("DELETE FROM kernel_heads WHERE conversation_id=?").run(id);
+                this.#db.prepare("DELETE FROM kernel_segment_models WHERE segment_id=?").run(id);
                 this.#db.prepare("DELETE FROM kernel_sessions WHERE id=?").run(id);
             }
 
@@ -401,7 +409,11 @@ export class RotomJournal {
         sessionFile?: string;
         kernelSessionId?: string;
     } {
-        const row = this.#db.prepare("SELECT * FROM kernel_sessions WHERE id=?").get(id);
+        const row = this.#db
+            .prepare(
+                "SELECT s.*,m.binding AS model_binding FROM kernel_sessions s LEFT JOIN kernel_segment_models m ON m.segment_id=s.id WHERE s.id=?",
+            )
+            .get(id);
 
         if (!row) {
             throw new Error("Unknown kernel session");
@@ -409,7 +421,7 @@ export class RotomJournal {
 
         return {
             segmentId: id,
-            binding: JSON.parse(String(row.binding)),
+            binding: JSON.parse(String(row.model_binding ?? row.binding)),
             ...(row.session_file
                 ? {
                       sessionFile: String(row.session_file),
@@ -516,6 +528,7 @@ export class RotomJournal {
         requestId: string,
         prompt: string,
         operation: "prompt" | "compact" | "fork" | "discover" | "command" = "prompt",
+        rebind?: KernelRebind,
     ): KernelReceipt {
         const existing = this.existing(sessionId, requestId, prompt, operation);
 
@@ -527,6 +540,10 @@ export class RotomJournal {
             throw new Error("Invalid request identity");
         }
 
+        if (rebind) {
+            return this.#rebind(sessionId, requestId, prompt, rebind);
+        }
+
         const { binding, segmentId, sessionFile } = this.session(sessionId);
 
         if (operation === "fork" && sessionFile) {
@@ -536,6 +553,69 @@ export class RotomJournal {
         this.#unblocked(sessionId);
 
         return this.#intent(sessionId, segmentId, requestId, prompt, binding, operation);
+    }
+
+    /**
+     * The same payer keeps its native session across a model change: the head segment's current model changes with the
+     * command's intent in one commit. Its original binding remains the identity anchor; earlier attempts keep their
+     * own binding snapshots for validation and usage.
+     */
+    #rebind(
+        sessionId: string,
+        requestId: string,
+        prompt: string,
+        { expectedHead, binding }: KernelRebind,
+    ): KernelReceipt {
+        const normalized = this.#binding(binding);
+
+        this.#db.exec("BEGIN IMMEDIATE");
+
+        try {
+            const head = this.session(sessionId);
+
+            if (head.segmentId !== expectedHead) {
+                throw new KernelRequestConflict(
+                    "Conversation head changed; refresh before switching the model",
+                );
+            }
+
+            for (const key of [
+                "memberId",
+                "kernelVersion",
+                "configurationDigest",
+                "home",
+                "workspace",
+            ] as const) {
+                if (head.binding[key] !== normalized[key]) {
+                    throw new KernelRequestConflict(
+                        "Only the paying member's model can change in place; anything else hands off",
+                    );
+                }
+            }
+
+            this.#unblocked(sessionId);
+            this.#db
+                .prepare(
+                    "INSERT INTO kernel_segment_models VALUES (?,?) ON CONFLICT(segment_id) DO UPDATE SET binding=excluded.binding",
+                )
+                .run(expectedHead, JSON.stringify(normalized));
+            const receipt = this.#intent(
+                sessionId,
+                expectedHead,
+                requestId,
+                prompt,
+                normalized,
+                "command",
+            );
+
+            this.#db.exec("COMMIT");
+
+            return receipt;
+        } catch (error) {
+            this.#db.exec("ROLLBACK");
+
+            throw error;
+        }
     }
 
     /** Only authoritative native prompt/skill discovery may make a reserved slash eligible for prompt recovery. */
@@ -1043,7 +1123,12 @@ export class RotomJournal {
             .run(sessionId);
     }
 
-    fail(id: string, status: "unknown" | "rejected", unmaterialized = false): KernelReceipt {
+    fail(
+        id: string,
+        status: "unknown" | "rejected",
+        unmaterialized = false,
+        restore?: KernelBinding,
+    ): KernelReceipt {
         const attempt = this.receipt(id);
 
         if (attempt.status !== "dispatch-intent") {
@@ -1059,6 +1144,20 @@ export class RotomJournal {
         try {
             if (unmaterialized) {
                 this.#forgetUnmaterialized(attempt.segmentId);
+            }
+
+            // A known-rejected model change did not happen; an unknown one keeps the binding it may have used.
+            if (restore && status === "rejected") {
+                const previous = JSON.stringify(restore);
+
+                this.#db
+                    .prepare("DELETE FROM kernel_segment_models WHERE segment_id=?")
+                    .run(attempt.segmentId);
+                this.#db
+                    .prepare(
+                        "INSERT INTO kernel_segment_models SELECT id,? FROM kernel_sessions WHERE id=? AND binding<>?",
+                    )
+                    .run(previous, attempt.segmentId, previous);
             }
 
             this.#db.prepare("UPDATE kernel_attempts SET status=? WHERE id=?").run(status, id);
