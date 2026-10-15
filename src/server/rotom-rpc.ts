@@ -295,6 +295,10 @@ export class RotomRpc {
         return this.#send({ type: "set_thinking_level", level });
     }
 
+    setModel(provider: string, modelId: string): Promise<unknown> {
+        return this.#send({ type: "set_model", provider, modelId });
+    }
+
     #send(command: RpcRecord, timeoutMs: number | null = this.#timeout): Promise<unknown> {
         if (this.#failure) {
             return Promise.reject(this.#failure);

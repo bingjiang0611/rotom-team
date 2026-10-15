@@ -12,7 +12,7 @@ flowchart LR
 
 The shared profile is **Team-dedicated**. Nothing imports the service user's personal agent settings, telemetry,
 credentials, model defaults, grants or skill memory. Each member still selects an available model on their own
-account; changing model uses the existing immutable Team handoff. See [PRODUCT.md](PRODUCT.md).
+account; the paying member changes model in place, in the same native session. See [PRODUCT.md](PRODUCT.md).
 
 ## Shared installation and configuration
 
@@ -196,9 +196,14 @@ the next model request uses it, not the response already streaming. The same pro
 receipt binding remain unchanged. Native thinking history preserves the level after process retirement/restart; current
 live readback takes precedence while the process is retained. A durable command-input fence prevents unknown writes
 from being replayed or making the parent prompt eligible for automatic continuation. Startup, finalization, Stop and
-unknown operations still refuse live changes. When idle, the paying member's thinking-only change runs as the native
-`/thinking` command receipt in the same native session and segment, so project hooks keep seeing one session id; a
-model, payer or kernel change still uses the existing handoff path.
+unknown operations still refuse live changes. When idle, the paying member's own change stays in the same native
+session and segment, so project hooks keep seeing one session id. A thinking-only change runs as the native `/thinking`
+command receipt on the retained process. A model or account change of the same member is one `/model` command receipt:
+its intent and the segment's current model commit together, the idle process retires, and native restarts on the same
+session file with the new model, then records `model_change` and reapplies the selected thinking level. The segment's
+original binding stays the immutable identity anchor; each attempt keeps its own binding for response validation and
+usage. A known rejection restores the previous model; an unknown outcome keeps the new one and stays fenced. A payer
+or kernel change still uses the existing handoff path.
 
 Browser/computer-use refer to the service host, not the viewer's device. Quota results remain member-private account
 snapshots. See [NATIVE-COMMAND-COMPATIBILITY.md](NATIVE-COMMAND-COMPATIBILITY.md) for every supported interaction and limit.

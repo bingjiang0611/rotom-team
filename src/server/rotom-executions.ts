@@ -32,6 +32,7 @@ import {
     type KernelEntry,
     type KernelReceipt,
     type KernelFailure,
+    type KernelRebind,
 } from "./rotom-journal.ts";
 import {
     nativeBuiltinCommands,
@@ -813,6 +814,27 @@ export class RotomExecutions {
         );
     }
 
+    /** The paying member's idle model change: same native session, restarted on the new model. */
+    setModel(
+        sessionId: string,
+        requestId: string,
+        rebind: KernelRebind,
+        hooks: RunHooks = {},
+    ): Promise<KernelReceipt> {
+        return this.#track(sessionId, (running) =>
+            this.#execute(
+                sessionId,
+                requestId,
+                `/model ${rebind.binding.accountGeneration}/${rebind.binding.model}`,
+                "command",
+                running,
+                hooks,
+                [],
+                rebind,
+            ),
+        );
+    }
+
     /** Authorized startup discovery uses a normal owned lease, but its gate denies all inference. */
     discover(sessionId: string, requestId: string, hooks: RunHooks): Promise<KernelReceipt> {
         return this.#track(sessionId, (running) =>
@@ -841,10 +863,11 @@ export class RotomExecutions {
         running: Running,
         hooks: RunHooks = {},
         images: ImageContent[] = [],
+        rebind?: KernelRebind,
     ): Promise<KernelReceipt> {
         const identity = nativePromptIdentity(prompt, images);
         const admitted = this.journal.session(sessionId);
-        const binding = Object.freeze(admitted.binding);
+        const binding = Object.freeze(rebind?.binding ?? admitted.binding);
 
         // Old receipts are returned, never fed to a new subprocess. Even unknown is a durable result of admission.
         await this.#authorize(binding, "admission", sessionId);
@@ -864,7 +887,10 @@ export class RotomExecutions {
 
         // Authorization awaited user/account state. A concurrent completed handoff must not
         // reserve the new payer while launching this previously admitted binding.
-        if (this.journal.session(sessionId).segmentId !== admitted.segmentId) {
+        if (
+            this.journal.session(sessionId).segmentId !== admitted.segmentId ||
+            (rebind && rebind.expectedHead !== admitted.segmentId)
+        ) {
             throw new KernelRequestConflict("Conversation head changed during admission");
         }
 
@@ -873,7 +899,13 @@ export class RotomExecutions {
         }
 
         const prepared = this.#prepare?.(binding, sessionId);
-        const receipt = this.journal.reserve(sessionId, requestId, identity, operation);
+
+        if (rebind) {
+            // The retained process is gated to the previous model; the same session file restarts on the new one.
+            await this.#retire(admitted.segmentId);
+        }
+
+        const receipt = this.journal.reserve(sessionId, requestId, identity, operation, rebind);
 
         running.attemptId = receipt.id;
 
@@ -1267,8 +1299,17 @@ export class RotomExecutions {
 
                 await hooks.onNativeResult?.({ state, stats });
                 disposition = "handled";
+            } else if (rebind && nativeCommandName(prompt) === "model") {
+                // Records the native model_change; Team's selected level is reapplied after native clamping.
+                await kernel.setModel(binding.provider, binding.model);
+
+                if (binding.thinkingLevel) {
+                    await kernel.setThinkingLevel(binding.thinkingLevel);
+                }
+
+                disposition = "handled";
             } else if (nativeCommandName(prompt) === "thinking") {
-                // Idle reasoning changes stay in this native session; only a payer/model change hands off.
+                // Idle reasoning changes stay in this native session and process.
                 const level = nativeCommandArgs(prompt);
 
                 if (!/^[a-z]+$/.test(level)) {
@@ -1517,7 +1558,12 @@ export class RotomExecutions {
             attached !== undefined &&
             !existsSync(attached);
 
-        return this.journal.fail(receipt.id, failureStatus, unmaterialized);
+        return this.journal.fail(
+            receipt.id,
+            failureStatus,
+            unmaterialized,
+            rebind ? admitted.binding : undefined,
+        );
     }
 
     async #retire(segmentId: string): Promise<void> {
