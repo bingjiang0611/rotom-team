@@ -1,6 +1,9 @@
 import { randomBytes } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import type { ConfigStore, Role, User } from "./config.ts";
+import { type ConfigStore, type InviteGrant, MAX_DEVICES, type User } from "./config.ts";
+import { HttpError } from "./errors.ts";
+
+export type { InviteGrant } from "./config.ts";
 
 export const COOKIE = "pocket_auth";
 
@@ -76,13 +79,6 @@ export function clearAuthCookie(response: ServerResponse): void {
     response.setHeader("set-cookie", `${COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
 }
 
-/**
- * What an invite grants: a role, and optionally a single session instead of all of them. An owner invite signs a device
- * in as the owner, with the owner's token: it is never for one session.
- */
-export type InviteGrant =
-    { role: Exclude<Role, "owner">; session?: string } | { role: "owner"; session?: never };
-
 /** Invites live in `config.json` (by their codes' hashes), so one that lasts a day or a week outlives a restart. */
 export class Auth {
     readonly #config: ConfigStore;
@@ -111,12 +107,28 @@ export class Auth {
         return this.#config.userByToken(token);
     }
 
-    /** A new invite that lasts `minutes`; an owner invite always lasts 15, the least. */
+    /** A new invite; owner and member-recovery links always last 15 minutes. */
     createInvite(
         by: User,
         grant: InviteGrant = { role: "guest" },
         minutes: InviteMinutes = 15,
     ): { code: string; expiresAt: number; minutes: InviteMinutes } {
+        if (grant.role === "recovery") {
+            if (by.role !== "owner") {
+                throw new HttpError(403, "Only the owner can recover a member's sign-in.");
+            }
+
+            const member = this.#config.userById(grant.memberId);
+
+            if (member === undefined) {
+                throw new HttpError(404, "No such member.");
+            }
+
+            if (member.role === "owner") {
+                throw new HttpError(400, "Use an owner invite for the owner's other device.");
+            }
+        }
+
         // Unambiguous characters, easy to type on a phone.
         const alphabet = "abcdefghjkmnpqrstuvwxyz23456789";
         const bytes = randomBytes(10);
@@ -126,7 +138,8 @@ export class Auth {
             code += alphabet[byte % alphabet.length];
         }
 
-        const lasts = grant.role === "owner" ? INVITE_MINUTES[0] : minutes;
+        const lasts =
+            grant.role === "owner" || grant.role === "recovery" ? INVITE_MINUTES[0] : minutes;
         const expiresAt = Date.now() + lasts * 60_000;
 
         this.#config.addInvite(code, { ...grant, expiresAt, createdBy: by.id });
@@ -149,6 +162,16 @@ export class Auth {
             return undefined;
         }
 
+        if (invite.role === "recovery") {
+            const member = this.#config.userById(invite.memberId);
+
+            return this.#config.userById(invite.createdBy)?.role === "owner" &&
+                member !== undefined &&
+                member.role !== "owner"
+                ? { role: "recovery", memberId: member.id }
+                : undefined;
+        }
+
         return invite.role === "owner" || invite.session === undefined
             ? { role: invite.role }
             : { role: invite.role, session: invite.session };
@@ -160,12 +183,13 @@ export class Auth {
 
     /**
      * Spend an invite on a new device: a user with the invite's role and scope, and its own token. An owner invite makes
-     * no one new: the device gets the owner and the owner's token. Either way the invite is gone, used or not.
+     * no one new: the device gets the owner and the owner's token. Recovery adds a revocable device to the existing
+     * member without changing their access or credentials. Full device capacity leaves the invite unspent.
      */
     redeem(code: string, name: string): { user: User; token: string } | undefined {
         const invite = this.#config.invite(code);
 
-        if (invite === undefined || !this.#config.removeInvite(code)) {
+        if (invite === undefined) {
             return undefined;
         }
 
@@ -173,6 +197,31 @@ export class Auth {
         const creator = this.#config.userById(invite.createdBy);
 
         if (creator === undefined || creator.role === "viewer" || creator.sessions !== undefined) {
+            return undefined;
+        }
+
+        if (invite.role === "recovery") {
+            const member = this.#config.userById(invite.memberId);
+
+            if (creator.role !== "owner" || member === undefined || member.role === "owner") {
+                return undefined;
+            }
+
+            if (this.#config.devices(member.id).length >= MAX_DEVICES) {
+                throw new HttpError(
+                    409,
+                    `Revoke an old device before recovering this member (${MAX_DEVICES} devices per member).`,
+                );
+            }
+
+            if (!this.#config.removeInvite(code)) {
+                return undefined;
+            }
+
+            return { user: member, token: this.#config.addDevice(member.id).token };
+        }
+
+        if (!this.#config.removeInvite(code)) {
             return undefined;
         }
 

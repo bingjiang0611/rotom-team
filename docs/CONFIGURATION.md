@@ -227,6 +227,27 @@ session and an unknown command receipt. It is **not** a production transport: pu
 command-completion/error observer to the external TUI frontend. Terminal exit or visual messages are not sufficient to
 settle a receipt. No context.mode spoofing, native monkeypatch or reconstructed `/context` report is used.
 
+## Recover an existing member's browser sign-in
+
+The owner can open **Settings → People → Recover sign-in** beside an existing non-owner member.
+Check the member name and ID (names may repeat), then send the recovery link only to that person.
+Anyone holding it can sign in as that member, including using their connected personal model/MCP accounts.
+This is trusted-owner account recovery, not anonymous self-service identity verification.
+
+Recovery links expire after 15 minutes and work once, only after an explicit confirmation POST.
+Replacing a displayed recovery link cancels it; closing the sheet leaves a delivered link valid until expiry.
+Only a hash is persisted. Unused links and redeemed device credentials survive ordinary server restarts.
+Deleting the member or rotating the owner login token invalidates pending recovery links.
+Recovery creates a revocable device credential for the same member ID. It does not rename the member, reset
+permissions/session scope/tunnel binding, copy credentials, or sign out existing devices. Use the member's
+original access address when it has a tunnel restriction. This is not model OAuth reauthentication and does
+not reconcile unknown model/tool outcomes. Device credentials are managed in the member's Profile; the
+existing 32-device limit still applies. At capacity, redemption returns an error without spending the link;
+revoke an old device from a signed-in member device before retrying.
+
+Do not roll back to a version without recovery support while recovery links remain live: cancel them or
+wait 15 minutes first. This feature does not diagnose or prevent browser Cookie deletion.
+
 ## Verification
 
 Use [VERIFICATION.md](VERIFICATION.md). The native/browser, resource, MCP, Goal and inventory scripts use temporary data

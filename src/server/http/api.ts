@@ -63,7 +63,24 @@ export function createApi(options: HttpOptions, auth: Auth) {
      * What an invite may grant: viewers and people invited to one session cannot invite anyone, and only the owner can
      * sign a device in as the owner (never for one session).
      */
-    const inviteGrant = (user: User, body: { role?: unknown; session?: unknown }): InviteGrant => {
+    const inviteGrant = (
+        user: User,
+        body: { role?: unknown; session?: unknown; memberId?: unknown },
+    ): InviteGrant => {
+        if (body.memberId !== undefined) {
+            requireOwner(user);
+
+            if (typeof body.memberId !== "string" || body.memberId === "") {
+                throw new HttpError(400, "Say which member to recover.");
+            }
+
+            if (body.role !== undefined || body.session !== undefined) {
+                throw new HttpError(400, "Recovery keeps the member's existing access.");
+            }
+
+            return { role: "recovery", memberId: body.memberId };
+        }
+
         if (body.role === "owner") {
             requireOwner(user);
 
@@ -547,6 +564,7 @@ export function createApi(options: HttpOptions, auth: Auth) {
                 role?: unknown;
                 session?: unknown;
                 minutes?: unknown;
+                memberId?: unknown;
             };
             const grant = inviteGrant(user, body);
             const invite = auth.createInvite(user, grant, inviteMinutes(body));

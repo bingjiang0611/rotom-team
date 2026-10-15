@@ -17,6 +17,17 @@ The automated suite uses synthetic providers, local fixtures and isolated test d
 
 For every check, record the exact source commit, exit status, inspected scope and any failure. Do not treat an older passing result as evidence for the current artifact.
 
+## Existing-member sign-in recovery
+
+`node --test test/member-recovery.test.ts test/settings-ui.test.ts` uses synthetic members and isolated data.
+HTTP checks cover owner-only issuance, invalid targets, immutable member identity/permissions/tunnel/primary
+credential, confirmation-only redemption, cross-site POST rejection, concurrent single use, fixed expiry,
+hashed persistence, restart readback, cancellation, member deletion, owner-token rotation, device revocation
+and the 32-device capacity limit. Chromium checks the real People action, recovery link replacement,
+confirmation, same-member login after refresh, hidden non-owner controls and phone-width containment.
+Browser checks explicitly skip if Chromium is unavailable; no real member/model accounts are used.
+This does not establish delivery to the intended person or diagnose a real browser's missing Cookie.
+
 ## First-message session names
 
 `test/sessions.test.ts` checks atomic first-message naming, whitespace normalization, the 80-character limit,

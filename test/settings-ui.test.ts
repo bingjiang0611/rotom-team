@@ -309,6 +309,101 @@ test("on a phone, settings lists its pages in a row above the open one", real, a
     await reach({ page: "Appearance" }, "another page, on a phone");
 });
 
+test(
+    "owner recovers an existing member through People; the new cookie survives refresh",
+    real,
+    async () => {
+        const member = app.config.addUser("Recovery UI member", "viewer");
+        const count = app.config.users.length;
+
+        await home(VIEWPORTS.desktop);
+        await tap('.home-list .me-row[title="Settings"]');
+        await press(".settings-nav", "People");
+        await reach({ page: "People" }, "People settings");
+        await press(".person-actions", "Recover sign-in");
+        await reach({ title: "Recover member sign-in" }, "member recovery sheet");
+        await until(() => present(".invite input[readonly]"), "recovery link created");
+        assert.equal(await present('.sheet-host:not(.leaving) input[type="checkbox"]'), false);
+        assert.equal(
+            await present(".sheet-host:not(.leaving) .segmented"),
+            false,
+            "recovery cannot change access",
+        );
+        const bodyText = () => inPage<string>(`return JSON.stringify(document.body.innerText)`);
+
+        assert.ok((await bodyText()).includes(member.user.id), "disambiguates same-name members");
+        const link = () =>
+            inPage<string>(
+                `return JSON.stringify(document.querySelector('.invite input[readonly]')?.value ?? '')`,
+            );
+        const first = await link();
+
+        assert.equal(app.config.devices(member.user.id).length, 0);
+        await page.evaluate(
+            `await Promise.all(document.getAnimations().filter(animation => animation.effect?.getComputedTiming().endTime !== Infinity).map(animation => animation.finished.catch(() => {})))`,
+        );
+        await shot("member-recovery-desktop");
+        await press(".sheet-host:not(.leaving)", "Replace recovery link");
+        await until(
+            async () => (await link()) !== "" && (await link()) !== first,
+            "replacement link",
+        );
+        assert.equal((await fetch(first)).status, 410, "replacing revokes the old link");
+        const url = await link();
+
+        await page.setViewport(VIEWPORTS.mobile);
+        await until(
+            async () =>
+                await inPage<boolean>(`
+        const page = document.querySelector('.sheet-host:not(.leaving) [role="dialog"]');
+        return JSON.stringify(page.scrollWidth <= page.clientWidth + 1);
+    `),
+            "recovery content fits phone width",
+        );
+        await page.evaluate(
+            `await Promise.all(document.getAnimations().filter(animation => animation.effect?.getComputedTiming().endTime !== Infinity).map(animation => animation.finished.catch(() => {})))`,
+        );
+        await shot("member-recovery-phone");
+        await page.navigate(url);
+        await until(() => present('form button[type="submit"]'), "confirmation page");
+        assert.ok((await bodyText()).includes("Continuing switches it"));
+        assert.equal(app.config.devices(member.user.id).length, 0, "GET does not sign in");
+        await tap('form button[type="submit"]');
+        const signedIn = () =>
+            inPage<string | null>(`
+        const { store } = await import('/store.js');
+        return JSON.stringify(store.state.me?.id ?? null);
+    `);
+
+        await until(
+            async () => (await signedIn()) === member.user.id,
+            "signed in as original member",
+        );
+        await page.navigate(`${base}/`);
+        await until(
+            async () => (await signedIn()) === member.user.id,
+            "member login survives refresh",
+        );
+        assert.equal(app.config.users.length, count);
+        assert.equal(app.config.devices(member.user.id).length, 1);
+        assert.equal((await fetch(url)).status, 410);
+        await page.evaluate(`(await import('/store.js')).openSheet({type: 'people'})`);
+        await reach({ page: "People" }, "member's People page");
+        assert.equal(
+            (await bodyText()).includes("Recover sign-in"),
+            false,
+            "non-owner has no recovery control",
+        );
+        // Restore the owner explicitly through the account-switch confirmation for subsequent tests.
+        await page.navigate(`${base}/login?token=${encodeURIComponent(app.config.ownerToken)}`);
+        await tap('form button[type="submit"]');
+        await until(
+            async () => (await signedIn()) !== member.user.id && (await signedIn()) !== null,
+            "owner restored",
+        );
+    },
+);
+
 test("reopening a native sheet during its exit starts with fresh form state", real, async () => {
     await home(VIEWPORTS.desktop);
     await page.evaluate(`(await import('/store.js')).openSheet({type: 'native-goal'})`);

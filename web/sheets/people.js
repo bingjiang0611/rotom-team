@@ -42,7 +42,7 @@ const cancelInvite = (invite) => {
     }
 };
 
-export function InviteSheet({ session = null }) {
+export function InviteSheet({ session = null, member = null }) {
     const { view, me } = store.state;
     const here = view.conversation?.kind === "session" ? view.conversation : null;
     const [role, setRole] = useState("guest");
@@ -54,7 +54,7 @@ export function InviteSheet({ session = null }) {
     // The newest invite could not be made: the sheet offers to try again rather than wait for ever.
     const [failed, setFailed] = useState(false);
     // What the sheet says now: an invite shows only while it was made for exactly this.
-    const asked = JSON.stringify([asOwner, role, only, minutes]);
+    const asked = JSON.stringify([asOwner, role, only, minutes, member?.id]);
     // Only the newest invite shows: one asked for before a change, answering late, must not stand for what the sheet says.
     const latest = useRef(0);
     // The invite the sheet last showed: a change to what it grants, or how long it lasts, ends it.
@@ -82,11 +82,13 @@ export function InviteSheet({ session = null }) {
             try {
                 answer = await api(
                     "invite",
-                    asOwner
-                        ? { role: "owner" }
-                        : collab()
-                          ? { role, ...(only && here ? { session: here.id } : {}), minutes }
-                          : { minutes },
+                    member
+                        ? { memberId: member.id }
+                        : asOwner
+                          ? { role: "owner" }
+                          : collab()
+                            ? { role, ...(only && here ? { session: here.id } : {}), minutes }
+                            : { minutes },
                 );
             } catch (error) {
                 if (ticket === latest.current) {
@@ -109,13 +111,23 @@ export function InviteSheet({ session = null }) {
                 throw new Error("Restart Pi Pocket to sign in another device as the owner.");
             }
 
+            if (
+                member &&
+                (answer.grant?.role !== "recovery" || answer.grant.memberId !== member.id)
+            ) {
+                cancelInvite(answer);
+                setFailed(true);
+
+                throw new Error("Restart rotom team to enable member recovery links.");
+            }
+
             shown.current = answer;
             setMade({ ...answer, asked });
         });
 
     useEffect(() => {
         create({ replacing: true });
-    }, [role, only, asOwner, minutes]);
+    }, [role, only, asOwner, minutes, member?.id]);
     useEffect(
         () => () => {
             mounted.current = false;
@@ -132,8 +144,14 @@ export function InviteSheet({ session = null }) {
         ([each]) => each === (invite ? (invite.minutes ?? 15) : minutes),
     )?.[2];
 
-    return html`<${Sheet} title="Invite someone" onClose=${closeSheet}>
+    return html`<${Sheet} title=${member ? "Recover member sign-in" : "Invite someone"} onClose=${closeSheet}>
         ${
+            member &&
+            html`<p><strong>${member.name}</strong> · <span class="mono">${member.id}</span></p>
+                <p class="muted small">Restores this existing member without creating another account or changing their permissions. Anyone with this link can sign in as them and use their connected accounts. Send it only to this member.</p>`
+        }
+        ${
+            !member &&
             me?.role === "owner" &&
             html`<label class="check">
                 <input
@@ -145,6 +163,7 @@ export function InviteSheet({ session = null }) {
             </label>`
         }
         ${
+            !member &&
             collab() &&
             !asOwner &&
             html`<div class="field">
@@ -180,6 +199,7 @@ export function InviteSheet({ session = null }) {
             }`
         }
         ${
+            !member &&
             !asOwner &&
             html`<div class="field">
                 <div class="label">Expires after</div>
@@ -198,9 +218,11 @@ export function InviteSheet({ session = null }) {
         }
         <p class="muted small">
             ${
-                asOwner
-                    ? "Scan this on your other device, or send it the link. That device signs in as you, the owner. It works once and expires in 15 minutes."
-                    : `Scan this on the other device, or send it the link. It works once and expires ${lasting}. Whoever joins sees ${where}.`
+                member
+                    ? "This recovery link works once and expires in 15 minutes. Existing signed-in devices stay signed in."
+                    : asOwner
+                      ? "Scan this on your other device, or send it the link. That device signs in as you, the owner. It works once and expires in 15 minutes."
+                      : `Scan this on the other device, or send it the link. It works once and expires ${lasting}. Whoever joins sees ${where}.`
             }
         </p>
         ${
@@ -270,10 +292,14 @@ export function InviteSheet({ session = null }) {
                     }
                 </div>`
                 : failed
-                  ? html`<p class="muted small">No invite yet. Tap New invite to try again.</p>`
+                  ? html`<p class="muted small">
+                        ${member ? "No recovery link yet. Tap Replace recovery link to try again." : "No invite yet. Tap New invite to try again."}
+                    </p>`
                   : html`<${Loader} label="Making an invite" />`
         }
-        <button class="button wide" onClick=${create}>New invite</button>
+        <button class="button wide" onClick=${() => create({ replacing: member !== null })}>
+            ${member ? "Replace recovery link" : "New invite"}
+        </button>
         ${!collab() && html`<${PeopleList} />`}
     <//>`;
 }
@@ -323,6 +349,13 @@ function PeopleList() {
                     owner &&
                     person.role !== "owner" &&
                     html`<div class="person-actions">
+                        <button
+                            class="button small"
+                            title=${`Recover sign-in for ${person.name} (${person.id})`}
+                            onClick=${() => openSheet({ type: "invite", member: person })}
+                        >
+                            Recover sign-in
+                        </button>
                         ${
                             collab() &&
                             html`<button

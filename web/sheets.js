@@ -176,7 +176,11 @@ function sheetBody(sheet) {
             body = html`<${ImageViewer} src=${sheet.src} alt=${sheet.alt} />`;
             break;
         case "invite":
-            body = html`<${InviteSheet} session=${sheet.session ?? null} />`;
+            body = html`<${InviteSheet}
+                key=${sheet.member?.id ?? "new-member"}
+                session=${sheet.session ?? null}
+                member=${sheet.member ?? null}
+            />`;
             break;
         case "people":
             body = html`<${PeopleSheet} />`;

@@ -36,16 +36,19 @@ export interface User {
     budget?: number;
 }
 
+/** A new member, the owner's other device, or recovery of an existing non-owner member. */
+export type InviteGrant =
+    | { role: Exclude<Role, "owner">; session?: string }
+    | { role: "owner"; session?: never }
+    | { role: "recovery"; memberId: string; session?: never };
+
 /** An invite not yet used, kept by its code's sha256 (the code itself is only shown to whoever made it). */
-export interface StoredInvite {
+export type StoredInvite = InviteGrant & {
     codeHash: string;
-    role: Role;
-    /** The one session it is for; absent means every session. Never set for an owner invite. */
-    session?: string;
     expiresAt: number;
     /** Who made it: it works only while they may still invite. */
     createdBy: string;
-}
+};
 
 export interface ModelChoice {
     provider: string;
@@ -90,6 +93,7 @@ function sameHash(a: string, b: string): boolean {
 
 /** The most invites one person keeps live at once. */
 export const MAX_INVITES = 50;
+export const MAX_DEVICES = 32;
 
 /** `config.json` in the data directory, written atomically with mode 0600. */
 export class ConfigStore {
@@ -217,8 +221,10 @@ export class ConfigStore {
 
         const devices = this.#config.devices ?? [];
 
-        if (devices.filter((device) => device.userId === userId).length >= 32) {
-            throw new Error("Revoke an old device before adding more (32 devices per member).");
+        if (devices.filter((device) => device.userId === userId).length >= MAX_DEVICES) {
+            throw new Error(
+                `Revoke an old device before adding more (${MAX_DEVICES} devices per member).`,
+            );
         }
 
         const token = newToken(),
@@ -327,7 +333,9 @@ export class ConfigStore {
         if (!this.#config.users.some((user) => user.id === id)) {
             this.#config.devices = this.#config.devices?.filter((device) => device.userId !== id);
             this.#config.invites = this.#config.invites?.filter(
-                (invite) => invite.createdBy !== id,
+                (invite) =>
+                    invite.createdBy !== id &&
+                    (invite.role !== "recovery" || invite.memberId !== id),
             );
         }
 
@@ -335,7 +343,10 @@ export class ConfigStore {
     }
 
     /** Keep a new invite. A person keeps at most `MAX_INVITES` live: beyond that, their oldest ends. */
-    addInvite(code: string, invite: Omit<StoredInvite, "codeHash">): void {
+    addInvite(
+        code: string,
+        invite: InviteGrant & Pick<StoredInvite, "expiresAt" | "createdBy">,
+    ): void {
         this.#pruneInvites();
         const theirs = (this.#config.invites ?? []).filter(
             (each) => each.createdBy === invite.createdBy,
@@ -399,7 +410,9 @@ export class ConfigStore {
         }
 
         if (this.#config.invites !== undefined) {
-            this.#config.invites = this.#config.invites.filter((invite) => invite.role !== "owner");
+            this.#config.invites = this.#config.invites.filter(
+                (invite) => invite.role !== "owner" && invite.role !== "recovery",
+            );
         }
 
         this.save();

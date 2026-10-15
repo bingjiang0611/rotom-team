@@ -90,6 +90,7 @@ export async function join(
         }
 
         const form = new URLSearchParams((await readBody(request, 10_000)).toString("utf8"));
+        const recovering = auth.invite(code)?.role === "recovery";
         const redeemed = auth.redeem(code, form.get("name") ?? "");
 
         if (redeemed === undefined) {
@@ -104,12 +105,16 @@ export async function join(
         const tunnel = quickTunnelHost(request);
 
         // The owner is never tied to one tunnel.
-        if (tunnel !== undefined && redeemed.user.role !== "owner") {
+        if (!recovering && tunnel !== undefined && redeemed.user.role !== "owner") {
             app.config.updateUser(redeemed.user.id, { tunnel });
         }
 
         setAuthCookie(request, response, redeemed.token);
-        response.writeHead(303, { location: "/" });
+        response.writeHead(303, {
+            location: "/",
+            "cache-control": "no-store",
+            "referrer-policy": "no-referrer",
+        });
         response.end();
 
         return;
@@ -126,6 +131,27 @@ export async function join(
                 "<h1>Invite expired</h1><p>Each invite works once, and only until it expires. Ask for a new one.</p>",
             ),
             "text/html; charset=utf-8",
+        );
+    }
+
+    if (grant.role === "recovery") {
+        // Auth checked the target and creator against current membership, not a role saved in the link.
+        const member = app.config.userById(grant.memberId)!;
+        const current = auth.user(request);
+        const switching =
+            current !== undefined && current.id !== member.id
+                ? `<p>This browser is signed in as ${escapeHtml(current.name)}. Continuing switches it to ${escapeHtml(member.name)}.</p>`
+                : "";
+
+        return send(
+            response,
+            200,
+            page(
+                "Recover member sign-in · rotom team",
+                `<h1>Sign in as ${escapeHtml(member.name)}</h1><p>This restores access to the existing member, not a new account. Their current permissions and personal account connections stay unchanged.</p>${switching}<p>Only continue if this is your account. This link works once and expires in 15 minutes.</p><form method="post"><button type="submit">Sign in as ${escapeHtml(member.name)}</button></form>`,
+            ),
+            "text/html; charset=utf-8",
+            { "referrer-policy": "no-referrer", "cache-control": "no-store" },
         );
     }
 
