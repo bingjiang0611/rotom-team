@@ -43,9 +43,11 @@ flowchart LR
 
 - `/` 菜单来自固定版本的原生注册表。GET 只读；首次动态发现由成员明确启动，沿用权限和 lease，但拒绝 Team 模型推理。打开 slash 建议即显式发起发现。缓存按成员、segment 和固定绑定隔离，保留最后已知结果，不再空闲 30 秒后消失；显示 freshness，执行前仍核对原生注册表。未知命令不作为模型输入。
 - 模型选择走 Team 接力，不改写运行中的付费人/模型。原生 fork/tree 选择恢复编辑草稿，不自动提交；tree 的可选原生摘要使用当前成员和模型，记录真实持久化用量。共享 Transcript 是含废弃分支的审计历史，不等于当前模型上下文。
-- 原生 JSONL 导出使用当前分支序列化；HTML 使用原生 exporter。原始导出只交付给该 segment 的成员。跨成员 fork/clone/import 仍只传公开历史。
-- `/mcp` 复用成员自己的浏览器外置登录桥。Qoder catalog/credits 调用成员 provider API，结果不向会话广播。
-- 本次明确排除的命令只有 `/share` 和 `/bug`：不提供可执行建议，手动输入在原生启动、推理及上传前拒绝。这不等于宣称其余 43 项全部对齐：`/context`、`/llama` 的 TUI 交互仍受阻，5 个个人技能按用户选择不安装；子 Agent 指定技能、user/project memory 和已有项目 refinement 叠加使用原生实现；user memory 按付费成员私有路由，project memory 按项目共享。workflowScript 缺少原生 RPC 收尾接口，refinement 自动生成受原生前台执行限制，仍不支持。其余权限、账户、运行状态限制仍生效。详见 [CONFIGURATION.md](CONFIGURATION.md)。
+- 原生 JSONL 导出使用当前分支序列化；HTML 使用原生 exporter。原始导出只交付给该 segment 的成员。跨成员 fork/clone 仍只传公开历史。
+- 内置/扩展命令只支持 `settings, model, thinking, tree, fork, clone, compact, reload, goal, browser, computer-use, mcp, qoder-credits`。技能和提示模板保留。发现、提交和排队入口使用同一限制；不只是隐藏菜单，也不允许同名模板绕过限制。内部生命周期操作和独立 Team API 不受此菜单精简影响。
+- Tab 和部分名称回车只补全；完整命令回车才执行。thinking/fork 使用专用键盘选择器；settings 只有 owner 可写共享设置；裸 Goal 打开网页管理器，但不提供原生安全设置编辑器。这是保留 Team 边界的网页对齐，不是完整终端等价。
+- `/browser` 和 `/computer-use` 指服务机器，而非访问页面的设备。`/mcp` 复用成员自己的浏览器外置登录桥。`/qoder-credits` 显示成员自己的额度快照，不广播，也不把未知值当作零或逐请求扣费。
+- 5 个个人技能仍按用户选择不安装。子 Agent 指定技能、user/project memory 和已有项目 refinement 叠加使用原生实现。user memory 按付费成员私有路由，project memory 按项目共享；模型引用后仍可能出现在共享历史中。workflowScript 仍缺少原生 RPC 收尾接口，refinement 自动生成仍受原生前台执行限制。权限、账号和 unknown 不重放边界不变。详见 [CONFIGURATION.md](CONFIGURATION.md)。
 
 ## 中断、恢复与数据
 

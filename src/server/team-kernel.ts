@@ -12,7 +12,7 @@ import {
     rmSync,
     writeFileSync,
 } from "node:fs";
-import { join, sep } from "node:path";
+import { join } from "node:path";
 import {
     defineDoc,
     type ConversationId,
@@ -23,6 +23,7 @@ import type { JsonValue } from "@earendil-works/chord";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import {
     clampThinkingLevel,
+    getSupportedThinkingLevels,
     type ModelThinkingLevel,
     type TranscriptContext,
 } from "@earendil-works/pi-ai";
@@ -65,6 +66,7 @@ import {
 } from "./rotom-kernel.ts";
 import { McpSignIns } from "./mcp-sign-in.ts";
 import { nativeTreeNodes } from "./native-tree.ts";
+import { supportedTeamCommand, teamCommandCatalog } from "./team-command-policy.ts";
 import { touchSession } from "./titles.ts";
 
 export type NativeCreation = {
@@ -669,20 +671,9 @@ export class TeamKernel {
         this.#app.requireSteer(user);
         this.#app.requireSee(user, id);
 
-        if (["share", "bug"].includes(nativeCommandName(text) ?? "")) {
-            throw new HttpError(
-                400,
-                `/${nativeCommandName(text)} is excluded from this Team release. No external upload was started.`,
-            );
-        }
+        await this.#requireSupportedCommand(id, user, text);
 
-        if (nativeCommandName(text) === "quit") {
-            await this.abort(id, user);
-
-            return { status: "handled" as const, conversationId: null };
-        }
-
-        if (["qoder-models", "qoder-credits"].includes(nativeCommandName(text) ?? "")) {
+        if (nativeCommandName(text) === "qoder-credits") {
             await this.#requireDynamicAdapter(id, user, nativeCommandName(text)!);
 
             throw new HttpError(
@@ -727,6 +718,7 @@ export class TeamKernel {
                     normalizeNativePrompt(attachmentText(text, attachments)),
                     mode,
                     images,
+                    (command) => this.#admitNativeCommand(command),
                 ))
             ) {
                 throw new HttpError(
@@ -806,104 +798,30 @@ export class TeamKernel {
             throw new HttpError(400, "Enter ordinary text or a native slash command.");
         }
 
+        await this.#requireSupportedCommand(id, user, prompt, requestId);
         const command = nativeCommandName(prompt);
         const args = nativeCommandArgs(prompt);
+
+        if (command === "goal" && !args) {
+            return { status: "handled" as const, interaction: { type: "native-goal" } };
+        }
+
         const mcp = await this.#mcpCommand(id, user, prompt, requestId);
 
         if (mcp) {
             return mcp;
         }
 
-        if (command === "qoder-models" || command === "qoder-credits") {
+        if (command === "qoder-credits") {
             await this.#requireDynamicAdapter(id, user, command, requestId);
             this.requireAccountIdle(user);
-            const result = await this.#app.accounts.nativeQoder(
-                user,
-                command === "qoder-models" ? "models" : "credits",
-            );
+            const result = await this.#app.accounts.nativeQoder(user, "credits");
 
             return { status: "handled" as const, nativeResult: result };
         }
 
-        const sheets: Record<string, string> = {
-            login: "providers",
-            logout: "providers",
-            hotkeys: "shortcuts",
-            settings: "native-settings",
-            "scoped-models": "native-models",
-        };
-
-        if (command && Object.hasOwn(sheets, command)) {
-            return { status: "handled" as const, interaction: { type: sheets[command] } };
-        }
-
-        if (command === "changelog") {
-            const info = await nativeConfigurationApi();
-
-            return {
-                status: "handled" as const,
-                nativeResult: {
-                    version: `rotom ${verifyRotomKernel().version}`,
-                    package: info.packageUrl,
-                    update: info.updateGuidance,
-                },
-            };
-        }
-
-        if (command === "trust") {
-            const api = await nativeConfigurationApi();
-            const options = api.getProjectTrustOptions(this.#app.cwdOf(id), {
-                includeSessionOnly: false,
-            }) as Array<{
-                label: string;
-                updates: Array<{ path: string; decision: boolean | null }>;
-            }>;
-
-            if (!args) {
-                return {
-                    status: "handled" as const,
-                    interaction: {
-                        type: "native-command",
-                        title: "Save native trust (Team agent configuration always ignores project trust)",
-                        options: options.map((option, index) => ({
-                            label: option.label,
-                            text: `/trust ${index}`,
-                        })),
-                    },
-                };
-            }
-
-            const option = options[Number(args)];
-
-            if (!option || !/^\d+$/.test(args)) {
-                throw new HttpError(400, "Choose a native project trust option.");
-            }
-
-            this.requireAccountIdle(user);
-            new api.ProjectTrustStore(join(this.#home(user.id), ".pi/agent")).setMany(
-                option.updates,
-            );
-
-            return {
-                status: "handled" as const,
-                nativeResult: {
-                    trust: option.label,
-                    note: "Team runs always disable project agent configuration; trust cannot enable project extensions.",
-                },
-            };
-        }
-
-        if (command === "quit") {
-            await this.abort(id, user);
-
-            return { status: "handled" as const, conversationId: null };
-        }
-
-        if (command === "share" || command === "bug") {
-            throw new HttpError(
-                400,
-                `/${command} is excluded from this Team release. No external upload was started.`,
-            );
+        if (command === "settings") {
+            return { status: "handled" as const, interaction: { type: "native-settings" } };
         }
 
         if (command === "compact") {
@@ -912,7 +830,31 @@ export class TeamKernel {
 
         if (command === "model" || command === "thinking") {
             if (!args) {
-                return { status: "handled" as const, interaction: { type: "model" } };
+                if (command === "model") {
+                    return { status: "handled" as const, interaction: { type: "model" } };
+                }
+
+                await this.#app.accounts.forUser(user);
+                const current = this.#currentChoice(id, user);
+                const ref = current ?? this.#app.commands.defaultModel(user).model;
+
+                if (!ref) {
+                    throw new HttpError(409, "Connect your own account and choose a model first.");
+                }
+
+                const model = this.#app.accounts.kernelModel(user, ref);
+
+                return {
+                    status: "handled" as const,
+                    interaction: {
+                        type: "native-thinking",
+                        levels: model.reasoning ? getSupportedThinkingLevels(model) : ["off"],
+                        thinkingLevel: clampThinkingLevel(
+                            model,
+                            (current?.thinkingLevel ?? "off") as ModelThinkingLevel,
+                        ),
+                    },
+                };
             }
 
             const separator = args.indexOf("/");
@@ -931,151 +873,11 @@ export class TeamKernel {
                               modelId: args.slice(separator + 1),
                           },
                       }
-                    : { thinkingLevel: args },
+                    : { thinkingLevel: args.toLowerCase() },
                 requestId,
             );
 
             return result.receipt ?? { status: "handled" as const };
-        }
-
-        if (command === "new") {
-            return this.#app.execution.exclusive(id, async () => {
-                const prior = (
-                    await this.#app.harness.snapshot(NativeCreationsDoc, id, BACKGROUND_CONTEXT)
-                )?.items[key];
-
-                if (prior && prior.identity !== prompt) {
-                    throw new HttpError(409, "Native creation request changed.");
-                }
-
-                const target =
-                    prior ??
-                    (await this.#app.commands.createSession(
-                        user,
-                        {
-                            backend: "rotom",
-                            cwd: this.#app.cwdOf(id),
-                        },
-                        undefined,
-                        { sourceId: id, requestId: key, identity: prompt },
-                    ));
-
-                this.#app.requireSee(user, target.id);
-
-                return { status: "handled" as const, conversationId: target.id };
-            });
-        }
-
-        if (command === "import") {
-            if (!args) {
-                return { status: "handled" as const, interaction: { type: "native-import" } };
-            }
-
-            const path = realpathSync(this.#app.workspace.readableFile(user, id, args));
-            const workspace = realpathSync(this.#app.cwdOf(id));
-            const uploads = this.#app.workspace.uploadDirectory(id);
-            const inside = (root: string) => path.startsWith(root + sep);
-
-            if (
-                (!inside(workspace) && !inside(uploads)) ||
-                (inside(this.#app.dataDir) && !inside(uploads))
-            ) {
-                throw new HttpError(
-                    403,
-                    "Import a JSONL file from this project's workspace or this session's uploads.",
-                );
-            }
-
-            if (!lstatSync(path).isFile() || lstatSync(path).size > 50 * 1024 * 1024) {
-                throw new HttpError(400, "Native JSONL import is limited to a 50 MiB file.");
-            }
-
-            const bytes = readFileSync(path);
-            const identity = `${prompt}:${createHash("sha256").update(bytes).digest("hex")}`;
-            const native = await nativeSessionManager();
-            const records = native.parseSessionEntries(bytes.toString("utf8")) as KernelEntry[];
-
-            if (records[0]?.type !== "session") {
-                throw new HttpError(400, "A native JSONL session header is required.");
-            }
-
-            native.migrateSessionEntries(records);
-
-            return this.#app.execution.exclusive(id, async () => {
-                const prior = (
-                    await this.#app.harness.snapshot(NativeCreationsDoc, id, BACKGROUND_CONTEXT)
-                )?.items[key];
-
-                if (prior) {
-                    if (prior.identity !== identity) {
-                        throw new HttpError(409, "Native import request changed.");
-                    }
-
-                    this.#app.requireSee(user, prior.id);
-                    const receipt = this.executions.journal.request(String(prior.id), key);
-
-                    return receipt
-                        ? { ...this.#receipt(receipt), conversationId: prior.id }
-                        : { status: "unknown" as const, conversationId: prior.id };
-                }
-
-                const target = await this.#app.commands.createSession(
-                    user,
-                    {
-                        backend: "rotom",
-                        cwd: this.#app.cwdOf(id),
-                        title: "Imported native session",
-                    },
-                    undefined,
-                    { sourceId: id, requestId: key, identity, seed: true },
-                );
-                const binding = this.executions.journal.session(String(target.id)).binding;
-                const receipt = await this.#track(
-                    target.id,
-                    binding,
-                    this.executions.importHistory(
-                        String(target.id),
-                        key,
-                        identity,
-                        records.slice(1),
-                    ),
-                );
-
-                if (receipt.status === "settled") {
-                    this.#ready.add(target.id);
-                }
-
-                return { ...receipt, conversationId: target.id };
-            });
-        }
-
-        if (command === "resume") {
-            if (!args) {
-                return {
-                    status: "handled" as const,
-                    interaction: {
-                        type: "native-command",
-                        title: "Resume a Team native session",
-                        options: this.#app
-                            .sessions(user)
-                            .filter((session) => session.backend === "rotom")
-                            .map((session) => ({
-                                label: session.title ?? `Session ${session.id}`,
-                                text: `/resume ${session.id}`,
-                            })),
-                    },
-                };
-            }
-
-            const target = this.#id(args);
-
-            this.#app.requireSee(user, target);
-
-            if (this.#app.sessionMeta(target)?.backend !== "rotom") {
-                throw new HttpError(400, "Choose a Team native session.");
-            }
-
-            return { status: "handled" as const, conversationId: target };
         }
 
         if ((command === "fork" || command === "tree") && !args) {
@@ -1176,19 +978,6 @@ export class TeamKernel {
                       editorText,
                   }
                 : { status: "unknown" as const, conversationId: target.id, receipt: null };
-        }
-
-        if (command === "export") {
-            const format = args.endsWith(".jsonl") ? "jsonl" : "html";
-
-            return {
-                status: "handled" as const,
-                download: `/api/c/${id}/native-export?format=${format}`,
-            };
-        }
-
-        if (command === "name" && !args) {
-            return { status: "handled" as const, interaction: { type: "native-name" } };
         }
 
         // Identity readback must not need a still-connected account or today's model capabilities.
@@ -1303,7 +1092,10 @@ export class TeamKernel {
 
                         reserved(receipt);
                     }),
-                    onCommandAdmitted: nameAcceptedPrompt,
+                    onCommandAdmitted: async (command) => {
+                        this.#admitNativeCommand(command);
+                        await nameAcceptedPrompt();
+                    },
                     onNativeResult: async (result) => {
                         nativeResult = result;
 
@@ -1396,14 +1188,7 @@ export class TeamKernel {
         }
 
         await this.#app.accounts.forUser(user);
-        const bindingBefore = this.executions.journal.session(String(id)).binding;
-        const previous =
-            bindingBefore.memberId === user.id
-                ? {
-                      ...this.#ref(bindingBefore),
-                      thinkingLevel: bindingBefore.thinkingLevel ?? "off",
-                  }
-                : this.#app.accounts.choice(user);
+        const previous = this.#currentChoice(id, user);
         let ref = request.model
             ? { provider: String(request.model.provider), modelId: String(request.model.modelId) }
             : (previous ?? this.#app.commands.defaultModel(user).model);
@@ -1482,6 +1267,7 @@ export class TeamKernel {
     ): RunHooks {
         return {
             ...(onReserved ? { onReserved } : {}),
+            onCommandAdmitted: (command) => this.#admitNativeCommand(command),
             sessionName: () => this.#app.sessionMeta(id)?.title,
             onSessionName: async (name) => {
                 await this.#app.harness.commit(async (tx) => {
@@ -1812,6 +1598,15 @@ export class TeamKernel {
         return { answered: true };
     }
 
+    /** The same personal model choice drives the thinking picker and its eventual configuration write. */
+    #currentChoice(id: ConversationId, user: User) {
+        const { binding } = this.executions.journal.session(String(id));
+
+        return binding.memberId === user.id
+            ? { ...this.#ref(binding), thinkingLevel: binding.thinkingLevel ?? "off" }
+            : this.#app.accounts.choice(user);
+    }
+
     /** The room's agent line for a native conversation: what the current segment runs on, and for whom. */
     agentInfo(id: ConversationId) {
         const cwd = this.#app.sessionMeta(id)?.cwd ?? this.#app.defaultCwd;
@@ -1834,8 +1629,8 @@ export class TeamKernel {
     }
 
     /**
-     * The shared agent's MCP servers as this member's runs reach them, and sign-in to those that use OAuth. A sign-in is the
-     * member's own: only their runs send its tokens. Reporting starts the shared command servers, as a run does, so
+     * Shared/project MCP servers as this member's runs reach them, and sign-in to those that use OAuth. A sign-in is the
+     * member's own: only their runs send its tokens. Reporting starts the configured command servers, as a run does, so
      * it takes the right to run Pi in the project.
      */
     async #mcpCommand(id: ConversationId, user: User, text: string, requestId?: string) {
@@ -2220,6 +2015,42 @@ export class TeamKernel {
         }
     }
 
+    /** Recheck the live native registry: a cached template may now be shadowed by an extension. */
+    #admitNativeCommand(command: { name: string; source?: unknown }) {
+        if (!supportedTeamCommand(command)) {
+            throw new RpcFailure("rejected", `/${command.name} is not supported in Team.`);
+        }
+    }
+
+    /** Reject hidden commands before native startup, handoff or inference. Skills/templates still need discovery. */
+    async #requireSupportedCommand(
+        id: ConversationId,
+        user: User,
+        text: string,
+        requestId?: string,
+    ) {
+        const name = nativeCommandName(text);
+
+        if (!name || supportedTeamCommand({ name })) {
+            return;
+        }
+
+        const catalog = await this.nativeCommands(id, user);
+
+        if (name.startsWith("skill:") && !catalog.dynamicReady) {
+            await this.#requireDynamicAdapter(id, user, name, requestId);
+
+            return;
+        }
+
+        if (!catalog.commands.some((command) => command.name === name)) {
+            throw new HttpError(
+                400,
+                `/${name} is not supported in Team. Open / to see available commands.`,
+            );
+        }
+    }
+
     /** Read-only snapshots; another member's native command descriptions are never returned. */
     async nativeCommands(id: ConversationId, user: User) {
         this.#app.requireSee(user, id);
@@ -2238,13 +2069,9 @@ export class TeamKernel {
 
         const cached = this.#commandSnapshot(id, user.id);
         const dynamic = cached?.commands ?? [];
-        const names = new Set(builtins.map((command) => command.name));
 
         return {
-            commands: [
-                ...builtins.filter((command) => !["share", "bug"].includes(command.name)),
-                ...dynamic.filter((command) => !names.has(command.name)),
-            ],
+            commands: teamCommandCatalog([...builtins, ...dynamic]),
             dynamicReady: Boolean(cached),
             discoveryBlocked:
                 this.executions.journal.pendingConversation(String(id))?.status === "unknown",

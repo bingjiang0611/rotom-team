@@ -13,6 +13,7 @@ import {
 import { html, Sheet } from "../ui.js";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { FILTERS, TreeView } from "../native-tree.js";
+import { NativeSelector } from "./native-selector.js";
 
 export function nativeCommandAccepted(result) {
     return (
@@ -21,7 +22,7 @@ export function nativeCommandAccepted(result) {
     );
 }
 
-export function showNativeResult(result) {
+export function showNativeResult(result, commandName) {
     if (["unknown", "rejected", "interrupted"].includes(result.status)) {
         notify(
             "warning",
@@ -29,6 +30,12 @@ export function showNativeResult(result) {
         );
 
         return;
+    }
+
+    if (result.operation === "compact" && result.status === "settled") {
+        notify("info", "Context compacted.");
+    } else if (commandName === "reload" && result.status === "handled") {
+        notify("info", "Native resources reloaded.");
     }
 
     const navigation = result.nativeResult?.navigation;
@@ -75,10 +82,40 @@ export function showNativeResult(result) {
 }
 
 export function NativeInfoSheet() {
-    return html`<${Sheet} title="Native command result" onClose=${closeSheet}>
-        <pre>${JSON.stringify(store.state.sheet.result, null, 2)}</pre>
+    const [result] = useState(store.state.sheet.result);
+
+    return html`<${Sheet} title=${result.title ?? "Native command result"} onClose=${closeSheet}>
+        <pre class="native-command-output">${result.text ?? JSON.stringify(result, null, 2)}</pre>
     <//>`;
 }
+
+const EXECUTION_SETTINGS = [
+    [
+        "steeringMode",
+        "Steering mode",
+        "How queued steering messages reach the running agent.",
+        ["one-at-a-time", "all"],
+    ],
+    [
+        "followUpMode",
+        "Follow-up mode",
+        "How queued follow-up messages are delivered.",
+        ["one-at-a-time", "all"],
+    ],
+    [
+        "imageAutoResize",
+        "Auto-resize images",
+        "Resize large images before sending them to the model.",
+        [true, false],
+    ],
+    ["blockImages", "Block images", "Prevent images from being sent to the model.", [false, true]],
+    [
+        "enableSkillCommands",
+        "Skill commands",
+        "Expose installed skills as slash commands.",
+        [true, false],
+    ],
+];
 
 export function NativeSettingsSheet({ scope = false }) {
     const [settings, setSettings] = useState(null);
@@ -137,22 +174,53 @@ export function NativeSettingsSheet({ scope = false }) {
             <button class="button" onClick=${cycle}>Cycle model</button>
         `
                   : html`
-            <p class="muted">Only the owner can change shared native settings. Project settings cannot override them. Retry and compaction use the pinned rotom defaults.</p>
-            ${["steeringMode", "followUpMode"].map(
-                (key) => html`<label class="field">
-                ${key}
-                <select disabled=${!sharedWritable} value=${settings[key]} onChange=${(event) => save({ [key]: event.currentTarget.value })}>
-                    <option value="one-at-a-time">One at a time</option>
-                    <option value="all">All</option>
-                </select>
-            </label>`,
-            )}
-            ${["imageAutoResize", "blockImages", "enableSkillCommands"].map(
-                (key) => html`<label class="field">
-                <input type="checkbox" disabled=${!sharedWritable} checked=${settings[key]} onChange=${(event) => save({ [key]: event.currentTarget.checked })} />
-                ${key}
-            </label>`,
-            )}
+            <p class="muted small">Only the owner can change shared native settings while accounts are idle. Terminal appearance and keybindings are not browser settings.</p>
+            <${NativeSelector}
+                label="Settings"
+                cycleValues
+                items=${[
+                    ...EXECUTION_SETTINGS.map(([value, label, description]) => ({
+                        value,
+                        label,
+                        description,
+                        current: String(settings[value]),
+                        disabled: !sharedWritable,
+                    })),
+                    {
+                        value: "autoRetry",
+                        label: "Auto retry",
+                        current: String(settings.autoRetry),
+                        description: "Inherited from native rotom settings; read-only here.",
+                        disabled: true,
+                    },
+                    {
+                        value: "autoCompaction",
+                        label: "Auto compaction",
+                        current: String(settings.autoCompaction),
+                        description: "Inherited from native rotom settings; read-only here.",
+                        disabled: true,
+                    },
+                    {
+                        value: "scope",
+                        label: "Model cycle scope…",
+                        description: "Choose which personal models participate in cycling.",
+                    },
+                ]}
+                onChoose=${(item, step) => {
+                    if (item.value === "scope") {
+                        openSheet({ type: "native-models" });
+
+                        return;
+                    }
+
+                    const [, , , values] = EXECUTION_SETTINGS.find(([name]) => name === item.value);
+                    const index = values.indexOf(settings[item.value]);
+
+                    return save({
+                        [item.value]: values[(index + step + values.length) % values.length],
+                    });
+                }}
+            />
         `
         }
     <//>`;
@@ -168,19 +236,69 @@ const runChoice = (text) =>
     });
 
 export function NativeCommandSheet() {
-    const sheet = store.state.sheet;
+    const [sheet] = useState(store.state.sheet);
+    const fork = sheet.command === "fork";
+    const items = sheet.options.map((option, index) => ({
+        ...option,
+        value: option.entryId ?? option.text,
+        label: fork ? option.label.replace(/^user: /, "") : option.label,
+        description: fork ? `Message ${index + 1} of ${sheet.options.length}` : "",
+    }));
 
-    return html`<${Sheet} title=${sheet.title} onClose=${closeSheet}>
-        ${sheet.options.length === 0 && html`<p class="muted">No native entries yet.</p>`}
-        ${sheet.options.map(
-            (option) => html`<button
-                class="button wide"
-                data-entry-id=${option.entryId}
-                onClick=${() => runChoice(option.text)}
-            >
-                ${option.label}
-            </button>`,
-        )}
+    return html`<${Sheet} title=${fork ? "Fork from Message" : sheet.title} onClose=${closeSheet}>
+        ${fork && html`<p class="muted small">Select a user message. Copy its preceding history into a new session and put the selected message back in the composer.</p>`}
+        ${
+            items.length === 0
+                ? html`<p class="muted">No user messages found.</p>`
+                : html`<${NativeSelector}
+            items=${items}
+            selectedValue=${fork ? items.at(-1)?.value : undefined}
+            searchable=${!fork}
+            label=${fork ? "User messages" : "Commands"}
+            onChoose=${(item) => runChoice(item.text)}
+        />`
+        }
+    <//>`;
+}
+
+const THINKING_DESCRIPTIONS = {
+    off: "No reasoning",
+    minimal: "Very brief reasoning (~1k tokens)",
+    low: "Light reasoning (~2k tokens)",
+    medium: "Moderate reasoning (~8k tokens)",
+    high: "Deep reasoning (~16k tokens)",
+    xhigh: "Extra-high reasoning (~32k tokens)",
+    max: "Maximum reasoning",
+};
+
+export function NativeThinkingSheet() {
+    const [choice] = useState(store.state.sheet);
+    const items = choice.levels.map((level) => ({
+        value: level,
+        label: `${choice.thinkingLevel === level ? "✓ " : ""}${level}`,
+        description: THINKING_DESCRIPTIONS[level],
+    }));
+
+    return html`<${Sheet} title="Thinking Level" onClose=${closeSheet}>
+        <${NativeSelector}
+            label="Thinking levels"
+            items=${items}
+            selectedValue=${choice.thinkingLevel}
+            onChoose=${(item) =>
+                attempt(async () => {
+                    const result = await actions.configure({ thinkingLevel: item.value });
+
+                    if (result.receipt && !nativeCommandAccepted(result.receipt)) {
+                        showNativeResult(result.receipt);
+
+                        return;
+                    }
+
+                    closeSheet();
+                    notify("info", "Thinking preference updated.");
+                })}
+        />
+        <p class="muted small">Uses your personal model preference. Changing it waits until your running tasks finish.</p>
     <//>`;
 }
 

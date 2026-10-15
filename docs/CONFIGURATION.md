@@ -29,7 +29,7 @@ The owner manages `<data>/team-agent` using the pinned native resource layout:
 Install packages into this dedicated profile with the pinned native CLI and an isolated HOME. Do not run installation
 against the service user's personal agent directory. Native `settings.json` package references must already be installed:
 startup calls the native package resolver with **error on missing**, never implicit installation. Relative resource paths
-resolve against the shared profile. A new extension's registered names need no Team command-dispatch changes.
+resolve against the shared profile. Native discovers extension metadata, but Team exposes only its supported slash-command surface.
 
 There is no new package-management web UI. The owner edits the profile on the deployment machine. Finish or stop Team
 runs before filesystem edits/package installation; direct OS writes are trusted and are not locked by Team. `/settings` and model
@@ -146,7 +146,7 @@ foreground reviewer; this release enables existing overlays, not generation. See
 
 ## Native slash commands
 
-Typing `/` uses the pinned runtime's builtin catalog, not Pocket's old hardcoded list. Dynamic extensions, prompt
+Typing `/` uses pinned native metadata filtered by Team's supported command surface. Dynamic extensions, prompt
 templates and skills come from native `get_commands`. `GET /api/c/:id/prompts` reads a snapshot; it never starts native code. Opening slash suggestions through composer input, or choosing **Refresh shared agent commands on my account**, explicitly starts the trusted native runtime under the member's ordinary permissions, admission and lease. Discovery denies Team
 inference and credential-refresh requests. It needs no paid prompt, but shared extension startup is still trusted executable
 code, not a sandbox. An idle session owned by another member is first handed over using public history.
@@ -160,27 +160,21 @@ input does not race an automatic discovery. Dispatch validates the current nativ
 not become model prompts. Native skills/templates are expanded by native APIs, including queued input. Selecting a
 skill or prompt-template suggestion only fills the draft; submitting it starts the model request.
 
-| Command                                                          | Team/native behavior                                                                                                                                                                                                                                                                            |
-| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/model`, `/thinking`, `/scoped-models`                          | Personal model picker and owner-managed shared native model-pattern scope. A real Team handoff creates a new immutable binding; an active run is never mutated. Scope cycling uses that same path.                                                                                              |
-| `/name`                                                          | Native `set_session_name`, with confirmed readback mirrored into Team. Native defers JSONL creation before the first conversation; Team preserves the confirmed name and restores it on the next startup.                                                                                       |
-| `/new`, `/resume`                                                | Create a separate Team native conversation, or choose a visible existing one. No receipt is silently attached to a different native session.                                                                                                                                                    |
-| `/fork`                                                          | Select a native user-entry ID; create a Team-safe public-history seed **before** that user message. Restore its text as a draft, never submit it automatically. This is not a call to native `forkSession`.                                                                                     |
-| `/clone`                                                         | Native `createBranchedSession` for the same member; public-history seed for a different member.                                                                                                                                                                                                 |
-| `/tree`                                                          | Select an entry in the member's native segment. Native `ctx.navigateTree` changes the branch; optional **Summarize** (or `/tree <entryId> --summarize`) runs the native summarizer through the same payer/model gate. Persisted summary usage is recorded; absent usage stays unknown.          |
-| `/export`                                                        | Authenticated, member-private attachment using native JSONL branch serialization or the native HTML exporter. JSONL is the current branch, not a byte-for-byte full-tree copy. HTML retains the native exporter's tree behavior.                                                                |
-| `/import`                                                        | Native parse/migration of a JSONL file in this workspace or this session's uploads, bounded to 50 MiB; a new Team conversation receives only public history, never imported provider state.                                                                                                     |
-| `/settings`                                                      | Native `SettingsManager` execution settings: steering/follow-up, image options, skill commands and model scope. Owner-only shared settings; trusted project settings retain native precedence; use `/reload` after changes. Retry and compaction follow the shared profile and native defaults. |
-| `/compact`, `/reload`, `/session`, `/copy`                       | Native compaction, resource reload, state/statistics and last-assistant-text clipboard result.                                                                                                                                                                                                  |
-| `/login`, `/logout`, `/hotkeys`, `/changelog`, `/trust`, `/quit` | Personal provider sheet, web shortcuts, pinned product update guidance, native trust choices (startup already trusts the configured project), and stopping/leaving this view respectively. Project trust does not create an OS boundary.                                                        |
-| `/mcp`, `/mcp login <server>`, `/mcp logout <server>`            | The existing member-owned browserless sign-in bridge. These adapters first verify actual native registration.                                                                                                                                                                                   |
-| `/qoder-models`, `/qoder-credits`                                | The member's provider catalog/quota API in the credential-owning parent. Results are private HTTP responses, not room broadcasts. Account-changing/busy operations are refused; snapshots are not per-request debit or financial cost.                                                          |
-| `/goal` and other registered extensions                          | Actual native handlers. Goal keeps its process, receipt, member and gate while active/waiting; native deadlines, Pause, Resume, Stop and plain input control that lifecycle.                                                                                                                    |
+The supported builtins/extensions are exactly:
 
-**Only `/share` and `/bug` are explicitly excluded from this release.** They are absent from executable suggestions;
-manual invocation is rejected before native startup, inference or upload. No sharing/auth service or diagnostic runner
-is provided. Other commands may still refuse operations for permissions, an active/unknown lease, unavailable accounts
-or invalid native inputs; these refusals are not simulated success.
+`settings, model, thinking, tree, fork, clone, compact, reload, goal, browser, computer-use, mcp, qoder-credits`.
+
+Installed skills and prompt templates remain available. Other builtin/extension names are rejected at submit and queue
+admission, not merely hidden from suggestions. Resolving native name precedence before filtering prevents a same-name
+template from exposing a hidden extension. The actual native registry is checked again immediately before idle or queued
+dispatch, including when a retained process reloads resources or registers a new command. Separate Team APIs and internal
+lifecycle/recovery operations are unchanged.
+
+Tab and partial-name Enter fill the draft without executing. Complete-name Enter runs the command. Thinking and fork
+have dedicated keyboard selectors; settings writes remain owner-only and busy-gated. Bare Goal opens a Web manager,
+with native grammar, personal billing and no-replay fences intact. Its safety-settings editor remains unavailable.
+Browser/computer-use refer to the service host, not the viewer's device. Quota results remain member-private account
+snapshots. See [NATIVE-COMMAND-COMPATIBILITY.md](NATIVE-COMMAND-COMPATIBILITY.md) for every supported interaction and limit.
 
 ### Branch interaction and outcomes
 
@@ -219,14 +213,14 @@ in again. Declared config paths cannot name auth, model stores or session storag
 
 ## Forty-five terminal entries and TUI compatibility
 
-See [NATIVE-COMMAND-COMPATIBILITY.md](NATIVE-COMMAND-COMPATIBILITY.md) for every comparison row and actual coverage.
+See [NATIVE-COMMAND-COMPATIBILITY.md](NATIVE-COMMAND-COMPATIBILITY.md) for the supported interactions and actual coverage.
 The isolated terminal comparison contains 24 builtins, 15 extension commands and 6 skill commands. The empty shared Team
-profile has 39 native entries, or 37 allowed catalog entries (not 37 working interactions) after the two explicit exclusions. This is a measured inventory,
-not proof that all entries have equivalent interactions.
+profile has 39 raw native entries. Fourteen remain public: the thirteen supported commands and the packaged subagent
+skill. Inventory presence is not proof of terminal-equivalent interactions.
 
-`/context` and `/llama` require real TUI/custom UI. Pinned RPC cannot supply it; a handled response containing a TUI-only
-warning is not success. `/context` is not installed into the initial Team profile while this is blocked. The five personal
-skills are deliberately uninstalled by user choice, not permission to publish private memory/preferences/device lessons. Neither condition is silently reclassified as an additional product exclusion.
+`/context` and `/llama` are outside the supported surface and require TUI/custom UI that pinned RPC cannot supply.
+A handled response containing a TUI-only warning is not success. Five personal skills remain deliberately uninstalled
+by user choice; this is not permission to publish private memory/preferences/device lessons.
 
 Production TUI transport is outside this delivery scope. A bounded OS-PTY prototype renders and interacts with an actual native custom component, preserving an isolated member
 session and an unknown command receipt. It is **not** a production transport: public extension APIs expose no generic

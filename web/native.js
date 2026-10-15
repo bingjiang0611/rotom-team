@@ -1,5 +1,5 @@
 // What a rotom session shows above its composer: questions its run asks, and an operation whose outcome is unknown.
-import { useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { actions, api, attempt, store } from "./store.js";
 import { html } from "./ui.js";
 
@@ -11,6 +11,13 @@ function reply(dialog, answer) {
 /** One question from the running prompt, such as ask_user_question's choices. Only its payer answers it. */
 function Question({ dialog, yours, memberName }) {
     const [text, setText] = useState(dialog.prefill ?? "");
+    const input = useRef(null);
+
+    useEffect(() => {
+        if (yours && matchMedia("(pointer: fine)").matches) {
+            input.current?.focus({ preventScroll: true });
+        }
+    }, [dialog.id, yours]);
 
     if (!yours) {
         return html`<div class="native-banner" role="status">
@@ -18,8 +25,19 @@ function Question({ dialog, yours, memberName }) {
         </div>`;
     }
 
-    return html`<div class="native-banner native-question" role="dialog" aria-label="Pi asks">
+    return html`<div
+        class="native-banner native-question"
+        role="dialog"
+        aria-label="Pi asks"
+        onKeyDown=${(event) => {
+            if (event.key === "Escape" && !event.isComposing) {
+                event.stopPropagation();
+                reply(dialog, { cancelled: true });
+            }
+        }}
+    >
         <div class="native-question-title">${dialog.title}</div>
+        <p class="muted small">Native tools run on the Team service machine, not this device.</p>
         ${dialog.message && html`<div class="muted">${dialog.message}</div>`}
         ${
             dialog.method === "select" &&
@@ -49,12 +67,24 @@ function Question({ dialog, yours, memberName }) {
                     reply(dialog, { value: text });
                 }}
             >
-                <textarea
-                    rows=${dialog.method === "editor" ? 8 : 2}
+                ${
+                    dialog.method === "input"
+                        ? html`<input
+                    ref=${input}
+                    aria-label=${dialog.title}
                     placeholder=${dialog.placeholder ?? ""}
                     value=${text}
                     onInput=${(event) => setText(event.currentTarget.value)}
-                />
+                />`
+                        : html`<textarea
+                    ref=${input}
+                    aria-label=${dialog.title}
+                    rows="8"
+                    placeholder=${dialog.placeholder ?? ""}
+                    value=${text}
+                    onInput=${(event) => setText(event.currentTarget.value)}
+                />`
+                }
                 <button class="button primary" type="submit">Answer</button>
             </form>`
         }

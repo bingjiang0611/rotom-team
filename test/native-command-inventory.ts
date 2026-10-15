@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { supportedTeamCommand, teamCommandCatalog } from "../src/server/team-command-policy.ts";
 import {
     nativeBuiltinCommands,
     startRotomKernel,
@@ -85,12 +86,18 @@ try {
         ["context", ...expectedNames.skill.filter((name) => name !== "skill:pi-subagents")].sort(),
     );
     assert.equal(actual.length, 39);
+    const allowed = teamCommandCatalog(actual);
+
+    assert.equal(
+        allowed.length,
+        14,
+        "thirteen supported commands plus the packaged subagent skill",
+    );
     const rows = terminal.commands.map((command) => {
         const observed = actual.find(
             (item) => item.name === command.name && item.source === command.source,
         );
-        const excluded = ["share", "bug"].includes(command.name);
-        const blockedUi = ["context", "llama"].includes(command.name);
+        const excluded = !supportedTeamCommand(command);
         const pendingSkill = command.source === "skill" && command.name !== "skill:pi-subagents";
 
         return {
@@ -101,22 +108,18 @@ try {
             presence: excluded ? "explicitly-excluded" : observed ? "registered" : "not-installed",
             supportedInteraction: excluded
                 ? "rejected before native effects"
-                : blockedUi
-                  ? "blocked: native TUI/custom UI unavailable through RPC"
-                  : pendingSkill
-                    ? "awaiting owner-curated portable shared source"
-                    : command.source === "builtin"
-                      ? "Team security/session adapter; see per-command compatibility table"
-                      : command.source === "skill"
-                        ? "native expansion on explicit submit, not suggestion click"
-                        : "native RPC handler; command-specific effects require separate proof",
+                : pendingSkill
+                  ? "awaiting owner-curated portable shared source"
+                  : command.source === "builtin"
+                    ? "Team security/session adapter; see per-command compatibility table"
+                    : command.source === "skill"
+                      ? "native expansion on explicit submit, not suggestion click"
+                      : "native RPC handler; command-specific effects require separate proof",
             parity: excluded
                 ? "excluded"
-                : blockedUi
-                  ? "blocked"
-                  : pendingSkill
-                    ? "pending-resource-provenance"
-                    : "inventory-match-not-a-behavior-verdict",
+                : pendingSkill
+                  ? "pending-resource-provenance"
+                  : "inventory-match-not-a-behavior-verdict",
         };
     });
     const state = (await kernel.request({ type: "get_state" })) as { messageCount: number };
@@ -132,8 +135,10 @@ try {
                 realAccounts: false,
                 terminalRows: 45,
                 registeredNativeRows: 39,
-                allowedTeamCatalogEntries: 37,
-                explicitExclusions: ["share", "bug"],
+                allowedTeamCatalogEntries: allowed.length,
+                explicitExclusions: terminal.commands
+                    .filter((command) => !supportedTeamCommand(command))
+                    .map((command) => command.name),
                 messageCount: state.messageCount,
                 all45Parity: false,
                 rows,

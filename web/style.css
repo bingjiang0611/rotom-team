@@ -7946,6 +7946,79 @@ textarea.notes {
     width: 100%;
 }
 
+/* Native command selectors keep keyboard selection and compact, readable rows rather than wide centered buttons. */
+.native-selector,
+.native-goal-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    min-height: 0;
+}
+
+.native-selector-list {
+    overflow-y: auto;
+    max-height: 50dvh;
+    min-height: 0;
+}
+
+.native-selector-row {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    width: 100%;
+    padding: 0.45rem 0.25rem;
+    text-align: left;
+    font-size: 0.85rem;
+}
+
+.native-selector-row:hover {
+    background: var(--hover);
+}
+
+.native-selector-row.on {
+    background: var(--o-selection);
+}
+
+.native-selector-row[aria-disabled="true"] {
+    color: var(--muted);
+    cursor: default;
+}
+
+.native-selector-cursor {
+    flex: 0 0 1ch;
+    color: var(--accent);
+}
+
+.native-selector-content {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    overflow-wrap: anywhere;
+}
+
+.native-selector-description {
+    color: var(--muted);
+    font-size: 0.75rem;
+}
+
+.native-selector-value {
+    color: var(--accent);
+}
+
+.native-command-output,
+.native-goal-objective {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+@media (pointer: coarse) {
+    .native-selector-row {
+        min-height: 44px;
+    }
+}
+
 /* Native /tree, drawn like the terminal selector: one monospace line per entry, tree glyphs kept aligned. */
 .native-tree-sheet .sheet-body {
     overflow: hidden;

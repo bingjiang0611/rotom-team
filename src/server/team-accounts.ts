@@ -388,7 +388,18 @@ export class TeamAccounts {
         const provider = account.runtime.getProvider("qoder") as
             | (ai.Provider & {
                   getCatalogStatus(): unknown;
-                  getQuotaUsage(options: { apiKey: string; signal: AbortSignal }): Promise<unknown>;
+                  getQuotaUsage(options: { apiKey: string; signal: AbortSignal }): Promise<{
+                      observedAt: number;
+                      pools: Record<
+                          string,
+                          {
+                              unit: string;
+                              total: number | null;
+                              used: number | null;
+                              remaining: number | null;
+                          } | null
+                      >;
+                  }>;
               })
             | undefined;
 
@@ -437,7 +448,24 @@ export class TeamAccounts {
 
         check();
 
-        return { credits, note: "Account snapshot only, not per-request debit or USD cost." };
+        const poolLines = Object.entries(credits.pools).map(([name, pool]) => {
+            if (!pool) {
+                return `${name}: not reported`;
+            }
+
+            return `${name}: remaining ${pool.remaining ?? "?"} / ${pool.total ?? "?"} ${pool.unit} (used ${pool.used ?? "?"})`;
+        });
+        const title = "Qoder Credit snapshot";
+
+        return {
+            credits,
+            title,
+            text: [
+                `${title} (${new Date(credits.observedAt).toISOString()})`,
+                ...poolLines,
+                "Account snapshot only; shared/concurrent use may change it. Not per-request debit or USD cost.",
+            ].join("\n"),
+        };
     }
 
     async refresh(user: User, rotateProvider?: string, forceQoder = false): Promise<void> {

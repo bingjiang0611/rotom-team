@@ -1,5 +1,6 @@
 // The open sheet: which component shows it. The sheets themselves are in web/sheets/, and a few beside their features
 // (chat.js, notify.js, share.js).
+import { useRef } from "preact/hooks";
 import { ChatSheet } from "./chat.js";
 import { NotificationsSheet } from "./notify.js";
 import { ShareSheet } from "./share.js";
@@ -28,10 +29,12 @@ import {
     NativeInfoSheet,
     NativeSettingsSheet,
     NativeTreeSheet,
+    NativeThinkingSheet,
     showNativeResult,
 } from "./sheets/native-command.js";
 import { ArtifactsSheet, ArtifactViewer, ImageViewer } from "./sheets/viewers.js";
 import { WorktreeSheet } from "./sheets/worktree.js";
+import { NativeGoalSheet } from "./sheets/native-goal.js";
 import { addLayer, removeLayer } from "./back.js";
 import { actions, api, store } from "./store.js";
 import { Boundary, html, usePresence } from "./ui.js";
@@ -102,6 +105,14 @@ store.subscribe(({ sheet, conversationId }) => {
  */
 export function Sheets({ state }) {
     const [sheet, leaving] = usePresence(state.sheet, 200);
+    const instance = useRef({ sheet: null, key: 0 });
+
+    // A fast native response can reopen the same kind before its exit animation ends.
+    // Its form/selection belongs to the new sheet, not the still-mounted closing one.
+    if (instance.current.sheet !== sheet) {
+        instance.current = { sheet, key: instance.current.key + 1 };
+    }
+
     const auth = state.auth ? html`<${AuthDialog} />` : null;
 
     if (!sheet) {
@@ -111,7 +122,7 @@ export function Sheets({ state }) {
     const body = sheetBody(sheet);
 
     return html`<div class=${`sheet-host ${leaving ? "leaving" : ""}`} inert=${leaving}>
-        <${Boundary} key=${sheetKey(sheet)} reset=${sheet}>
+        <${Boundary} key=${SETTINGS_PAGES.has(sheet.type) ? "settings" : instance.current.key} reset=${sheet}>
             ${SETTINGS_PAGES.has(sheet.type) ? html`<${SettingsSheet} section=${sheet.type}>${body}<//>` : body}
         <//>
     </div>
@@ -205,13 +216,11 @@ function sheetBody(sheet) {
         case "native-tree":
             body = html`<${NativeTreeSheet} />`;
             break;
-        case "native-name":
-            body = html`<${TextSheet}
-                title="Native session name"
-                label="Session title"
-                initial=${view.conversation?.title ?? ""}
-                submit=${(value) => actions.submit(`/name ${value}`, [], "steer", false, true)}
-            />`;
+        case "native-thinking":
+            body = html`<${NativeThinkingSheet} />`;
+            break;
+        case "native-goal":
+            body = html`<${NativeGoalSheet} />`;
             break;
         case "rename":
             body = html`<${TextSheet}

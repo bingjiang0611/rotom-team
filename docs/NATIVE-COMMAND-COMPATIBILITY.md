@@ -1,84 +1,55 @@
-# Native command comparison: 45 terminal entries
+# Supported native commands
 
-This is a comparison and evidence ledger, **not a claim that all 45 interactions pass**. The pin is rotom 0.1.21.
-An isolated terminal inventory supplies 24 builtin, 15 extension and 6 skill name/source pairs. Team's empty dedicated
-profile supplies 39 native entries; 37 remain allowed catalog entries after the two explicit exclusions (not 37 working interactions). No personal settings,
-telemetry, credentials or skill assets are copied to manufacture this count.
+Team exposes exactly these thirteen builtins/extensions from rotom 0.1.21:
+`settings, model, thinking, tree, fork, clone, compact, reload, goal, browser, computer-use, mcp, qoder-credits`.
+Installed skills and prompt templates remain available. This is **web alignment within Team boundaries**, not a PTY
+frontend or a claim of complete terminal equivalence.
 
-`node test/native-command-inventory.ts <attested-terminal-inventory.json>` asserts every name/source pair, compares actual
-pinned Team discovery and writes all 45 rows with source files to a temporary report. It makes no inference. A registration
-match or `handled` disposition is not an effect, interaction or financial verification.
+`team-command-policy.ts` applies the same surface to discovery and submit/queue admission. Native name precedence is
+resolved before filtering; a template cannot expose a hidden same-name extension. Known excluded names are refused
+before startup. Submit and queue also recheck the actual native registry before dispatch, so a stale template catalog
+cannot authorize a newly registered extension. Trusted startup/reload may already have run in that case. Arbitrary
+extension code and tools remain trusted native capabilities, not extra public slash entry points. Internal lifecycle/recovery operations and separate Team APIs are not removed.
 
-Source abbreviations are relative to `runtime/rotom/node_modules/@bingjiang0611/rotom`:
+## Interaction contract
 
-- **B**: `runtime/pi/node_modules/@earendil-works/pi-coding-agent/dist/core/slash-commands.js`; native terminal handlers in
-  `dist/modes/interactive/interactive-mode.js`. Team permission/session mediation is in `src/server/team-kernel.ts`.
-- **S**: `extensions/third-party/node_modules/pi-subagents/src/slash/slash-commands.ts`.
-- **C**: `extensions/third-party/node_modules/@injaneity/pi-computer-use/extensions/computer-use.ts`.
-- **G**: `extensions/third-party/node_modules/@narumitw/pi-goal/src/command-registration.ts`.
-- **Q**: `extensions/qoder/index.ts` and its command registration modules.
-- **L/M**: `runtime/pi/node_modules/@earendil-works/pi-coding-agent/dist/extensions/llama/index.js` / `extensions/mcp/index.js`.
-- **Context**: public package `pi-context-view@0.6.0`, `src/index.ts`, `src/ui/usage-view.ts`, `src/ui/injections-view.ts` (MIT).
+| Command          | Web behavior                                                                                                                        | Boundary / limit                                                                                                                                                                                                                                          |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/settings`      | Search, arrows and Enter/left/right cycle execution settings. Model scope remains reachable inside the sheet.                       | Only the owner writes shared settings while accounts are idle. Retry/compaction show inherited native values read-only. Terminal theme, keybindings and transport controls are not copied into a shared service.                                          |
+| `/model`         | Existing personal model picker and immutable account-safe handoff.                                                                  | A running/unknown lease blocks changes.                                                                                                                                                                                                                   |
+| `/thinking`      | Dedicated searchable picker, current-level mark, arrows/Enter. Explicit arguments are case-normalized.                              | Levels come from the requesting member's model, not the shared room projection. Applying still uses the existing personal-account configuration gate.                                                                                                     |
+| `/tree`          | Native tree nodes, filters, search, keyboard/touch navigation, cancellation, editable drafts and optional summary.                  | Shared transcript remains immutable audit history; native cancellation reason is not available over RPC. See VERIFICATION.md for bounded UI omissions.                                                                                                    |
+| `/fork`          | Terminal order and latest-message selection, wraparound arrows, Enter. Textless/image-only user entries are omitted as native does. | Copy preceding history into a new Team session; restore the selected text as a draft, never auto-submit. Labels show a 160-character excerpt.                                                                                                             |
+| `/clone`         | Copy the selected native branch into an independent Team session.                                                                   | Same-member private history stays private; another member receives only public history.                                                                                                                                                                   |
+| `/compact`       | Actual native compaction with optional instructions and completion feedback.                                                        | Uses the fixed payer, records native summary/usage, and does not repeat a completed or unknown request.                                                                                                                                                   |
+| `/reload`        | Native resource reload and confirmed completion notice.                                                                             | Does not restart the shared service or install dependencies.                                                                                                                                                                                              |
+| `/goal`          | Bare command opens a Web Goal manager: start/budget, edit/replace, pause/resume, status, confirmed clear and help.                  | Native RPC's bare command is status-only. This is an explicit web adapter, not `ctx.ui.custom`. The safety-settings editor is unavailable; use native `clear`/`stop`, not unsupported `cancel`. Start/resume retain the native account/receipt lifecycle. |
+| `/browser`       | Real native input/confirm/notify handler. Empty Enter cancels input; Escape dismisses.                                              | Operates on the **Team service machine**, not the viewer's browser. A task may invoke the selected model. Tests do not install a relay or automate a real browser.                                                                                        |
+| `/computer-use`  | Native configuration report.                                                                                                        | It is not an interactive desktop launcher. No real desktop action is claimed.                                                                                                                                                                             |
+| `/mcp`           | Existing native definition/auth mediation and browserless personal OAuth.                                                           | Shared/project definitions do not share member tokens; MCP-only sign-in does not load Agent extensions.                                                                                                                                                   |
+| `/qoder-credits` | Readable timestamp and pool balances instead of raw JSON. Missing/unreported values stay unknown.                                   | Credential-owning parent queries only the requesting member; results are private HTTP data, not room broadcasts or per-request financial cost.                                                                                                            |
 
-| Command                 | Source                              | Interaction / current evidence and limit                                                                                                                                 |
-| ----------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `/settings`             | B                                   | Owner-managed native SettingsManager; browser settings→later native startup proof. Non-owner editing is denied.                                                          |
-| `/model`                | B                                   | Member model picker→immutable handoff→later inference on chosen model/payer; native/browser proof.                                                                       |
-| `/tree`                 | B                                   | Selected native ID, editable draft, cancellation/no-op, optional billed native summary; branch and browser proof. Cancellation reason is unavailable through pinned RPC. |
-| `/thinking`             | B                                   | Native model-compatible thinking via immutable Team handoff; later state proof.                                                                                          |
-| `/scoped-models`        | B                                   | Owner shared native patterns; member cycles only their own available models through a handoff. Browser proof.                                                            |
-| `/export`               | B                                   | Member-private native JSONL current branch / native HTML; bytes and foreign-member denial proof.                                                                         |
-| `/import`               | B                                   | Native parsing and Team public-history seed in a new conversation; privacy and continuation proof.                                                                       |
-| `/share`                | B                                   | Explicit exclusion; manual submit rejected before startup/inference/upload.                                                                                              |
-| `/bug`                  | B                                   | Explicit exclusion; manual submit rejected before startup/inference/upload.                                                                                              |
-| `/copy`                 | B                                   | Native last assistant text and browser clipboard adapter. Clipboard behavior is not native terminal clipboard transport.                                                 |
-| `/name`                 | B                                   | Native set/readback, Team persistence before first JSONL and across handoff; browser/native proof.                                                                       |
-| `/session`              | B                                   | Native state/statistics result, including later bound model/thinking; HTTP/native proof.                                                                                 |
-| `/changelog`            | B                                   | Pinned Rotom version/package/update guidance, matching native Rotom-specific handler (not upstream Pi changelog). Individual browser invocation not separately attested. |
-| `/hotkeys`              | B                                   | Web shortcut sheet, not a claim that native terminal keybindings work in the browser. Individual invocation not separately attested.                                     |
-| `/fork`                 | B                                   | Earlier selected user ID→Team-safe seed before entry→editable draft; later inference excludes abandoned text. Not native forkSession identity switching.                 |
-| `/clone`                | B                                   | Native same-member branch clone; foreign member gets public history only; continuation proof.                                                                            |
-| `/trust`                | B                                   | Native trust choices; startup already trusts the configured workspace. Native project loading and reload are covered by the resource proof.                              |
-| `/login`                | B                                   | Personal provider sheet/security mediation; no real login performed by this work. Provider argument-specific parity is not separately attested.                          |
-| `/logout`               | B                                   | Personal provider sheet/security mediation; account lifecycle tests are separate from arbitrary native terminal UI parity.                                               |
-| `/new`                  | B                                   | Separate Team/native conversation; no receipt identity mutation; native proof.                                                                                           |
-| `/compact`              | B                                   | Actual native compaction; persisted summary, aggregate split-turn usage and no duplicate retry; native proof.                                                            |
-| `/resume`               | B                                   | Visible Team conversation selector; does not expose private native session trees. Native proof.                                                                          |
-| `/reload`               | B                                   | Native resource reload; shared discovery and new unknown command installation proof.                                                                                     |
-| `/quit`                 | B                                   | Stop/leave Team view, not terminate the shared server. Goal Stop is independently tested; individual slash invocation is not separately attested.                        |
-| `/trace`                | `extensions/observability/index.ts` | Actual native notification observed with observability disabled; not a claim that a trace upload occurred.                                                               |
-| `/browser`              | `extensions/browser/index.ts`       | Actual native `status` result observed. Installation and destructive browser actions are not run for coverage.                                                           |
-| `/computer-use`         | C                                   | Actual config notification; native project values take precedence over shared configuration. No desktop action is needed for this check.                                 |
-| `/subagent-cost`        | S                                   | Actual native report/message observed. Empty synthetic history is not real-account cost reconciliation.                                                                  |
-| `/subagents-doctor`     | S                                   | Actual native diagnostic message observed; not a proof that every reported capability is usable.                                                                         |
-| `/subagents-guide`      | S                                   | Actual packaged native guide message observed.                                                                                                                           |
-| `/subagents-detach`     | S                                   | Native empty-input/empty-task response observed; successful detachment of a live child is not individually attested here.                                                |
-| `/subagents-stop`       | S                                   | Native empty-task response observed; actual child closure is covered separately by the kernel proof, not inferred from this acknowledgement.                             |
-| `/subagents-models`     | S                                   | Native builtin-model report observed. Shared/project/package roles load; member customization remains rejected in resource proofs.                                       |
-| `/goal`                 | G                                   | Actual timers, pause, Stop/unknown, plain and skill wake under one receipt/member; native and browser proofs.                                                            |
-| `/qoder-models`         | Q                                   | Private member provider API/catalog mediation with synthetic accounts; no broker HOME credential or room result broadcast.                                               |
-| `/qoder-credits`        | Q                                   | Private member quota API fixture; not per-request debit, billing or real-account evidence.                                                                               |
-| `/context`              | Context                             | Not installed into the initial shared profile. Native handler refuses RPC except `config`; arbitrary custom-UI parity is blocked, not an implicit product exclusion.     |
-| `/llama`                | L                                   | Registered but native handler refuses RPC before UI. A TUI-only warning plus handled response is not functional parity.                                                  |
-| `/mcp`                  | M                                   | Shared definitions, member-private native OAuth, browserless callback mediation; HTTP/browser/native isolation proof.                                                    |
-| `/skill:pi-subagents`   | `skills/pi-subagents/SKILL.md`      | Bundled native skill expansion. Suggestion only fills draft; explicit submit/queued skill wake proof. User-script workflows remain unsupported.                          |
-| `/skill:design-loop`    | Terminal skill metadata only        | Deliberately uninstalled by user choice. Personal memory, component collections and history are not imported.                                                            |
-| `/skill:dws`            | Terminal skill metadata only        | Deliberately uninstalled by user choice. No DingTalk action executed.                                                                                                    |
-| `/skill:mobile-use`     | Terminal skill metadata only        | Deliberately uninstalled by user choice. Private device/setup lessons stay private; no device operation executed.                                                        |
-| `/skill:ponytail-audit` | Terminal skill metadata only        | Deliberately uninstalled by user choice; no replacement skill is fabricated.                                                                                             |
-| `/skill:yao-meta-skill` | Terminal skill metadata only        | Deliberately uninstalled by user choice; referenced personal assets are not copied.                                                                                      |
+Tab and partial-name Enter complete the composer without executing. A second Enter on the complete command executes.
+Clicking an argumentless command still opens/runs it; skill/template selection only fills the draft.
 
-## Generic extension proof, not a command-name switch
+## Evidence and inventory
 
-`test/team-resources-proof.ts` installs previously unknown names into a temporary shared profile. The actual native
-handlers receive exact arguments, select/input/confirm responses and keyed status/widget calls. It checks persisted
-native effects, shared/project context, project skill retention, native reload, an installed later command and restart
-into a new session. An awaited asynchronous follow-up reaches the synthetic provider under the original receipt/payer.
-A handler appends a real effect and throws; restart/retry adds no inference or file bytes. Its unknown session refuses a
-new dispatch. No Team handler implementation names those fixture commands.
+- `node test/native-commands-proof.ts --ui`: actual pinned runtime, synthetic personal accounts, loopback inference,
+  real browser interaction. Checks thirteen-command HTTP/catalog admission, owner settings, personal thinking/model,
+  fork/tree, native compaction, reload, Goal, private quota output, native browser input, and unknown/no-replay fences.
+- Error-command fixtures deliberately call the trusted executor below HTTP admission. They prove its receipt fence,
+  **not** that extra fixture commands are public. UI slot/tree fixtures use native input hooks on ordinary test messages.
+- `node --test test/team-command-policy.test.ts test/native-tree.test.ts`: surface/name-precedence/routing checks
+  and direct pinned terminal tree comparison.
+- `node test/native-command-inventory.ts <attested-terminal-inventory.json>` compares all 45 supplied terminal
+  name/source pairs. The empty shared profile has 39 raw native entries; **14** remain public: thirteen commands plus
+  the packaged subagent skill. Registration/handled is not proof of behavioral or financial equivalence.
+- `test/team-resources-proof.ts` exercises native RPC/executor resource loading, arbitrary trusted extension handlers,
+  native dialogs, reload and follow-up below Team's public command admission. Those extra names are not exposed by Team.
 
-This does not prove unannounced fire-and-forget timers after a handler has returned. The pinned extension API exposes no
-generic lifetime/completion contract for arbitrary background work; the native Goal protocol has its own lifecycle proof.
+Five personal skills remain deliberately uninstalled by user choice. No personal settings, credentials or skill assets
+are copied to manufacture parity. All other builtins/extensions, including `/context`, `/llama`, `/share`, `/bug`,
+`/name`, `/qoder-models` and subagent diagnostic slash commands, are outside the supported surface.
 
 ## TUI feasibility (outside this delivery scope)
 
@@ -102,15 +73,15 @@ The production TUI bridge is explicitly outside this accepted delivery scope. Th
 
 ## Resource and delivery limits
 
-The project/member subagent-source bypass is now guarded separately from core trust, including native live tool calls and
-child CLI aliases/canonical paths. Frozen project snapshots keep their old bytes while using the current shared base.
+Trusted project resources follow native precedence; declared member resource mirrors remain derived from the shared
+profile. Native owned-scope rules still govern children. Frozen project snapshots keep their old bytes while using the shared base.
 Configuration removal preserves unknown data; dependency freshness does not recursively scan links. Locked shared npm cache
 is explicitly excluded from backup and must be reinstalled after restore; see CONFIGURATION.md. These are tested Team
 contracts, not claims about every arbitrary plugin's undeclared state or a filesystem sandbox.
 
-Remaining capability gaps are separate from the two explicit exclusions: five personal skills are deliberately uninstalled by user choice (no automatic import); `/context` custom views and `/llama` TUI actions have no production browser transport;
-not every live/error branch of all 45 entries is individually exercised. Real provider accounts, device automation and financial
-reconciliation are not attested. `/share` and `/bug` alone are intentionally excluded.
+The thirteen-command surface does not promise every native terminal setting or arbitrary custom UI. Real provider accounts,
+device automation and financial reconciliation are not attested. Expanding the command set or adding terminal-only settings
+requires a new explicit contract and command-specific interaction/permission evidence, not a catalog-only change.
 
 ### Subagent limits in the verified subset
 

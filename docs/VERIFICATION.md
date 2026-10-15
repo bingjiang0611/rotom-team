@@ -70,7 +70,7 @@ Journal tests cover both unresolved and confirmed-handled inputs; read-only insp
 The schema-1 migration fixture is reconstructed without newer tables, and schema-5 inspection preserves operation identity.
 
 The inventory script compares all 45 supplied terminal name/source pairs to actual isolated Team discovery. It records
-39 raw baseline entries and 37 allowed catalog entries (not 37 working interactions); it does not claim 45 behavioral passes. Five personal skills are deliberately uninstalled by user choice, not replaced by fabricated skills. Read-only terminal SKILL.md metadata evidence is private and stays outside
+39 raw baseline entries and 14 public catalog entries (thirteen commands plus the packaged subagent skill); it does not claim 45 behavioral passes. Five personal skills are deliberately uninstalled by user choice, not replaced by fabricated skills. Read-only terminal SKILL.md metadata evidence is private and stays outside
 Git. Every row and remaining interaction gap is listed in [NATIVE-COMMAND-COMPATIBILITY.md](NATIVE-COMMAND-COMPATIBILITY.md).
 
 The PTY experiment runs the verified CLI and a real custom component on an OS PTY. It proves a native key interaction,
@@ -161,13 +161,13 @@ buttons remain available); no label editing or full-entry copy shortcut; message
 native 200-character excerpt rather than full transcript search. Long rows clip to the viewport; native
 automatic horizontal panning for deeply nested branches is not ported. If clipping hides the selected
 entry's identity in real branched histories, add selected-anchor panning with a deep-tree browser fixture.
-All rows are rendered; no large-history virtualization claim is made. Other slash dialogs and TUI-only
-extensions are unchanged. Recheck native parity when updating the runtime pin.
+All rows are rendered; no large-history virtualization claim is made. Other supported slash dialogs are described below.
+TUI-only extensions remain outside the supported surface. Recheck native parity when updating the runtime pin.
 
 ## Native command adapters and Goal
 
 ```sh
-node --test test/rotom-commands.test.ts test/rotom-rpc.test.ts
+node --test test/rotom-commands.test.ts test/rotom-rpc.test.ts test/team-command-policy.test.ts test/native-goal-form.test.ts
 node test/native-commands-proof.ts --ui
 node test/rotom-goal-proof.ts
 npm run test:kernel:ui
@@ -176,10 +176,9 @@ npm run test:kernel:ui
 These scripts use the actual pinned runtime, isolated member HOMEs, loopback model/OAuth fixtures and Chromium.
 `native-commands-proof` writes `native-commands/report.json` and screenshots under its printed temporary data root.
 It checks first-session discovery without inference; retained snapshots beyond 30 seconds and after restart without native startup; owner-only shared settings; viewer/other-member catalog privacy; model A→B and later payer/model
-requests; confirmed names before the first conversation and across handoff; native branch JSONL/HTML export; positive
-owner-private reasoning before cross-member clone/import filtering; earlier SECOND-entry fork/tree with THIRD absent
-from the new branch and later inference; request replay/conflicts; native settings and slash compaction with persisted summary/usage; and explicit share/bug rejection
-without starting native operations. Personal Qoder API fixtures assert credential ownership and private result delivery;
+requests; fixture native titles and Team rename across handoff; native branch JSONL/HTML export; positive
+owner-private reasoning before cross-member clone filtering; earlier SECOND-entry fork/tree with THIRD absent
+from the new branch and later inference; request replay/conflicts; native settings and slash compaction with persisted summary/usage; and exactly thirteen builtin/extension entries, with removed names rejected before native operations. Personal Qoder API fixtures assert credential ownership and private result delivery;
 they are not real-account billing evidence.
 
 The browser proof chooses native entry IDs, restores fork/tree drafts without submitting them, invokes an authorized
@@ -188,14 +187,25 @@ custom-message text extraction. HTTP coverage also checks native no-op navigatio
 not its reason; summary-abort reason discrimination is not verified or claimed. Audit transcript records remain visible
 while native branch checks exclude the abandoned user entries.
 
+Error fixtures call the trusted executor below HTTP admission; their extra slash names are explicitly rejected over HTTP.
 A fixture appends a real native effect and then throws. The command remains `unknown`; restart and same-request retry
 add neither inference nor native bytes. The separate Team proof retains ordinary prompt clean-stop/crash continuation
 checks and asserts that native skill expansion receipts remain `prompt`, not non-recoverable extension handlers.
 
-The browser sends 20 native status/widget updates and verifies one keyed slot per key, followed by removal while the
-handler is still live. Goal waiting controls remain usable without a status-toast pile-up; plain composer input wakes
+The browser uses ordinary fixture input hooks to send 20 native status/widget updates and verifies one keyed slot per key,
+followed by removal while the handler is still live. Goal waiting controls remain usable without a status-toast pile-up; plain composer input wakes
 the same workflow. The low-level Goal proof verifies a real timer wake, Stop with unknown outcome, pause, explicit wake and queued native skill expansion/wake, retaining one receipt/member. These are distinct from merely receiving a command acknowledgement.
 
-No real account, external sharing upload, deployment, target-device/mobile layout, financial reconciliation or arbitrary
+The browser also checks completion-only Tab/partial Enter, the personal thinking picker, owner settings cycling,
+readable private quota/unknown values, the real browser input dialog with empty Enter cancellation, and Goal manager
+start/edit/confirmed-clear. A reserved one-word objective is refused without dispatch. Goal budget validation and literal
+quote/newline encoding are compared directly against the pinned native parser, not duplicated expected output.
+A same-name template cannot authorize a hidden extension registered by resource reload or during an active prompt:
+both paths reject against the actual native registry before handler effects. Rapidly reopening Goal after edit starts a
+fresh sheet even before the previous exit animation finishes; it does not retain the old edit form.
+Fork begins on the latest native user message and supports arrow/Enter selection. Goal/tree are checked at a 390px
+viewport; screenshots wait for finite transitions rather than capturing a partially transparent sheet.
+
+No real account, external sharing upload, deployment, physical-device automation, financial reconciliation or arbitrary
 third-party extension is accepted by these fixtures. Run the commands on the final artifact; older logs are not evidence
 for a later edit.

@@ -7,6 +7,7 @@ import type { ConversationId } from "@earendil-works/pi-durable";
 import type { Attachment, SubmitRequest } from "../commands.ts";
 import { HttpError } from "../errors.ts";
 import { uploadedAttachments } from "../attachments.ts";
+import { teamCommandUsesAdapter } from "../team-command-policy.ts";
 import { serveDownload, serveImage, TYPES } from "./assets.ts";
 import { type ApiRequest, json, readJson, send } from "./io.ts";
 
@@ -184,7 +185,11 @@ export async function conversationRoutes(
             );
 
             // While Pi works, the composer's message joins the run (steer) or waits for it (followUp).
-            if (app.kernel.isRunning(id) && (body.mode === "steer" || body.mode === "followUp")) {
+            if (
+                app.kernel.isRunning(id) &&
+                (body.mode === "steer" || body.mode === "followUp") &&
+                !teamCommandUsesAdapter(body.text)
+            ) {
                 return json(
                     response,
                     200,

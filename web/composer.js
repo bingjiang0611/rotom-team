@@ -394,14 +394,15 @@ export function Composer() {
                 [],
                 "steer",
                 false,
-                command.name !== "goal" || ["status", "pause", "cancel"].includes(arg.trim()),
+                command.name !== "goal" ||
+                    ["", "status", "pause", "clear", "stop"].includes(arg.trim()),
             );
 
             if (nativeCommandAccepted(result)) {
                 update("");
             }
 
-            showNativeResult(result);
+            showNativeResult(result, command.name);
 
             return true;
         });
@@ -526,7 +527,7 @@ export function Composer() {
             const slash = store.state.view.kernel && full.trimStart().startsWith("/");
             const goal =
                 /^\s*\/goal(?:\s|$)/.test(full) &&
-                !/^\s*\/goal\s+(status|pause|cancel)\s*$/.test(full);
+                !/^\s*\/goal\s+(status|pause|clear|stop)\s*$/.test(full);
             const result = await actions.submit(
                 full,
                 attachments,
@@ -730,7 +731,10 @@ export function Composer() {
                 (event.key === "Enter" && !event.shiftKey && !coarse && !typedOut)
             ) {
                 event.preventDefault();
-                choose(chosen);
+                update(
+                    `/${chosen.name}${chosen.args || ["skill", "prompt"].includes(chosen.source) ? " " : ""}`,
+                );
+                focusEnd();
 
                 return;
             }

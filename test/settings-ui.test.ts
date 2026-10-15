@@ -308,3 +308,19 @@ test("on a phone, settings lists its pages in a row above the open one", real, a
     await press(".settings-nav", "Appearance");
     await reach({ page: "Appearance" }, "another page, on a phone");
 });
+
+test("reopening a native sheet during its exit starts with fresh form state", real, async () => {
+    await home(VIEWPORTS.desktop);
+    await page.evaluate(`(await import('/store.js')).openSheet({type: 'native-goal'})`);
+    await tap('.native-selector-row[data-value="start"]');
+    await until(() => present(".native-goal-form"), "Goal form opened");
+    // Same render batch, deliberately faster than the 200ms leaving transition. No command is submitted.
+    await page.evaluate(`
+        const { closeSheet, openSheet } = await import('/store.js');
+        closeSheet();
+        openSheet({type: 'native-goal'});
+    `);
+    await until(async () => !(await present(".native-goal-form")), "old form was unmounted");
+    assert.equal(await present('.native-selector-row[data-value="start"]'), true);
+    await page.evaluate(`(await import('/store.js')).closeSheet()`);
+});

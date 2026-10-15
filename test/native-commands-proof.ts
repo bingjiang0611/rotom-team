@@ -25,6 +25,15 @@ writeFileSync(
     join(data, "team-agent/prompts/fixture-prompt.md"),
     "NATIVE_TEMPLATE_INPUT $ARGUMENTS",
 );
+// Native command resolution prefers the hidden extension over this same-name template.
+writeFileSync(
+    join(data, "team-agent/prompts/fixture-echo.md"),
+    "MUST_NOT_BYPASS_COMMAND_ADMISSION",
+);
+writeFileSync(
+    join(data, "team-agent/prompts/runtime-swap.md"),
+    "STALE_TEMPLATE_MUST_NOT_AUTHORIZE_AN_EXTENSION",
+);
 writeFileSync(
     join(data, "team-agent/extensions/commands.ts"),
     `import {appendFileSync,existsSync} from "node:fs";
@@ -32,19 +41,26 @@ export default function(pi) {
     pi.on("session_start", () => appendFileSync(${JSON.stringify(join(realpathSync(root), "native-commands/native-starts.jsonl"))}, JSON.stringify({home: process.env.HOME}) + "\\n"));
     pi.on("session_start", () => { if (existsSync(${JSON.stringify(join(data, "force-discovery-unknown"))})) process.exit(17); });
     pi.registerCommand("fixture-echo", {description: "fixture dynamic command", handler: async (_args, ctx) => ctx.ui.notify("native-echo")});
-    pi.registerCommand("fixture-custom-message", {handler: async (_args, ctx) => {
-        pi.sendMessage({customType: "fixture-text", content: [{type: "text", text: "CUSTOM_"}, {type: "text", text: "DRAFT"}], display: true}, {triggerTurn: false});
-        await ctx.waitForIdle();
-        pi.appendEntry("fixture-after-custom", {});
-    }});
-    pi.registerCommand("fixture-status", {handler: async (_args, ctx) => {
+    const swap = () => pi.registerCommand("runtime-swap", {handler: async () => pi.appendEntry("hidden-command-effect", {})});
+    pi.on("session_start", () => { if (existsSync(${JSON.stringify(join(data, "team-agent/extensions/swap-command.flag"))})) swap(); });
+    pi.on("input", async (event, ctx) => {
+        if (event.text === "HOLD_MARKER") swap();
+        if (event.text === "FIXTURE_CUSTOM_MESSAGE") {
+            pi.sendMessage({customType: "fixture-text", content: [{type: "text", text: "CUSTOM_"}, {type: "text", text: "DRAFT"}], display: true}, {triggerTurn: false});
+            pi.appendEntry("fixture-after-custom", {});
+            return {action: "handled"};
+        }
+        if (event.text === "FIXTURE_CANCEL_TREE" || event.text === "FIXTURE_ALLOW_TREE") {
+            pi.appendEntry("fixture-tree-cancellation", {enabled: event.text === "FIXTURE_CANCEL_TREE"});
+            return {action: "handled"};
+        }
+        if (event.text !== "FIXTURE_STATUS") return;
         for (let i = 0; i < 20; i++) { ctx.ui.setStatus("fixture-status", "STATUS_" + i); ctx.ui.setWidget("fixture-widget", ["WIDGET_" + i]); }
         await ctx.ui.confirm("Clear native slots?", "The latest status and widget should each occupy one slot.");
         ctx.ui.setStatus("fixture-status", undefined); ctx.ui.setWidget("fixture-widget", undefined);
         await ctx.ui.confirm("Native slots cleared", "Both slots must disappear while this command remains open.");
-    }});
-    pi.registerCommand("fixture-cancel-tree", {handler: async () => pi.appendEntry("fixture-tree-cancellation", {enabled: true})});
-    pi.registerCommand("fixture-allow-tree", {handler: async () => pi.appendEntry("fixture-tree-cancellation", {enabled: false})});
+        return {action: "handled"};
+    });
     pi.on("session_before_tree", (_event, ctx) => {
         if (ctx.sessionManager.getEntries().findLast(entry => entry.customType === "fixture-tree-cancellation")?.data?.enabled) return {cancel: true};
     });
@@ -194,7 +210,15 @@ const configureUserModels = (models: Runtime, user: User) => {
             assert.equal(apiKey, `private-qoder:${user.id}`);
             qoderCalls.push({ memberId: user.id, action: "credits" });
 
-            return { balance: 7, privateFixture: `PRIVATE_CREDITS_${user.id}` };
+            return {
+                observedAt: 1000,
+                pools: {
+                    plan: { remaining: 7, total: 10, used: 3, unit: "credits" },
+                    addon: null,
+                    shared: { remaining: null, total: null, used: null, unit: "unknown" },
+                },
+                privateFixture: `PRIVATE_CREDITS_${user.id}`,
+            };
         },
         stream: () => {
             throw new Error("Qoder inference must not run");
@@ -326,29 +350,7 @@ try {
     assert.equal(app.sessionMeta(id)?.title, undefined);
     assert.equal((await json(await submit(alice, "FIRST_USER_MARKER"))).status, "settled");
     assert.equal(calls.at(-1)!.body.model, "model-a");
-    const beforeGenericNames = calls.length;
-
-    for (const name of ["future.点", "constructor"]) {
-        assert.equal(
-            (await json(await submit(alice, `/${name} exact-argument`))).status,
-            "handled",
-        );
-    }
-
-    assert.equal(
-        calls.length,
-        beforeGenericNames,
-        "generic names invoke native handlers, not inference or builtin object properties",
-    );
     const sourceFirst = app.kernel!.executions.journal.session(String(id));
-
-    for (const name of ["future.点", "constructor"]) {
-        assert.ok(
-            readFileSync(sourceFirst.sessionFile!, "utf8").includes(
-                JSON.stringify({ name, args: "exact-argument" }),
-            ),
-        );
-    }
 
     const originalFile = sourceFirst.sessionFile!;
     const registry = await json(await request(alice, `c/${id}/prompts`));
@@ -356,44 +358,60 @@ try {
     assert.equal((await json(await request(viewer, `c/${id}/prompts`))).dynamicReady, false);
 
     assert.ok(registry.dynamicReady);
-    assert.ok(
-        registry.commands.some((command: { name: string }) => command.name === "fixture-echo"),
+    assert.deepEqual(
+        registry.commands
+            .filter((command: { source: string }) => !["skill", "prompt"].includes(command.source))
+            .map((command: { name: string }) => command.name)
+            .sort(),
+        [
+            "settings",
+            "model",
+            "thinking",
+            "tree",
+            "fork",
+            "clone",
+            "compact",
+            "reload",
+            "goal",
+            "browser",
+            "computer-use",
+            "mcp",
+            "qoder-credits",
+        ].sort(),
     );
     const noInference = calls.length;
 
-    const privateDescription = registry.commands.find(
-        (command: { name: string }) => command.name === "fixture-private",
-    ).description;
+    const beforeQoder = qoderCalls.length;
 
-    assert.match(privateDescription, /private-home:/);
-    assert.ok(
-        !JSON.stringify(await json(await request(bob, `c/${id}/prompts`))).includes(
-            privateDescription,
-        ),
-    );
+    assert.equal((await submit(alice, "/qoder-models")).status, 400);
     const personalCredits = await json(await submit(alice, "/qoder-credits"));
-    const personalCatalog = await json(await submit(alice, "/qoder-models"));
 
+    assert.match(personalCredits.nativeResult.text, /Qoder Credit snapshot/);
+    assert.match(personalCredits.nativeResult.text, /7 \/ 10 credits/);
     assert.equal(
         personalCredits.nativeResult.credits.privateFixture,
         `PRIVATE_CREDITS_${alice.id}`,
     );
-    assert.equal(personalCatalog.nativeResult.catalog[0].id, `PRIVATE_CATALOG_${alice.id}`);
-    assert.ok(
-        qoderCalls.some(
-            (call) => call.memberId === alice.id && call.action === "models" && call.force,
-        ),
-    );
+    assert.deepEqual(qoderCalls.slice(beforeQoder), [{ memberId: alice.id, action: "credits" }]);
     assert.equal(calls.length, noInference);
     assert.ok(!JSON.stringify(await app.room(id)).includes("PRIVATE_CREDITS_"));
     assert.ok(!JSON.stringify(app.kernel!.snapshot(id, bob)).includes("PRIVATE_CREDITS_"));
+    // A tracked resource change reloads the retained runtime: the cached template becomes a hidden extension.
+    writeFileSync(join(data, "team-agent/extensions/swap-command.flag"), "fixture");
+    const swapped = await submit(alice, "/runtime-swap");
+
+    rmSync(join(data, "team-agent/extensions/swap-command.flag"));
+    assert.equal(swapped.status, 400, await swapped.text());
+    assert.equal(app.kernel!.executions.journal.latest(String(id))!.status, "rejected");
+    assert.equal(calls.length, noInference);
+    assert.ok(!readFileSync(originalFile, "utf8").includes("hidden-command-effect"));
     const excludedReceipts = app.kernel!.executions.journal.receipts(String(id)).length;
 
     for (const text of ["/share", "/bug"]) {
         const response = await submit(alice, text);
 
         assert.equal(response.status, 400);
-        assert.match(await response.text(), /excluded/);
+        assert.match(await response.text(), /not supported/);
     }
 
     assert.equal(
@@ -402,7 +420,28 @@ try {
         "excluded external actions never start a native process",
     );
 
-    for (const text of ["/unknown-fixture", "/team-kernel-tree anything"]) {
+    for (const text of [
+        "/unknown-fixture",
+        "/team-kernel-tree anything",
+        "/fixture-echo",
+        "/fixture-error",
+        "/future.点",
+        "/constructor",
+        "/name denied",
+        "/new",
+        "/resume",
+        "/export",
+        "/import",
+        "/session",
+        "/copy",
+        "/quit",
+        "/login",
+        "/logout",
+        "/hotkeys",
+        "/scoped-models",
+        "/changelog",
+        "/trust",
+    ]) {
         const response = await submit(alice, text);
 
         assert.equal(response.status, 400, await response.text());
@@ -431,7 +470,13 @@ try {
     await json(await submit(alice, "SECOND_USER_MARKER"));
     assert.equal(calls.at(-1)!.body.model, "model-b");
     assert.equal(calls.at(-1)!.payer, alice.id);
-    await json(await submit(alice, "/name Synchronized Native Name"));
+    // Native title is fixture setup, not an exposed Team slash command.
+    await app.kernel!.executions.run(
+        String(id),
+        "fixture-native-title",
+        "/name Synchronized Native Name",
+    );
+    await json(await request(alice, `sessions/${id}`, { title: "Synchronized Native Name" }));
     assert.equal(app.sessionMeta(id)?.title, "Synchronized Native Name");
     const firstNamed = app.kernel!.executions.journal.session(String(id));
     const native = await nativeSessionManager();
@@ -554,34 +599,6 @@ try {
         !(await branchExport.text()).includes("THIRD_USER_MARKER"),
         "native JSONL must export the selected branch, not the abandoned path",
     );
-    const newSession = await json(await submit(alice, "/new", { requestId: "new-stable" }));
-    const sameNew = await json(await submit(alice, "/new", { requestId: "new-stable" }));
-
-    assert.equal(newSession.conversationId, sameNew.conversationId);
-    assert.equal(app.kernel!.snapshot(newSession.conversationId, alice).messages.length, 0);
-    const resume = await json(await submit(alice, `/resume ${clone.conversationId}`));
-
-    assert.equal(resume.conversationId, clone.conversationId);
-    writeFileSync(join(workspace, "import.jsonl"), exported);
-    const imported = await json(await submit(bob, "/import import.jsonl"));
-
-    assert.equal(imported.status, "settled");
-    assert.equal(
-        app.kernel!.executions.journal.session(String(imported.conversationId)).binding.memberId,
-        bob.id,
-    );
-    assert.ok(
-        !JSON.stringify(app.kernel!.snapshot(imported.conversationId, bob).messages).includes(
-            "private-response-",
-        ),
-    );
-    const importedSegment = app.kernel!.executions.journal.session(String(imported.conversationId));
-
-    assert.ok(
-        !readFileSync(importedSegment.sessionFile!, "utf8").includes(
-            `PRIVATE_REASONING_${alice.id}`,
-        ),
-    );
     const oldFile = readFileSync(originalFile, "utf8");
 
     assert.ok(
@@ -605,16 +622,13 @@ try {
     assert.equal(retainedCatalog.capturedAt, catalogBeforeSettings.capturedAt);
     assert.equal(retainedCatalog.freshness, "configuration-changed");
     assert.ok(
-        retainedCatalog.commands.some(
-            (command: { name: string }) => command.name === "fixture-echo",
-        ),
+        retainedCatalog.commands.some((command: { name: string }) => command.name === "goal"),
     );
-    const info = await json(await submit(alice, "/session"));
-
-    assert.equal(info.nativeResult.state.model.id, "model-b");
-    assert.equal(info.nativeResult.state.thinkingLevel, "low");
-    assert.equal(info.nativeResult.state.steeringMode, "all");
-    assert.equal((await json(await submit(alice, "/fixture-echo"))).status, "handled");
+    assert.equal(
+        (await json(await submit(alice, "/thinking"))).interaction.type,
+        "native-thinking",
+    );
+    assert.equal((await json(await submit(alice, "/goal"))).interaction.type, "native-goal");
     await json(await submit(alice, "/reload"));
     hold = true;
     const held = submit(alice, "HOLD_MARKER", { wait: false });
@@ -628,6 +642,46 @@ try {
 
     const beforeChoice = app.accounts.choice(alice);
     const beforeBinding = app.kernel!.executions.journal.session(String(id)).binding;
+
+    assert.equal(
+        (
+            await request(alice, `c/${id}/submit`, {
+                text: {},
+                mode: "steer",
+                requestId: "malformed-busy-input",
+            })
+        ).status,
+        400,
+    );
+
+    for (const [command, type] of [
+        ["settings", "native-settings"],
+        ["thinking", "native-thinking"],
+        ["goal", "native-goal"],
+    ]) {
+        const result = await json(await submit(alice, `/${command}`, { mode: "steer" }));
+
+        assert.equal(
+            result.interaction.type,
+            type,
+            `busy /${command} uses its web adapter, not the queue`,
+        );
+    }
+
+    assert.equal(
+        (await submit(alice, "/runtime-swap", { mode: "steer" })).status,
+        409,
+        "live queued registry overrides a stale template catalog",
+    );
+    assert.ok(
+        !readFileSync(
+            app.kernel!.executions.journal.session(String(id)).sessionFile!,
+            "utf8",
+        ).includes("hidden-command-effect"),
+    );
+    assert.equal((await submit(alice, "/fixture-error", { mode: "steer" })).status, 400);
+    assert.equal((await submit(alice, "/name queued bypass", { mode: "followUp" })).status, 400);
+    assert.equal((await submit(alice, "/model openai/model-a", { mode: "steer" })).status, 409);
 
     assert.equal(
         (
@@ -652,9 +706,7 @@ try {
 
     assert.equal(catalogAfterRestart.dynamicReady, true);
     assert.ok(
-        catalogAfterRestart.commands.some(
-            (command: { name: string }) => command.name === "fixture-echo",
-        ),
+        catalogAfterRestart.commands.some((command: { name: string }) => command.name === "goal"),
     );
     assert.equal(readFileSync(startsFile, "utf8"), startsAfterRestart);
     const restoredTree = await json(
@@ -763,12 +815,14 @@ try {
         20000,
     );
     const queuedOwner = app.kernel!.executions.journal.latest(String(queuedFailureSession.id))!;
-    const queuedFailurePending = submit(
-        alice,
-        "/fixture-error",
-        { mode: "steer", requestId: "queued-effect" },
-        queuedFailureSession.id,
-    );
+    // Exercise the trusted executor below Team admission. HTTP rejects fixture commands above.
+    // These fixtures still prove the native effect/error fence; they are not an extra public command surface.
+    const queuedFailurePending = app
+        .kernel!.executions.queue(String(queuedFailureSession.id), "/fixture-error", "steer")
+        .then(
+            () => assert.fail("fixture must throw after its native effect"),
+            (error) => error,
+        );
     const queuedFile = app.kernel!.executions.journal.session(
         String(queuedFailureSession.id),
     ).sessionFile!;
@@ -778,24 +832,15 @@ try {
         "queued native effect before owner completion",
         20000,
     );
-    let queuedRetry: Response | undefined;
-    const queuedRetryPending = submit(
-        alice,
-        "/fixture-error",
-        { mode: "steer", requestId: "queued-effect" },
-        queuedFailureSession.id,
-    ).then((response) => {
-        queuedRetry = response;
-    });
-
-    await until(() => queuedRetry !== undefined, "pending queued command retry refused", 5000);
-    await queuedRetryPending;
-    assert.equal(queuedRetry!.status, 409);
+    await assert.rejects(
+        app.kernel!.executions.queue(String(queuedFailureSession.id), "/fixture-error", "steer"),
+        /pending or unknown/,
+    );
     await app.kernel!.abort(queuedFailureSession.id, alice);
     const queuedFailure = await queuedFailurePending;
 
-    assert.equal(queuedFailure.status, 409);
-    assert.ok((await queuedFailure.text()).includes("unknown"));
+    assert.equal(queuedFailure.outcome, "unknown");
+    assert.match(queuedFailure.message, /fixture-after-effect/);
     hold = false;
     await until(
         () => !app.kernel!.isRunning(queuedFailureSession.id),
@@ -877,8 +922,10 @@ try {
         "unknown discovery cannot start a second native process, even with a new request id",
     );
     const beforeFailure = calls.length;
-    const failed = await json(
-        await submit(alice, "/fixture-error", { requestId: "error-stable" }, failureSession.id),
+    const failed = await app.kernel!.executions.run(
+        String(failureSession.id),
+        "error-stable",
+        "/fixture-error",
     );
 
     assert.equal(
@@ -915,23 +962,20 @@ try {
 
     assert.equal(queuedReadback.id, queuedOwner.id);
     assert.equal(queuedReadback.status, "unknown");
-    const failedReadback = await json(
-        await request(
-            alice,
-            `c/${failureSession.id}/kernel-request?requestId=error-stable&operation=submit`,
-        ),
-    );
+    const failedReadback = app.kernel!.executions.journal.receipt(failed.id);
 
-    assert.equal(failedReadback.receipt.id, failed.id);
-    assert.equal(failedReadback.receipt.operation, "command");
+    assert.equal(failedReadback.id, failed.id);
+    assert.equal(failedReadback.operation, "command");
     assert.equal(
         calls.length,
         beforeFailure,
         "restart must not continue an unknown command as model input",
     );
     assert.equal(readFileSync(failureFile, "utf8"), failureBytes);
-    const replay = await json(
-        await submit(alice, "/fixture-error", { requestId: "error-stable" }, failureSession.id),
+    const replay = await app.kernel!.executions.run(
+        String(failureSession.id),
+        "error-stable",
+        "/fixture-error",
     );
 
     assert.equal(replay.id, failed.id);
@@ -949,22 +993,22 @@ try {
     report.passed = true;
     report.inferences = calls.length;
     report.checks = [
-        "command effects remain unknown without restart/retry replay",
+        "trusted executor fixture command effects remain unknown without restart/retry replay (below HTTP admission)",
         "queued effect-then-error durably fences the existing prompt; no duplicate effect or automatic resume",
         "actual unknown discovery cannot start a second native process with same or new request ID",
         "catalog retained after 30 seconds/restart without native startup; owner-only shared settings",
-        "generic dotted/non-ASCII/prototype-property command names reach native handlers",
+        "only thirteen builtins/extensions exposed; hidden/dotted/fixture commands rejected before dispatch",
         "first-session no-inference discovery and member-private snapshots",
         "Qoder account API private results",
         "native title readback before first message and after handoff",
         "model A→B then inference B and Alice payer",
         "thinking high persisted",
-        "native and Team name synchronization",
+        "fixture native title and Team rename persist across handoff",
         "native JSONL entries and HTML export/member privacy",
         "selected earlier-user fork with Bob payer",
         "native tree navigation and explicit branch summary usage",
         "native slash compaction receipt, persisted summary/usage and idempotency",
-        "new/resume/import/clone mapped to independent Team sessions",
+        "clone and selected-message fork create independent Team sessions; removed lifecycle commands rejected",
         "settings persist to real native startup",
         "unknown/private/excluded commands no inference",
         "busy model mutation rejected without preference change",

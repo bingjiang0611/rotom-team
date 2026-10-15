@@ -51,9 +51,20 @@ export async function nativeCommandUiProof(options: {
             `composer releases ${command}`,
             30_000,
         );
+
+        if (command.startsWith("FIXTURE_")) {
+            await until(
+                () => !options.app.kernel!.isRunning(options.id),
+                "input fixture lease closes",
+                20_000,
+            );
+        }
     };
 
     const screenshot = async (name: string) => {
+        await page.evaluate(
+            `await Promise.all(document.getAnimations().filter(animation => animation.effect?.getComputedTiming().endTime !== Infinity).map(animation => animation.finished.catch(() => {})))`,
+        );
         const image = await page.screenshot();
         const path = join(options.root, `${name}.jpg`);
 
@@ -70,6 +81,21 @@ export async function nativeCommandUiProof(options: {
             "native composer",
             20_000,
         );
+        await page.evaluate(`
+            const { actions } = await import('/store.js');
+            const submit = actions.submit;
+            globalThis.commandTrace = [];
+            actions.submit = async (...args) => {
+                try {
+                    const result = await submit(...args);
+                    globalThis.commandTrace.push({text: args[0], result});
+                    return result;
+                } catch (error) {
+                    globalThis.commandTrace.push({text: args[0], error: String(error)});
+                    throw error;
+                }
+            };
+        `);
         const before = options.modelCalls();
 
         await type("/");
@@ -87,23 +113,28 @@ export async function nativeCommandUiProof(options: {
         );
         assert.equal(options.modelCalls(), before);
         await screenshot("native-command-menu");
-        await type("/future.");
-        await until(
-            async () => (await text(".commands")).includes("/future.点"),
-            "generic non-ASCII dotted native command suggestion",
-        );
-        assert.equal(
+
+        for (const key of ["Tab", "Enter"]) {
+            await type("/sett");
+            await until(
+                async () => (await text(".commands")).includes("/settings"),
+                "settings suggestion",
+            );
             await page.evaluate(
-                `(await import('/commands.js')).parseCommand('/future.点 exact')?.command.name`,
-            ),
-            "future.点",
-        );
-        assert.equal(
-            await page.evaluate(
-                `(await import('/commands.js')).parseCommand('/constructor exact')?.command.name`,
-            ),
-            "constructor",
-        );
+                `document.querySelector('.composer textarea').dispatchEvent(new KeyboardEvent('keydown', {key: ${JSON.stringify(key)}, bubbles: true, cancelable: true}))`,
+            );
+            assert.equal(
+                await page.evaluate("document.querySelector('.composer textarea').value"),
+                "/settings",
+            );
+            assert.equal(
+                await page.evaluate("Boolean((await import('/store.js')).store.state.sheet)"),
+                "false",
+                "completion must not execute",
+            );
+        }
+
+        await type("");
 
         for (const name of ["fixture-prompt", "skill:pi-subagents"]) {
             await type(`/${name}`);
@@ -144,20 +175,36 @@ export async function nativeCommandUiProof(options: {
             "immutable model handoff",
             20_000,
         );
-        await execute("/name Browser Native Name");
+
+        await execute("/thinking");
         await until(
-            async () => (await text(".topbar")).includes("Browser Native Name"),
-            "native name mirrored into title",
+            async () => (await text(".sheet")).includes("Thinking Level"),
+            "dedicated thinking picker",
+        );
+        await page.evaluate(`
+            const search = document.querySelector('.native-selector input');
+            search.value = 'high';
+            search.dispatchEvent(new Event('input', {bubbles: true}));
+        `);
+        await page.evaluate(
+            "document.querySelector('.native-selector input').dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', bubbles: true, cancelable: true}))",
+        );
+        await until(
+            async () =>
+                (await page.evaluate(
+                    "(await import('/store.js')).store.state.view.kernel.thinkingLevel",
+                )) === "high",
+            "thinking keyboard selection persists",
             20_000,
         );
         await execute("/settings");
         await until(
-            async () => (await text(".sheet")).includes("imageAutoResize"),
+            async () => (await text(".sheet")).includes("Auto-resize images"),
             "real native settings sheet",
             20_000,
         );
         await page.evaluate(
-            `Array.from(document.querySelectorAll('.sheet label')).find(label => label.textContent.includes('imageAutoResize')).querySelector('input').click()`,
+            `document.querySelector('.native-selector-row[data-value="imageAutoResize"]').click()`,
         );
         await until(
             async () =>
@@ -168,8 +215,9 @@ export async function nativeCommandUiProof(options: {
             20_000,
         );
         await screenshot("native-command-settings");
-        await page.evaluate(`(await import('/store.js')).closeSheet()`);
-        await execute("/scoped-models");
+        await page.evaluate(
+            `document.querySelector('.native-selector-row[data-value="scope"]').click()`,
+        );
         await until(
             async () => (await text(".sheet")).includes("Cycle model"),
             "native model scope sheet",
@@ -188,7 +236,43 @@ export async function nativeCommandUiProof(options: {
         await execute("/reload");
         assert.equal(options.modelCalls(), before, "selection and settings do not infer");
 
-        await type("/fixture-status");
+        await execute("/qoder-credits");
+        await until(
+            async () => (await text(".sheet")).includes("Account snapshot"),
+            "private readable Qoder credits",
+        );
+        assert.ok((await text(".native-command-output")).includes("7 / 10 credits"));
+        assert.ok((await text(".native-command-output")).includes("addon: not reported"));
+        assert.ok(
+            (await text(".native-command-output")).includes("shared: remaining ? / ? unknown"),
+        );
+        await screenshot("native-command-credits");
+        await page.evaluate("(await import('/store.js')).closeSheet()");
+        await execute("/computer-use");
+
+        // The real native browser handler asks for input. Empty Enter cancels without touching Chrome or a model.
+        await type("/browser");
+        await page.evaluate(`${send}.click()`);
+        await until(
+            async () =>
+                (await page.evaluate(
+                    "Boolean(document.querySelector('.native-question input'))",
+                )) === "true",
+            "native browser input dialog",
+            20_000,
+        );
+        await screenshot("native-command-browser-input");
+        await page.evaluate("document.querySelector('.native-question input').focus()");
+        await page.press("Enter");
+        await until(
+            async () =>
+                (await page.evaluate("document.querySelector('.composer textarea')?.value")) === "",
+            "empty browser input completes",
+            20_000,
+        );
+        assert.equal(options.modelCalls(), before);
+
+        await type("FIXTURE_STATUS");
         await until(
             async () => (await page.evaluate(`Boolean(${send} && !${send}.disabled)`)) === "true",
             "status fixture command ready",
@@ -229,7 +313,50 @@ export async function nativeCommandUiProof(options: {
             "status command completes",
             20_000,
         );
-        await execute("/goal Browser wake proof, then pause for my decision.");
+        await until(
+            () => !options.app.kernel!.isRunning(options.id),
+            "input fixture closes its native lease",
+            20_000,
+        );
+        const beforeGoal = options.modelCalls();
+
+        await execute("/goal");
+        await until(
+            async () => (await text(".sheet")).includes("Start a goal"),
+            "web Goal manager",
+        );
+        assert.equal(
+            await page.evaluate(
+                `document.querySelector('.native-selector-row[data-value="settings"]').getAttribute('aria-disabled')`,
+            ),
+            "true",
+        );
+        await screenshot("native-command-goal-manager");
+        await page.setViewport(VIEWPORTS.mobile);
+        assert.equal(
+            await page.evaluate(
+                `const sheet = document.querySelector('.sheet'); JSON.stringify(sheet.scrollWidth <= sheet.clientWidth)`,
+            ),
+            "true",
+        );
+        await screenshot("native-command-goal-mobile");
+        await page.setViewport(VIEWPORTS.desktop);
+        await page.evaluate(
+            `document.querySelector('.native-selector-row[data-value="start"]').click()`,
+        );
+        await page.evaluate(
+            `const input = document.querySelector('.native-goal-form textarea'); input.value = 'clear'; input.dispatchEvent(new Event('input', {bubbles: true}));`,
+        );
+        await page.evaluate(`${button("Start goal")}.click()`);
+        await until(
+            async () => (await text('.sheet [role="alert"]')).includes("native Goal control"),
+            "objective cannot become a destructive control command",
+        );
+        assert.equal(options.modelCalls(), beforeGoal);
+        await page.evaluate(
+            `const input = document.querySelector('.native-goal-form textarea'); input.value = 'Browser wake proof, then pause for my decision.'; input.dispatchEvent(new Event('input', {bubbles: true}));`,
+        );
+        await page.evaluate(`${button("Start goal")}.click()`);
         await until(
             async () => (await text(".goal-bar")).includes("Waiting"),
             "native waiting Goal visible",
@@ -252,6 +379,51 @@ export async function nativeCommandUiProof(options: {
         );
         assert.equal(options.modelCalls(), waitingCalls + 1);
         await screenshot("native-command-goal-paused");
+        await until(
+            () => !options.app.kernel!.isRunning(options.id),
+            "paused Goal lease closes",
+            20_000,
+        );
+        const beforeEdit = options.modelCalls();
+
+        await execute("/goal");
+        await page.evaluate(
+            `document.querySelector('.native-selector-row[data-value="edit"]').click()`,
+        );
+        await page.evaluate(
+            `const input = document.querySelector('.native-goal-form textarea'); input.value = 'Edited browser Goal objective'; input.dispatchEvent(new Event('input', {bubbles: true}));`,
+        );
+        await page.evaluate(`${button("Update goal")}.click()`);
+        await until(
+            async () => (await text(".goal-bar")).includes("Edited browser Goal objective"),
+            "native Goal edit snapshot",
+            20_000,
+        );
+        await until(
+            () => !options.app.kernel!.isRunning(options.id),
+            "edited Goal lease closes",
+            20_000,
+        );
+        await execute("/goal");
+        await page.evaluate(
+            `document.querySelector('.native-selector-row[data-value="clear"]').click()`,
+        );
+        await until(
+            async () => (await text(".sheet")).includes("Conversation history is retained"),
+            "clear requires confirmation",
+        );
+        await page.evaluate(`${button("Clear goal")}.click()`);
+        await until(
+            async () =>
+                (await page.evaluate("Boolean(document.querySelector('.goal-bar'))")) === "false",
+            "native Goal cleared",
+            20_000,
+        );
+        assert.equal(
+            options.modelCalls(),
+            beforeEdit,
+            "editing and clearing a paused Goal never infer",
+        );
         await until(
             () => !options.app.kernel!.isRunning(options.id),
             "paused Goal closes its lease",
@@ -303,7 +475,25 @@ export async function nativeCommandUiProof(options: {
             "fork selector uses native entry IDs",
             20_000,
         );
-        await page.evaluate(`document.querySelector(${JSON.stringify(selectedButton)}).click()`);
+        assert.ok(
+            (await text('.native-selector-row[aria-selected="true"]')).includes(
+                "THIRD_BROWSER_MARKER",
+            ),
+            "fork starts on the latest user message, like the terminal",
+        );
+        await screenshot("native-command-fork-selector");
+        await page.evaluate(
+            `document.querySelector('.native-selector').dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowUp', bubbles: true, cancelable: true}))`,
+        );
+        assert.equal(
+            await page.evaluate(
+                `document.querySelector('.native-selector-row[aria-selected="true"]').dataset.entryId`,
+            ),
+            selected.id,
+        );
+        await page.evaluate(
+            `document.querySelector('.native-selector').dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', bubbles: true, cancelable: true}))`,
+        );
         await until(
             async () =>
                 (await page.evaluate(`document.querySelector('.composer textarea')?.value`)) ===
@@ -330,7 +520,7 @@ export async function nativeCommandUiProof(options: {
             "original source session",
             20_000,
         );
-        await execute("/fixture-cancel-tree");
+        await execute("FIXTURE_CANCEL_TREE");
         await execute("/tree");
         await until(
             async () =>
@@ -417,7 +607,7 @@ export async function nativeCommandUiProof(options: {
                 .cancelled,
             true,
         );
-        await execute("/fixture-allow-tree");
+        await execute("FIXTURE_ALLOW_TREE");
         await execute("/tree");
         await until(
             async () =>
@@ -504,7 +694,7 @@ export async function nativeCommandUiProof(options: {
             "immutable audit history is not erased by navigation",
         );
         await screenshot("native-command-tree-summary-draft");
-        await execute("/fixture-custom-message");
+        await execute("FIXTURE_CUSTOM_MESSAGE");
         const custom = kernel.executions.journal
             .segmentEntries(segment.segmentId)
             .findLast(
@@ -542,19 +732,26 @@ export async function nativeCommandUiProof(options: {
             immutableAuditVsActiveBranch: true,
             firstSessionDiscoveryWithoutInference: true,
             initialDiscoveryWithoutExtraClick: true,
-            genericNativeCommandNames: true,
+            completionWithoutPrematureExecution: true,
+            dedicatedThinkingPicker: true,
+            privateReadableCredits: true,
+            browserInputEnterWithoutSideEffects: true,
             templateAndSkillSelectionWithoutInference: true,
             builtinExclusions: true,
             modelPickerHandoff: true,
-            nativeName: true,
             persistedSettings: true,
             scopedModelCycle: true,
+            goalManagerStartEditConfirmedClearAndReservedObjective: true,
             goalWaitingAndPlainWake: true,
             screenshots,
         };
     } catch (error) {
         await screenshot("native-command-failure");
         writeFileSync(join(options.root, "browser-failure.txt"), await text("body"));
+        writeFileSync(
+            join(options.root, "browser-command-trace.json"),
+            await page.evaluate("JSON.stringify(globalThis.commandTrace)"),
+        );
 
         throw error;
     } finally {
