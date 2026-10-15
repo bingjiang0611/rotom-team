@@ -44,7 +44,7 @@ export default function(pi) {
     const swap = () => pi.registerCommand("runtime-swap", {handler: async () => pi.appendEntry("hidden-command-effect", {})});
     pi.on("session_start", () => { if (existsSync(${JSON.stringify(join(data, "team-agent/extensions/swap-command.flag"))})) swap(); });
     pi.on("input", async (event, ctx) => {
-        if (event.text === "HOLD_MARKER") swap();
+        if (event.text.includes("HOLD_MARKER")) swap();
         if (event.text === "FIXTURE_LARGE_HISTORY" || event.text === "FIXTURE_LARGE_MEMORY") {
             for (let i = 0; i < 5; i++) pi.appendEntry("large-readback-fixture", {padding: "A".repeat(14 * 1024 * 1024)});
             if (event.text === "FIXTURE_LARGE_MEMORY") return {action: "handled"};
@@ -75,6 +75,16 @@ export default function(pi) {
 );
 const calls: Array<{ payer: string; body: Record<string, any> }> = [];
 let hold = false;
+const heldResponses: Array<() => void> = [];
+
+const releaseResponses = () => {
+    hold = false;
+
+    for (const release of heldResponses.splice(0)) {
+        release();
+    }
+};
+
 const goalCounts = new Map<string, number>();
 const provider = createServer(async (request, response) => {
     let body = "";
@@ -149,9 +159,15 @@ const provider = createServer(async (request, response) => {
     emit({ reasoning_content: `PRIVATE_REASONING_${payer}` });
     emit({ content: `NATIVE_ANSWER_${calls.length}` });
 
-    if (!hold) {
+    const finish = () => {
         emit({}, "stop");
         response.end("data: [DONE]\n\n");
+    };
+
+    if (hold) {
+        heldResponses.push(finish);
+    } else {
+        finish();
     }
 });
 
@@ -635,9 +651,17 @@ try {
     assert.equal((await json(await submit(alice, "/goal"))).interaction.type, "native-goal");
     await json(await submit(alice, "/reload"));
     hold = true;
-    const held = submit(alice, "HOLD_MARKER", { wait: false });
+    let skillAccepted = false;
+    const held = submit(alice, "/skill:pi-subagents HOLD_MARKER", { wait: true }).then(
+        (response) => {
+            skillAccepted = true;
 
-    await held;
+            return json(response);
+        },
+    );
+
+    await until(() => skillAccepted, "skill admission returns before inference finishes", 20_000);
+    assert.equal((await held).operation, "prompt");
     await until(
         () => JSON.stringify(calls.at(-1)?.body).includes("HOLD_MARKER"),
         "held native inference",
@@ -696,7 +720,56 @@ try {
         409,
     );
     assert.deepEqual(app.accounts.choice(alice), beforeChoice);
+    const beforeLive = app.kernel!.executions.journal.latest(String(id))!;
+    const startsBeforeThinking = readFileSync(startsFile, "utf8");
+    const heldReasoning = calls.at(-1)!.body.reasoning_effort;
+
+    for (const user of [bob, viewer]) {
+        const response = await request(user, `c/${id}/configure`, { thinkingLevel: "high" });
+
+        assert.ok(
+            [403, 409].includes(response.status),
+            "only the current payer may change thinking",
+        );
+    }
+
+    assert.equal(
+        (
+            await request(alice, `c/${id}/configure`, {
+                model: { provider: "openai", modelId: "model-b" },
+                thinkingLevel: "high",
+            })
+        ).status,
+        409,
+    );
+    await json(await request(alice, `c/${id}/configure`, { thinkingLevel: "medium" }));
+    assert.equal(app.kernel!.agentInfo(id).thinkingLevel, "medium");
+    await json(await submit(alice, "/thinking high", { mode: "steer" }));
+    assert.equal(app.kernel!.agentInfo(id).thinkingLevel, "high");
+    await json(await request(alice, `c/${id}/configure`, { thinkingLevel: "max" }));
+    assert.equal(
+        app.kernel!.agentInfo(id).thinkingLevel,
+        "high",
+        "native clamps unsupported levels",
+    );
+    assert.equal((await json(await submit(alice, "/thinking"))).interaction.thinkingLevel, "high");
+    assert.equal(
+        calls.at(-1)!.body.reasoning_effort,
+        heldReasoning,
+        "already dispatched request unchanged",
+    );
     assert.deepEqual(app.kernel!.executions.journal.session(String(id)).binding, beforeBinding);
+    const afterLive = app.kernel!.executions.journal.latest(String(id))!;
+
+    assert.equal(afterLive.id, beforeLive.id);
+    assert.equal(readFileSync(startsFile, "utf8"), startsBeforeThinking);
+    assert.equal(afterLive.segmentId, beforeLive.segmentId);
+    assert.deepEqual(afterLive.binding, beforeLive.binding);
+    await json(await submit(alice, "AFTER_LIVE_THINKING", { mode: "steer" }));
+    releaseResponses();
+    await until(() => !app.kernel!.isRunning(id), "live thinking follow-up settles", 20_000);
+    assert.equal(calls.at(-1)!.body.reasoning_effort, "high");
+    assert.ok(JSON.stringify(calls.at(-1)!.body).includes("AFTER_LIVE_THINKING"));
     await app.kernel!.abort(id, alice);
     await until(() => !app.kernel!.isRunning(id), "held native run closes", 20_000);
     hold = false;
@@ -705,6 +778,9 @@ try {
     handler = createHandler({ app, listen: { host: "127.0.0.1", port: 0 }, restart: () => {} });
     assert.equal(app.sessionMeta(id)?.title, "Synchronized Native Name");
     assert.equal(app.kernel!.executions.journal.session(String(id)).binding.model, "model-b");
+    assert.equal(app.kernel!.agentInfo(id).thinkingLevel, "high");
+    await json(await submit(alice, "THINKING_AFTER_RESTART"));
+    assert.equal(calls.at(-1)!.body.reasoning_effort, "high");
     const startsAfterRestart = readFileSync(startsFile, "utf8");
     const catalogAfterRestart = await json(await request(alice, `c/${id}/prompts`));
 
@@ -793,6 +869,11 @@ try {
             root: data,
             base: base.replace(/\/api\/$/, ""),
             modelCalls: () => calls.length,
+            hold: () => {
+                hold = true;
+            },
+            release: releaseResponses,
+            lastThinking: () => calls.at(-1)?.body.reasoning_effort,
             app,
             user: alice,
             id: browserSession.id,
@@ -910,6 +991,15 @@ try {
             })
         ).status,
         409,
+    );
+    assert.equal(
+        (
+            await request(alice, `c/${unknownDiscoverySession.id}/configure`, {
+                thinkingLevel: "low",
+            })
+        ).status,
+        409,
+        "thinking does not bypass unknown leases",
     );
     const unknownReplay = await json(
         await request(alice, `c/${unknownDiscoverySession.id}/prompts`, {
@@ -1058,6 +1148,10 @@ try {
         "native title readback before first message and after handoff",
         "model A→B then inference B and Alice payer",
         "thinking high persisted",
+        "skill admission clears before held inference completes",
+        "live thinking changes next provider request without replacing process, segment or receipt binding",
+        "native thinking clamping, payer-only admission and unknown/mixed-model fences",
+        "live thinking survives native process retirement and server restart",
         "fixture native title and Team rename persist across handoff",
         "native JSONL entries and HTML export/member privacy",
         "selected earlier-user fork with Bob payer",

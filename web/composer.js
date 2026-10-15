@@ -386,7 +386,9 @@ export function Composer() {
         });
 
     /** Dispatch a native slash command through the same team journal as an ordinary prompt. */
-    const runCommand = async ({ command, arg }) => {
+    const runCommand = async ({ command, arg }, clearDraft = true) => {
+        const submittedDraft = drafts.get(conversationId);
+
         setSending(true);
         await attempt(async () => {
             const result = await actions.submit(
@@ -398,7 +400,11 @@ export function Composer() {
                     ["", "status", "pause", "clear", "stop"].includes(arg.trim()),
             );
 
-            if (nativeCommandAccepted(result)) {
+            if (
+                clearDraft &&
+                nativeCommandAccepted(result) &&
+                drafts.get(conversationId) === submittedDraft
+            ) {
                 update("");
             }
 
@@ -857,10 +863,11 @@ export function Composer() {
 
     const turns = view.turns;
     const blocked = collab() && turns?.on && turns.driver !== me?.id;
-    const level =
-        agent?.thinkingLevel && agent.thinkingLevel !== "off" && agent.reasoning
-            ? agent.thinkingLevel
-            : null;
+    const level = view.kernel
+        ? (agent?.thinkingLevel ?? "unknown")
+        : agent?.thinkingLevel && agent.thinkingLevel !== "off" && agent.reasoning
+          ? agent.thinkingLevel
+          : null;
 
     return html`<footer class="composer-wrap">
         <${TypingLine} where="pi" />
@@ -1159,8 +1166,20 @@ export function Composer() {
                             onClick=${() => openSheet({ type: "model" })}
                         >
                             <span class="glyph">✦</span> ${modelLabel(agent)}
-                            ${level && html`<span class="muted"> ${level}</span>`}
+                            ${!view.kernel && level && html`<span class="muted"> ${level}</span>`}
                         </button>
+                        ${
+                            view.kernel &&
+                            html`<button
+                                class="chip thinking-chip"
+                                disabled=${sending}
+                                aria-label=${`Thinking: ${level}`}
+                                title="Thinking level · changes apply to subsequent model requests"
+                                onClick=${() => runCommand({ command: { name: "thinking" }, arg: "" }, false)}
+                            >
+                                <span class="thinking-label">Thinking:</span> ${level}
+                            </button>`
+                        }
                         ${
                             planAvailable() &&
                             !view.kernel &&

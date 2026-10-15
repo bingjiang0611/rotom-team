@@ -298,7 +298,7 @@ export function NativeThinkingSheet() {
                     notify("info", "Thinking preference updated.");
                 })}
         />
-        <p class="muted small">Uses your personal model preference. Changing it waits until your running tasks finish.</p>
+        <p class="muted small">The paying member can change thinking while running. Changes apply to subsequent model requests, not the response already streaming.</p>
     <//>`;
 }
 

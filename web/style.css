@@ -7557,7 +7557,14 @@ textarea.notes {
         top: 7px;
         right: 7px;
     }
-    /* Room for it: the model's name gives way first, and the thinking level shows on the model picker. */
+    /* Keep the effective thinking level and run controls readable; the model name gives way first. */
+    .composer-row .thinking-chip,
+    .composer-row .toggle {
+        flex-shrink: 0;
+    }
+    .composer-row .thinking-label {
+        display: none;
+    }
     .composer-row .model-chip {
         min-width: 0;
         overflow: hidden;

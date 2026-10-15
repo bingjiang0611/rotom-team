@@ -154,7 +154,8 @@ type Running = {
     aborted: boolean;
     attemptId?: string;
     kernel?: RotomRpc;
-    snapshot?: () => Promise<unknown>;
+    snapshot?: () => Promise<{ entries: KernelEntry[]; leafId: string | null }>;
+    thinkingChange?: Promise<string>;
     closureUnknown?: boolean;
     /** Its prompt was dispatched: messages may join it. */
     prompting?: boolean;
@@ -174,7 +175,7 @@ type PersistentKernel = {
     gateFile: string;
     contextFile?: string;
     gateState: { active?: ActiveAttempt };
-    state: { sessionFile: string; sessionId: string; sessionName?: string };
+    state: { sessionFile: string; sessionId: string; sessionName?: string; thinkingLevel: string };
 };
 
 function goalIsActive(value: unknown): boolean {
@@ -284,6 +285,62 @@ export class RotomExecutions {
                 }
             }),
         );
+    }
+
+    thinkingLevel(sessionId: string): string {
+        const { segmentId } = this.journal.session(sessionId);
+
+        return (
+            this.#kernels.get(segmentId)?.state.thinkingLevel ??
+            this.journal.thinkingLevel(sessionId)
+        );
+    }
+
+    /** Change only native reasoning, under the current prompt's durable command fence. */
+    async setThinkingLevel(sessionId: string, level: string): Promise<string> {
+        const run = [...(this.#running.get(sessionId) ?? [])].find((run) => run.prompting);
+        const receipt = run?.attemptId ? this.journal.receipt(run.attemptId) : undefined;
+
+        if (
+            !run?.kernel ||
+            !run.snapshot ||
+            run.aborted ||
+            !receipt ||
+            receipt.status !== "dispatch-intent" ||
+            receipt.phase !== "execution" ||
+            receipt.unresolvedCommandInput
+        ) {
+            throw new RpcFailure(
+                "rejected",
+                "Thinking can only change during an active, reconciled prompt",
+            );
+        }
+
+        const kernel = run.kernel;
+        const snapshot = run.snapshot;
+        const inputId = this.journal.beginCommandInput(receipt.id, `/thinking ${level}`);
+
+        run.thinkingChange = (async () => {
+            await kernel.setThinkingLevel(level);
+            const state = (await kernel.request({ type: "get_state" })) as {
+                thinkingLevel: string;
+            };
+            const { entries } = await snapshot();
+
+            if (run.aborted) {
+                throw new RpcFailure(
+                    "unknown",
+                    "Thinking change interrupted by Stop; do not replay it",
+                );
+            }
+
+            this.journal.progress(receipt.id, entries);
+            this.journal.completeCommandInput(inputId);
+
+            return state.thinkingLevel;
+        })();
+
+        return run.thinkingChange;
     }
 
     /** Add a message to the session's running prompt. False when none is running. */
@@ -990,6 +1047,7 @@ export class RotomExecutions {
                 this.#notStopped(running);
                 kernel = await startRotomKernel({
                     ...binding,
+                    thinkingLevel: this.journal.thinkingLevel(sessionId),
                     teamAgentDir: join(this.#data, "team-agent"),
                     gateFile,
                     sessionFile: session.sessionFile,
@@ -1003,6 +1061,7 @@ export class RotomExecutions {
                     sessionFile: string;
                     sessionId: string;
                     sessionName?: string;
+                    thinkingLevel: string;
                 };
                 const prefix = join(binding.home, ".pi/agent/sessions") + "/";
 
@@ -1061,6 +1120,11 @@ export class RotomExecutions {
             // Message-level durability: each persisted message is journaled as it lands, so a restart loses at most
             // the message in flight. The final snapshot below remains the authority for the outcome.
             const detachProgress = kernel.onEvent((event) => {
+                if (event.type === "thinking_level_changed") {
+                    nativeState.thinkingLevel = String(event.level);
+                    hooks.onProgress?.();
+                }
+
                 if (
                     event.type !== "message_end" ||
                     !["prompt", "command"].includes(operation) ||
@@ -1296,10 +1360,14 @@ export class RotomExecutions {
                 }
             }
 
+            // Finalization must not outrun a live thinking write or hide its unknown outcome.
+            await running.thinkingChange;
+
             const finalState = (await kernel.request({ type: "get_state" })) as {
                 sessionId?: unknown;
                 sessionFile?: unknown;
                 sessionName?: unknown;
+                thinkingLevel: string;
             };
 
             if (
@@ -1314,6 +1382,7 @@ export class RotomExecutions {
 
             state.sessionName =
                 typeof finalState.sessionName === "string" ? finalState.sessionName : undefined;
+            state.thinkingLevel = finalState.thinkingLevel;
 
             // Native delays JSONL creation until the first conversation. Preserve confirmed /name readback now,
             // then restore it through set_session_name when the next native process starts.

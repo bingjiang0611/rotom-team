@@ -770,6 +770,24 @@ export class RotomJournal {
         return row ? this.receipt(String(row.id)) : undefined;
     }
 
+    /** Thinking is mutable native session state; the receipt binding retains its initial value. */
+    thinkingLevel(sessionId: string): string {
+        const { segmentId, binding } = this.session(sessionId);
+        const entries = this.segmentEntries(segmentId);
+        const byId = new Map(entries.map((entry) => [entry.id, entry]));
+        let entry = entries.at(-1);
+
+        while (entry) {
+            if (entry.type === "thinking_level_change") {
+                return String(entry.thinkingLevel);
+            }
+
+            entry = typeof entry.parentId === "string" ? byId.get(entry.parentId) : undefined;
+        }
+
+        return binding.thinkingLevel ?? "off";
+    }
+
     /** Provisional ingestion while a prompt runs: records each persisted message once, never settles the attempt. */
     progress(id: string, entries: KernelEntry[]): number {
         const attempt = this.receipt(id),

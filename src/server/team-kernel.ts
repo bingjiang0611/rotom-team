@@ -575,7 +575,7 @@ export class TeamKernel {
             provider: binding.provider,
             model: binding.model,
             configurationDigest: binding.configurationDigest,
-            thinkingLevel: binding.thinkingLevel,
+            thinkingLevel: this.executions.thinkingLevel(String(id)),
             messages: publicMessages,
             receipts: journal.receipts(String(id)).map((receipt) => ({
                 ...this.#receipt(receipt),
@@ -1054,6 +1054,10 @@ export class TeamKernel {
         }
 
         let nativeResult: unknown;
+        let expanded!: (receipt: KernelReceipt) => void;
+        const promptExpansion = new Promise<KernelReceipt>((resolve) => {
+            expanded = resolve;
+        });
         let reserved!: (receipt: KernelReceipt) => void;
         let wasReserved = false;
         const admitted = new Promise<KernelReceipt>((resolve) => {
@@ -1095,6 +1099,10 @@ export class TeamKernel {
                     onCommandAdmitted: async (command) => {
                         this.#admitNativeCommand(command);
                         await nameAcceptedPrompt();
+
+                        if (command.source === "skill" || command.source === "prompt") {
+                            expanded(journal.request(String(id), key)!);
+                        }
                     },
                     onNativeResult: async (result) => {
                         nativeResult = result;
@@ -1112,7 +1120,11 @@ export class TeamKernel {
         );
 
         if (wait) {
-            const receipt = await run;
+            // Skills/templates are model input, not dialogs: release the draft on authoritative admission.
+            const receipt = await Promise.race([
+                run,
+                promptExpansion.then((receipt) => this.#receipt(receipt)),
+            ]);
 
             return { ...receipt, ...(nativeResult === undefined ? {} : { nativeResult }) };
         }
@@ -1180,6 +1192,39 @@ export class TeamKernel {
             return { receipt: this.#receipt(prior) };
         }
 
+        if (this.isRunning(id) && request.model === undefined) {
+            await this.#app.requireDriver(id, user, "rotom");
+            const { binding } = this.executions.journal.session(String(id));
+
+            if (binding.memberId !== user.id) {
+                throw new HttpError(
+                    409,
+                    "Only the paying member can change thinking during this run.",
+                );
+            }
+
+            try {
+                const level = await this.executions.setThinkingLevel(
+                    String(id),
+                    String(request.thinkingLevel),
+                );
+
+                this.#app.accounts.choose(user, { ...this.#ref(binding), thinkingLevel: level });
+                this.#app.roomChanged(id);
+
+                return { receipt: null };
+            } catch (error) {
+                if (error instanceof RpcFailure) {
+                    throw new HttpError(
+                        409,
+                        `Thinking change outcome is ${error.outcome}: ${error.message}`,
+                    );
+                }
+
+                throw error;
+            }
+        }
+
         if (this.isRunning(id) || this.executions.journal.pendingConversation(String(id))) {
             throw new HttpError(
                 409,
@@ -1235,7 +1280,7 @@ export class TeamKernel {
             binding.memberId === user.id &&
             binding.accountGeneration === chosen.model?.provider &&
             binding.model === chosen.model.modelId &&
-            (binding.thinkingLevel ?? "off") === (chosen.thinkingLevel ?? "off")
+            this.executions.thinkingLevel(String(id)) === (chosen.thinkingLevel ?? "off")
         ) {
             this.#app.accounts.choose(user, { ...ref, thinkingLevel: chosen.thinkingLevel });
 
@@ -1603,7 +1648,7 @@ export class TeamKernel {
         const { binding } = this.executions.journal.session(String(id));
 
         return binding.memberId === user.id
-            ? { ...this.#ref(binding), thinkingLevel: binding.thinkingLevel ?? "off" }
+            ? { ...this.#ref(binding), thinkingLevel: this.executions.thinkingLevel(String(id)) }
             : this.#app.accounts.choice(user);
     }
 
@@ -1622,7 +1667,7 @@ export class TeamKernel {
             modelName: binding.model,
             accountName: this.#app.config.userById(binding.memberId)?.name ?? "A former member",
             personalAccount: true,
-            thinkingLevel: binding.thinkingLevel ?? "off",
+            thinkingLevel: this.executions.thinkingLevel(String(id)),
             cwd: binding.workspace,
             available: true,
         };

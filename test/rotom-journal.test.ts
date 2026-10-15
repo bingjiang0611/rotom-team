@@ -47,6 +47,41 @@ function setup() {
     return { root, data, binding };
 }
 
+test("current thinking follows native ancestry without changing immutable receipt bindings", () => {
+    const f = setup();
+    let journal = new RotomJournal(f.data);
+
+    try {
+        journal.bind("native", { ...f.binding, thinkingLevel: "minimal" });
+        assert.equal(journal.thinkingLevel("native"), "minimal");
+        const run = journal.reserve("native", "thinking", "work");
+
+        journal.attach(run.id, "/tmp/native-thinking.jsonl", "native-id");
+        journal.progress(run.id, [
+            { id: "high", parentId: null, type: "thinking_level_change", thinkingLevel: "high" },
+            { id: "low", parentId: "high", type: "thinking_level_change", thinkingLevel: "low" },
+        ]);
+        assert.equal(journal.thinkingLevel("native"), "low");
+        journal.progress(run.id, [
+            { id: "branch", parentId: "high", type: "custom", customType: "branch" },
+        ]);
+        assert.equal(journal.thinkingLevel("native"), "high", "abandoned branch does not win");
+        journal.progress(run.id, [
+            { id: "off", parentId: "branch", type: "thinking_level_change", thinkingLevel: "off" },
+        ]);
+        assert.equal(journal.thinkingLevel("native"), "off");
+        assert.equal(journal.receipt(run.id).binding.thinkingLevel, "minimal");
+        assert.equal(journal.session("native").binding.thinkingLevel, "minimal");
+        journal.close();
+        journal = new RotomJournal(f.data);
+        assert.equal(journal.thinkingLevel("native"), "off");
+        assert.equal(journal.receipt(run.id).status, "unknown");
+    } finally {
+        journal.close();
+        rmSync(f.root, { recursive: true, force: true });
+    }
+});
+
 test("finalization is durable before readback: restart never turns it into another model request", () => {
     const f = setup();
     let journal = new RotomJournal(f.data);

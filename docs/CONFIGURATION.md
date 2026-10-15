@@ -173,6 +173,9 @@ Unknown discovery blocks startup even with a new request ID; exact receipt readb
 input does not race an automatic discovery. Dispatch validates the current native registry. Unknown names and private `team-kernel-*` commands do
 not become model prompts. Native skills/templates are expanded by native APIs, including queued input. Selecting a
 skill or prompt-template suggestion only fills the draft; submitting it starts the model request.
+After the native registry admits that input as a skill/template, submit returns its active prompt receipt and the
+composer clears the submitted draft without waiting for inference to finish. Side-effectful commands still wait for
+their own result; cancellation/rejection/unknown does not clear the draft.
 
 The supported builtins/extensions are exactly:
 
@@ -187,6 +190,14 @@ lifecycle/recovery operations are unchanged.
 Tab and partial-name Enter fill the draft without executing. Complete-name Enter runs the command. Thinking and fork
 have dedicated keyboard selectors; settings writes remain owner-only and busy-gated. Bare Goal opens a Web manager,
 with native grammar, personal billing and no-replay fences intact. Its safety-settings editor remains unavailable.
+The composer shows a separate current thinking control, including `off`. During a live prompt, only its paying member
+with continue/driver permission may change thinking, through the picker or `/thinking <level>`. Native clamps the level;
+the next model request uses it, not the response already streaming. The same process, payer, model, segment and initial
+receipt binding remain unchanged. Native thinking history preserves the level after process retirement/restart; current
+live readback takes precedence while the process is retained. A durable command-input fence prevents unknown writes
+from being replayed or making the parent prompt eligible for automatic continuation. Startup, finalization, Stop and
+unknown operations still refuse live changes. Idle model/thinking selection retains the existing handoff path.
+
 Browser/computer-use refer to the service host, not the viewer's device. Quota results remain member-private account
 snapshots. See [NATIVE-COMMAND-COMPATIBILITY.md](NATIVE-COMMAND-COMPATIBILITY.md) for every supported interaction and limit.
 

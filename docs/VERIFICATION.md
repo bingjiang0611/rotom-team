@@ -245,6 +245,21 @@ fresh sheet even before the previous exit animation finishes; it does not retain
 Fork begins on the latest native user message and supports arrow/Enter selection. Goal/tree are checked at a 390px
 viewport; screenshots wait for finite transitions rather than capturing a partially transparent sheet.
 
+The same proof holds a synthetic model response open: skill submit returns an active prompt receipt, and the browser
+clears its draft before inference finishes. Reverting only the early-return change makes the held-skill admission test
+time out; restoring it passes. The Team kernel proof waits for the admitted skill's journal receipt to settle before
+checking expanded model input, rather than treating admission as completion. Live thinking changes through configure, slash input and the dedicated chip
+keep the native startup count, segment, payer/model and historical binding unchanged; the next actual loopback provider
+request carries the new reasoning effort. It checks native clamping, other-member/viewer denial, busy mixed-model denial,
+unknown-lease refusal and effective level after a server restart/new native process. Chromium checks `off` visibility,
+unsent-draft preservation and an unclipped thinking value at 390px. Journal tests separately check ancestry (not abandoned
+branch order), initial-binding immutability and restart readback. Transport-loss/Stop races specifically during a thinking
+write are not fault-injected; they use the existing unresolved-command fence and no-replay transport.
+
+The visual reference is the supplied bug screenshots and pinned native thinking selector/RPC behavior. The local repair
+reuses the existing chip and selector, without a new theme or component library. Phone layout hides only the word
+“Thinking”, not its value. Personal library searches found no reusable selector and stale old-machine references.
+
 No real account, external sharing upload, deployment, physical-device automation, financial reconciliation or arbitrary
 third-party extension is accepted by these fixtures. Run the commands on the final artifact; older logs are not evidence
 for a later edit.

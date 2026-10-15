@@ -56,6 +56,9 @@ export async function nativeCommandUiProof(options: {
     root: string;
     base: string;
     modelCalls: () => number;
+    hold: () => void;
+    release: () => void;
+    lastThinking: () => string | undefined;
     app: PocketApp;
     user: User;
     id: ConversationId;
@@ -313,6 +316,90 @@ export async function nativeCommandUiProof(options: {
         );
         assert.equal(options.modelCalls(), before);
 
+        const kernel = options.app.kernel!;
+        const beforeSkill = options.modelCalls();
+
+        await until(() => !kernel.isRunning(options.id), "thinking handoff completes", 20_000);
+        await type("/");
+        await until(
+            async () => (await text(".commands")).includes("/skill:pi-subagents"),
+            "skill discovered for the new segment",
+            30_000,
+        );
+        await until(() => !kernel.isRunning(options.id), "new segment discovery completes", 20_000);
+        options.hold();
+        await execute("/skill:pi-subagents LIVE_SKILL_DRAFT");
+        await until(
+            () => options.modelCalls() > beforeSkill,
+            "skill inference remains held",
+            20_000,
+        );
+        assert.equal(kernel.isRunning(options.id), true);
+        await until(
+            async () => (await text(".thinking-chip")).includes("high"),
+            "visible current thinking",
+            20_000,
+        );
+        await type("NEXT_DRAFT_AFTER_SKILL");
+        await page.evaluate("document.querySelector('.thinking-chip').click()");
+        await until(
+            async () => (await text(".sheet")).includes("Thinking Level"),
+            "live thinking picker",
+            20_000,
+        );
+        assert.equal(
+            await page.evaluate("document.querySelector('.composer textarea').value"),
+            "NEXT_DRAFT_AFTER_SKILL",
+        );
+        await page.evaluate(
+            "document.querySelector('.native-selector-row[data-value=off]').click()",
+        );
+        await until(
+            async () => (await text(".thinking-chip")).includes("off"),
+            "thinking off remains visible",
+            20_000,
+        );
+        await page.evaluate("document.querySelector('.thinking-chip').click()");
+        await until(
+            async () => (await text(".sheet")).includes("Thinking Level"),
+            "reopen live thinking picker",
+            20_000,
+        );
+        await page.evaluate(
+            "document.querySelector('.native-selector-row[data-value=medium]').click()",
+        );
+        await until(
+            async () => (await text(".thinking-chip")).includes("medium"),
+            "live thinking chip updates",
+            20_000,
+        );
+        assert.equal(kernel.isRunning(options.id), true);
+        await screenshot("native-live-thinking-desktop");
+        await page.setViewport(VIEWPORTS.mobile);
+        await screenshot("native-live-thinking-phone");
+        assert.equal(
+            await page.evaluate("document.documentElement.scrollWidth <= innerWidth"),
+            "true",
+        );
+        assert.equal(
+            await page.evaluate(
+                "(() => { const chip = document.querySelector('.thinking-chip'); return chip.scrollWidth <= chip.clientWidth; })()",
+            ),
+            "true",
+            "mobile thinking level is not clipped",
+        );
+        await page.setViewport(VIEWPORTS.desktop);
+        await page.evaluate(`${send}.click()`);
+        await until(
+            async () =>
+                (await page.evaluate("document.querySelector('.composer textarea').value")) === "",
+            "follow-up draft clears",
+            20_000,
+        );
+        options.release();
+        await until(() => !kernel.isRunning(options.id), "skill and follow-up complete", 30_000);
+        assert.equal(options.lastThinking(), "medium");
+
         await type("FIXTURE_STATUS");
         await until(
             async () => (await page.evaluate(`Boolean(${send} && !${send}.disabled)`)) === "true",
@@ -489,7 +576,6 @@ export async function nativeCommandUiProof(options: {
             "third branch message settles",
             20_000,
         );
-        const kernel = options.app.kernel!;
         const segment = kernel.executions.journal.session(String(options.id));
         const native = await nativeSessionManager();
         const activeMessages = () =>
@@ -775,6 +861,11 @@ export async function nativeCommandUiProof(options: {
             initialDiscoveryWithoutExtraClick: true,
             completionWithoutPrematureExecution: true,
             dedicatedThinkingPicker: true,
+            skillDraftClearsDuringInference: true,
+            liveThinkingAndOffVisible: true,
+            thinkingPreservesUnsentDraft: true,
+            nextRequestUsesSelectedThinking: true,
+            mobileThinkingNotClipped: true,
             privateReadableCredits: true,
             browserInputEnterWithoutSideEffects: true,
             templateAndSkillSelectionWithoutInference: true,

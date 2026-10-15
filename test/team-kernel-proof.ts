@@ -2129,9 +2129,18 @@ try {
     });
 
     assert.equal(skillRun.status, 200);
-    const skillReceipt = (await skillRun.json()) as { status: string; operation: string };
+    const skillReceipt = (await skillRun.json()) as {
+        id: string;
+        status: string;
+        operation: string;
+    };
 
-    assert.equal(skillReceipt.status, "settled");
+    assert.ok(["dispatch-intent", "settled"].includes(skillReceipt.status));
+    await until(
+        () => app.kernel!.executions.journal.receipt(skillReceipt.id).status === "settled",
+        "admitted skill finishes as an ordinary prompt",
+        30000,
+    );
     assert.equal(
         skillReceipt.operation,
         "prompt",
