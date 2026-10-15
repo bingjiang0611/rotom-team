@@ -138,12 +138,16 @@ export async function nativeConfigurationApi() {
     );
 
     const resourceLoader = await import(pathToFileURL(join(root, "core/resource-loader.js")).href);
+    const skills = await import(pathToFileURL(join(root, "core/skills.js")).href);
+    const mcp = await import(pathToFileURL(join(root, "extensions/mcp/config.js")).href);
     const args = await import(pathToFileURL(join(root, "cli/args.js")).href);
 
     return {
         bundledResourceRoot: product,
         parseArgs: args.parseArgs,
         loadProjectContextFiles: resourceLoader.loadProjectContextFiles,
+        loadSkills: skills.loadSkills,
+        loadMcpConfig: mcp.loadMcpConfig,
         DefaultPackageManager: packages.DefaultPackageManager,
         SettingsManager: settings.SettingsManager,
         ProjectTrustStore: trust.ProjectTrustStore,

@@ -4,6 +4,7 @@ import { useRef } from "preact/hooks";
 import { ChatSheet } from "./chat.js";
 import { NotificationsSheet } from "./notify.js";
 import { ShareSheet } from "./share.js";
+import { AgentResourcesSheet } from "./sheets/agent-resources.js";
 import { AppearanceSheet } from "./sheets/appearance.js";
 import { BranchPicker } from "./sheets/branch.js";
 import { ExtensionsSheet } from "./sheets/extensions.js";
@@ -159,6 +160,9 @@ function sheetBody(sheet) {
             break;
         case "projects":
             body = html`<${ProjectsSheet} />`;
+            break;
+        case "agent-resources":
+            body = html`<${AgentResourcesSheet} />`;
             break;
         case "profile":
             body = html`<${ProfileSheet} />`;

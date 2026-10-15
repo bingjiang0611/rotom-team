@@ -7,6 +7,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { homedir, networkInterfaces } from "node:os";
 import { dirname, join } from "node:path";
 import QRCode from "qrcode";
+import { listAgentResources } from "../agent-resource-list.ts";
 import { MAX_PEEKS } from "../app.ts";
 import {
     type Auth,
@@ -183,6 +184,27 @@ export function createApi(options: HttpOptions, auth: Auth) {
             await app.projectsChanged();
 
             return json(response, 200, project);
+        }
+
+        if (first === "agent-resources" && second === undefined && method === "GET") {
+            if (!app.kernel) {
+                throw new HttpError(404, "Agent resources are listed only on a Team server.");
+            }
+
+            const id = url.searchParams.get("project");
+            // Only projects this person may view; another project's id reads as unknown.
+            const project =
+                id === null ? undefined : app.projects.all(user).find((each) => each.id === id);
+
+            if (id !== null && !project) {
+                throw new HttpError(404, "No such project.");
+            }
+
+            return json(
+                response,
+                200,
+                await listAgentResources(join(app.dataDir, "team-agent"), project?.cwd),
+            );
         }
 
         if (first === "devices" && third === undefined) {

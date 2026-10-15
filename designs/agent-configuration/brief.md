@@ -123,3 +123,9 @@ Project/MCP 列表、Shared/Skills + 运行中、Project/Instructions 链、项�
 - 权限：owner 和 member 看到的内容相同，都是只读；member 的项目下拉框只列有 view 权限的项目。
 
 仍未确认：package 的实际安装路径（原型中的 `team-agent/npm/node_modules/...` 只是示例），以及扫描是复用原生 resolver 还是由服务端自己按目录扫描。前者结果准确，后者可能与原生加载结果不一致。
+
+## 实现（v3 落地）
+
+- 页面：`web/sheets/agent-resources.js`，入口 `Settings › Team › Agent resources`，仅 Team 服务器显示。
+- 接口：`GET /api/agent-resources[?project=<id>]`，由 `src/server/agent-resource-list.ts` 用固定版本的原生 resolver（`DefaultPackageManager`、`loadSkills`、`loadMcpConfig`、`loadProjectContextFiles`）按会话方式解析；不安装、不连接、不执行。
+- 与 v3 的差异：内置扩展没有文件，不列出（页脚说明）；未做“MCP 可执行文件不存在”检查（命令可能来自 PATH，无法可靠判断）；Skill 按名称排序，同名的未加载项紧跟在生效项之后。

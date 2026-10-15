@@ -2759,6 +2759,192 @@ button.chip:hover {
     }
 }
 
+/* Agent resources: a read-only report, so its rows are cards without hover. Paths wrap anywhere and select whole. */
+.settings-page .sheet-body > .ar-row,
+.ar-scope,
+.ar-tabs,
+.ar-note,
+.ar-scanned,
+.ar-chain {
+    flex-shrink: 0;
+}
+
+.ar-scope {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    align-items: center;
+}
+
+.ar-scope select {
+    width: auto;
+    min-width: 10rem;
+    background: var(--card);
+    border: 1px solid var(--line);
+    padding: 0.28rem 0.4rem;
+    font-size: 0.82rem;
+}
+
+.ar-hint,
+.ar-foot,
+.ar-scanned {
+    margin: 0;
+    font-size: 0.7rem;
+    line-height: 1.55;
+    color: var(--muted);
+    overflow-wrap: anywhere;
+}
+
+.ar-scanned code {
+    color: var(--body);
+}
+
+.ar-none {
+    margin-left: 0.4rem;
+    color: var(--faint);
+}
+
+.ar-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--line);
+    overflow-x: auto;
+}
+
+.ar-tabs button {
+    flex: none;
+    padding: 0.45rem 0.7rem;
+    font-size: 0.8rem;
+    color: var(--muted);
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+}
+
+.ar-tabs button.on {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+}
+
+.ar-count {
+    font-size: 0.68rem;
+    color: var(--faint);
+}
+
+.ar-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 0.6rem;
+    padding: 0.6rem 0.7rem;
+    border-radius: var(--radius);
+    background: var(--card);
+    border: 1px solid var(--line);
+    color: var(--text);
+}
+
+.ar-row.inherited {
+    background: transparent;
+    border-style: dashed;
+}
+
+.ar-main {
+    display: flex;
+    flex-direction: column;
+    gap: 0.18rem;
+    flex: 1;
+    min-width: 0;
+}
+
+.ar-main strong {
+    font-weight: 600;
+}
+
+.ar-row.off strong {
+    color: var(--muted);
+    text-decoration: line-through;
+}
+
+.ar-sub,
+.ar-path {
+    font-size: 0.7rem;
+    overflow-wrap: anywhere;
+}
+
+.ar-sub {
+    color: var(--muted);
+}
+
+.ar-sub.warn {
+    color: var(--warn);
+}
+
+.ar-path {
+    color: var(--body);
+    user-select: all;
+}
+
+.ar-tags {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.3rem;
+    flex: none;
+    max-width: 40%;
+}
+
+.ar-tag {
+    font-size: 0.64rem;
+    padding: 0.08rem 0.32rem;
+    border: 1px solid var(--line-strong);
+    color: var(--muted);
+    white-space: nowrap;
+}
+
+.ar-tag.shared {
+    border-color: var(--accent-line);
+    color: var(--accent);
+}
+
+.ar-tag.project {
+    border-color: color-mix(in srgb, var(--o-magenta) 55%, transparent);
+    color: var(--o-magenta);
+}
+
+.ar-tag.warn {
+    border-color: var(--warn-line);
+    color: var(--warn);
+}
+
+.ar-note {
+    margin: 0;
+    font-size: 0.74rem;
+    line-height: 1.55;
+    padding: 0.5rem 0.65rem;
+    border: 1px solid var(--line);
+    border-left-width: 2px;
+    overflow-wrap: anywhere;
+}
+
+.ar-note.warn {
+    border-color: var(--warn-line);
+    background: var(--warn-soft);
+}
+
+.ar-note.err {
+    border-color: var(--err-line);
+    background: var(--err-soft);
+}
+
+.ar-chain {
+    display: flex;
+    flex-direction: column;
+}
+
+.ar-then {
+    font-size: 0.66rem;
+    color: var(--faint);
+    padding: 0.15rem 0 0.15rem 0.8rem;
+}
+
 /* ─── The rail: the sidebar folded to numbered sessions, like Waybar's workspaces ─── */
 
 .rail {

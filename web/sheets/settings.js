@@ -13,6 +13,7 @@ export const SETTINGS_PAGES = new Set([
     "appearance",
     "people",
     "projects",
+    "agent-resources",
     "spend",
     "running",
     "extensions",
@@ -56,6 +57,7 @@ function groups() {
                     ? page("people", "People")
                     : action("Sign in another device", () => openSheet({ type: "invite" })),
                 page("projects", "Projects & access"),
+                server?.kernel && page("agent-resources", "Agent resources"),
                 page("spend", "Spend"),
             ],
         },

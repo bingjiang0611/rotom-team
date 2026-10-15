@@ -66,11 +66,17 @@ retain their non-Team server module behavior. No model inference or real MCP ser
 
 ```sh
 node --test test/rotom-resources.test.ts test/native-command-menu.test.ts test/team-resource-backup.test.ts
+node --test test/agent-resource-list.test.ts
 node test/team-resources-proof.ts
 node test/native-command-inventory.ts <attested-terminal-inventory.json>
 node test/native-tui-prototype.ts
 node test/mcp-sign-in-proof.ts
 ```
+
+`agent-resource-list.test.ts` checks the read-only Agent resources list: shared versus project scope, package and
+disabled entries, the AGENTS.md chain, a same-name skill reported as not loaded, MCP overrides, a settings parse error
+shown as a problem, and a member without view access getting 404 for that project. It does not check that a listed
+extension loads or a listed MCP server connects.
 
 The resource unit checks derive shared settings, preserve credential/unknown-state bytes, reject credential declarations,
 restore declared configuration and detect private config writes. The actual pinned resource proof checks native
