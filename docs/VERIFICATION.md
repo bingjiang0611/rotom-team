@@ -140,6 +140,13 @@ Browser checks skip explicitly when Chromium is unavailable. `npm run test:kerne
 through an actual native session, proving the download route is admitted without a model call. PDF byte delivery does
 not establish rendering in every browser's PDF viewer. HTML downloads do not run in the application's origin.
 
+`test/native-files.test.ts` creates a native session without inference. It checks `~` against the current execution
+binding's HOME (not the service HOME), HTTP preview/download, attachment path resolution, both browser viewers,
+and unchanged private-data/workspace boundaries. Missing and restricted paths give recovery guidance without
+claiming that a restricted file exists. Native `~` follows the current segment after a handoff; it is not a historical
+artifact identifier. Keep shared deliverables in the session workspace and link by workspace-relative or absolute
+path. Private HOME contents are still owner-only; this fix does not publish them to other members or recover deleted files.
+
 ## Acceptance boundaries
 
 - Type checking and automated tests do not establish real-account authorization, provider approval, complete billing or target-device readiness.

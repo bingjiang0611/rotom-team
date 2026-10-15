@@ -377,11 +377,13 @@ function FilesTab({ changes, covering }) {
     useEffect(() => {
         if (filesTarget && filesTarget.n !== handled.current && root !== "") {
             handled.current = filesTarget.n;
-            const absolute = filesTarget.path.startsWith("/")
-                ? filesTarget.path
-                : filesTarget.path.startsWith("~/") && server?.home
-                  ? `${server.home}${filesTarget.path.slice(1)}`
-                  : `${root}/${filesTarget.path.replace(/^\.\//, "")}`;
+            // Only the server knows the session's execution HOME, which may differ from the service HOME.
+            const absolute =
+                filesTarget.path.startsWith("/") ||
+                filesTarget.path === "~" ||
+                filesTarget.path.startsWith("~/")
+                    ? filesTarget.path
+                    : `${root}/${filesTarget.path.replace(/^\.\//, "")}`;
 
             pick(absolute, filesTarget.line, filesTarget.from);
         }

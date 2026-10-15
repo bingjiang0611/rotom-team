@@ -229,9 +229,24 @@ export class Workspace {
         return this.checkDirectory(absolute);
     }
 
+    /** Native tools run with the bound member's HOME, not the service user's HOME. */
+    #conversationHome(id: ConversationId): string | undefined {
+        if (this.#app.sessionMeta(id)?.backend !== "rotom") {
+            return undefined;
+        }
+
+        const kernel = this.#app.kernel;
+
+        if (!kernel) {
+            throw new HttpError(409, "The native session's file location is unavailable.");
+        }
+
+        return kernel.executions.journal.session(String(id)).binding.home;
+    }
+
     /** A path as a conversation means it: absolute, `~/…`, or relative to the conversation's working directory. */
     conversationPath(id: ConversationId, path: string): string {
-        return resolve(this.#app.cwdOf(id), expandHome(path.trim()));
+        return resolve(this.#app.cwdOf(id), expandHome(path.trim(), this.#conversationHome(id)));
     }
 
     /**
@@ -376,12 +391,26 @@ export class Workspace {
 
             return {
                 path: file,
-                display: displayPath(file, this.#app.cwdOf(id)),
+                display: displayPath(file, this.#app.cwdOf(id), this.#conversationHome(id)),
                 ...(await viewFile(file)),
             };
         } catch (error) {
-            if (error instanceof HttpError || (error as NodeJS.ErrnoException).code === "ENOENT") {
-                throw new HttpError(404, `${path} is not there.`);
+            if (error instanceof HttpError) {
+                if (error.status === 404) {
+                    throw new HttpError(
+                        404,
+                        "This path is outside this session's readable locations. Ask the agent to copy the deliverable (not credentials or private state) into the session workspace and share that path.",
+                    );
+                }
+
+                throw error;
+            }
+
+            if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+                throw new HttpError(
+                    404,
+                    `${path} is not there. It may have been moved or deleted. Ask the agent to check the file and share an existing path in the session workspace.`,
+                );
             }
 
             throw new HttpError(409, describe(error));

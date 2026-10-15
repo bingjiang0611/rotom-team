@@ -350,10 +350,13 @@ test("only the owner may read Pi's folder and the app's data, but anyone who ste
         const agentFile = join(process.env.PI_CODING_AGENT_DIR!, "settings-test.json");
 
         writeFileSync(agentFile, "{}");
-        await assert.rejects(app.workspace.viewFile(id, guest, agentFile), /is not there/);
+        await assert.rejects(
+            app.workspace.viewFile(id, guest, agentFile),
+            /outside.*readable locations/,
+        );
         await assert.rejects(
             app.workspace.viewFile(id, guest, join(app.dataDir, "config.json")),
-            /is not there/,
+            /outside.*readable locations/,
         );
         assert.equal((await app.workspace.viewFile(id, owner(app), agentFile)).kind, "text");
         mkdirSync(app.workspace.uploadDirectory(id), { recursive: true });
