@@ -453,7 +453,11 @@ export async function startPerformanceJournal(options: {
     pushChannel.subscribe(onPush);
     kernelRunChannel.subscribe(onRun);
 
-    const delay = monitorEventLoopDelay({ resolution: 20 });
+    // The histogram records the time between its timer's ticks, so every sample includes the sampling interval: an idle
+    // loop reads about 20 ms. The journal records the delay beyond it.
+    const resolutionMs = 20;
+    const delay = monitorEventLoopDelay({ resolution: resolutionMs });
+    const beyondResolution = (ns: number) => round(Math.max(0, ns / 1e6 - resolutionMs));
 
     delay.enable();
     let lastAt = performance.now();
@@ -471,9 +475,9 @@ export async function startPerformanceJournal(options: {
             kind: "process",
             intervalMs,
             eventLoopDelayMs: {
-                p50: round(delay.percentile(50) / 1e6),
-                p99: round(delay.percentile(99) / 1e6),
-                max: round(delay.max / 1e6),
+                p50: beyondResolution(delay.percentile(50)),
+                p99: beyondResolution(delay.percentile(99)),
+                max: beyondResolution(delay.max),
             },
             eventLoopUtilization: Math.round(loop.utilization * 1000) / 1000,
             cpuUserMs: round(cpu.user / 1000),

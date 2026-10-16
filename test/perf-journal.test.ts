@@ -187,6 +187,41 @@ test("the server's requests, pushed events, and native runs reach the journal, w
     assert.ok(!raw.includes(token));
 });
 
+test("event-loop delay is the delay beyond the sampling interval: an idle loop reads near zero, a stall its length", async () => {
+    const directory = mkdtempSync(join(root, "journal-"));
+    const server = createServer();
+    const journal = await startPerformanceJournal({
+        directory,
+        server,
+        openMs: 1,
+        kernel: false,
+        log: () => assert.fail("the journal failed"),
+        sampleMs: 60_000,
+    });
+    const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    await wait(600);
+    const end = performance.now() + 100;
+
+    while (performance.now() < end) {
+        // A 100 ms stall of the event loop.
+    }
+
+    await wait(100);
+    await journal.stop();
+    const sample = records(directory)
+        .map((record) => record.observation)
+        .find((each) => each.kind === "process")!;
+
+    assert.equal(sample.kind, "process");
+    // Raw histogram values would read about 20 ms idle and about 120 ms for this stall.
+    assert.ok(sample.eventLoopDelayMs.p50 < 10, `idle p50 ${sample.eventLoopDelayMs.p50}`);
+    assert.ok(
+        sample.eventLoopDelayMs.max >= 70 && sample.eventLoopDelayMs.max < 115,
+        `stall max ${sample.eventLoopDelayMs.max}`,
+    );
+});
+
 test("the report reads archives and the active file, counts cut-off lines, and ranks routes by total time", async () => {
     const data = mkdtempSync(join(root, "journal-data-"));
     const journal = new PerformanceJournal({
