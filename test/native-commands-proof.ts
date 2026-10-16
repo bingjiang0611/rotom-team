@@ -485,6 +485,11 @@ try {
     app = await open();
     handler = createHandler({ app, listen: { host: "127.0.0.1", port: 0 }, restart: () => {} });
     assert.equal(
+        app.kernel!.agentInfo(id).thinkingLevel,
+        "low",
+        "an idle session shows the level its model actually uses",
+    );
+    assert.equal(
         (await json(await submit(alice, "/thinking medium"))).status,
         "handled",
         "a restarted reasoning-only model starts from its clamped level",

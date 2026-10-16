@@ -862,6 +862,11 @@ export class RotomJournal {
                 return String(entry.thinkingLevel);
             }
 
+            // A model switch restarts Pi, which clamps silently; the binding holds that clamped level.
+            if (entry.type === "model_change") {
+                break;
+            }
+
             entry = typeof entry.parentId === "string" ? byId.get(entry.parentId) : undefined;
         }
 
