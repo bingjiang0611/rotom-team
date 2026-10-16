@@ -1,0 +1,1269 @@
+{
+    "schema": 1,
+    "metrics": {
+        "git.changes/subprocess.git": {
+            "scenario": "git.changes",
+            "metric": "subprocess.git",
+            "layer": "process",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 20 changed files; GET changes",
+            "source": "child processes whose program is git (test/perf/counters.ts)",
+            "status": "gating",
+            "tolerance": 0,
+            "ceiling": 5,
+            "evidence": {
+                "stability": "10 fresh-process runs on darwin-arm64 (Apple M1, 8 cores, load 2.5-3.7) gave 5 in every run (spread 0); docs/performance/experiments/2026-10-16-gate-git-counters.md",
+                "sensitivity": "ROTOM_TEAM_PERF_INJECT=git (every Git command run twice) moved it 5 -> 10 in all 5 runs, and `ratchet.ts check` failed with `regressed`",
+                "correlation": "the same injected Git commands moved the scenario's median 308.1 -> 389.9 ms on the same machine and load"
+            }
+        },
+        "git.branches/subprocess.git": {
+            "scenario": "git.branches",
+            "metric": "subprocess.git",
+            "layer": "process",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 2 branches; GET branches",
+            "source": "child processes whose program is git (test/perf/counters.ts)",
+            "status": "gating",
+            "tolerance": 0,
+            "ceiling": 2,
+            "evidence": {
+                "stability": "10 fresh-process runs on darwin-arm64 (Apple M1, 8 cores, load 2.5-3.7) gave 2 in every run (spread 0); docs/performance/experiments/2026-10-16-gate-git-counters.md",
+                "sensitivity": "ROTOM_TEAM_PERF_INJECT=git (every Git command run twice) moved it 2 -> 4 in all 5 runs, and `ratchet.ts check` failed with `regressed`",
+                "correlation": "the same injected Git commands moved the scenario's median 95.7 -> 166.7 ms on the same machine and load"
+            }
+        },
+        "startup.restart/sql.statements": {
+            "scenario": "startup.restart",
+            "metric": "sql.statements",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; close the app and open it again",
+            "source": "node:sqlite StatementSync run/get/all/iterate + DatabaseSync.exec (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 848
+            }
+        },
+        "startup.restart/sql.rows": {
+            "scenario": "startup.restart",
+            "metric": "sql.rows",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; close the app and open it again",
+            "source": "rows returned by StatementSync all/get (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 1,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 529
+            }
+        },
+        "startup.restart/subprocess.total": {
+            "scenario": "startup.restart",
+            "metric": "subprocess.total",
+            "layer": "process",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; close the app and open it again",
+            "source": "ChildProcess.prototype.spawn + spawnSync/execFileSync/execSync (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "startup.restart/json.parse.calls": {
+            "scenario": "startup.restart",
+            "metric": "json.parse.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; close the app and open it again",
+            "source": "global JSON.parse calls in the server process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 1,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 527
+            }
+        },
+        "startup.restart/json.parse.chars": {
+            "scenario": "startup.restart",
+            "metric": "json.parse.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; close the app and open it again",
+            "source": "characters given to JSON.parse (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 20,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 200940
+            }
+        },
+        "startup.restart/json.stringify.chars": {
+            "scenario": "startup.restart",
+            "metric": "json.stringify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; close the app and open it again",
+            "source": "characters JSON.stringify produced (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 18515
+            }
+        },
+        "sessions.list/sql.statements": {
+            "scenario": "sessions.list",
+            "metric": "sql.statements",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; GET /api/sessions",
+            "source": "node:sqlite StatementSync run/get/all/iterate + DatabaseSync.exec (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "sessions.list/sql.rows": {
+            "scenario": "sessions.list",
+            "metric": "sql.rows",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; GET /api/sessions",
+            "source": "rows returned by StatementSync all/get (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "sessions.list/subprocess.total": {
+            "scenario": "sessions.list",
+            "metric": "subprocess.total",
+            "layer": "process",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; GET /api/sessions",
+            "source": "ChildProcess.prototype.spawn + spawnSync/execFileSync/execSync (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "sessions.list/json.parse.calls": {
+            "scenario": "sessions.list",
+            "metric": "json.parse.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; GET /api/sessions",
+            "source": "global JSON.parse calls in the server process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "sessions.list/json.parse.chars": {
+            "scenario": "sessions.list",
+            "metric": "json.parse.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; GET /api/sessions",
+            "source": "characters given to JSON.parse (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 83
+            }
+        },
+        "sessions.list/json.stringify.chars": {
+            "scenario": "sessions.list",
+            "metric": "json.stringify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; GET /api/sessions",
+            "source": "characters JSON.stringify produced (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 4063
+            }
+        },
+        "sessions.list/http.body.bytes": {
+            "scenario": "sessions.list",
+            "metric": "http.body.bytes",
+            "layer": "http",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; GET /api/sessions",
+            "source": "answer body bytes the benchmark received (test/perf/scenarios.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 3980
+            }
+        },
+        "session.open/sql.statements": {
+            "scenario": "session.open",
+            "metric": "sql.statements",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; a new event-stream tab on it, until its first full view",
+            "source": "node:sqlite StatementSync run/get/all/iterate + DatabaseSync.exec (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 48
+            }
+        },
+        "session.open/sql.rows": {
+            "scenario": "session.open",
+            "metric": "sql.rows",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; a new event-stream tab on it, until its first full view",
+            "source": "rows returned by StatementSync all/get (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 112
+            }
+        },
+        "session.open/subprocess.total": {
+            "scenario": "session.open",
+            "metric": "subprocess.total",
+            "layer": "process",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; a new event-stream tab on it, until its first full view",
+            "source": "ChildProcess.prototype.spawn + spawnSync/execFileSync/execSync (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open/json.parse.calls": {
+            "scenario": "session.open",
+            "metric": "json.parse.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; a new event-stream tab on it, until its first full view",
+            "source": "global JSON.parse calls in the server process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 103
+            }
+        },
+        "session.open/json.parse.chars": {
+            "scenario": "session.open",
+            "metric": "json.parse.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; a new event-stream tab on it, until its first full view",
+            "source": "characters given to JSON.parse (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 3,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 373917
+            }
+        },
+        "session.open/json.stringify.chars": {
+            "scenario": "session.open",
+            "metric": "json.stringify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; a new event-stream tab on it, until its first full view",
+            "source": "characters JSON.stringify produced (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 84293
+            }
+        },
+        "session.open/push.events": {
+            "scenario": "session.open",
+            "metric": "push.events",
+            "layer": "push",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; a new event-stream tab on it, until its first full view",
+            "source": "events written to tabs, rotom-team:push channel (src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 8
+            }
+        },
+        "session.open/push.bytes": {
+            "scenario": "session.open",
+            "metric": "push.bytes",
+            "layer": "push",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; a new event-stream tab on it, until its first full view",
+            "source": "event-stream bytes written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 81884
+            }
+        },
+        "session.open/push.view.count": {
+            "scenario": "session.open",
+            "metric": "push.view.count",
+            "layer": "push",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; a new event-stream tab on it, until its first full view",
+            "source": "view events written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "session.open/push.view.bytes": {
+            "scenario": "session.open",
+            "metric": "push.view.bytes",
+            "layer": "push",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; a new event-stream tab on it, until its first full view",
+            "source": "view event bytes written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 75997
+            }
+        },
+        "turn.cold/sql.statements": {
+            "scenario": "turn.cold",
+            "metric": "sql.statements",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; first prompt of a new session with one tab watching, until settled and quiet",
+            "source": "node:sqlite StatementSync run/get/all/iterate + DatabaseSync.exec (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 15,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 219
+            }
+        },
+        "turn.cold/sql.rows": {
+            "scenario": "turn.cold",
+            "metric": "sql.rows",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; first prompt of a new session with one tab watching, until settled and quiet",
+            "source": "rows returned by StatementSync all/get (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 10,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 139
+            }
+        },
+        "turn.cold/subprocess.total": {
+            "scenario": "turn.cold",
+            "metric": "subprocess.total",
+            "layer": "process",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; first prompt of a new session with one tab watching, until settled and quiet",
+            "source": "ChildProcess.prototype.spawn + spawnSync/execFileSync/execSync (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "turn.cold/json.parse.calls": {
+            "scenario": "turn.cold",
+            "metric": "json.parse.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; first prompt of a new session with one tab watching, until settled and quiet",
+            "source": "global JSON.parse calls in the server process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 10,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 259
+            }
+        },
+        "turn.cold/json.parse.chars": {
+            "scenario": "turn.cold",
+            "metric": "json.parse.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; first prompt of a new session with one tab watching, until settled and quiet",
+            "source": "characters given to JSON.parse (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 3378,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 873804
+            }
+        },
+        "turn.cold/json.stringify.chars": {
+            "scenario": "turn.cold",
+            "metric": "json.stringify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; first prompt of a new session with one tab watching, until settled and quiet",
+            "source": "characters JSON.stringify produced (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 281,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 125193
+            }
+        },
+        "turn.cold/subprocess.git": {
+            "scenario": "turn.cold",
+            "metric": "subprocess.git",
+            "layer": "process",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; first prompt of a new session with one tab watching, until settled and quiet",
+            "source": "child processes whose program is git (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "turn.cold/push.events": {
+            "scenario": "turn.cold",
+            "metric": "push.events",
+            "layer": "push",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; first prompt of a new session with one tab watching, until settled and quiet",
+            "source": "events written to tabs, rotom-team:push channel (src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 4
+            }
+        },
+        "turn.cold/push.bytes": {
+            "scenario": "turn.cold",
+            "metric": "push.bytes",
+            "layer": "push",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; first prompt of a new session with one tab watching, until settled and quiet",
+            "source": "event-stream bytes written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 17352
+            }
+        },
+        "turn.cold/push.view.count": {
+            "scenario": "turn.cold",
+            "metric": "push.view.count",
+            "layer": "push",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; first prompt of a new session with one tab watching, until settled and quiet",
+            "source": "view events written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 2
+            }
+        },
+        "turn.cold/push.view.bytes": {
+            "scenario": "turn.cold",
+            "metric": "push.view.bytes",
+            "layer": "push",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; first prompt of a new session with one tab watching, until settled and quiet",
+            "source": "view event bytes written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 8534
+            }
+        },
+        "turn.warm/sql.statements": {
+            "scenario": "turn.warm",
+            "metric": "sql.statements",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; second prompt of that session with one tab watching, until settled and quiet",
+            "source": "node:sqlite StatementSync run/get/all/iterate + DatabaseSync.exec (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 148
+            }
+        },
+        "turn.warm/sql.rows": {
+            "scenario": "turn.warm",
+            "metric": "sql.rows",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; second prompt of that session with one tab watching, until settled and quiet",
+            "source": "rows returned by StatementSync all/get (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 120
+            }
+        },
+        "turn.warm/subprocess.total": {
+            "scenario": "turn.warm",
+            "metric": "subprocess.total",
+            "layer": "process",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; second prompt of that session with one tab watching, until settled and quiet",
+            "source": "ChildProcess.prototype.spawn + spawnSync/execFileSync/execSync (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "turn.warm/json.parse.calls": {
+            "scenario": "turn.warm",
+            "metric": "json.parse.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; second prompt of that session with one tab watching, until settled and quiet",
+            "source": "global JSON.parse calls in the server process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 203
+            }
+        },
+        "turn.warm/json.parse.chars": {
+            "scenario": "turn.warm",
+            "metric": "json.parse.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; second prompt of that session with one tab watching, until settled and quiet",
+            "source": "characters given to JSON.parse (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 558969
+            }
+        },
+        "turn.warm/json.stringify.chars": {
+            "scenario": "turn.warm",
+            "metric": "json.stringify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; second prompt of that session with one tab watching, until settled and quiet",
+            "source": "characters JSON.stringify produced (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 83294
+            }
+        },
+        "turn.warm/subprocess.git": {
+            "scenario": "turn.warm",
+            "metric": "subprocess.git",
+            "layer": "process",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; second prompt of that session with one tab watching, until settled and quiet",
+            "source": "child processes whose program is git (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "turn.warm/push.events": {
+            "scenario": "turn.warm",
+            "metric": "push.events",
+            "layer": "push",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; second prompt of that session with one tab watching, until settled and quiet",
+            "source": "events written to tabs, rotom-team:push channel (src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 2
+            }
+        },
+        "turn.warm/push.bytes": {
+            "scenario": "turn.warm",
+            "metric": "push.bytes",
+            "layer": "push",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; second prompt of that session with one tab watching, until settled and quiet",
+            "source": "event-stream bytes written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 11828
+            }
+        },
+        "turn.warm/push.view.count": {
+            "scenario": "turn.warm",
+            "metric": "push.view.count",
+            "layer": "push",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; second prompt of that session with one tab watching, until settled and quiet",
+            "source": "view events written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "turn.warm/push.view.bytes": {
+            "scenario": "turn.warm",
+            "metric": "push.view.bytes",
+            "layer": "push",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; second prompt of that session with one tab watching, until settled and quiet",
+            "source": "view event bytes written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 7382
+            }
+        },
+        "turn.paced/sql.statements": {
+            "scenario": "turn.paced",
+            "metric": "sql.statements",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; third prompt of that session, its answer paced 25 ms per chunk, one tab watching, until settled and quiet",
+            "source": "node:sqlite StatementSync run/get/all/iterate + DatabaseSync.exec (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 318
+            }
+        },
+        "turn.paced/sql.rows": {
+            "scenario": "turn.paced",
+            "metric": "sql.rows",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; third prompt of that session, its answer paced 25 ms per chunk, one tab watching, until settled and quiet",
+            "source": "rows returned by StatementSync all/get (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 348
+            }
+        },
+        "turn.paced/subprocess.total": {
+            "scenario": "turn.paced",
+            "metric": "subprocess.total",
+            "layer": "process",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; third prompt of that session, its answer paced 25 ms per chunk, one tab watching, until settled and quiet",
+            "source": "ChildProcess.prototype.spawn + spawnSync/execFileSync/execSync (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "turn.paced/json.parse.calls": {
+            "scenario": "turn.paced",
+            "metric": "json.parse.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; third prompt of that session, its answer paced 25 ms per chunk, one tab watching, until settled and quiet",
+            "source": "global JSON.parse calls in the server process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 353
+            }
+        },
+        "turn.paced/json.parse.chars": {
+            "scenario": "turn.paced",
+            "metric": "json.parse.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; third prompt of that session, its answer paced 25 ms per chunk, one tab watching, until settled and quiet",
+            "source": "characters given to JSON.parse (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1069876
+            }
+        },
+        "turn.paced/json.stringify.chars": {
+            "scenario": "turn.paced",
+            "metric": "json.stringify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; third prompt of that session, its answer paced 25 ms per chunk, one tab watching, until settled and quiet",
+            "source": "characters JSON.stringify produced (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 1600,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 136810
+            }
+        },
+        "turn.paced/subprocess.git": {
+            "scenario": "turn.paced",
+            "metric": "subprocess.git",
+            "layer": "process",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; third prompt of that session, its answer paced 25 ms per chunk, one tab watching, until settled and quiet",
+            "source": "child processes whose program is git (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "turn.paced/push.events": {
+            "scenario": "turn.paced",
+            "metric": "push.events",
+            "layer": "push",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; third prompt of that session, its answer paced 25 ms per chunk, one tab watching, until settled and quiet",
+            "source": "events written to tabs, rotom-team:push channel (src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 11
+            }
+        },
+        "turn.paced/push.bytes": {
+            "scenario": "turn.paced",
+            "metric": "push.bytes",
+            "layer": "push",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; third prompt of that session, its answer paced 25 ms per chunk, one tab watching, until settled and quiet",
+            "source": "event-stream bytes written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 1600,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 52562
+            }
+        },
+        "turn.paced/push.view.count": {
+            "scenario": "turn.paced",
+            "metric": "push.view.count",
+            "layer": "push",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; third prompt of that session, its answer paced 25 ms per chunk, one tab watching, until settled and quiet",
+            "source": "view events written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 9
+            }
+        },
+        "turn.paced/push.view.bytes": {
+            "scenario": "turn.paced",
+            "metric": "push.view.bytes",
+            "layer": "push",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; third prompt of that session, its answer paced 25 ms per chunk, one tab watching, until settled and quiet",
+            "source": "view event bytes written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 1600,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 43671
+            }
+        },
+        "git.changes/sql.statements": {
+            "scenario": "git.changes",
+            "metric": "sql.statements",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 20 changed files; GET changes",
+            "source": "node:sqlite StatementSync run/get/all/iterate + DatabaseSync.exec (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 3
+            }
+        },
+        "git.changes/sql.rows": {
+            "scenario": "git.changes",
+            "metric": "sql.rows",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 20 changed files; GET changes",
+            "source": "rows returned by StatementSync all/get (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 30
+            }
+        },
+        "git.changes/subprocess.total": {
+            "scenario": "git.changes",
+            "metric": "subprocess.total",
+            "layer": "process",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 20 changed files; GET changes",
+            "source": "ChildProcess.prototype.spawn + spawnSync/execFileSync/execSync (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 5
+            }
+        },
+        "git.changes/json.parse.calls": {
+            "scenario": "git.changes",
+            "metric": "json.parse.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 20 changed files; GET changes",
+            "source": "global JSON.parse calls in the server process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 30
+            }
+        },
+        "git.changes/json.parse.chars": {
+            "scenario": "git.changes",
+            "metric": "json.parse.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 20 changed files; GET changes",
+            "source": "characters given to JSON.parse (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 1,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 122459
+            }
+        },
+        "git.changes/json.stringify.chars": {
+            "scenario": "git.changes",
+            "metric": "json.stringify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 20 changed files; GET changes",
+            "source": "characters JSON.stringify produced (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 7,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 2542
+            }
+        },
+        "git.changes/http.body.bytes": {
+            "scenario": "git.changes",
+            "metric": "http.body.bytes",
+            "layer": "http",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 20 changed files; GET changes",
+            "source": "answer body bytes the benchmark received (test/perf/scenarios.ts)",
+            "status": "candidate",
+            "tolerance": 7,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 2542
+            }
+        },
+        "git.branches/sql.statements": {
+            "scenario": "git.branches",
+            "metric": "sql.statements",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 2 branches; GET branches",
+            "source": "node:sqlite StatementSync run/get/all/iterate + DatabaseSync.exec (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "git.branches/sql.rows": {
+            "scenario": "git.branches",
+            "metric": "sql.rows",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 2 branches; GET branches",
+            "source": "rows returned by StatementSync all/get (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "git.branches/subprocess.total": {
+            "scenario": "git.branches",
+            "metric": "subprocess.total",
+            "layer": "process",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 2 branches; GET branches",
+            "source": "ChildProcess.prototype.spawn + spawnSync/execFileSync/execSync (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 2
+            }
+        },
+        "git.branches/json.parse.calls": {
+            "scenario": "git.branches",
+            "metric": "json.parse.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 2 branches; GET branches",
+            "source": "global JSON.parse calls in the server process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "git.branches/json.parse.chars": {
+            "scenario": "git.branches",
+            "metric": "json.parse.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 2 branches; GET branches",
+            "source": "characters given to JSON.parse (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "git.branches/json.stringify.chars": {
+            "scenario": "git.branches",
+            "metric": "json.stringify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 2 branches; GET branches",
+            "source": "characters JSON.stringify produced (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 34,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 242
+            }
+        },
+        "git.branches/http.body.bytes": {
+            "scenario": "git.branches",
+            "metric": "http.body.bytes",
+            "layer": "http",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 2 branches; GET branches",
+            "source": "answer body bytes the benchmark received (test/perf/scenarios.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 208
+            }
+        },
+        "commands.list/sql.statements": {
+            "scenario": "commands.list",
+            "metric": "sql.statements",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; GET the native slash-command list",
+            "source": "node:sqlite StatementSync run/get/all/iterate + DatabaseSync.exec (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 10
+            }
+        },
+        "commands.list/sql.rows": {
+            "scenario": "commands.list",
+            "metric": "sql.rows",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; GET the native slash-command list",
+            "source": "rows returned by StatementSync all/get (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 17
+            }
+        },
+        "commands.list/subprocess.total": {
+            "scenario": "commands.list",
+            "metric": "subprocess.total",
+            "layer": "process",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; GET the native slash-command list",
+            "source": "ChildProcess.prototype.spawn + spawnSync/execFileSync/execSync (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "commands.list/json.parse.calls": {
+            "scenario": "commands.list",
+            "metric": "json.parse.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; GET the native slash-command list",
+            "source": "global JSON.parse calls in the server process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 31
+            }
+        },
+        "commands.list/json.parse.chars": {
+            "scenario": "commands.list",
+            "metric": "json.parse.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; GET the native slash-command list",
+            "source": "characters given to JSON.parse (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 170825
+            }
+        },
+        "commands.list/json.stringify.chars": {
+            "scenario": "commands.list",
+            "metric": "json.stringify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; GET the native slash-command list",
+            "source": "characters JSON.stringify produced (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 34,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 3916
+            }
+        },
+        "commands.list/http.body.bytes": {
+            "scenario": "commands.list",
+            "metric": "http.body.bytes",
+            "layer": "http",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; GET the native slash-command list",
+            "source": "answer body bytes the benchmark received (test/perf/scenarios.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 3283
+            }
+        },
+        "web.open/sql.statements": {
+            "scenario": "web.open",
+            "metric": "sql.statements",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; headless Chromium signed in, opens /s/<session> until the last answer is in the page",
+            "source": "node:sqlite StatementSync run/get/all/iterate + DatabaseSync.exec (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 22
+            }
+        },
+        "web.open/sql.rows": {
+            "scenario": "web.open",
+            "metric": "sql.rows",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; headless Chromium signed in, opens /s/<session> until the last answer is in the page",
+            "source": "rows returned by StatementSync all/get (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 74
+            }
+        },
+        "web.open/subprocess.total": {
+            "scenario": "web.open",
+            "metric": "subprocess.total",
+            "layer": "process",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; headless Chromium signed in, opens /s/<session> until the last answer is in the page",
+            "source": "ChildProcess.prototype.spawn + spawnSync/execFileSync/execSync (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "web.open/push.events": {
+            "scenario": "web.open",
+            "metric": "push.events",
+            "layer": "push",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; headless Chromium signed in, opens /s/<session> until the last answer is in the page",
+            "source": "events written to tabs, rotom-team:push channel (src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 11
+            }
+        },
+        "web.open/push.bytes": {
+            "scenario": "web.open",
+            "metric": "push.bytes",
+            "layer": "push",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; headless Chromium signed in, opens /s/<session> until the last answer is in the page",
+            "source": "event-stream bytes written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 99855
+            }
+        },
+        "web.open/push.view.count": {
+            "scenario": "web.open",
+            "metric": "push.view.count",
+            "layer": "push",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; headless Chromium signed in, opens /s/<session> until the last answer is in the page",
+            "source": "view events written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "web.open/push.view.bytes": {
+            "scenario": "web.open",
+            "metric": "push.view.bytes",
+            "layer": "push",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; headless Chromium signed in, opens /s/<session> until the last answer is in the page",
+            "source": "view event bytes written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 76014
+            }
+        },
+        "web.open/http.requests": {
+            "scenario": "web.open",
+            "metric": "http.requests",
+            "layer": "http",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; headless Chromium signed in, opens /s/<session> until the last answer is in the page",
+            "source": "http.server.request.start diagnostics channel (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 73
+            }
+        },
+        "web.open/cdp.LayoutCount": {
+            "scenario": "web.open",
+            "metric": "cdp.LayoutCount",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; headless Chromium signed in, opens /s/<session> until the last answer is in the page",
+            "source": "Chromium Performance.getMetrics LayoutCount delta (test/perf/browser.ts)",
+            "status": "candidate",
+            "tolerance": 2,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 10
+            }
+        },
+        "web.open/cdp.RecalcStyleCount": {
+            "scenario": "web.open",
+            "metric": "cdp.RecalcStyleCount",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; headless Chromium signed in, opens /s/<session> until the last answer is in the page",
+            "source": "Chromium Performance.getMetrics RecalcStyleCount delta (test/perf/browser.ts)",
+            "status": "candidate",
+            "tolerance": 2,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 19
+            }
+        },
+        "web.open/cdp.Nodes": {
+            "scenario": "web.open",
+            "metric": "cdp.Nodes",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; headless Chromium signed in, opens /s/<session> until the last answer is in the page",
+            "source": "Chromium Performance.getMetrics Nodes once the answer shows (test/perf/browser.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 971
+            }
+        }
+    }
+}

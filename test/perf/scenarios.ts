@@ -1,0 +1,351 @@
+/**
+ * One run of the controlled benchmarks: a real server in team kernel mode, real rotom child processes, a real
+ * event-stream tab, and a loopback OpenAI-compatible model that streams a fixed answer. No real account is used.
+ * Each scenario records how long it took and the work counters (`counters.ts`) for exactly its window.
+ *
+ *   node test/perf/scenarios.ts <out.json>
+ *
+ * `measure.ts` runs this several times, each in a fresh process, and turns the runs into a report.
+ */
+import { raw, since, snapshot, type Counts } from "./counters.ts";
+import { cleanUp, owner, root, work } from "../helpers.ts";
+import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { once } from "node:events";
+import { mkdirSync, realpathSync, writeFileSync } from "node:fs";
+import { createServer, type Server } from "node:http";
+import { join } from "node:path";
+import { PocketApp } from "../../src/server/app.ts";
+import { createHandler } from "../../src/server/http.ts";
+import type { Runtime } from "../../src/server/team-accounts.ts";
+import type { User } from "../../src/server/config.ts";
+import { measureWebOpen } from "./browser.ts";
+import { WORKLOAD } from "./workload.ts";
+
+export type ScenarioResult =
+    | { scenario: string; ms: number; counts: Counts; extra?: Record<string, number> }
+    | { scenario: string; unavailable: string };
+
+const out = process.argv[2];
+
+if (out === undefined) {
+    throw new Error("Usage: node test/perf/scenarios.ts <out.json>");
+}
+
+const results: ScenarioResult[] = [];
+
+// ─── The loopback model: the same answer for the same turn, in a fixed number of chunks, as fast as it can.
+
+/** The text answering the `turn`th user message; it ends with a marker the browser scenario waits for. */
+const answer = (turn: number) => {
+    const marker = `END-OF-ANSWER-${turn}`;
+    const body = `Answer ${turn}. `.padEnd(
+        WORKLOAD.answerChars - marker.length - 1,
+        "lorem ipsum ",
+    );
+
+    return `${body} ${marker}`;
+};
+
+const model = createServer(async (req, res) => {
+    let body = "";
+
+    for await (const chunk of req) {
+        body += chunk;
+    }
+
+    const input = raw.parse(body) as { messages: { role: string; content: unknown }[] };
+    const users = input.messages.filter((m) => m.role === "user");
+    const text = answer(users.length);
+    // A paced answer streams like a real model, so the server's 90 ms push coalescing has something to coalesce.
+    const paced = raw.stringify(users.at(-1)?.content ?? "").includes("PACED");
+    const size = Math.ceil(text.length / WORKLOAD.streamChunks);
+    const emit = (delta: object, finish: string | null = null) =>
+        res.write(
+            `data: ${raw.stringify({ id: "perf", object: "chat.completion.chunk", created: 1, model: "perf", choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`,
+        );
+
+    res.writeHead(200, { "Content-Type": "text/event-stream" });
+    emit({ role: "assistant" });
+
+    for (let at = 0; at < text.length; at += size) {
+        emit({ content: text.slice(at, at + size) });
+
+        if (paced) {
+            await new Promise((resolve) => setTimeout(resolve, WORKLOAD.pacedChunkMs));
+        }
+    }
+
+    emit({}, "stop");
+    res.end("data: [DONE]\n\n");
+});
+
+model.listen(0, "127.0.0.1");
+await once(model, "listening");
+const baseUrl = `http://127.0.0.1:${(model.address() as { port: number }).port}/v1`;
+const configureUserModels = (models: Runtime, user: User) =>
+    models.registerNativeProvider({
+        id: "openai",
+        name: "Loopback benchmark model",
+        auth: {
+            apiKey: {
+                name: "Synthetic benchmark key",
+                resolve: async () => ({ auth: { apiKey: `perf:${user.id}` }, source: "perf" }),
+            },
+        },
+        getModels: () => [
+            {
+                id: "perf",
+                name: "perf",
+                api: "openai-completions",
+                provider: "openai",
+                baseUrl,
+                reasoning: false,
+                input: ["text"],
+                contextWindow: 200_000,
+                maxTokens: 4096,
+                cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+            },
+        ],
+        stream: () => {
+            throw new Error("rotom sessions never run on the Durable path");
+        },
+        streamSimple: () => {
+            throw new Error("rotom sessions never run on the Durable path");
+        },
+    });
+
+// ─── The workspace: a Git repository with changed files, so the changes and branches routes have work to do.
+
+const data = join(realpathSync(root), "perf-data");
+const workspace = join(realpathSync(work), "perf-project");
+const git = (...args: string[]) =>
+    execFileSync("git", ["-C", workspace, ...args], { stdio: "ignore" });
+
+mkdirSync(join(workspace, "src"), { recursive: true });
+writeFileSync(join(workspace, "AGENTS.md"), "Benchmark project.\n");
+
+for (let index = 0; index < WORKLOAD.changedFiles; index++) {
+    writeFileSync(join(workspace, "src", `file-${index}.txt`), `line ${index}\n`.repeat(50));
+}
+
+git("init", "-q", "-b", "main");
+git("-c", "user.name=perf", "-c", "user.email=perf@example.invalid", "add", "-A");
+git("-c", "user.name=perf", "-c", "user.email=perf@example.invalid", "commit", "-q", "-m", "seed");
+git("branch", "feature");
+
+for (let index = 0; index < WORKLOAD.changedFiles; index++) {
+    writeFileSync(join(workspace, "src", `file-${index}.txt`), `changed ${index}\n`.repeat(60));
+}
+
+// ─── The server, as the service runs it: kernel mode, behind the real HTTP handler.
+
+const open = () =>
+    PocketApp.open({
+        dataDir: data,
+        defaultCwd: workspace,
+        supervised: false,
+        kernel: true,
+        browser: null,
+        log: () => {},
+        configureUserModels,
+    });
+let app = await open();
+let handler = createHandler({ app, listen: { host: "127.0.0.1", port: 0 }, restart: () => {} });
+const server: Server = createServer((req, res) => handler(req, res));
+
+server.listen(0, "127.0.0.1");
+await once(server, "listening");
+const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+const alice = owner(app);
+const token = app.config.addDevice(alice.id).token;
+
+await app.hello(alice);
+
+const call = async (path: string, method = "GET", body?: object) => {
+    const response = await fetch(`${base}/api/${path}`, {
+        method,
+        headers: {
+            authorization: `Bearer ${token}`,
+            "x-pocket": "1",
+            "content-type": "application/json",
+        },
+        ...(body ? { body: raw.stringify(body) } : {}),
+    });
+    const text = await response.text();
+
+    assert.equal(response.status, 200, `${method} ${path}: ${text}`);
+
+    return { value: raw.parse(text) as Record<string, unknown>, bytes: Buffer.byteLength(text) };
+};
+
+/** A browser tab on the event stream of session `id`; `fullView` settles once its first full view has arrived. */
+function tab(id: number) {
+    const controller = new AbortController();
+    let resolveFull: () => void;
+    const fullView = new Promise<void>((resolve) => (resolveFull = resolve));
+    const reading = (async () => {
+        const response = await fetch(`${base}/api/events?c=${id}&tab=perf-${id}-${Date.now()}`, {
+            headers: { authorization: `Bearer ${token}` },
+            signal: controller.signal,
+        });
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        for await (const chunk of response.body!) {
+            buffer += decoder.decode(chunk as Uint8Array, { stream: true });
+            let end: number;
+
+            while ((end = buffer.indexOf("\n\n")) >= 0) {
+                const frame = buffer.slice(0, end);
+
+                buffer = buffer.slice(end + 2);
+
+                // Only the event name and the `full` flag, without parsing the event: parsing would count as work.
+                if (frame.startsWith("event: view\n") && frame.includes('"full":true')) {
+                    resolveFull!();
+                }
+            }
+        }
+    })().catch((error: Error) => {
+        if (error.name !== "AbortError") {
+            throw error;
+        }
+    });
+
+    return {
+        fullView,
+        close: async () => {
+            controller.abort();
+            await reading;
+        },
+    };
+}
+
+/**
+ * Wait until the server has gone quiet: no event pushed and no SQL statement for `quietMs`. Pushes coalesce over 90 ms
+ * and native runs finish asynchronously, so a scenario's window ends here, not when its request answered.
+ */
+async function quiet(quietMs = 400, limitMs = 20_000): Promise<void> {
+    const started = Date.now();
+    let last = snapshot();
+    let calmSince = Date.now();
+
+    while (Date.now() - calmSince < quietMs) {
+        if (Date.now() - started > limitMs) {
+            throw new Error(`The server did not go quiet within ${limitMs} ms`);
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        const now = snapshot();
+
+        if (
+            now["push.events"] !== last["push.events"] ||
+            now["sql.statements"] !== last["sql.statements"]
+        ) {
+            calmSince = Date.now();
+        }
+
+        last = now;
+    }
+}
+
+/** Time `action` and count its work, through the quiet that follows it. Counts `action` returns join the counters. */
+async function scenario(
+    name: string,
+    action: () => Promise<Record<string, number> | void>,
+): Promise<void> {
+    await quiet();
+    const before = snapshot();
+    const started = performance.now();
+    const extra = await action();
+    const ms = performance.now() - started;
+
+    await quiet();
+    results.push({ scenario: name, ms, counts: { ...since(before), ...extra } });
+}
+
+const submit = (id: number, turn: number, text = `Question ${turn}.`) =>
+    call(`c/${id}/submit`, "POST", { text, requestId: `perf-${id}-${turn}` });
+
+// ─── Seed: a session with history, and more sessions for the list.
+
+const history = (await call("sessions", "POST", { title: "History", backend: "rotom" })).value
+    .id as number;
+
+for (let turn = 1; turn <= WORKLOAD.seededTurns; turn++) {
+    assert.equal((await submit(history, turn)).value.status, "settled");
+}
+
+for (let index = 0; index < WORKLOAD.extraSessions; index++) {
+    await call("sessions", "POST", { title: `Session ${index}`, backend: "rotom" });
+}
+
+// ─── Scenarios.
+
+await scenario("startup.restart", async () => {
+    await app.close();
+    app = await open();
+    handler = createHandler({ app, listen: { host: "127.0.0.1", port: 0 }, restart: () => {} });
+});
+await app.hello(owner(app));
+
+await scenario("sessions.list", async () => ({
+    "http.body.bytes": (await call("sessions")).bytes,
+}));
+
+await scenario("session.open", async () => {
+    const watcher = tab(history);
+
+    await watcher.fullView;
+    await watcher.close();
+});
+
+const fresh = (await call("sessions", "POST", { title: "Fresh", backend: "rotom" })).value
+    .id as number;
+const watcher = tab(fresh);
+
+await watcher.fullView;
+await scenario("turn.cold", async () => {
+    assert.equal((await submit(fresh, 1)).value.status, "settled");
+});
+await scenario("turn.warm", async () => {
+    assert.equal((await submit(fresh, 2)).value.status, "settled");
+});
+await scenario("turn.paced", async () => {
+    assert.equal((await submit(fresh, 3, "Question 3, PACED.")).value.status, "settled");
+});
+await watcher.close();
+
+await scenario("git.changes", async () => ({
+    "http.body.bytes": (await call(`c/${history}/changes`)).bytes,
+}));
+await scenario("git.branches", async () => ({
+    "http.body.bytes": (await call(`c/${history}/branches`)).bytes,
+}));
+await scenario("commands.list", async () => ({
+    "http.body.bytes": (await call(`c/${history}/prompts`)).bytes,
+}));
+
+const web = await measureWebOpen({
+    base,
+    ownerToken: app.config.ownerToken,
+    sessionId: history,
+    marker: `END-OF-ANSWER-${WORKLOAD.seededTurns}`,
+    quiet,
+    profile: join(root, "perf-browser"),
+});
+
+results.push(
+    "unavailable" in web
+        ? { scenario: "web.open", unavailable: web.unavailable }
+        : { scenario: "web.open", ms: web.ms, counts: web.counts, extra: web.metrics },
+);
+
+writeFileSync(out, raw.stringify({ workload: WORKLOAD, results }, null, 2));
+server.closeAllConnections();
+server.close();
+model.close();
+await app.close();
+cleanUp();
+process.exit(0);

@@ -10,3 +10,5 @@ data/
 .env.*
 .DS_Store
 Thumbs.db
+# Benchmark reports (npm run perf:measure); the ledger is test/perf/ledger.json.
+perf-results/

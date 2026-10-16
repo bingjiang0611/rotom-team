@@ -1,0 +1,37 @@
+# Before and after a pull request: the work-counter ratchet, the ledger guard, and a millisecond comparison.
+# macOS arm64 matches the ledger's darwin-arm64 baselines; counts on another platform need their own baselines.
+name: performance
+
+on:
+    pull_request:
+
+permissions:
+    contents: read
+
+concurrency:
+    group: performance-${{ github.event.pull_request.number }}
+    cancel-in-progress: true
+
+jobs:
+    ratchet:
+        runs-on: macos-14
+        timeout-minutes: 40
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 24.18.0
+            - run: npm ci
+            - run: npm run install:kernel
+            - run: npm run check
+            # The base ref is fetched by the full checkout; the ledger guard needs no approval unless the PR loosens it.
+            - run: npm run perf:ci -- origin/${{ github.base_ref }} --runs 3 --out perf-results/ci
+              env:
+                  ROTOM_TEAM_PERF_RAISE_APPROVED: ${{ contains(github.event.pull_request.labels.*.name, 'performance-raise-approved') && '1' || '' }}
+            - uses: actions/upload-artifact@v4
+              if: always()
+              with:
+                  name: performance-reports
+                  path: perf-results/ci

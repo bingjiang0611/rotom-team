@@ -34,7 +34,13 @@
         "test": "node --test --test-concurrency=2 test/*.test.ts",
         "format": "eslint --fix . && prettier --write .",
         "format:check": "prettier --check . && eslint .",
-        "lint": "eslint ."
+        "lint": "eslint .",
+        "perf:measure": "node test/perf/measure.ts",
+        "perf:check": "node test/perf/ratchet.ts check",
+        "perf:propose": "node test/perf/ratchet.ts propose",
+        "perf:compare": "node test/perf/ratchet.ts compare",
+        "perf:ci": "node test/perf/ci.ts",
+        "perf:report": "node test/perf/report.ts"
     },
     "dependencies": {
         "@earendil-works/chord": "1.0.2",

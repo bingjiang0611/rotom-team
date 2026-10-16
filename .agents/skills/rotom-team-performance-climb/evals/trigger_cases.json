@@ -1,0 +1,45 @@
+{
+    "negative_patterns": [
+        "deploy",
+        "release",
+        "real account",
+        "translate",
+        "summarize",
+        "sign in",
+        "colour"
+    ],
+    "should_trigger": [
+        { "text": "What is slow in rotom team lately?", "family": "analysis" },
+        {
+            "text": "Read the performance journal and tell me where people wait",
+            "family": "analysis"
+        },
+        { "text": "Opening a session feels slow, find the bottleneck", "family": "analysis" },
+        { "text": "看看 rotom team 最近哪里慢", "family": "analysis" },
+        {
+            "text": "Climb the changes route down: it runs too many git commands",
+            "family": "climb"
+        },
+        { "text": "做一轮性能爬坡，把一轮对话的 JSON 解析量降下来", "family": "climb" },
+        {
+            "text": "Did my change make the server do more work? Compare with main",
+            "family": "climb"
+        },
+        { "text": "perf:check says regressed, help me", "family": "maintain" },
+        { "text": "Can this work counter become a gate?", "family": "maintain" },
+        { "text": "补一下 linux-x64 的性能基线", "family": "maintain" }
+    ],
+    "should_not_trigger": [
+        { "text": "Deploy the new version to the team server", "family": "deploy" },
+        { "text": "Fix the Qoder sign-in bug", "family": "feature" },
+        { "text": "Translate this paragraph into Chinese", "family": "other" },
+        { "text": "Change the sidebar colour", "family": "feature" }
+    ],
+    "near_neighbor": [
+        {
+            "text": "Run the kernel proof with a real ChatGPT account",
+            "family": "provider-acceptance"
+        },
+        { "text": "Add an export button to sessions", "family": "feature" }
+    ]
+}

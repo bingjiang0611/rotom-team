@@ -17,6 +17,10 @@ The automated suite uses synthetic providers, local fixtures and isolated test d
 
 For every check, record the exact source commit, exit status, inspected scope and any failure. Do not treat an older passing result as evidence for the current artifact.
 
+## Performance
+
+`npm test` covers the ratchet, the journal, and the server's journal end to end. The benchmarks are separate: `npm run perf:measure` (real rotom processes, a loopback model, Chromium where present) and `npm run perf:ci -- <base-ref>` for before and after a change. A gating counter failing `perf:check` fails the change; millisecond numbers are evidence only with the machine's load recorded. See [PERFORMANCE.md](PERFORMANCE.md).
+
 ## Rotom 0.1.25 auxiliary inference
 
 `node test/rotom-reducer-proof.ts` launches the pinned product through Team with synthetic loopback models. It checks

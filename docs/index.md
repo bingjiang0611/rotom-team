@@ -2,7 +2,7 @@
 
 ## Current product
 
-Start with [PRODUCT.md](PRODUCT.md) for the execution, account and safety contract, [CONFIGURATION.md](CONFIGURATION.md) for shared project configuration and member MCP sign-ins, [AGENT-CONFIGURATION.md](AGENT-CONFIGURATION.md) for Agent Extension/Skill/MCP setup, and [VERIFICATION.md](VERIFICATION.md) for verification boundaries. The [README](../README.md) describes startup; [DEPLOYMENT.md](DEPLOYMENT.md) and [NATIVE-RECOVERY.md](NATIVE-RECOVERY.md) describe operations. [NATIVE-DELIVERY.md](NATIVE-DELIVERY.md) and [DELIVERY-CHECKLIST.md](DELIVERY-CHECKLIST.md) define acceptance, not permission to use real accounts or a completed deployment.
+Start with [PRODUCT.md](PRODUCT.md) for the execution, account and safety contract, [CONFIGURATION.md](CONFIGURATION.md) for shared project configuration and member MCP sign-ins, [AGENT-CONFIGURATION.md](AGENT-CONFIGURATION.md) for Agent Extension/Skill/MCP setup, and [VERIFICATION.md](VERIFICATION.md) for verification boundaries. The [README](../README.md) describes startup; [DEPLOYMENT.md](DEPLOYMENT.md) and [NATIVE-RECOVERY.md](NATIVE-RECOVERY.md) describe operations. [NATIVE-DELIVERY.md](NATIVE-DELIVERY.md) and [DELIVERY-CHECKLIST.md](DELIVERY-CHECKLIST.md) define acceptance, not permission to use real accounts or a completed deployment. [PERFORMANCE.md](PERFORMANCE.md) describes the performance loop: daily journal, controlled benchmarks, and the work-counter ledger.
 
 Old migration plans and experimental reports are available through Git history, not as current requirements.
 
