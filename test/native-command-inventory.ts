@@ -91,11 +91,7 @@ try {
     assert.equal(actual.length, 40);
     const allowed = teamCommandCatalog(actual);
 
-    assert.equal(
-        allowed.length,
-        14,
-        "thirteen supported commands plus the packaged subagent skill",
-    );
+    assert.equal(allowed.length, 27, "native catalog minus thirteen protected terminal builtins");
     const rows = terminal.commands.map((command) => {
         const observed = actual.find(
             (item) => item.name === command.name && item.source === command.source,

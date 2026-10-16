@@ -673,7 +673,7 @@ export class TeamKernel {
 
         await this.#requireSupportedCommand(id, user, text);
 
-        if (nativeCommandName(text) === "qoder-credits") {
+        if (["qoder-credits", "qoder-models"].includes(nativeCommandName(text) ?? "")) {
             await this.#requireDynamicAdapter(id, user, nativeCommandName(text)!);
 
             throw new HttpError(
@@ -812,12 +812,26 @@ export class TeamKernel {
             return mcp;
         }
 
-        if (command === "qoder-credits") {
+        if (command === "qoder-credits" || command === "qoder-models") {
             await this.#requireDynamicAdapter(id, user, command, requestId);
             this.requireAccountIdle(user);
-            const result = await this.#app.accounts.nativeQoder(user, "credits");
+            const result = await this.#app.accounts.nativeQoder(
+                user,
+                command === "qoder-models" ? "models" : "credits",
+            );
 
             return { status: "handled" as const, nativeResult: result };
+        }
+
+        if (command === "context") {
+            if (args && args !== "usage" && args !== "injections") {
+                throw new HttpError(
+                    400,
+                    "Use /context [usage|injections]. Context configuration belongs to the owner-managed shared profile.",
+                );
+            }
+
+            await this.#requireDynamicAdapter(id, user, command, requestId);
         }
 
         if (command === "settings") {
@@ -1098,16 +1112,20 @@ export class TeamKernel {
                     }),
                     onCommandAdmitted: async (command) => {
                         this.#admitNativeCommand(command);
-                        await nameAcceptedPrompt();
 
                         if (command.source === "skill" || command.source === "prompt") {
+                            await nameAcceptedPrompt();
                             expanded(journal.request(String(id), key)!);
                         }
                     },
                     onNativeResult: async (result) => {
                         nativeResult = result;
 
-                        if (result && typeof result === "object" && "navigation" in result) {
+                        if (
+                            result &&
+                            typeof result === "object" &&
+                            ("navigation" in result || "context" in result)
+                        ) {
                             await this.#app.harness.commit(async (tx) => {
                                 (await tx.doc(NativeCommandResultsDoc, id)).items[key] =
                                     result as JsonValue;
@@ -1570,6 +1588,13 @@ export class TeamKernel {
                 // Native notifications are notices; statuses/widgets are keyed live replace/clear slots.
                 // Dialogs remain interactive live state for the paying member.
                 if (method === "notify") {
+                    if (
+                        typeof event.message === "string" &&
+                        event.message.startsWith('{"kind":"team-kernel-context-v1"')
+                    ) {
+                        return;
+                    }
+
                     const message = text(event.message);
 
                     if (message) {
@@ -1580,9 +1605,11 @@ export class TeamKernel {
                         } catch {}
 
                         if (
-                            ["team-kernel-barrier-v1", "team-kernel-tree-v1"].includes(
-                                String(control?.kind),
-                            )
+                            [
+                                "team-kernel-barrier-v1",
+                                "team-kernel-tree-v1",
+                                "team-kernel-context-v1",
+                            ].includes(String(control?.kind))
                         ) {
                             return;
                         }

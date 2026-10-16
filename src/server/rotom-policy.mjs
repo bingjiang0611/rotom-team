@@ -5,14 +5,135 @@ import { chatGPTPayload } from "./openai-chatgpt-payload.ts";
 import { qoderRequestProvider } from "./rotom-qoder.mjs";
 import { bindSessionAccount } from "../../runtime/rotom/node_modules/@bingjiang0611/rotom/extensions/qoder/session-policy.mjs";
 import { CREDIT_ENTRY } from "../../runtime/rotom/node_modules/@bingjiang0611/rotom/extensions/qoder/credits.mjs";
+import { SnapshotBuilder } from "../../runtime/rotom/node_modules/@bingjiang0611/rotom/extensions/third-party/node_modules/pi-context-view/src/capture/builder.ts";
+import { registerCapture } from "../../runtime/rotom/node_modules/@bingjiang0611/rotom/extensions/third-party/node_modules/pi-context-view/src/capture/register.ts";
+import {
+    buildFallbackInjectionsSnapshot,
+    buildInjectionsSnapshot,
+} from "../../runtime/rotom/node_modules/@bingjiang0611/rotom/extensions/third-party/node_modules/pi-context-view/src/injections.ts";
+import { collectPromptSources } from "../../runtime/rotom/node_modules/@bingjiang0611/rotom/extensions/third-party/node_modules/pi-context-view/src/prompt-additions.ts";
+import { applyRequestSnapshot } from "../../runtime/rotom/node_modules/@bingjiang0611/rotom/extensions/third-party/node_modules/pi-context-view/src/projection.ts";
+import { buildUsageSnapshot } from "../../runtime/rotom/node_modules/@bingjiang0611/rotom/extensions/third-party/node_modules/pi-context-view/src/replay.ts";
+import { readAutoCompactReserveTokens } from "../../runtime/rotom/node_modules/@bingjiang0611/rotom/extensions/third-party/node_modules/pi-context-view/src/settings.ts";
+import { SnapshotStore } from "../../runtime/rotom/node_modules/@bingjiang0611/rotom/extensions/third-party/node_modules/pi-context-view/src/snapshot.ts";
+import {
+    computeUsage,
+    toReportedUsage,
+} from "../../runtime/rotom/node_modules/@bingjiang0611/rotom/extensions/third-party/node_modules/pi-context-view/src/usage.ts";
 import {
     contentText,
     lazyStream,
 } from "../../runtime/rotom/node_modules/@bingjiang0611/rotom/runtime/pi/node_modules/@earendil-works/pi-ai/dist/index.js";
 
+const contextSnapshots = new SnapshotStore();
+const contextMessages = {
+    get isCurrentRun() {
+        return false;
+    },
+    filterMessages: (messages) => messages,
+};
+
+function contextCategory(category) {
+    return {
+        id: category.id,
+        label: category.label,
+        tokens: category.tokens,
+        ...(category.children?.length ? { children: category.children.map(contextCategory) } : {}),
+    };
+}
+
+function contextItem(item) {
+    return {
+        label: item.label,
+        tokens: item.tokens,
+        ...(item.change ? { change: item.change } : {}),
+        ...(item.dropped ? { dropped: true } : {}),
+        ...(item.moved ? { moved: true } : {}),
+        ...(item.requestOnly ? { requestOnly: true } : {}),
+        ...(item.children?.length ? { children: item.children.map(contextItem) } : {}),
+    };
+}
+
+function contextInputs(pi, ctx) {
+    return {
+        entries: ctx.sessionManager.getEntries(),
+        options: ctx.getSystemPromptOptions(),
+        allTools: pi.getAllTools(),
+        activeToolNames: pi.getActiveTools(),
+        promptSources: collectPromptSources(pi.getAllTools(), pi.getCommands()),
+        systemPrompt: ctx.getSystemPrompt(),
+    };
+}
+
+function contextResult(pi, ctx, view) {
+    const snapshot = contextSnapshots.latest();
+    const common = contextInputs(pi, ctx);
+
+    if (view === "injections") {
+        const injections = snapshot
+            ? buildInjectionsSnapshot({
+                  ...common,
+                  snapshot,
+                  filterMessages: contextMessages.filterMessages,
+              })
+            : buildFallbackInjectionsSnapshot(common);
+
+        return {
+            type: "native-context",
+            title: "Context injections",
+            view,
+            captured: Boolean(snapshot),
+            totalTokens: injections.totalTokens,
+            hiddenTools: injections.hiddenTools ?? [],
+            groups: injections.groups.map((group) => ({
+                source: group.source.label,
+                native: group.source.native,
+                totalTokens: group.totalTokens,
+                items: group.items.map(contextItem),
+            })),
+        };
+    }
+
+    const applied = applyRequestSnapshot({
+        snapshot,
+        entries: common.entries,
+        leafId: ctx.sessionManager.getLeafId(),
+        filterMessages: contextMessages.filterMessages,
+    });
+    const current = buildUsageSnapshot({
+        ...common,
+        messages: applied.messages,
+        systemChanges: applied.systemChanges,
+        forcedPrompt: applied.forcedPrompt,
+    });
+    const usage = computeUsage({
+        snapshot: current,
+        messages: applied.messages,
+        reported: toReportedUsage(ctx.getContextUsage()),
+        modelLabel: ctx.model?.id,
+        autoCompactReserveTokens: readAutoCompactReserveTokens(pi, ctx.model),
+    });
+
+    return {
+        type: "native-context",
+        title: "Context usage",
+        view: "usage",
+        captured: Boolean(snapshot),
+        model: usage.modelLabel,
+        reported: usage.reported,
+        estimatedTokens: usage.estimatedTokens,
+        autoCompactReserveTokens: usage.autoCompactReserveTokens,
+        categories: usage.categories.map(contextCategory),
+    };
+}
+
 export default function (pi) {
     const config = JSON.parse(readFileSync(process.env.ROTOM_TEAM_KERNEL_GATE, "utf8"));
     let ready = false;
+
+    // The product's own context extension owns a TUI-only store. Team keeps a parallel read-only capture so the Web
+    // adapter can render the same measured structures without a silent model probe or raw prompt text persistence.
+    registerCapture(pi, contextMessages, new SnapshotBuilder(contextSnapshots));
 
     if (config.modelDefinition) {
         // Registration happens before CLI model selection. This sentinel is never sent to a provider.
@@ -115,6 +236,27 @@ export default function (pi) {
                     params: { id },
                 });
             }
+        },
+    });
+
+    pi.registerCommand("team-kernel-context", {
+        description: "Private Team context view adapter",
+        handler: async (args, ctx) => {
+            const { nonce, view } = JSON.parse(args);
+
+            if (!nonce || !["usage", "injections"].includes(view)) {
+                throw new Error("Use /context [usage|injections]");
+            }
+
+            await ctx.waitForIdle();
+            ctx.ui.notify(
+                JSON.stringify({
+                    kind: "team-kernel-context-v1",
+                    nonce,
+                    result: contextResult(pi, ctx, view),
+                }),
+                "info",
+            );
         },
     });
 
@@ -331,6 +473,8 @@ export default function (pi) {
 
         ready = ids.has(config.provider);
     });
+    pi.on("session_shutdown", () => contextSnapshots.clear());
+
     pi.registerCommand("team-kernel-probe", {
         description: "Private kernel integration readiness probe (no model request)",
         handler: async (nonce, ctx) => {

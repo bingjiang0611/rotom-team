@@ -164,8 +164,9 @@ foreground reviewer; this release enables existing overlays, not generation. See
 
 ## Native slash commands
 
-Typing `/` uses pinned native metadata filtered by Team's supported command surface. Dynamic extensions, prompt
-templates and skills come from native `get_commands`. `GET /api/c/:id/prompts` reads a snapshot; it never starts native code. Opening slash suggestions through composer input, or choosing **Refresh shared agent commands on my account**, explicitly starts the trusted native runtime under the member's ordinary permissions, admission and lease. Discovery denies Team
+Typing `/` uses pinned native metadata. Dynamic extensions, prompt templates and skills from native `get_commands`
+are admitted by default; Team only protects terminal-only builtins for credentials, trust, uploads and session lifecycle,
+plus private `team-kernel-*` commands. `GET /api/c/:id/prompts` reads a snapshot; it never starts native code. Opening slash suggestions through composer input, or choosing **Refresh shared agent commands on my account**, explicitly starts the trusted native runtime under the member's ordinary permissions, admission and lease. Discovery denies Team
 inference and credential-refresh requests. It needs no paid prompt, but shared extension startup is still trusted executable
 code, not a sandbox. An idle session owned by another member is first handed over using public history.
 
@@ -181,15 +182,19 @@ After the native registry admits that input as a skill/template, submit returns 
 composer clears the submitted draft without waiting for inference to finish. Side-effectful commands still wait for
 their own result; cancellation/rejection/unknown does not clear the draft.
 
-The supported builtins/extensions are exactly:
+Team's fixed Web adapters remain `settings, model, thinking, tree, fork, clone, compact, reload`; Goal, context, account
+commands and other native extensions use command-specific or native handlers after live discovery. The protected
+terminal-only builtins are `scoped-models, export, import, share, bug, changelog, hotkeys, trust, login, logout, new,
+resume, quit`. Resolving native name precedence before protection prevents a same-name template from bypassing a
+protected builtin. The actual native registry is checked again immediately before idle or queued dispatch, including
+when a retained process reloads resources or registers a new command. Separate Team APIs and internal lifecycle/recovery
+operations are unchanged.
 
-`settings, model, thinking, tree, fork, clone, compact, reload, goal, browser, computer-use, mcp, qoder-credits`.
-
-Installed skills and prompt templates remain available. Other builtin/extension names are rejected at submit and queue
-admission, not merely hidden from suggestions. Resolving native name precedence before filtering prevents a same-name
-template from exposing a hidden extension. The actual native registry is checked again immediately before idle or queued
-dispatch, including when a retained process reloads resources or registers a new command. Separate Team APIs and internal
-lifecycle/recovery operations are unchanged.
+`/context` and `/context usage` open a Web context-usage sheet; `/context injections` groups current request injections
+by native/extension source. Both reuse pinned `pi-context-view` capture and measurement code, never make a paid/silent
+probe, and return only labels/counts—not raw prompt, message or tool text. `/context config` is refused because plugin
+configuration belongs to the owner-managed shared profile. Context commands are read-only receipts, idempotent by
+request ID, and busy-gated rather than queued into a running prompt.
 
 Tab and partial-name Enter fill the draft without executing. Complete-name Enter runs the command. Thinking and fork
 have dedicated keyboard selectors; settings writes remain owner-only and busy-gated. Bare Goal opens a Web manager,
@@ -252,17 +257,18 @@ in again. Declared config paths cannot name auth, model stores or session storag
 See [NATIVE-COMMAND-COMPATIBILITY.md](NATIVE-COMMAND-COMPATIBILITY.md) for the supported interactions and actual coverage.
 The attested 0.1.22 terminal comparison contains 24 builtins, 15 extension commands and 6 skill commands. The empty
 shared Team profile on rotom 0.1.25 has 40 raw native entries: `/context` is now packaged and the other five personal
-skills remain absent. Fourteen remain public: the thirteen supported commands and the packaged subagent skill. Inventory
-presence is not proof of terminal-equivalent interactions.
+skills remain absent. Twenty-seven remain public after protecting thirteen terminal-only builtins. Inventory presence
+is not proof of terminal-equivalent interactions.
 
-`/context` and `/llama` are outside the supported surface and require TUI/custom UI that pinned RPC cannot supply.
-A handled response containing a TUI-only warning is not success. Five personal skills remain deliberately uninstalled
+`/context` has structured Web usage/injection-source adapters. `/llama` remains discoverable but its custom manager
+requires TUI support that pinned RPC cannot supply. A handled response containing a TUI-only warning is not success. Five personal skills remain deliberately uninstalled
 by user choice; this is not permission to publish private memory/preferences/device lessons.
 
 Production TUI transport is outside this delivery scope. A bounded OS-PTY prototype renders and interacts with an actual native custom component, preserving an isolated member
 session and an unknown command receipt. It is **not** a production transport: public extension APIs expose no generic
 command-completion/error observer to the external TUI frontend. Terminal exit or visual messages are not sufficient to
-settle a receipt. No context.mode spoofing, native monkeypatch or reconstructed `/context` report is used.
+settle a receipt. No context.mode spoofing or native monkeypatch is used. The separate `/context` Web adapter reuses
+native measurement functions; it is not a generic TUI transport.
 
 ## Recover an existing member's browser sign-in
 

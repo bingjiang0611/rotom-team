@@ -1264,6 +1264,16 @@ export class RotomExecutions {
             } else if (operation === "compact") {
                 await kernel.compact(prompt);
                 disposition = "settled";
+            } else if (nativeCommandName(prompt) === "context") {
+                const requested = nativeCommandArgs(prompt).toLowerCase();
+                const view = requested === "" || requested === "usage" ? "usage" : requested;
+
+                if (view !== "usage" && view !== "injections") {
+                    throw new RpcFailure("rejected", "Use /context [usage|injections]");
+                }
+
+                await hooks.onNativeResult?.({ context: await kernel.context(view) });
+                disposition = "handled";
             } else if (nativeCommandName(prompt) === "tree") {
                 const [entryId, option, ...extra] = nativeCommandArgs(prompt).split(/\s+/);
 

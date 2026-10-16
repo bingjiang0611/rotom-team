@@ -1,4 +1,4 @@
-/** Team's supported native command surface; discovery still owns names, metadata and execution. */
+/** Builtins implemented by Team instead of dispatching the terminal command directly. */
 export const TEAM_BUILTIN_COMMANDS = new Set([
     "settings",
     "model",
@@ -9,16 +9,29 @@ export const TEAM_BUILTIN_COMMANDS = new Set([
     "compact",
     "reload",
 ]);
-const EXTENSIONS = new Set(["goal", "browser", "computer-use", "mcp", "qoder-credits"]);
+
+/**
+ * Terminal-only builtins that would mutate credentials/session lifecycle, upload data, or require a TUI. Dynamic
+ * extension, skill and prompt commands are admitted from the live native registry instead of a second Team allowlist.
+ */
+const PROTECTED_NATIVE_BUILTINS = new Set([
+    "scoped-models",
+    "export",
+    "import",
+    "share",
+    "bug",
+    "changelog",
+    "hotkeys",
+    "trust",
+    "login",
+    "logout",
+    "new",
+    "resume",
+    "quit",
+]);
 
 export function supportedTeamCommand(command: { name: string; source?: unknown }): boolean {
-    return (
-        !command.name.startsWith("team-kernel-") &&
-        (TEAM_BUILTIN_COMMANDS.has(command.name) ||
-            EXTENSIONS.has(command.name) ||
-            command.source === "skill" ||
-            command.source === "prompt")
-    );
+    return !command.name.startsWith("team-kernel-") && !PROTECTED_NATIVE_BUILTINS.has(command.name);
 }
 
 /** Resolve native precedence before filtering: a hidden extension must not reappear as a same-name template. */
@@ -48,6 +61,9 @@ export function teamCommandUsesAdapter(text: unknown): boolean {
     const match = /^\/([^\s]+)(?:\s+([\s\S]*))?$/.exec(text.trim());
 
     return Boolean(
-        match && (TEAM_BUILTIN_COMMANDS.has(match[1]!) || (match[1] === "goal" && !match[2])),
+        match &&
+        (TEAM_BUILTIN_COMMANDS.has(match[1]!) ||
+            match[1] === "context" ||
+            (match[1] === "goal" && !match[2])),
     );
 }

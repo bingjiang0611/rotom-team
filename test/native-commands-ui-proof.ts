@@ -157,6 +157,55 @@ export async function nativeCommandUiProof(options: {
         );
         assert.equal(options.modelCalls(), before);
         await screenshot("native-command-menu");
+        await type("/cont");
+        await until(
+            async () => (await text(".commands")).includes("/context"),
+            "context is discovered in the native command menu",
+            20_000,
+        );
+        await execute("/context");
+        await until(
+            async () => (await text(".sheet")).includes("Context usage"),
+            "native context usage opens in a Web sheet",
+            20_000,
+        );
+        assert.ok((await text(".native-context")).includes("System Prompt"));
+        assert.ok(!(await text(".native-context")).includes("TUI mode only"));
+        assert.equal(options.modelCalls(), before, "context before first prompt runs no probe");
+        await screenshot("native-context-usage");
+        await page.evaluate("document.querySelector('.native-context details > summary').click()");
+        assert.equal(
+            await page.evaluate("document.querySelector('.native-context details').open"),
+            "true",
+            "native context category can expand its measured breakdown",
+        );
+        await page.evaluate("document.querySelector('.native-context details > summary').click()");
+        assert.equal(
+            await page.evaluate("document.querySelector('.native-context details').open"),
+            "false",
+            "native context category can collapse without another request",
+        );
+        await page.setViewport(VIEWPORTS.mobile);
+        assert.equal(
+            await page.evaluate(
+                "document.documentElement.scrollWidth <= innerWidth && document.querySelector('.sheet').scrollWidth <= document.querySelector('.sheet').clientWidth",
+            ),
+            "true",
+            "context sheet fits mobile width",
+        );
+        await screenshot("native-context-mobile");
+        await page.setViewport(VIEWPORTS.desktop);
+        await page.evaluate("(await import('/store.js')).closeSheet()");
+        await execute("/context injections");
+        await until(
+            async () => (await text(".sheet")).includes("Context injections"),
+            "native injection sources open in a Web sheet",
+            20_000,
+        );
+        assert.ok((await text(".native-context")).includes("sources"));
+        assert.equal(options.modelCalls(), before, "injections performs no inference");
+        await screenshot("native-context-injections");
+        await page.evaluate("(await import('/store.js')).closeSheet()");
 
         for (const key of ["Tab", "Enter"]) {
             await type("/sett");
@@ -875,6 +924,10 @@ export async function nativeCommandUiProof(options: {
             scopedModelCycle: true,
             goalManagerStartEditConfirmedClearAndReservedObjective: true,
             goalWaitingAndPlainWake: true,
+            contextUsageAndInjections: true,
+            contextBeforePromptNoInference: true,
+            contextMobileContainment: true,
+            contextExpandableBreakdown: true,
             screenshots,
         };
     } catch (error) {

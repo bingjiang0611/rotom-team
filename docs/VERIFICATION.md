@@ -108,11 +108,16 @@ The schema-1 migration fixture is reconstructed without newer tables/columns. Sc
 
 `node --test test/native-snapshot.test.ts test/rotom-journal.test.ts` checks a synthetic image-bearing history above 64 MiB against the pinned native SessionManager and actual RPC transport: the full response fails at the existing limit, while local-prefix/native-delta readback preserves every entry and the native selected branch. It also checks unflushed entries without a JSONL file, partial append anchors, foreign headers, durable finalization before a crash, and size-limit no-replay fences.
 
-`node test/native-commands-proof.ts --ui` additionally runs a real native prompt with more than 64 MiB of persisted custom history through the Team HTTP path, then verifies settlement. A separate unflushed 70 MiB suffix deliberately exceeds the unchanged bound: its finalization failure is visible through readback and remains unknown across restart without another inference.
+`node test/rotom-context-proof.ts` runs pinned context capture/measurement through the Team executor with a synthetic
+loopback model. It covers usage and injection-source views before the first message and after a captured request, no
+silent/paid probe, no extra usage charge, idempotent duplicate readback, and absence of raw prompt/message text in
+returned results. `node test/native-commands-proof.ts --ui` checks `/context` discovery, desktop/mobile rendering,
+usage/injections sheets, no-inference behavior and mobile containment. It also runs a real native prompt with more than
+64 MiB of persisted custom history through the Team HTTP path, then verifies settlement. A separate unflushed 70 MiB suffix deliberately exceeds the unchanged bound: its finalization failure is visible through readback and remains unknown across restart without another inference.
 
 The inventory script compares all 45 supplied terminal name/source pairs to actual isolated Team discovery. It records
-40 raw baseline entries on 0.1.25 (`/context` is now packaged) and 14 public catalog entries (thirteen commands plus the
-packaged subagent skill); it does not claim 45 behavioral passes. Five personal skills are deliberately uninstalled by user choice, not replaced by fabricated skills. Read-only terminal SKILL.md metadata evidence is private and stays outside
+40 raw baseline entries on 0.1.25 (`/context` is packaged) and 27 public catalog entries after thirteen terminal-only
+builtins are protected; it does not claim 45 behavioral passes. Five personal skills are deliberately uninstalled by user choice, not replaced by fabricated skills. Read-only terminal SKILL.md metadata evidence is private and stays outside
 Git. Every row and remaining interaction gap is listed in [NATIVE-COMMAND-COMPATIBILITY.md](NATIVE-COMMAND-COMPATIBILITY.md).
 
 The PTY experiment runs the verified CLI and a real custom component on an OS PTY. It proves a native key interaction,
@@ -220,7 +225,8 @@ native 200-character excerpt rather than full transcript search. Long rows clip 
 automatic horizontal panning for deeply nested branches is not ported. If clipping hides the selected
 entry's identity in real branched histories, add selected-anchor panning with a deep-tree browser fixture.
 All rows are rendered; no large-history virtualization claim is made. Other supported slash dialogs are described below.
-TUI-only extensions remain outside the supported surface. Recheck native parity when updating the runtime pin.
+TUI-only extensions can be discovered but need an explicit Web adapter or native RPC UI support to work. Recheck
+native parity when updating the runtime pin.
 
 ## Native command adapters and Goal
 
@@ -236,7 +242,9 @@ These scripts use the actual pinned runtime, isolated member HOMEs, loopback mod
 It checks first-session discovery without inference; retained snapshots beyond 30 seconds and after restart without native startup; owner-only shared settings; viewer/other-member catalog privacy; model A→B and later payer/model
 requests; fixture native titles and Team rename across handoff; native branch JSONL/HTML export; positive
 owner-private reasoning before cross-member clone filtering; earlier SECOND-entry fork/tree with THIRD absent
-from the new branch and later inference; request replay/conflicts; native settings and slash compaction with persisted summary/usage; and exactly thirteen builtin/extension entries, with removed names rejected before native operations. Personal Qoder API fixtures assert credential ownership and private result delivery;
+from the new branch and later inference; request replay/conflicts; native settings and slash compaction with persisted
+summary/usage; default extension admission and protected builtin refusal; and `/context` before/after model requests
+without inference. Personal Qoder API fixtures assert credential ownership and private result delivery;
 they are not real-account billing evidence.
 
 The browser proof chooses native entry IDs, restores fork/tree drafts without submitting them, invokes an authorized

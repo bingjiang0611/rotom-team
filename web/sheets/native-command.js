@@ -81,8 +81,120 @@ export function showNativeResult(result, commandName) {
     }
 }
 
+const contextTokens = (value) => {
+    if (!Number.isFinite(value)) {
+        return "unknown";
+    }
+
+    return value >= 1_000_000
+        ? `${(value / 1_000_000).toFixed(value >= 10_000_000 ? 0 : 1)}M`
+        : value >= 1_000
+          ? `${(value / 1_000).toFixed(value >= 10_000 ? 0 : 1)}k`
+          : String(Math.round(value));
+};
+
+function ContextRows({ rows, total, depth = 0 }) {
+    return rows.map((row) => {
+        const cells = html`<span>${row.label}</span>
+            <span class="native-context-row-bar" aria-hidden="true">
+                <i style=${`width: ${Math.min(100, (row.tokens / Math.max(total, 1)) * 100)}%`}></i>
+            </span>
+            <strong>${contextTokens(row.tokens)}</strong>`;
+
+        return row.children?.length
+            ? html`<details class="native-context-row-wrap" key=${row.id ?? row.label}>
+                <summary class="native-context-row" style=${`--context-depth: ${depth}`}>
+                    ${cells}
+                </summary>
+                <${ContextRows} rows=${row.children} total=${total} depth=${depth + 1} />
+            </details>`
+            : html`<div class="native-context-row" key=${row.id ?? row.label} style=${`--context-depth: ${depth}`}>
+                ${cells}
+            </div>`;
+    });
+}
+
+function NativeContext({ context }) {
+    if (context.view === "injections") {
+        return html`<div class="native-context">
+            <div class="native-context-summary">
+                <div><strong>${contextTokens(context.totalTokens)}</strong><span>estimated tokens</span></div>
+                <div><strong>${context.groups?.length ?? 0}</strong><span>sources</span></div>
+                <div><strong>${context.hiddenTools?.length ?? 0}</strong><span>hidden tools</span></div>
+            </div>
+            ${
+                !context.captured &&
+                html`<p class="native-context-note">No completed model request was captured yet. Showing the current prompt and tools.</p>`
+            }
+            <div class="native-context-groups">
+                ${context.groups?.map(
+                    (group) => html`<section class="native-context-group" key=${group.source}>
+                        <header>
+                            <span>${group.source}${group.native ? " · native" : ""}</span>
+                            <strong>${contextTokens(group.totalTokens)}</strong>
+                        </header>
+                        <${ContextRows} rows=${group.items ?? []} total=${context.totalTokens} />
+                    </section>`,
+                )}
+            </div>
+            <p class="muted small">Content text stays inside the native process; Team stores only labels and token estimates.</p>
+        </div>`;
+    }
+
+    const windowTokens = context.reported?.contextWindow;
+    const usedTokens = context.estimatedTokens;
+    const reserveTokens = context.autoCompactReserveTokens ?? 0;
+    const freeTokens = Number.isFinite(windowTokens)
+        ? Math.max(0, windowTokens - usedTokens - reserveTokens)
+        : undefined;
+
+    return html`<div class="native-context">
+        <div class="native-context-summary">
+            <div><strong>${contextTokens(usedTokens)}</strong><span>estimated used</span></div>
+            <div><strong>${contextTokens(windowTokens)}</strong><span>window</span></div>
+            <div><strong>${contextTokens(freeTokens)}</strong><span>free after buffer</span></div>
+        </div>
+        <div class="native-context-meter" role="img" aria-label=${`${contextTokens(usedTokens)} of ${contextTokens(windowTokens)} tokens used`}>
+            ${context.categories?.map(
+                (category, index) => html`<i
+                    key=${category.id}
+                    class=${`native-context-segment c${index % 8}`}
+                    title=${`${category.label}: ${contextTokens(category.tokens)}`}
+                    style=${`width: ${Math.min(100, (category.tokens / Math.max(windowTokens ?? context.estimatedTokens, 1)) * 100)}%`}
+                ></i>`,
+            )}
+            ${
+                reserveTokens > 0 &&
+                html`<i
+                    class="native-context-buffer"
+                    title=${`Auto-compact buffer: ${contextTokens(reserveTokens)}`}
+                    style=${`width: ${Math.min(100, (reserveTokens / Math.max(windowTokens, 1)) * 100)}%`}
+                ></i>`
+            }
+        </div>
+        <div class="native-context-meta">
+            <span>${context.model ?? "Current model"}</span>
+            <span>native estimate · not billing usage</span>
+            ${context.captured && Number.isFinite(context.reported?.tokens) && html`<span>provider total: ${contextTokens(context.reported.tokens)}</span>`}
+            ${reserveTokens > 0 && html`<span>${contextTokens(reserveTokens)} compact buffer</span>`}
+        </div>
+        ${!context.captured && html`<p class="native-context-note">No model request captured yet. Current prompt and tools are estimated without sending a probe.</p>`}
+        <${ContextRows}
+            rows=${context.categories ?? []}
+            total=${windowTokens ?? context.estimatedTokens}
+        />
+        <p class="muted small">Expand a category for its breakdown. Content text stays in the native process.</p>
+    </div>`;
+}
+
 export function NativeInfoSheet() {
     const [result] = useState(store.state.sheet.result);
+
+    if (result.context?.type === "native-context") {
+        return html`<${Sheet} title=${result.context.title} wide onClose=${closeSheet}>
+            <${NativeContext} context=${result.context} />
+        <//>`;
+    }
 
     return html`<${Sheet} title=${result.title ?? "Native command result"} onClose=${closeSheet}>
         <pre class="native-command-output">${result.text ?? JSON.stringify(result, null, 2)}</pre>

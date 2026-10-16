@@ -497,6 +497,51 @@ export class RotomRpc {
         }
     }
 
+    /** Read the native context-view measurements through Team's Web-safe adapter, without model inference. */
+    async context(view: "usage" | "injections"): Promise<Record<string, unknown>> {
+        const nonce = randomUUID();
+        let result: Record<string, unknown> | undefined;
+        const detach = this.onEvent((event) => {
+            if (
+                event.type !== "extension_ui_request" ||
+                event.method !== "notify" ||
+                typeof event.message !== "string"
+            ) {
+                return;
+            }
+
+            try {
+                const value = JSON.parse(event.message) as {
+                    kind?: unknown;
+                    nonce?: unknown;
+                    result?: unknown;
+                };
+
+                if (
+                    value.kind === "team-kernel-context-v1" &&
+                    value.nonce === nonce &&
+                    value.result &&
+                    typeof value.result === "object" &&
+                    !Array.isArray(value.result)
+                ) {
+                    result = value.result as Record<string, unknown>;
+                }
+            } catch {}
+        });
+
+        try {
+            await this.command(`/team-kernel-context ${JSON.stringify({ nonce, view })}`);
+        } finally {
+            detach();
+        }
+
+        if (!result) {
+            throw new RpcFailure("unknown", "Native context view did not return its outcome");
+        }
+
+        return result;
+    }
+
     /** Forward native cancellation, canonical draft text and persisted summary evidence through the Team bridge. */
     async navigateTree(
         entryId: string,

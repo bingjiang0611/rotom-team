@@ -347,6 +347,18 @@ try {
     assert.equal(discovered.receipt.operation, "discover");
     assert.ok(discovered.commands.some((command: { name: string }) => command.name === "goal"));
     assert.equal(calls.length, 0, "first-session discovery must not require a paid prompt");
+    const emptyContext = await json(
+        await submit(alice, "/context", { requestId: "empty-context" }),
+    );
+
+    assert.equal(emptyContext.status, "handled");
+    assert.equal(emptyContext.nativeResult.context.type, "native-context");
+    assert.equal(emptyContext.nativeResult.context.captured, false);
+    assert.ok(emptyContext.nativeResult.context.estimatedTokens > 0);
+    assert.equal(calls.length, 0, "context before first message runs no model probe");
+    assert.equal((await submit(viewer, "/context")).status, 403);
+    assert.equal((await submit(alice, "/context config")).status, 400);
+    const afterContextCatalog = await json(await request(alice, `c/${id}/prompts`));
     const startsBeforeRead = readFileSync(startsFile, "utf8");
     const realNow = Date.now;
 
@@ -356,8 +368,8 @@ try {
 
         assert.equal(retained.dynamicReady, true);
         assert.equal(retained.freshness, "last-known");
-        assert.equal(retained.capturedAt, discovered.capturedAt);
-        assert.deepEqual(retained.commands, discovered.commands);
+        assert.equal(retained.capturedAt, afterContextCatalog.capturedAt);
+        assert.deepEqual(retained.commands, afterContextCatalog.commands);
     } finally {
         Date.now = realNow;
     }
@@ -380,32 +392,69 @@ try {
     assert.equal((await json(await request(viewer, `c/${id}/prompts`))).dynamicReady, false);
 
     assert.ok(registry.dynamicReady);
-    assert.deepEqual(
-        registry.commands
-            .filter((command: { source: string }) => !["skill", "prompt"].includes(command.source))
-            .map((command: { name: string }) => command.name)
-            .sort(),
-        [
-            "settings",
-            "model",
-            "thinking",
-            "tree",
-            "fork",
-            "clone",
-            "compact",
-            "reload",
-            "goal",
-            "browser",
-            "computer-use",
-            "mcp",
-            "qoder-credits",
-        ].sort(),
-    );
+    const publicNames = new Set(registry.commands.map((command: { name: string }) => command.name));
+
+    for (const name of [
+        "context",
+        "llama",
+        "qoder-models",
+        "name",
+        "session",
+        "copy",
+        "fixture-echo",
+        "future.点",
+        "constructor",
+    ]) {
+        assert.equal(publicNames.has(name), true, name);
+    }
+
+    for (const name of [
+        "scoped-models",
+        "export",
+        "import",
+        "share",
+        "bug",
+        "trust",
+        "login",
+        "logout",
+        "new",
+        "resume",
+        "quit",
+    ]) {
+        assert.equal(publicNames.has(name), false, name);
+    }
+
     const noInference = calls.length;
+    const contextUsage = await json(
+        await submit(alice, "/context usage", { requestId: "context-usage" }),
+    );
+    const contextInjections = await json(await submit(alice, "/context injections"));
+
+    assert.equal(contextUsage.nativeResult.context.view, "usage");
+    assert.equal(contextUsage.nativeResult.context.captured, true);
+    assert.equal(contextUsage.nativeResult.context.reported.contextWindow, 32000);
+    assert.ok(contextUsage.nativeResult.context.categories.length > 0);
+    assert.equal(contextInjections.nativeResult.context.view, "injections");
+    assert.ok(contextInjections.nativeResult.context.groups.length > 0);
+    assert.ok(!JSON.stringify(contextInjections.nativeResult).includes('"text":'));
+    const contextReplay = await json(
+        await submit(alice, "/context usage", { requestId: "context-usage" }),
+    );
+
+    assert.equal(contextReplay.id, contextUsage.id);
+    assert.deepEqual(contextReplay.nativeResult, contextUsage.nativeResult);
+    assert.equal(calls.length, noInference, "context readback never requests inference");
+    report.context = { usage: true, injections: true, noInference: true, idempotentReadback: true };
 
     const beforeQoder = qoderCalls.length;
 
-    assert.equal((await submit(alice, "/qoder-models")).status, 400);
+    const personalModels = await json(await submit(alice, "/qoder-models"));
+
+    assert.equal(personalModels.nativeResult.catalog[0].id, `PRIVATE_CATALOG_${alice.id}`);
+    assert.deepEqual(qoderCalls.slice(beforeQoder), [
+        { memberId: alice.id, action: "models", force: undefined },
+        { memberId: alice.id, action: "models", force: true },
+    ]);
     const personalCredits = await json(await submit(alice, "/qoder-credits"));
 
     assert.match(personalCredits.nativeResult.text, /Qoder Credit snapshot/);
@@ -414,19 +463,23 @@ try {
         personalCredits.nativeResult.credits.privateFixture,
         `PRIVATE_CREDITS_${alice.id}`,
     );
-    assert.deepEqual(qoderCalls.slice(beforeQoder), [{ memberId: alice.id, action: "credits" }]);
+    assert.deepEqual(qoderCalls.slice(beforeQoder), [
+        { memberId: alice.id, action: "models", force: undefined },
+        { memberId: alice.id, action: "models", force: true },
+        { memberId: alice.id, action: "credits" },
+    ]);
     assert.equal(calls.length, noInference);
     assert.ok(!JSON.stringify(await app.room(id)).includes("PRIVATE_CREDITS_"));
     assert.ok(!JSON.stringify(app.kernel!.snapshot(id, bob)).includes("PRIVATE_CREDITS_"));
-    // A tracked resource change reloads the retained runtime: the cached template becomes a hidden extension.
+    // A tracked resource change reloads the retained runtime: the live extension shadows the cached template and is
+    // admitted without a second Team allowlist.
     writeFileSync(join(data, "team-agent/extensions/swap-command.flag"), "fixture");
-    const swapped = await submit(alice, "/runtime-swap");
+    const swapped = await json(await submit(alice, "/runtime-swap"));
 
     rmSync(join(data, "team-agent/extensions/swap-command.flag"));
-    assert.equal(swapped.status, 400, await swapped.text());
-    assert.equal(app.kernel!.executions.journal.latest(String(id))!.status, "rejected");
+    assert.equal(swapped.status, "handled");
     assert.equal(calls.length, noInference);
-    assert.ok(!readFileSync(originalFile, "utf8").includes("hidden-command-effect"));
+    assert.ok(readFileSync(originalFile, "utf8").includes("hidden-command-effect"));
     const excludedReceipts = app.kernel!.executions.journal.receipts(String(id)).length;
 
     for (const text of ["/share", "/bug"]) {
@@ -445,17 +498,10 @@ try {
     for (const text of [
         "/unknown-fixture",
         "/team-kernel-tree anything",
-        "/fixture-echo",
-        "/fixture-error",
-        "/future.点",
-        "/constructor",
-        "/name denied",
         "/new",
         "/resume",
         "/export",
         "/import",
-        "/session",
-        "/copy",
         "/quit",
         "/login",
         "/logout",
@@ -470,6 +516,17 @@ try {
         assert.equal(calls.length, noInference);
     }
 
+    assert.equal((await json(await submit(alice, "/fixture-echo"))).status, "handled");
+    assert.equal((await json(await submit(alice, "/future.点 generic"))).status, "handled");
+    assert.equal((await json(await submit(alice, "/constructor generic"))).status, "handled");
+    assert.equal((await json(await submit(alice, "/name allowed"))).status, "handled");
+    assert.equal(app.sessionMeta(id)?.title, "allowed");
+    assert.ok((await json(await submit(alice, "/session"))).nativeResult.stats);
+    assert.equal(
+        typeof (await json(await submit(alice, "/copy"))).nativeResult.clipboard,
+        "string",
+    );
+    assert.equal(calls.length, noInference);
     assert.equal((await submit(viewer, "/name denied")).status, 403);
     assert.equal(app.kernel!.executions.thinkingLevel(String(id)), "off");
     const reasoningOnly = await json(await submit(alice, "/model openai/model-c"));
@@ -765,19 +822,9 @@ try {
         );
     }
 
-    assert.equal(
-        (await submit(alice, "/runtime-swap", { mode: "steer" })).status,
-        409,
-        "live queued registry overrides a stale template catalog",
-    );
-    assert.ok(
-        !readFileSync(
-            app.kernel!.executions.journal.session(String(id)).sessionFile!,
-            "utf8",
-        ).includes("hidden-command-effect"),
-    );
-    assert.equal((await submit(alice, "/fixture-error", { mode: "steer" })).status, 400);
-    assert.equal((await submit(alice, "/name queued bypass", { mode: "followUp" })).status, 400);
+    assert.equal((await submit(alice, "/context", { mode: "steer" })).status, 409);
+    assert.equal((await submit(alice, "/share", { mode: "steer" })).status, 400);
+    assert.equal((await submit(alice, "/name queued bypass", { mode: "followUp" })).status, 409);
     assert.equal((await submit(alice, "/model openai/model-a", { mode: "steer" })).status, 409);
 
     assert.equal(
@@ -1211,7 +1258,8 @@ try {
         "queued effect-then-error durably fences the existing prompt; no duplicate effect or automatic resume",
         "actual unknown discovery cannot start a second native process with same or new request ID",
         "catalog retained after 30 seconds/restart without native startup; owner-only shared settings",
-        "only thirteen builtins/extensions exposed; hidden/dotted/fixture commands rejected before dispatch",
+        "live native extensions exposed without a Team allowlist; protected account/upload/lifecycle commands rejected",
+        "native context usage/injections before first message and after inference; no paid probe or raw text result",
         "first-session no-inference discovery and member-private snapshots",
         "Qoder account API private results",
         "native title readback before first message and after handoff",
