@@ -2133,6 +2133,12 @@ export class TeamKernel {
 
     #commandSnapshot(id: ConversationId, memberId: string) {
         const cached = this.#commands.get(id);
+
+        // A session the kernel never started has no native commands yet.
+        if (!cached || !this.executions.journal.hasConversation(String(id))) {
+            return undefined;
+        }
+
         const session = this.executions.journal.session(String(id));
 
         if (

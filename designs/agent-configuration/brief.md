@@ -127,5 +127,5 @@ Project/MCP 列表、Shared/Skills + 运行中、Project/Instructions 链、项�
 ## 实现（v3 落地）
 
 - 页面：`web/sheets/agent-resources.js`，入口 `Settings › Team › Agent resources`，仅 Team 服务器显示。
-- 接口：`GET /api/agent-resources[?project=<id>]`，由 `src/server/agent-resource-list.ts` 用固定版本的原生 resolver（`DefaultPackageManager`、`loadSkills`、`loadMcpConfig`、`loadProjectContextFiles`）按会话方式解析；不安装、不连接、不执行。
-- 与 v3 的差异：产品、Team 和 Pi 为每个会话加入的 Extension/Skill 单独列为 “Bundled with rotom <版本>”，Pi 内置的显示为 `builtin:<name>`；未做“MCP 可执行文件不存在”检查（命令可能来自 PATH，无法可靠判断）；Skill 按名称排序，同名的未加载项紧跟在生效项之后。
+- 接口：`GET /api/agent-resources[?folder=<绝对路径>]`（可选目录来自 `GET /api/agent-resources/folders`，服务端校验），由 `src/server/agent-resource-list.ts` 用固定版本的原生 resolver（`DefaultPackageManager`、`loadSkills`、`loadMcpConfig`、`loadProjectContextFiles`）按会话方式解析；不安装、不连接、不执行。
+- 与 v3 的差异：产品、Team 和 Pi 为每个会话加入的 Extension/Skill 单独列为 “Bundled with rotom <版本>”，Pi 内置的显示为 `builtin:<name>`；未做“MCP 可执行文件不存在”检查（命令可能来自 PATH，无法可靠判断）；Skill 按名称排序，同名的未加载项紧跟在生效项之后；Project ▾ 改为 Folder ▾：会话会信任并加载自己所在目录，而生产会话大多不在已登记项目里，所以 Owner 可看默认目录和每个会话的目录，成员仍只看有权限的项目。

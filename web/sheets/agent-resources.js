@@ -1,7 +1,7 @@
-// Agent resources: what a Team session loads from the shared profile and a project, listed with each file's path. It
+// Agent resources: what a Team session loads from the shared profile and its folder, listed with each file's path. It
 // only reads: the files are changed on the deployment machine.
 import { useEffect, useState } from "preact/hooks";
-import { api, closeSheet, openSheet, store } from "../store.js";
+import { api, closeSheet } from "../store.js";
 import { html, Loader, Sheet } from "../ui.js";
 
 const TABS = [
@@ -173,18 +173,26 @@ const FOOT =
     "Read only. Change shared and project files on the deployment machine, then run /reload in a " +
     "running session. Bundled entries change only with the pinned rotom release.";
 
+/** A project by name, any other folder by path, with its session count. */
+function folderName(folder) {
+    const sessions = `${folder.sessions} session${folder.sessions === 1 ? "" : "s"}`;
+    const notes = folder.isDefault ? `default, ${sessions}` : sessions;
+
+    return `${folder.project ? `${folder.project} — ` : ""}${folder.path} (${notes})`;
+}
+
 const BODIES = { instructions: Instructions, skills: Skills, extensions: Extensions, mcp: Mcp };
 
 export function AgentResourcesSheet() {
-    const [projects, setProjects] = useState(null);
-    const [projectId, setProjectId] = useState(null);
+    const [folders, setFolders] = useState(null);
+    const [folder, setFolder] = useState(null);
     const [tab, setTab] = useState("skills");
     const [list, setList] = useState(null);
     const [error, setError] = useState("");
 
     useEffect(() => {
-        api("projects")
-            .then(setProjects)
+        api("agent-resources/folders")
+            .then(setFolders)
             .catch((e) => setError(e.message));
     }, []);
 
@@ -193,14 +201,14 @@ export function AgentResourcesSheet() {
 
         setList(null);
         setError("");
-        api(`agent-resources${projectId ? `?project=${encodeURIComponent(projectId)}` : ""}`)
+        api(`agent-resources${folder ? `?folder=${encodeURIComponent(folder)}` : ""}`)
             .then((result) => current && setList(result))
             .catch((e) => current && setError(e.message));
 
         return () => {
             current = false;
         };
-    }, [projectId]);
+    }, [folder]);
 
     const counts = list && {
         instructions: list.instructions.length,
@@ -215,53 +223,46 @@ export function AgentResourcesSheet() {
         <div class="ar-scope">
             <div class="segmented" role="group" aria-label="Scope">
                 <button
-                    class=${projectId ? "" : "on"}
-                    aria-pressed=${!projectId}
-                    onClick=${() => setProjectId(null)}
+                    class=${folder ? "" : "on"}
+                    aria-pressed=${!folder}
+                    onClick=${() => setFolder(null)}
                 >
                     Shared
                 </button>
                 <button
-                    class=${projectId ? "on" : ""}
-                    aria-pressed=${!!projectId}
-                    disabled=${!projects?.length}
-                    onClick=${() => projectId || setProjectId(projects[0].id)}
+                    class=${folder ? "on" : ""}
+                    aria-pressed=${!!folder}
+                    disabled=${!folders?.length}
+                    onClick=${() => folder || setFolder(folders[0].path)}
                 >
-                    Project
+                    Folder
                 </button>
             </div>
             ${
-                projectId &&
+                folder &&
                 html`<select
-                    aria-label="Project"
-                    value=${projectId}
-                    onChange=${(event) => setProjectId(event.currentTarget.value)}
+                    aria-label="Folder"
+                    value=${folder}
+                    onChange=${(event) => setFolder(event.currentTarget.value)}
                 >
-                    ${projects.map(
-                        (project) => html`<option value=${project.id}>${project.name}</option>`,
+                    ${folders.map(
+                        (each) => html`<option value=${each.path}>${folderName(each)}</option>`,
                     )}
                 </select>`
             }
         </div>
         <p class="ar-hint">
             ${
-                projectId
-                    ? "What a session in this project loads: the shared profile and the project, " +
-                      "merged. Dashed rows come from the shared profile."
+                folder
+                    ? "What a session in this folder loads: the shared profile and the folder, which " +
+                      "the session trusts, merged. Dashed rows come from the shared profile."
                     : "The shared profile every Team session loads."
             }
         </p>
         ${
-            projects?.length === 0 &&
-            (store.state.me?.role === "owner"
-                ? html`<p class="ar-hint">
-                      No projects yet, so there is no project view. Add one in${" "}
-                      <button class="link" onClick=${() => openSheet({ type: "projects" })}>
-                          Projects & access
-                      </button>
-                      .
-                  </p>`
-                : html`<p class="ar-hint">No projects are shared with you yet.</p>`)
+            // The owner always has the default folder; a member may have no project yet.
+            folders?.length === 0 &&
+            html`<p class="ar-hint">No projects are shared with you yet.</p>`
         }
         <div class="ar-tabs" role="tablist">
             ${TABS.map(

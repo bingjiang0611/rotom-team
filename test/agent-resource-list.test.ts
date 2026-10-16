@@ -200,12 +200,19 @@ test("a settings file that does not parse is reported, not hidden", async (t) =>
     assert.match(list.problems[0]!, /\.pi\/settings\.json/);
 });
 
-test("the API lists a project only for people who may view it, on a Team server", async (t) => {
-    const dataDir = join(realpathSync(testRoot), "agent-resources-api");
+test("the API lists any session's folder for the owner, and for a member only their projects", async (t) => {
+    const base = realpathSync(testRoot);
+    const dataDir = join(base, "agent-resources-api");
     const project = realpathSync(work);
+    const loose = join(base, "agent-resources-loose");
+    const home = join(base, "agent-resources-default");
+
+    mkdirSync(home);
+    put(join(project, "AGENTS.md"), "project");
+    put(join(loose, ".pi/extensions/hook.ts"), "export default () => {};\n");
     const app = await PocketApp.open({
         dataDir,
-        defaultCwd: project,
+        defaultCwd: home,
         supervised: false,
         kernel: true,
         browser: null,
@@ -220,26 +227,59 @@ test("the API lists a project only for people who may view it, on a Team server"
         server.close();
         await app.close();
     });
-    put(join(project, "AGENTS.md"), "project");
     const member = app.config.addUser("Member", "guest");
-    const { id } = app.projects.save(
+
+    app.projects.save(
         owner(app),
         { name: "work", cwd: project, members: {} },
         (each) => app.config.userById(each) !== undefined,
     );
+    // Not a registered project, yet a session there trusts and loads the folder.
+    const session = await app.commands.createSession(owner(app), { cwd: loose });
 
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
     const port = (server.address() as { port: number }).port;
-    const get = (token: string, query = "") =>
-        fetch(`http://127.0.0.1:${port}/api/agent-resources${query}`, {
+    const get = (token: string, path: string) =>
+        fetch(`http://127.0.0.1:${port}/api/${path}`, {
             headers: { authorization: `Bearer ${token}` },
         });
-    const listed = await get(app.config.ownerToken, `?project=${id}`);
+    const folder = (path: string) => `agent-resources?folder=${encodeURIComponent(path)}`;
+    const ownerToken = app.config.ownerToken;
 
-    assert.equal(listed.status, 200);
-    assert.deepEqual((await listed.json()).instructions, [
+    assert.deepEqual(await (await get(ownerToken, "agent-resources/folders")).json(), [
+        { path: project, project: "work", sessions: 0 },
+        { path: loose, sessions: 1 },
+        { path: home, isDefault: true, sessions: 0 },
+    ]);
+    assert.deepEqual(await (await get(member.token, "agent-resources/folders")).json(), []);
+
+    const inProject = await get(ownerToken, folder(project));
+
+    assert.equal(inProject.status, 200);
+    assert.deepEqual((await inProject.json()).instructions, [
         { path: join(project, "AGENTS.md"), scope: "project" },
     ]);
-    assert.equal((await get(member.token, `?project=${id}`)).status, 404);
-    assert.equal((await get(member.token)).status, 200);
+    assert.deepEqual(
+        (await (await get(ownerToken, folder(loose))).json()).extensions.map(
+            (each: { path: string; scope: string }) => [each.path, each.scope],
+        ),
+        [[join(loose, ".pi/extensions/hook.ts"), "project"]],
+    );
+    assert.equal((await get(ownerToken, folder("/etc"))).status, 404);
+    assert.equal((await get(member.token, folder(project))).status, 404);
+    assert.equal((await get(member.token, folder(loose))).status, 404);
+    assert.equal((await get(member.token, "agent-resources")).status, 200);
+
+    // The kernel never started this session: no native commands yet, not an error.
+    const prompts = await get(ownerToken, `c/${session.id}/prompts`);
+
+    assert.equal(prompts.status, 200);
+    assert.deepEqual(
+        Object.fromEntries(
+            Object.entries(await prompts.json()).filter(([key]) =>
+                ["dynamicReady", "freshness"].includes(key),
+            ),
+        ),
+        { dynamicReady: false, freshness: "undiscovered" },
+    );
 });

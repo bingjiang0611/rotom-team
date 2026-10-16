@@ -167,6 +167,6 @@ cd "$PROJECT"
 
 不需要用旧的服务 Extensions 面板，也不需要为单纯的 Agent 资源编辑重启 Team 服务。升级本次服务加载链改动则仍需按 [DEPLOYMENT.md](DEPLOYMENT.md) 切换发布并重启。
 
-网页 **Settings → Agent resources** 只读列出将加载的资源及其绝对路径：Shared 显示共享基础配置；Project 显示该项目会话合并后的结果，并标出来源（`shared`/`project`/`ancestor`）、package、disabled、同名 Skill、MCP 覆盖、`settings.json` 解析失败和未安装的 package。列表使用固定版本的原生 resolver，按会话方式解析（项目视为可信），但不安装、不连接 MCP，也不执行 Extension；因此它不证明加载成功或连接成功。Extensions 和 Skills 还单独列出每个会话都会加载、与文件无关的 bundled 资源：固定版本 rotom 产品启动器按 `RESOURCE_DESCRIPTORS_V1` 加入的 Extension 和 Skill、Team 自己的 `rotom-skills.mjs`/`rotom-policy.mjs`，以及 Pi 内置 Extension（无文件，显示为 `builtin:<name>`；rotom 下 Codemode 由产品的 `third-party` 提供，不算 Pi 内置）。成员只能选择自己有 view 权限的项目。
+网页 **Settings → Agent resources** 只读列出将加载的资源及其绝对路径：Shared 显示共享基础配置；Folder 显示在该目录运行的会话合并后的结果，并标出来源（`shared`/`project`/`ancestor`）、package、disabled、同名 Skill、MCP 覆盖、`settings.json` 解析失败和未安装的 package。列表使用固定版本的原生 resolver，按会话方式解析（会话启动时会信任自己的目录，未登记为项目也一样，所以这里同样视为可信），但不安装、不连接 MCP，也不执行 Extension；因此它不证明加载成功或连接成功。Extensions 和 Skills 还单独列出每个会话都会加载、与文件无关的 bundled 资源：固定版本 rotom 产品启动器按 `RESOURCE_DESCRIPTORS_V1` 加入的 Extension 和 Skill、Team 自己的 `rotom-skills.mjs`/`rotom-policy.mjs`，以及 Pi 内置 Extension（无文件，显示为 `builtin:<name>`；rotom 下 Codemode 由产品的 `third-party` 提供，不算 Pi 内置）。Owner 可选默认目录、已登记项目和每个已有会话所在的目录；成员只能选择自己有 view 权限的项目。
 
 没有资源编辑/包管理 Web UI，Owner 在部署机器编辑；项目配置通常随项目 Git 管理。历史冻结会话仍保留其 context/Skill 快照，不能用 `/reload` 宣称已切换为新项目 Skill。细则见 [CONFIGURATION.md](CONFIGURATION.md)，验证边界见 [VERIFICATION.md](VERIFICATION.md)。

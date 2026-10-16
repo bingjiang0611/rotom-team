@@ -2780,6 +2780,7 @@ button.chip:hover {
 .ar-scope select {
     width: auto;
     min-width: 10rem;
+    max-width: 100%;
     background: var(--card);
     border: 1px solid var(--line);
     padding: 0.28rem 0.4rem;
@@ -2880,11 +2881,6 @@ button.chip:hover {
     -webkit-line-clamp: 2;
     line-clamp: 2;
     overflow: hidden;
-}
-
-/* `.link` comes later and sets its own size. */
-.ar-hint .link {
-    font-size: inherit;
 }
 
 .ar-main .link.ar-more {

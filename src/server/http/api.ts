@@ -139,6 +139,45 @@ export function createApi(options: HttpOptions, auth: Auth) {
         }
     };
 
+    /**
+     * Folders whose Agent resources this person may list. A session trusts and loads its own folder, registered or
+     * not, so the owner gets every session's folder and the default one; a member, only the projects they may view.
+     */
+    const agentResourceFolders = (user: User) => {
+        const folders = new Map<
+            string,
+            { path: string; project?: string; isDefault?: boolean; sessions: number }
+        >();
+
+        const add = (path: string) => {
+            const folder = folders.get(path) ?? { path, sessions: 0 };
+
+            folders.set(path, folder);
+
+            return folder;
+        };
+
+        for (const project of app.projects.all(user)) {
+            add(project.cwd).project = project.name;
+        }
+
+        if (user.role === "owner") {
+            add(app.defaultCwd).isDefault = true;
+        }
+
+        for (const session of app.sessions(user)) {
+            const folder = user.role === "owner" ? add(session.cwd) : folders.get(session.cwd);
+
+            if (folder) {
+                folder.sessions += 1;
+            }
+        }
+
+        return [...folders.values()].sort(
+            (a, b) => Number(!!b.project) - Number(!!a.project) || b.sessions - a.sessions,
+        );
+    };
+
     return async (
         request: IncomingMessage,
         response: ServerResponse,
@@ -191,20 +230,29 @@ export function createApi(options: HttpOptions, auth: Auth) {
                 throw new HttpError(404, "Agent resources are listed only on a Team server.");
             }
 
-            const id = url.searchParams.get("project");
-            // Only projects this person may view; another project's id reads as unknown.
-            const project =
-                id === null ? undefined : app.projects.all(user).find((each) => each.id === id);
+            const folder = url.searchParams.get("folder");
 
-            if (id !== null && !project) {
-                throw new HttpError(404, "No such project.");
+            // Only folders this person may view; any other path reads as unknown.
+            if (
+                folder !== null &&
+                !agentResourceFolders(user).some((each) => each.path === folder)
+            ) {
+                throw new HttpError(404, "No such folder.");
             }
 
             return json(
                 response,
                 200,
-                await listAgentResources(join(app.dataDir, "team-agent"), project?.cwd),
+                await listAgentResources(join(app.dataDir, "team-agent"), folder ?? undefined),
             );
+        }
+
+        if (first === "agent-resources" && second === "folders" && method === "GET") {
+            if (!app.kernel) {
+                throw new HttpError(404, "Agent resources are listed only on a Team server.");
+            }
+
+            return json(response, 200, agentResourceFolders(user));
         }
 
         if (first === "devices" && third === undefined) {
