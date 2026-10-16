@@ -290,6 +290,21 @@ The visual reference is the supplied bug screenshots and pinned native thinking 
 reuses the existing chip and selector, without a new theme or component library. Phone layout hides only the word
 “Thinking”, not its value. Personal library searches found no reusable selector and stale old-machine references.
 
+### Context usage map
+
+`node --test test/native-context.test.ts` compares the browser's 16×16 map (plus two other geometries) directly with
+pinned `pi-context-view/src/ui/usage-map.ts` across 138 distributions: empty, tiny, mixed, full and overflowing windows,
+and fractional boundaries. It also executes the native number formatters for token/percentage comparisons. A negative
+control changes the mixed-cell threshold and verifies that native comparison detects the difference. Buffer/free-space
+checks cover a reserve larger than the remaining window; missing/invalid windows stay unknown instead of zero.
+
+`node test/native-commands-proof.ts --ui` checks the actual production context sheet with the native pre-request data
+and a synthetic high-occupancy terminal-shaped snapshot. It checks 256 cells, distinct category colors, percentages,
+default per-tool breakdown, mouse/Enter/Space expansion, side-by-side desktop and stacked mobile layouts, and containment
+at 390px and 320px. It renders unknown and empty windows without another model request. Screenshots include desktop,
+phone, light-theme and unknown-window states. Layout checks do not establish physical-device or full accessibility
+acceptance. Native theme overrides, Fit zoom and raw-content previews remain outside this browser projection.
+
 No real account, external sharing upload, deployment, physical-device automation, financial reconciliation or arbitrary
 third-party extension is accepted by these fixtures. Run the commands on the final artifact; older logs are not evidence
 for a later edit.

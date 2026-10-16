@@ -14,6 +14,13 @@ import { html, Sheet } from "../ui.js";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { FILTERS, TreeView } from "../native-tree.js";
 import { NativeSelector } from "./native-selector.js";
+import {
+    buildContextMap,
+    contextColor,
+    contextPercent,
+    contextSpace,
+    contextTokens,
+} from "../context-usage.js";
 
 export function nativeCommandAccepted(result) {
     return (
@@ -81,18 +88,6 @@ export function showNativeResult(result, commandName) {
     }
 }
 
-const contextTokens = (value) => {
-    if (!Number.isFinite(value)) {
-        return "unknown";
-    }
-
-    return value >= 1_000_000
-        ? `${(value / 1_000_000).toFixed(value >= 10_000_000 ? 0 : 1)}M`
-        : value >= 1_000
-          ? `${(value / 1_000).toFixed(value >= 10_000 ? 0 : 1)}k`
-          : String(Math.round(value));
-};
-
 function ContextRows({ rows, total, depth = 0 }) {
     return rows.map((row) => {
         const cells = html`<span>${row.label}</span>
@@ -112,6 +107,45 @@ function ContextRows({ rows, total, depth = 0 }) {
                 ${cells}
             </div>`;
     });
+}
+
+function UsageRows({ rows, total, depth = 0, color }) {
+    return rows.map((row) => {
+        const rowColor = color ?? contextColor(row.id);
+        const style = `--context-depth: ${depth}; --context-color: ${rowColor}`;
+        const cells = html`<span class="native-context-label">
+                <i class=${`native-context-swatch ${depth ? "breakdown" : ""}`} aria-hidden="true"></i>
+                <span>${row.label}</span>
+            </span>
+            <span class="native-context-leader" aria-hidden="true"></span>
+            <strong title=${`${row.tokens.toLocaleString()} estimated tokens`}>${contextTokens(row.tokens)}</strong>
+            <span class="native-context-percent">${contextPercent(row.tokens, total)}</span>`;
+
+        return row.children?.length
+            ? html`<details
+                class="native-context-category"
+                key=${row.id ?? row.label}
+                open=${row.id === "tool-output" || depth > 0}
+            >
+                <summary class="native-context-usage-row" style=${style}>${cells}</summary>
+                <${UsageRows} rows=${row.children} total=${total} depth=${depth + 1} color=${rowColor} />
+            </details>`
+            : html`<div class="native-context-usage-row" key=${row.id ?? row.label} style=${style}>
+                ${cells}
+            </div>`;
+    });
+}
+
+function SpaceRow({ label, tokens, total, fill }) {
+    return html`<div class="native-context-usage-row native-context-space">
+        <span class="native-context-label">
+            <i class=${`native-context-swatch ${fill}`} aria-hidden="true"></i>
+            <span>${label}</span>
+        </span>
+        <span class="native-context-leader" aria-hidden="true"></span>
+        <strong>${contextTokens(tokens)}</strong>
+        <span class="native-context-percent">${contextPercent(tokens, total)}</span>
+    </div>`;
 }
 
 function NativeContext({ context }) {
@@ -143,47 +177,58 @@ function NativeContext({ context }) {
 
     const windowTokens = context.reported?.contextWindow;
     const usedTokens = context.estimatedTokens;
-    const reserveTokens = context.autoCompactReserveTokens ?? 0;
-    const freeTokens = Number.isFinite(windowTokens)
-        ? Math.max(0, windowTokens - usedTokens - reserveTokens)
-        : undefined;
+    const { buffer, free } = contextSpace(context);
+    const map = buildContextMap(context);
+    const labels = new Map(context.categories?.map((category) => [category.id, category.label]));
 
-    return html`<div class="native-context">
-        <div class="native-context-summary">
-            <div><strong>${contextTokens(usedTokens)}</strong><span>estimated used</span></div>
-            <div><strong>${contextTokens(windowTokens)}</strong><span>window</span></div>
-            <div><strong>${contextTokens(freeTokens)}</strong><span>free after buffer</span></div>
-        </div>
-        <div class="native-context-meter" role="img" aria-label=${`${contextTokens(usedTokens)} of ${contextTokens(windowTokens)} tokens used`}>
-            ${context.categories?.map(
-                (category, index) => html`<i
-                    key=${category.id}
-                    class=${`native-context-segment c${index % 8}`}
-                    title=${`${category.label}: ${contextTokens(category.tokens)}`}
-                    style=${`width: ${Math.min(100, (category.tokens / Math.max(windowTokens ?? context.estimatedTokens, 1)) * 100)}%`}
-                ></i>`,
-            )}
-            ${
-                reserveTokens > 0 &&
-                html`<i
-                    class="native-context-buffer"
-                    title=${`Auto-compact buffer: ${contextTokens(reserveTokens)}`}
-                    style=${`width: ${Math.min(100, (reserveTokens / Math.max(windowTokens, 1)) * 100)}%`}
-                ></i>`
-            }
-        </div>
+    return html`<div class="native-context native-context-usage">
         <div class="native-context-meta">
-            <span>${context.model ?? "Current model"}</span>
-            <span>native estimate · not billing usage</span>
-            ${context.captured && Number.isFinite(context.reported?.tokens) && html`<span>provider total: ${contextTokens(context.reported.tokens)}</span>`}
-            ${reserveTokens > 0 && html`<span>${contextTokens(reserveTokens)} compact buffer</span>`}
+            <span class="native-context-model">${context.model ?? "Current model"}</span>
+            <span>${contextTokens(usedTokens)} / ${contextTokens(windowTokens)} tokens · ${contextPercent(usedTokens, windowTokens)}</span>
         </div>
-        ${!context.captured && html`<p class="native-context-note">No model request captured yet. Current prompt and tools are estimated without sending a probe.</p>`}
-        <${ContextRows}
-            rows=${context.categories ?? []}
-            total=${windowTokens ?? context.estimatedTokens}
-        />
-        <p class="muted small">Expand a category for its breakdown. Content text stays in the native process.</p>
+        <div class=${`native-context-dashboard ${map ? "" : "no-map"}`}>
+            <div class="native-context-map-panel">
+                ${
+                    map
+                        ? html`<div
+                        class="native-context-map"
+                        role="img"
+                        aria-label=${`Estimated context: ${contextTokens(usedTokens)} of ${contextTokens(windowTokens)} tokens. Each square represents ${contextTokens(Math.round(map.blockTokens))} tokens. Category breakdown follows.`}
+                    >
+                        ${map.cells.map(
+                            (cell, index) => html`<i
+                            key=${index}
+                            class=${`native-context-cell ${cell.fill}`}
+                            style=${`--context-color: ${contextColor(cell.categoryId)}`}
+                            aria-hidden="true"
+                            title=${cell.categoryId ? labels.get(cell.categoryId) : cell.fill === "buffer" ? "Auto-Compact Buffer" : "Free Space"}
+                        ></i>`,
+                        )}
+                    </div>
+                    <div class="native-context-map-key">
+                        <span><i class="native-context-swatch" aria-hidden="true"></i>One category</span>
+                        <span><i class="native-context-swatch partial" aria-hidden="true"></i>Mixed</span>
+                        <span>${contextTokens(Math.round(map.blockTokens))} tokens / square (${contextPercent(1, map.cells.length)})</span>
+                    </div>`
+                        : html`<p class="native-context-note">Context window unknown. The map and percentages are unavailable.</p>`
+                }
+            </div>
+            <section class="native-context-legend" aria-label="Context categories">
+                <div class="native-context-legend-head" aria-hidden="true">
+                    <span>Category</span><span>Tokens</span><span>Window %</span>
+                </div>
+                <${UsageRows} rows=${context.categories ?? []} total=${windowTokens} />
+                <div class="native-context-space-rows">
+                    <${SpaceRow} label="Auto-Compact Buffer" tokens=${buffer} total=${windowTokens} fill="buffer" />
+                    <${SpaceRow} label="Free Space" tokens=${free} total=${windowTokens} fill="free" />
+                </div>
+            </section>
+        </div>
+        <div class="native-context-meta native-context-footnote">
+            <span>Native estimate · not billing usage</span>
+            ${context.captured && Number.isFinite(context.reported?.tokens) && html`<span>Provider total: ${contextTokens(context.reported.tokens)}</span>`}
+            ${!context.captured && html`<span>No request captured yet · no probe sent</span>`}
+        </div>
     </div>`;
 }
 
@@ -191,7 +236,7 @@ export function NativeInfoSheet() {
     const [result] = useState(store.state.sheet.result);
 
     if (result.context?.type === "native-context") {
-        return html`<${Sheet} title=${result.context.title} wide onClose=${closeSheet}>
+        return html`<${Sheet} title=${result.context.title} wide className="native-context-sheet" onClose=${closeSheet}>
             <${NativeContext} context=${result.context} />
         <//>`;
     }
