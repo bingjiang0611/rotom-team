@@ -1,5 +1,5 @@
 // The daily performance journal: what it keeps out (anything a user typed), how it rotates and caps its files, and that
-// the server's own event streams and native runs reach it through their diagnostics channels.
+// the server's own event streams, native runs, and browser tabs' timing reports reach it.
 import { cleanUp, newSession, openApp, owner, root, scriptedModel } from "./helpers.ts";
 import assert from "node:assert/strict";
 import { once } from "node:events";
@@ -141,6 +141,42 @@ test("the server's requests, pushed events, and native runs reach the journal, w
     assert.equal((await fetch(`${base}/api/sessions?q=private-words`, { headers })).status, 200);
     assert.equal((await fetch(`${base}/api/c/${id}/entry/12345`, { headers })).status, 404);
     kernelRunChannel.publish({ ms: 1234.56, outcome: "prompt:settled" });
+    kernelRunChannel.publish({
+        ms: 900,
+        outcome: "prompt:settled",
+        prompt: { process: "reused", dispatchMs: 12.34, firstOutputMs: null, toolMs: 0, tools: 0 },
+    });
+    const report = (body: unknown) =>
+        fetch(`${base}/api/perf`, {
+            method: "POST",
+            headers: { ...headers, "x-pocket": "1", "content-type": "application/json" },
+            body: JSON.stringify(body),
+        });
+
+    assert.equal(
+        (
+            await report({
+                timings: [
+                    { name: "switch", ms: 81.26, transport: "stream" },
+                    { name: "reply.first", unavailable: "hidden", transport: "poll" },
+                ],
+            })
+        ).status,
+        200,
+    );
+
+    // A tab is not trusted: a report carrying anything outside the closed set is refused whole.
+    for (const timings of [
+        [{ name: "switch", ms: 5, transport: "stream", text: "private-words" }],
+        [{ name: "private-words", ms: 5, transport: "stream" }],
+        [{ name: "switch", ms: -1, transport: "stream" }],
+        [{ name: "switch", ms: 60 * 60_000, transport: "stream" }],
+        [{ name: "switch", unavailable: "private-words", transport: "stream" }],
+        Array.from({ length: 21 }, () => ({ name: "switch", ms: 5, transport: "stream" })),
+    ]) {
+        assert.equal((await report({ timings })).status, 400, JSON.stringify(timings[0]));
+    }
+
     controller.abort();
     pushChannel.unsubscribe(listen);
     await journal.stop();
@@ -180,6 +216,26 @@ test("the server's requests, pushed events, and native runs reach the journal, w
         "held streams are not requests",
     );
     assert.ok(kinds.some((each) => each.kind === "kernel-run" && each.ms === 1234.6));
+    assert.ok(
+        kinds.some(
+            (each) =>
+                each.kind === "kernel-run" &&
+                each.prompt?.process === "reused" &&
+                each.prompt.dispatchMs === 12.3 &&
+                each.prompt.firstOutputMs === null,
+        ),
+    );
+    assert.deepEqual(
+        kinds.filter((each) => each.kind === "web"),
+        [
+            { kind: "web", name: "switch", transport: "stream", ms: 81.3 },
+            { kind: "web", name: "reply.first", transport: "poll", unavailable: "hidden" },
+        ],
+    );
+    assert.ok(
+        kinds.every((each) => each.kind !== "http" || each.route !== "/api/perf"),
+        "a timing report is its waits, not a request people waited for",
+    );
     assert.ok(kinds.some((each) => each.kind === "push" && (each.events.view?.count ?? 0) >= 1));
     assert.ok(kinds.some((each) => each.kind === "process" && each.rssBytes > 0));
     assert.equal(kinds.at(-1)!.kind, "health");
@@ -264,5 +320,44 @@ test("the report reads archives and the active file, counts cut-off lines, and r
             ["GET /api/c/:n/changes", 10, 1000, true],
             ["GET /api/sessions", 100, 500, false],
         ],
+    );
+});
+
+test("the report splits prompt runs by process and phase, and browser waits by name and transport", () => {
+    const at = "2026-10-17T00:00:00.000Z";
+    const record = (observation: PerformanceRecord["observation"]) =>
+        ({ schema: 1, recordedAt: at, session: "s", observation }) as PerformanceRecord;
+    const prompt = (process: "started" | "reused", firstOutputMs: number | null) =>
+        record({
+            kind: "kernel-run",
+            ms: 1000,
+            outcome: "prompt:settled",
+            prompt: { process, dispatchMs: 100, firstOutputMs, toolMs: 250, tools: 1 },
+        });
+    const result = analyse([
+        prompt("started", 400),
+        prompt("reused", 200),
+        prompt("reused", null),
+        record({ kind: "kernel-run", ms: 50, outcome: "discover:handled" }),
+        record({ kind: "web", name: "switch", transport: "stream", ms: 80 }),
+        record({ kind: "web", name: "switch", transport: "stream", unavailable: "hidden" }),
+    ]);
+
+    assert.deepEqual(
+        result.prompts.map((each) => [
+            each.process,
+            each.runs,
+            each.firstOutput.p50,
+            each.noOutput,
+            each.toolShare,
+        ]),
+        [
+            ["started", 1, 400, 0, 0.25],
+            ["reused", 2, 200, 1, 0.25],
+        ],
+    );
+    assert.deepEqual(
+        result.web.map((each) => [each.wait, each.count, each.p50, each.hidden]),
+        [["switch stream", 1, 80, 1]],
     );
 });
