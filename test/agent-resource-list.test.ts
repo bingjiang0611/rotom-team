@@ -2,15 +2,32 @@
 import { cleanUp, owner, root as testRoot, scriptedModel, work } from "./helpers.ts";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
-import { mkdtempSync, mkdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import {
+    existsSync,
+    mkdtempSync,
+    mkdirSync,
+    readFileSync,
+    realpathSync,
+    rmSync,
+    writeFileSync,
+} from "node:fs";
+import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { after, test } from "node:test";
 import { listAgentResources } from "../src/server/agent-resource-list.ts";
+import { teamPolicyExtension, teamSkillsExtension } from "../src/server/rotom-kernel.ts";
 import { PocketApp } from "../src/server/app.ts";
 import { createHandler } from "../src/server/http.ts";
 
 after(cleanUp);
+
+// The launcher sets this inside a session; the service does not have it. Native reads it once, on first import.
+delete process.env.ROTOM_PRODUCT_VERSION;
+
+const product = fileURLToPath(
+    new URL("../runtime/rotom/node_modules/@bingjiang0611/rotom", import.meta.url),
+);
 
 function put(file: string, text: string) {
     mkdirSync(dirname(file), { recursive: true });
@@ -65,6 +82,7 @@ test("shared scope lists only the shared profile's files, with packages and disa
         [
             ["off", join(shared, "skills/off/SKILL.md"), false, "shared"],
             ["packaged", join(shared, "tools/skills/packaged/SKILL.md"), true, "shared"],
+            ["pi-subagents", join(product, "skills/pi-subagents/SKILL.md"), true, "bundled"],
             ["release", join(shared, "skills/release/SKILL.md"), true, "shared"],
         ],
     );
@@ -130,6 +148,45 @@ test("project scope merges the project like a session: instruction chain, same-n
             (each) => each.path === join(project, ".agents/skills") && !each.exists,
         ),
     );
+});
+
+test("every session's bundled extensions are listed as the launcher passes them, not only the files", async (t) => {
+    const { root, shared } = fixture();
+
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    const { bundled } = await listAgentResources(shared);
+    const extensions = Object.fromEntries(bundled.extensions.map((each) => [each.name, each]));
+
+    assert.equal(
+        bundled.version,
+        JSON.parse(readFileSync(join(product, "package.json"), "utf8")).version,
+    );
+    assert.deepEqual(
+        bundled.extensions.map((each) => [each.from, each.name]),
+        [
+            ["rotom", "observability"],
+            ["rotom", "browser"],
+            ["rotom", "coding-policy"],
+            ["rotom", "third-party"],
+            ["rotom", "qoder"],
+            ["team", "rotom-skills"],
+            ["team", "rotom-policy"],
+            ["pi", "llama.cpp"],
+            ["pi", "tool-search"],
+            ["pi", "mcp"],
+        ],
+        "Codemode comes from the product's third-party extension, not Pi's built-in",
+    );
+    assert.equal(extensions["browser"]!.path, join(product, "extensions/browser/index.ts"));
+    assert.equal(extensions["third-party"]!.path, join(product, "extensions/third-party"));
+    assert.ok(extensions["third-party"]!.packages!.includes("pi-subagents"));
+    assert.equal(extensions["rotom-skills"]!.path, teamSkillsExtension);
+    assert.equal(extensions["rotom-policy"]!.path, teamPolicyExtension);
+    assert.equal(extensions["mcp"]!.path, "builtin:mcp");
+
+    for (const each of bundled.extensions.filter((extension) => extension.from !== "pi")) {
+        assert.ok(existsSync(each.path), each.path);
+    }
 });
 
 test("a settings file that does not parse is reported, not hidden", async (t) => {

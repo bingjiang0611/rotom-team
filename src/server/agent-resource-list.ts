@@ -1,8 +1,12 @@
 /** Read-only list of the Agent resources a Team session would load: shared, or shared plus one project. */
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join, sep } from "node:path";
-import { nativeConfigurationApi } from "./rotom-kernel.ts";
+import { basename, dirname, join, sep } from "node:path";
+import {
+    nativeConfigurationApi,
+    teamPolicyExtension,
+    teamSkillsExtension,
+} from "./rotom-kernel.ts";
 
 type Scope = "shared" | "project";
 type Resolved = {
@@ -31,7 +35,8 @@ type McpEntry = {
     override?: string;
 };
 
-export type ResourceOrigin = { scope: Scope; source: string; packageRoot?: string };
+/** `bundled`: added by the pinned rotom product to every session, not by any file on the deployment machine. */
+export type ResourceOrigin = { scope: Scope | "bundled"; source: string; packageRoot?: string };
 export type ListedSkill = ResourceOrigin & {
     name: string;
     description: string;
@@ -41,6 +46,13 @@ export type ListedSkill = ResourceOrigin & {
     sameNameAs?: string;
 };
 export type ListedExtension = ResourceOrigin & { path: string; enabled: boolean };
+/** An extension every Team session loads whatever the files say. Pi's own have no file: `builtin:<name>`. */
+export type BundledExtension = {
+    name: string;
+    path: string;
+    from: "rotom" | "team" | "pi";
+    packages?: string[];
+};
 export type ListedMcpServer = {
     name: string;
     file: string;
@@ -60,6 +72,7 @@ export type AgentResourceList = {
     skills: ListedSkill[];
     skillProblems: string[];
     extensions: ListedExtension[];
+    bundled: { version: string; extensions: BundledExtension[] };
     mcp: ListedMcpServer[];
     mcpProblems: string[];
     scanned: { skills: ScannedPlace[]; extensions: ScannedPlace[]; mcp: ScannedPlace[] };
@@ -82,8 +95,8 @@ function owner(resources: Resolved[], file: string): Resolved | undefined {
 
 /**
  * Resolve with the pinned native resolver, the way Team starts a session: the shared profile as the agent directory and
- * the project trusted. Nothing is installed; a missing package is reported. Built-in extensions have no file and are
- * not listed, nor the service user's `~/.agents/skills`, which Team never gives a member.
+ * the project trusted, after what the product and Team add to every session. Nothing is installed; a missing package
+ * is reported. The service user's `~/.agents/skills` is left out: Team never gives it to a member.
  */
 export async function listAgentResources(
     shared: string,
@@ -113,19 +126,27 @@ export async function listAgentResources(
     );
     const enabledSkills = skillResources.filter((resource) => resource.enabled);
     const disabledSkills = skillResources.filter((resource) => !resource.enabled);
-    const load = (resources: Resolved[]) =>
+    const product = api.productResources as { id: string; kind: string; path: string }[];
+    // The launcher passes these as `--skill`, which native loads first, ahead of any found in files.
+    const bundledSkills = product.filter((each) => each.kind === "skill").map((each) => each.path);
+    const load = (paths: string[]) =>
         api.loadSkills({
             cwd,
             agentDir: shared,
-            skillPaths: resources.map((resource) => resource.path),
+            skillPaths: paths,
             includeDefaults: false,
         }) as { skills: Skill[]; diagnostics: Diagnostic[] };
-    const loaded = load(enabledSkills);
+    const paths = (resources: Resolved[]) => resources.map((resource) => resource.path);
+    const skillOrigin = (file: string): ResourceOrigin =>
+        bundledSkills.some((path) => file === path || file.startsWith(path + sep))
+            ? { scope: "bundled", source: "rotom" }
+            : origin(owner(skillResources, file)!);
+    const loaded = load([...bundledSkills, ...paths(enabledSkills)]);
     const skills: ListedSkill[] = [];
 
     for (const [list, enabled] of [
         [loaded.skills, true],
-        [load(disabledSkills).skills, false],
+        [load(paths(disabledSkills)).skills, false],
     ] as const) {
         for (const skill of list) {
             skills.push({
@@ -133,7 +154,7 @@ export async function listAgentResources(
                 description: skill.description,
                 path: skill.filePath,
                 enabled,
-                ...origin(owner(skillResources, skill.filePath)!),
+                ...skillOrigin(skill.filePath),
             });
         }
     }
@@ -150,7 +171,7 @@ export async function listAgentResources(
                 path: collision.loserPath,
                 enabled: false,
                 sameNameAs: collision.winnerPath,
-                ...origin(owner(skillResources, collision.loserPath)!),
+                ...skillOrigin(collision.loserPath),
             });
         } else {
             skillProblems.push(
@@ -194,6 +215,29 @@ export async function listAgentResources(
             enabled: resource.enabled,
             ...origin(resource),
         })),
+        bundled: {
+            version: api.productVersion,
+            extensions: [
+                ...product
+                    .filter((each) => each.kind === "extension")
+                    .map((each) => ({
+                        name: each.id,
+                        path: each.path,
+                        from: "rotom" as const,
+                        ...(each.id === "third-party" ? { packages: api.thirdPartyPackages } : {}),
+                    })),
+                ...[teamSkillsExtension, teamPolicyExtension].map((path) => ({
+                    name: basename(path, ".mjs"),
+                    path,
+                    from: "team" as const,
+                })),
+                ...(api.builtInExtensions as string[]).map((name) => ({
+                    name,
+                    path: `builtin:${name}`,
+                    from: "pi" as const,
+                })),
+            ],
+        },
         mcp: mcp.servers.map((server) => ({
             name: server.name,
             file: server.source,

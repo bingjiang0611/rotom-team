@@ -116,7 +116,7 @@ Project/MCP 列表、Shared/Skills + 运行中、Project/Instructions 链、项�
 用户决定：**只扫描并展示列表，显示具体路径，不支持任何操作**。v2 的编辑、开关、新建、保存条、运行锁定、保存冲突、详情页全部删除。
 
 - 入口与结构沿用 v2：`Settings › Team › Agent resources`，Shared / Project ▾，Instructions / Skills / Extensions / MCP 四个 tab。
-- 每行显示绝对路径（可整段选中复制）。MCP 写成 `<mcp.json 绝对路径> → mcpServers.<name>`；package 资源显示解析后的文件路径和 package 来源；内置扩展标“No file”。
+- 每行显示绝对路径（可整段选中复制）。MCP 写成 `<mcp.json 绝对路径> → mcpServers.<name>`；package 资源显示解析后的文件路径和 package 来源；内置扩展标“No file”（实现中显示为 `builtin:<name>`）。
 - 每个 tab 上方列出本次扫描的位置，不存在的标 `(none)`，例如项目的 `.agents/skills/`。项目 Instructions 改为按加载顺序列出 AGENTS.md 链，不再重复列扫描位置。
 - 保留扫描问题：同名 Skill、MCP 可执行文件不存在、`settings.json` 解析失败（提示列表可能不完整）。行不可点击，没有 hover 效果。
 - 页脚写明：只读；修改需在部署机器上改文件，再在运行中的会话执行 `/reload`。
@@ -128,4 +128,4 @@ Project/MCP 列表、Shared/Skills + 运行中、Project/Instructions 链、项�
 
 - 页面：`web/sheets/agent-resources.js`，入口 `Settings › Team › Agent resources`，仅 Team 服务器显示。
 - 接口：`GET /api/agent-resources[?project=<id>]`，由 `src/server/agent-resource-list.ts` 用固定版本的原生 resolver（`DefaultPackageManager`、`loadSkills`、`loadMcpConfig`、`loadProjectContextFiles`）按会话方式解析；不安装、不连接、不执行。
-- 与 v3 的差异：内置扩展没有文件，不列出（页脚说明）；未做“MCP 可执行文件不存在”检查（命令可能来自 PATH，无法可靠判断）；Skill 按名称排序，同名的未加载项紧跟在生效项之后。
+- 与 v3 的差异：产品、Team 和 Pi 为每个会话加入的 Extension/Skill 单独列为 “Bundled with rotom <版本>”，Pi 内置的显示为 `builtin:<name>`；未做“MCP 可执行文件不存在”检查（命令可能来自 PATH，无法可靠判断）；Skill 按名称排序，同名的未加载项紧跟在生效项之后。

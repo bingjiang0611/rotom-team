@@ -2761,6 +2761,7 @@ button.chip:hover {
 
 /* Agent resources: a read-only report, so its rows are cards without hover. Paths wrap anywhere and select whole. */
 .settings-page .sheet-body > .ar-row,
+.ar-group,
 .ar-scope,
 .ar-tabs,
 .ar-note,
@@ -2925,6 +2926,17 @@ button.chip:hover {
 .ar-tag.project {
     border-color: color-mix(in srgb, var(--o-magenta) 55%, transparent);
     color: var(--o-magenta);
+}
+
+.ar-tag.bundled {
+    border-color: color-mix(in srgb, var(--o-cyan) 55%, transparent);
+    color: var(--o-cyan);
+}
+
+.ar-group {
+    margin: 0.6rem 0 0;
+    font-size: 0.78rem;
+    font-weight: 600;
 }
 
 .ar-tag.warn {

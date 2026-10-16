@@ -15,6 +15,11 @@ import { prepareTeamResources, sharedContextPaths } from "./rotom-resources.ts";
 
 const runtime = fileURLToPath(new URL("../../runtime/rotom/", import.meta.url));
 const product = join(runtime, "node_modules/@bingjiang0611/rotom");
+
+/** Team's own extensions: every member session loads both, next to the product's (each one runs through the gate). */
+export const teamSkillsExtension = fileURLToPath(new URL("./rotom-skills.mjs", import.meta.url));
+export const teamPolicyExtension = fileURLToPath(new URL("./rotom-policy.mjs", import.meta.url));
+
 const bootstrapFiles = [
     "package.json",
     "bin/rotom",
@@ -142,9 +147,35 @@ export async function nativeConfigurationApi() {
     const skills = await import(pathToFileURL(join(root, "core/skills.js")).href);
     const mcp = await import(pathToFileURL(join(root, "extensions/mcp/config.js")).href);
     const args = await import(pathToFileURL(join(root, "cli/args.js")).href);
+    const builtIn = await import(pathToFileURL(join(root, "extensions/index.js")).href);
+    const productConfig = await import(
+        pathToFileURL(canonical(join(product, "runtime/product-config.mjs"), "file")).href
+    );
 
     return {
         bundledResourceRoot: product,
+        productVersion: JSON.parse(readFileSync(join(product, "package.json"), "utf8"))
+            .version as string,
+        /** What the product launcher adds to every session, as `--extension`/`--skill` paths. */
+        productResources: (
+            productConfig.RESOURCE_DESCRIPTORS_V1 as {
+                id: string;
+                kind: "extension" | "skill";
+                path: string;
+                loadPath?: string;
+            }[]
+        ).map((resource) => ({
+            id: resource.id,
+            kind: resource.kind,
+            path: resolve(product, resource.loadPath ?? resource.path),
+        })),
+        /** The packages the product's `third-party` extension bundles. */
+        thirdPartyPackages: Object.keys(productConfig.VERIFIED_THIRD_PARTY_PACKAGES),
+        // Inside a session the launcher sets ROTOM_PRODUCT_VERSION, and native then leaves Codemode to the product's
+        // own extension. This process has no such variable, so the native list still names it here.
+        builtInExtensions: (builtIn.builtInExtensions as { name: string }[])
+            .map((each) => each.name)
+            .filter((name) => name !== "codemode"),
         parseArgs: args.parseArgs,
         loadProjectContextFiles: resourceLoader.loadProjectContextFiles,
         loadSkills: skills.loadSkills,
@@ -412,7 +443,7 @@ export async function startRotomKernel(options: {
             "--approve",
             "--no-skills",
             "--extension",
-            fileURLToPath(new URL("./rotom-skills.mjs", import.meta.url)),
+            teamSkillsExtension,
             ...(options.configuration
                 ? [
                       // Legacy snapshots freeze instructions, not trusted project executable resources.
@@ -430,9 +461,7 @@ export async function startRotomKernel(options: {
             "--session-dir",
             join(home, ".pi/agent/sessions"),
             ...(options.sessionFile ? ["--session", options.sessionFile] : []),
-            ...(options.gateFile
-                ? ["--extension", fileURLToPath(new URL("./rotom-policy.mjs", import.meta.url))]
-                : []),
+            ...(options.gateFile ? ["--extension", teamPolicyExtension] : []),
         ],
         {
             cwd: workspace,
@@ -461,12 +490,8 @@ export async function startRotomKernel(options: {
                           PI_SUBAGENT_PI_BINARY: fileURLToPath(
                               new URL("./rotom-child.sh", import.meta.url),
                           ),
-                          ROTOM_TEAM_POLICY: fileURLToPath(
-                              new URL("./rotom-policy.mjs", import.meta.url),
-                          ),
-                          ROTOM_TEAM_SKILLS: fileURLToPath(
-                              new URL("./rotom-skills.mjs", import.meta.url),
-                          ),
+                          ROTOM_TEAM_POLICY: teamPolicyExtension,
+                          ROTOM_TEAM_SKILLS: teamSkillsExtension,
                       }
                     : {}),
             },

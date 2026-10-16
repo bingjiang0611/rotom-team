@@ -110,8 +110,18 @@ function Skills({ list }) {
     )}`;
 }
 
+/** Notes for an extension the product, Team or Pi adds to every session. */
+function bundledNotes(extension) {
+    return [
+        extension.packages && [`Packages: ${extension.packages.join(", ")}`],
+        extension.from === "pi" && ["Built into Pi: no file."],
+    ];
+}
+
 function Extensions({ list }) {
-    return html`${list.extensions.length === 0 && html`<p class="muted">No extensions found.</p>`}
+    const none = list.project ? "No shared or project extensions." : "No shared extensions.";
+
+    return html`${list.extensions.length === 0 && html`<p class="muted">${none}</p>`}
     ${list.extensions.map(
         (extension) =>
             html`<${Row}
@@ -122,6 +132,17 @@ function Extensions({ list }) {
                 notes=${[origin(extension)]}
                 tags=${html`${scopeTag(extension.scope)}
                 ${!extension.enabled && html`<${Tag}>disabled<//>`}`}
+            />`,
+    )}
+    <h3 class="ar-group">Bundled with rotom ${list.bundled.version}</h3>
+    <p class="ar-hint">${BUNDLED}</p>
+    ${list.bundled.extensions.map(
+        (extension) =>
+            html`<${Row}
+                name=${extension.name}
+                path=${extension.path}
+                notes=${bundledNotes(extension)}
+                tags=${html`<${Tag} kind="bundled">${extension.from}<//>`}
             />`,
     )}`;
 }
@@ -144,9 +165,13 @@ function Mcp({ list }) {
     )}`;
 }
 
+const BUNDLED =
+    "Every Team session loads these, whatever the files above say: the pinned rotom product's, " +
+    "Team's own, and Pi's built-in ones.";
+
 const FOOT =
-    "Read only. Change these files on the deployment machine, then run /reload in a running " +
-    "session. Built-in extensions have no file and are not listed.";
+    "Read only. Change shared and project files on the deployment machine, then run /reload in a " +
+    "running session. Bundled entries change only with the pinned rotom release.";
 
 const BODIES = { instructions: Instructions, skills: Skills, extensions: Extensions, mcp: Mcp };
 
@@ -180,7 +205,7 @@ export function AgentResourcesSheet() {
     const counts = list && {
         instructions: list.instructions.length,
         skills: list.skills.length,
-        extensions: list.extensions.length,
+        extensions: list.extensions.length + list.bundled.extensions.length,
         mcp: list.mcp.length,
     };
     const scanned = list && tab !== "instructions" ? list.scanned[tab] : null;
