@@ -1,5 +1,6 @@
 /** Non-replayable team-owned execution journal around the real rotom loop. Not a model-provider adapter. */
 import { createServer } from "node:http";
+import { kernelRunChannel, type KernelRunSignal } from "./perf-channels.ts";
 import { TeamResourcePolicyError, assertTeamResourceSources } from "./rotom-resource-policy.ts";
 import {
     memberConfigurationSnapshot,
@@ -492,10 +493,23 @@ export class RotomExecutions {
         runs.add(running);
         this.#running.set(sessionId, runs);
         this.#active++;
+        const started = performance.now();
+        let outcome = "error";
 
         try {
-            return await action(running);
+            const receipt = await action(running);
+
+            outcome = `${receipt.operation}:${receipt.status}`;
+
+            return receipt;
         } finally {
+            if (kernelRunChannel.hasSubscribers) {
+                kernelRunChannel.publish({
+                    ms: performance.now() - started,
+                    outcome,
+                } satisfies KernelRunSignal);
+            }
+
             // Failure to prove child closure must retain the writer lease, even after the caller rejects.
             if (!running.closureUnknown) {
                 runs.delete(running);

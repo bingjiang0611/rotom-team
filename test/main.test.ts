@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { type ChildProcess, spawn } from "node:child_process";
 import { once } from "node:events";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -134,5 +134,38 @@ test(
         proc.kill("SIGHUP");
         assert.deepEqual(await exit(proc), { code: 0, signal: null });
         assert.equal(existsSync(join(data, "harness.lock")), false);
+    },
+);
+
+test(
+    "the running server keeps a content-free performance journal in its data folder",
+    { skip: posix },
+    async () => {
+        const port = await freePort();
+        const { proc, data, output } = server("journal", port);
+
+        await until(() => output().includes("rotom team is running."), "the server to start");
+        assert.equal((await fetch(`http://127.0.0.1:${port}/s/7?private-words=1`)).status, 200);
+        proc.kill("SIGHUP");
+        assert.deepEqual(await exit(proc), { code: 0, signal: null });
+
+        const raw = readFileSync(join(data, "performance", "performance-0.jsonl"), "utf8");
+        const observations = raw
+            .trim()
+            .split("\n")
+            .map(
+                (line) =>
+                    (JSON.parse(line) as { observation: Record<string, unknown> }).observation,
+            );
+
+        assert.equal(observations[0]!.kind, "startup");
+        assert.ok(
+            observations.some(
+                (each) => each.kind === "http" && each.route === "/app" && each.status === 200,
+            ),
+        );
+        assert.ok(observations.some((each) => each.kind === "process"));
+        assert.equal(observations.at(-1)!.kind, "health");
+        assert.doesNotMatch(raw, /private-words/);
     },
 );

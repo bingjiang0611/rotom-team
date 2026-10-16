@@ -7,6 +7,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { PocketApp } from "../app.ts";
 import type { User } from "../config.ts";
 import type { Client } from "../room.ts";
+import { pushChannel, type PushSignal } from "../perf-channels.ts";
 import { conversationId, json } from "./io.ts";
 
 /** How long a poll waits for events before answering empty, and how long an unpolled session lives. */
@@ -49,7 +50,17 @@ export function createEventStreams(app: PocketApp) {
     ): Promise<void> => {
         const client = newClient(url, user, (event, data) => {
             if (!response.writableEnded) {
-                response.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+                const frame = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+
+                response.write(frame);
+
+                if (pushChannel.hasSubscribers) {
+                    pushChannel.publish({
+                        event,
+                        bytes: Buffer.byteLength(frame),
+                        transport: "stream",
+                    } satisfies PushSignal);
+                }
             }
         });
 
@@ -141,6 +152,14 @@ export function createEventStreams(app: PocketApp) {
 
             created.client = newClient(url, user, (event, data) => {
                 created.queue.push({ seq: ++created.seq, event, data });
+
+                if (pushChannel.hasSubscribers) {
+                    pushChannel.publish({
+                        event,
+                        bytes: null,
+                        transport: "poll",
+                    } satisfies PushSignal);
+                }
 
                 // A short pause lets a burst of events go out in one answer.
                 if (created.waiting !== undefined) {

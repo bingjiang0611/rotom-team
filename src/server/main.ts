@@ -97,6 +97,9 @@ let app: PocketApp | undefined;
 
 let stopWatching = () => {};
 
+/** Stops the daily performance journal (`perf-journal.ts`); a no-op until it started. */
+let stopJournal = async () => {};
+
 let stopping = false;
 /** A stop asked for while starting, done once the start finishes. */
 let stopWhenStarted: number | undefined;
@@ -126,6 +129,7 @@ const stop = async (code: number) => {
         console.error("Close failed:", error);
     }
 
+    await stopJournal();
     process.exit(code);
 };
 
@@ -210,6 +214,7 @@ if (options.kernel) {
     }
 }
 
+const openStarted = performance.now();
 const opened = await App.open({
     dataDir: options.data,
     defaultCwd: options.cwd,
@@ -218,6 +223,7 @@ const opened = await App.open({
 });
 
 app = opened;
+const openMs = performance.now() - openStarted;
 
 if (options.rotateToken) {
     opened.config.rotateOwnerToken();
@@ -240,6 +246,21 @@ stopWatching = (() => {
         }
     };
 })();
+
+// Observation fails open: a journal that cannot start costs its records, never the server.
+try {
+    const { startPerformanceJournal } = await import("./perf-journal.ts");
+
+    ({ stop: stopJournal } = await startPerformanceJournal({
+        directory: join(options.data, "performance"),
+        server,
+        openMs,
+        kernel: options.kernel,
+        log: (line) => console.error(line),
+    }));
+} catch (error) {
+    console.error(`The performance journal is off: ${(error as Error).message}`);
+}
 
 const token = encodeURIComponent(opened.config.ownerToken);
 
