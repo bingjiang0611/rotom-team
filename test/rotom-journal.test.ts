@@ -239,6 +239,49 @@ test("durable attempt identity: duplicate intent/unknown never dispatches again 
     }
 });
 
+test("native auxiliary model usage is payer-bound, atomic and deduplicated", () => {
+    const f = setup();
+    const journal = new RotomJournal(f.data);
+
+    try {
+        journal.bind("native", f.binding);
+        const run = journal.reserve("native", "reducer", "work");
+        const entry: KernelEntry = {
+            id: "reducer-usage",
+            parentId: null,
+            type: "usage",
+            kind: "sol_pi_reducer",
+            provider: f.binding.provider,
+            model: f.binding.model,
+            usage: { totalTokens: 17 },
+        };
+
+        journal.attach(run.id, "/tmp/native-reducer.jsonl", "native-id");
+        assert.throws(
+            () => journal.progress(run.id, [entry, { ...entry, id: "foreign", model: "other" }]),
+            /Native response model does not match admitted payer\/model/,
+        );
+        assert.equal(journal.entries("native").length, 0, "invalid snapshot rolls back entries");
+        assert.equal(journal.usage("native").length, 0, "invalid snapshot rolls back charges");
+        assert.equal(journal.progress(run.id, [entry]), 1);
+        assert.equal(journal.progress(run.id, [entry]), 0);
+        assert.deepEqual(
+            journal.usage("native").map((row) => [row.memberId, row.attemptId, row.raw]),
+            [["alice", run.id, { totalTokens: 17 }]],
+        );
+        assert.throws(
+            () =>
+                journal.progress(run.id, [{ ...entry, id: "foreign-provider", provider: "other" }]),
+            /Native response model does not match admitted payer\/model/,
+        );
+        journal.finish(run.id, "settled", [entry, response("done")]);
+        assert.equal(journal.usage("native").length, 2, "reducer and response each charged once");
+    } finally {
+        journal.close();
+        rmSync(f.root, { recursive: true, force: true });
+    }
+});
+
 test("response and immutable payer usage are ingested atomically and deduplicated by native entry", () => {
     const f = setup();
     const journal = new RotomJournal(f.data);

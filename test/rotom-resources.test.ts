@@ -78,6 +78,45 @@ test("shared resources replace member settings without reading project packages 
     );
 });
 
+test("rotom auxiliary inference defaults to the admitted payer model", async () => {
+    const { home, shared, project } = fixture();
+
+    await prepareTeamResources(home, shared, project, {
+        provider: "personal-provider",
+        model: "personal-model",
+    });
+    const generated = JSON.parse(readFileSync(join(home, ".pi/agent/sol-pi.json"), "utf8"));
+
+    assert.equal(generated.evidencePreservingReducer, true);
+    assert.equal(generated.evidencePreservingReducerProvider, "personal-provider");
+    assert.equal(generated.evidencePreservingReducerModel, "personal-model");
+    assert.equal(generated.onlineContextCompact, false);
+    assert.ok(
+        JSON.parse(
+            readFileSync(join(home, ".pi/agent/team-resource-view.json"), "utf8"),
+        ).files.includes("sol-pi.json"),
+    );
+
+    writeFileSync(
+        join(shared, "sol-pi.json"),
+        JSON.stringify({
+            version: 1,
+            evidencePreservingReducer: false,
+            evidencePreservingReducerProvider: "owner-provider",
+            evidencePreservingReducerModel: "owner-model",
+        }),
+    );
+    await prepareTeamResources(home, shared, project, {
+        provider: "personal-provider",
+        model: "personal-model",
+    });
+    assert.equal(
+        JSON.parse(readFileSync(join(home, ".pi/agent/sol-pi.json"), "utf8"))
+            .evidencePreservingReducerProvider,
+        "owner-provider",
+    );
+});
+
 test("declared plugin configuration is shared; credentials cannot be declared as configuration", async () => {
     const { home, shared, project } = fixture();
 

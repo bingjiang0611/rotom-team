@@ -1,6 +1,6 @@
 # Supported native commands
 
-Team exposes exactly these thirteen builtins/extensions from rotom 0.1.22:
+Team exposes exactly these thirteen builtins/extensions from rotom 0.1.25:
 `settings, model, thinking, tree, fork, clone, compact, reload, goal, browser, computer-use, mcp, qoder-credits`.
 Installed skills and prompt templates remain available. This is **web alignment within Team boundaries**, not a PTY
 frontend or a claim of complete terminal equivalence.
@@ -42,8 +42,8 @@ Clicking an argumentless command still opens/runs it; skill/template selection o
 - `node --test test/team-command-policy.test.ts test/native-tree.test.ts`: surface/name-precedence/routing checks
   and direct pinned terminal tree comparison.
 - `node test/native-command-inventory.ts <attested-terminal-inventory.json>` compares all 45 supplied terminal
-  name/source pairs. The empty shared profile has 39 raw native entries; **14** remain public: thirteen commands plus
-  the packaged subagent skill. Registration/handled is not proof of behavioral or financial equivalence.
+  name/source pairs from the 0.1.22 attestation. The empty shared profile on 0.1.25 has 40 raw native entries because
+  `/context` is now packaged; **14** remain public: thirteen commands plus the packaged subagent skill. Registration/handled is not proof of behavioral or financial equivalence.
 - `test/team-resources-proof.ts` exercises native RPC/executor resource loading, arbitrary trusted extension handlers,
   native dialogs, reload and follow-up below Team's public command admission. Those extra names are not exposed by Team.
 
@@ -96,7 +96,7 @@ Native injection resolves sources; Team no longer assumes every owned child has 
 User memory is member-private, project memory is shared, and neither is copied into the shared base profile.
 Named skills advertise descriptions/locations; the fixture verifies an actual child read, not just prompt metadata.
 
-Workflow support still needs a supported native RPC drain bridge. In 0.1.22, RPC has UI and skips the native headless
+Workflow support still needs a supported native RPC drain bridge. In 0.1.25, RPC has UI and skips the native headless
 auto-drain; agent settlement does not prove workflow-controller closure. Native refinement generation uses a standalone
 foreground reviewer that owned scope rejects. Existing overlays are supported; generation is not.
 

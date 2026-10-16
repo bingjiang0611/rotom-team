@@ -130,7 +130,7 @@ paging/streaming protocol, not silently truncating data or raising limits withou
 
 ## Native pin and subagent defaults
 
-The pin remains rotom 0.1.22. Team does not override native retry, compaction or builtin role settings. An empty shared
+The pin is rotom 0.1.25. Team does not override native retry, compaction or builtin role settings. An empty shared
 profile uses native defaults: automatic retry enabled (3 retries, 2-second exponential base delay, 60-second maximum),
 automatic compaction enabled (16,384 reserve tokens and approximately 20,000 recent tokens retained), and all six builtin
 roles: scout, worker, reviewer, delegate, oracle and researcher (alias advisor for oracle). Compaction triggers when the
@@ -138,8 +138,12 @@ native context estimate exceeds the selected model's context window minus reserv
 recovery. Context windows come from model metadata, not a Team-wide limit. Shared `compaction.modelOverrides` and
 `retry.provider` settings retain native precedence. Provider request retry options are forwarded unchanged; the pinned
 OpenAI provider helper defaults to zero HTTP retries when no override is set. Agent-level retry is separate and defaults
-to three. Automatic compaction usage is journaled under the same prompt payer; missing usage remains unknown. All
-inference, including retry and compaction, still passes through the fixed payer/model gate. Unknown Team operations and
+to three. Automatic compaction usage and rotom's evidence-preserving reducer usage are journaled under the same prompt payer;
+missing usage remains unknown. Unless an owner/shared or trusted project `sol-pi.json` explicitly selects otherwise,
+Team writes native SoL-Pi configuration with rotom's feature defaults and the admitted provider/model. Shared
+`sol-pi.json` is a managed configuration file. The reducer may run only on the admitted provider/model: an explicitly
+selected foreign reducer is blocked and leaves the operation unknown rather than charging an unbound account. All inference, including
+retry, compaction and reduction, still passes through the fixed payer/model gate. Unknown Team operations and
 credential refreshes are not replayed. Existing managed role/recovery overrides are replaced from the shared profile on
 the next startup; private/unclassified state is untouched. This is not an OS sandbox or a claim that a plugin cannot read
 project files.
@@ -246,9 +250,10 @@ in again. Declared config paths cannot name auth, model stores or session storag
 ## Forty-five terminal entries and TUI compatibility
 
 See [NATIVE-COMMAND-COMPATIBILITY.md](NATIVE-COMMAND-COMPATIBILITY.md) for the supported interactions and actual coverage.
-The isolated terminal comparison contains 24 builtins, 15 extension commands and 6 skill commands. The empty shared Team
-profile has 39 raw native entries. Fourteen remain public: the thirteen supported commands and the packaged subagent
-skill. Inventory presence is not proof of terminal-equivalent interactions.
+The attested 0.1.22 terminal comparison contains 24 builtins, 15 extension commands and 6 skill commands. The empty
+shared Team profile on rotom 0.1.25 has 40 raw native entries: `/context` is now packaged and the other five personal
+skills remain absent. Fourteen remain public: the thirteen supported commands and the packaged subagent skill. Inventory
+presence is not proof of terminal-equivalent interactions.
 
 `/context` and `/llama` are outside the supported surface and require TUI/custom UI that pinned RPC cannot supply.
 A handled response containing a TUI-only warning is not success. Five personal skills remain deliberately uninstalled

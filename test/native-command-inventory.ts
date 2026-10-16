@@ -35,7 +35,10 @@ const terminal = JSON.parse(readFileSync(source, "utf8")) as {
     commands: { name: string; source: string; sourceInfo?: { path?: string } }[];
 };
 
-assert.equal(terminal.version, verifyRotomKernel().version);
+assert.ok(
+    terminal.version === "0.1.22" || terminal.version === verifyRotomKernel().version,
+    "Only the original attestation or the current pinned inventory is supported",
+);
 const pairs = (commands: { name: string; source: string }[]) =>
     commands.map((command) => `${command.source}:${command.name}`).sort();
 
@@ -83,9 +86,9 @@ try {
 
     assert.deepEqual(
         missing.map((command) => command.name).sort(),
-        ["context", ...expectedNames.skill.filter((name) => name !== "skill:pi-subagents")].sort(),
+        expectedNames.skill.filter((name) => name !== "skill:pi-subagents").sort(),
     );
-    assert.equal(actual.length, 39);
+    assert.equal(actual.length, 40);
     const allowed = teamCommandCatalog(actual);
 
     assert.equal(
@@ -131,10 +134,11 @@ try {
             {
                 root,
                 terminalInventory: source,
-                version: terminal.version,
+                version: verifyRotomKernel().version,
+                terminalVersion: terminal.version,
                 realAccounts: false,
                 terminalRows: 45,
-                registeredNativeRows: 39,
+                registeredNativeRows: 40,
                 allowedTeamCatalogEntries: allowed.length,
                 explicitExclusions: terminal.commands
                     .filter((command) => !supportedTeamCommand(command))

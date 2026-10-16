@@ -29,6 +29,7 @@ const standardFiles = [
     "SYSTEM.md",
     "APPEND_SYSTEM.md",
     "mcp.json",
+    "sol-pi.json",
     "extensions/pi-computer-use.json",
 ];
 
@@ -155,7 +156,12 @@ export function teamResourceRevision(directory: string, workspace?: string): str
 }
 
 /** Resolve already-installed shared packages with the pinned native resolver; never install on a member's run. */
-export async function prepareTeamResources(home: string, directory: string, workspace: string) {
+export async function prepareTeamResources(
+    home: string,
+    directory: string,
+    workspace: string,
+    payerModel?: { provider: string; model: string },
+) {
     safeConfigurationPath(directory, "settings.json");
     safeConfigurationPath(directory, "team.json");
     safeConfigurationPath(home, ".pi/agent/settings.json");
@@ -222,7 +228,31 @@ export async function prepareTeamResources(home: string, directory: string, work
         throw new Error("Member resource view belongs to a different Team profile");
     }
 
-    const present = files.filter((name) => existsSync(safeConfigurationPath(directory, name)));
+    const contents = new Map(
+        files
+            .filter((name) => existsSync(safeConfigurationPath(directory, name)))
+            .map((name) => [name, readFileSync(safeConfigurationPath(directory, name))]),
+    );
+
+    if (payerModel && !contents.has("sol-pi.json")) {
+        // Preserve rotom 0.1.25's feature defaults, but auxiliary inference must use the admitted payer/model.
+        contents.set(
+            "sol-pi.json",
+            Buffer.from(
+                `${JSON.stringify({
+                    version: 1,
+                    actionFusion: true,
+                    observationPack: true,
+                    evidencePreservingReducer: true,
+                    evidencePreservingReducerProvider: payerModel.provider,
+                    evidencePreservingReducerModel: payerModel.model,
+                    onlineContextCompact: false,
+                })}\n`,
+            ),
+        );
+    }
+
+    const present = [...contents.keys()];
     const retiring = [...new Set<string>([...(previous.files ?? []), ...files])].filter(
         (name) => !present.includes(name),
     );
@@ -243,13 +273,13 @@ export async function prepareTeamResources(home: string, directory: string, work
     }
 
     for (const name of present) {
-        const source = safeConfigurationPath(directory, name);
+        const sourceDigest = createHash("sha256").update(contents.get(name)!).digest("hex");
         const target = safeConfigurationPath(home, `.pi/agent/${name}`);
 
         if (
             existsSync(target) &&
             !previous.files?.includes(name) &&
-            resourceFileDigest(target) !== resourceFileDigest(source)
+            resourceFileDigest(target) !== sourceDigest
         ) {
             throw new TeamResourcePolicyError(
                 `Shared configuration collides with an unmanaged member file: ${name}`,
@@ -262,10 +292,7 @@ export async function prepareTeamResources(home: string, directory: string, work
     }
 
     for (const name of present) {
-        write(
-            safeConfigurationPath(home, `.pi/agent/${name}`),
-            readFileSync(safeConfigurationPath(directory, name)),
-        );
+        write(safeConfigurationPath(home, `.pi/agent/${name}`), contents.get(name)!);
     }
 
     write(join(agentDir, "settings.json"), `${JSON.stringify(settings, null, 2)}\n`);
@@ -273,7 +300,7 @@ export async function prepareTeamResources(home: string, directory: string, work
         directory,
         files: present,
         fileDigests: Object.fromEntries(
-            present.map((file) => [file, resourceFileDigest(join(directory, file))]),
+            present.map((file) => [file, resourceFileDigest(join(agentDir, file))]),
         ),
         subagents: settings.subagents,
         resourceSettings: teamResourceSettings(settings),

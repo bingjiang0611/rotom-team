@@ -412,7 +412,10 @@ export async function startRotomKernel(options: {
 
     const teamAgentDir = options.teamAgentDir;
 
-    await prepareTeamResources(home, teamAgentDir, workspace);
+    await prepareTeamResources(home, teamAgentDir, workspace, {
+        provider: options.provider,
+        model: options.model,
+    });
     const node = realpathSync(process.execPath);
     // Desktop tools run as the service user. The member HOME isolates credentials, not the screen:
     // reuse the service user's installed (and TCC-authorized) Computer Use helper.

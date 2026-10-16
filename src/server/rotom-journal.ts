@@ -1057,13 +1057,17 @@ export class RotomJournal {
                     );
             }
 
-            const message = entry.message as
+            // Native auxiliary inference (for example SoL-Pi reduction) records usage outside assistant messages.
+            const message = (entry.type === "usage" ? entry : entry.message) as
                 { role?: string; provider?: string; model?: string; usage?: unknown } | undefined;
 
-            if (entry.type === "message" && message?.role === "assistant") {
+            if (
+                entry.type === "usage" ||
+                (entry.type === "message" && message?.role === "assistant")
+            ) {
                 if (
-                    message.provider !== attempt.binding.provider ||
-                    message.model !== attempt.binding.model
+                    message?.provider !== attempt.binding.provider ||
+                    message?.model !== attempt.binding.model
                 ) {
                     throw new Error("Native response model does not match admitted payer/model");
                 }
