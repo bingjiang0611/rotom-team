@@ -248,6 +248,44 @@ async function prefixOf(cwd: string): Promise<string> {
     return (await git(cwd, ["rev-parse", "--show-prefix"])).trim();
 }
 
+/** Fresh repository metadata in one process; keep the original reads for unborn or unusual HEADs. */
+async function repositoryState(cwd: string): Promise<{
+    root: string;
+    branch?: string;
+    head?: string;
+}> {
+    try {
+        // rev-parse options apply to subsequent arguments: emit root, OID, then abbreviated HEAD.
+        // Only the final two lines are metadata; repository paths may themselves contain newlines.
+        const output = await git(cwd, [
+            "rev-parse",
+            "--show-toplevel",
+            "HEAD",
+            "--abbrev-ref",
+            "HEAD",
+        ]);
+        const match = /^([\s\S]+)\n([0-9a-f]{40}|[0-9a-f]{64})\n([^\n]+)\n$/.exec(output);
+
+        if (match) {
+            return { root: match[1]!.trim(), head: match[2]!, branch: match[3]!.trim() };
+        }
+    } catch {
+        // Preserve the old root/HEAD error handling rather than guessing from a partial failed response.
+    }
+
+    const root = (await git(cwd, ["rev-parse", "--show-toplevel"])).trim();
+    const branch = await git(cwd, ["rev-parse", "--abbrev-ref", "HEAD"]).then(
+        (name) => name.trim(),
+        () => undefined,
+    );
+    const head = await git(root, ["rev-parse", "--verify", "--quiet", "HEAD"]).then(
+        (id) => id.trim() || undefined,
+        () => undefined,
+    );
+
+    return { root, branch, head };
+}
+
 /**
  * The changes in a folder's repository, with the files Pi edited according to `entries`. `onlyHere` leaves out the
  * changes outside the folder: someone invited to one session sees its files only.
@@ -257,10 +295,10 @@ export async function changesIn(
     entries: readonly ClientEntry[],
     onlyHere = false,
 ): Promise<Changes> {
-    let root: string;
+    let repository: Awaited<ReturnType<typeof repositoryState>>;
 
     try {
-        root = (await git(cwd, ["rev-parse", "--show-toplevel"])).trim();
+        repository = await repositoryState(cwd);
     } catch {
         const edits = piEdits(entries, cwd);
 
@@ -271,15 +309,8 @@ export async function changesIn(
         };
     }
 
+    const { root, branch, head } = repository;
     const edits = piEdits(entries, cwd, true);
-    const branch = await git(cwd, ["rev-parse", "--abbrev-ref", "HEAD"]).then(
-        (name) => name.trim(),
-        () => undefined,
-    );
-    const head = await git(root, ["rev-parse", "--verify", "--quiet", "HEAD"]).then(
-        (id) => id.trim() || undefined,
-        () => undefined,
-    );
     const prefix = onlyHere ? await prefixOf(cwd) : "";
     const changed = parseStatus(
         await git(root, ["status", "--porcelain=v1", "-z", "--untracked-files=all"]),
@@ -324,7 +355,7 @@ export async function changesIn(
  * Only files that git lists as changed: the path cannot point anywhere else. With `onlyHere`, only files in `cwd`.
  */
 export async function diffOf(cwd: string, path: string, onlyHere = false): Promise<string> {
-    const root = (await git(cwd, ["rev-parse", "--show-toplevel"])).trim();
+    const { root, head } = await repositoryState(cwd);
     const change = parseStatus(
         await git(root, ["status", "--porcelain=v1", "-z", "--untracked-files=all"]),
     ).find((each) => each.path === path);
@@ -334,10 +365,8 @@ export async function diffOf(cwd: string, path: string, onlyHere = false): Promi
         throw new Error("That file has no uncommitted changes");
     }
 
-    const hasHead = await git(root, ["rev-parse", "--verify", "--quiet", "HEAD"]).then(
-        () => true,
-        () => false,
-    );
+    const hasHead = head !== undefined;
+
     // `--no-index` exits with 1 when the files differ, which is the point. A renamed file is both its paths: given
     // both, git shows what changed in it, not a whole new file.
     const paths = change.from === undefined ? [path] : [change.from, path];

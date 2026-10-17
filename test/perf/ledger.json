@@ -10,7 +10,7 @@
             "source": "child processes whose program is git (test/perf/counters.ts)",
             "status": "gating",
             "tolerance": 0,
-            "ceiling": 5,
+            "ceiling": 3,
             "evidence": {
                 "stability": "10 fresh-process runs on darwin-arm64 (Apple M1, 8 cores, load 2.5-3.7) gave 5 in every run (spread 0); docs/performance/experiments/2026-10-16-gate-git-counters.md",
                 "sensitivity": "ROTOM_TEAM_PERF_INJECT=git (every Git command run twice) moved it 5 -> 10 in all 5 runs, and `ratchet.ts check` failed with `regressed`",
@@ -58,7 +58,7 @@
             "tolerance": 1,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 529
+                "darwin-arm64": 528
             }
         },
         "startup.restart/subprocess.total": {
@@ -856,7 +856,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 5
+                "darwin-arm64": 3
             }
         },
         "git.changes/json.parse.calls": {
@@ -912,7 +912,7 @@
             "tolerance": 7,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 2542
+                "darwin-arm64": 2540
             }
         },
         "git.branches/sql.statements": {
@@ -996,7 +996,7 @@
             "tolerance": 34,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 242
+                "darwin-arm64": 208
             }
         },
         "git.branches/http.body.bytes": {
@@ -1304,7 +1304,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 4
+                "darwin-arm64": 3
             }
         },
         "git.diff/json.parse.calls": {
@@ -1346,7 +1346,7 @@
             "tolerance": 34,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 34
+                "darwin-arm64": 0
             }
         },
         "git.diff/subprocess.git": {
@@ -1360,7 +1360,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 4
+                "darwin-arm64": 3
             }
         },
         "git.diff/http.body.bytes": {
