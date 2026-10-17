@@ -97,6 +97,11 @@ const COUNTERS: Record<string, MetricSpec> = {
         unit: "chars",
         source: "characters JSON.stringify produced (test/perf/counters.ts)",
     },
+    "view.entry.visits": {
+        layer: "cpu",
+        unit: "count",
+        source: "durable entries traversed to project room views (src/server/room.ts)",
+    },
     "push.events": {
         layer: "push",
         unit: "count",
@@ -158,11 +163,11 @@ const pushes = ["push.events", "push.bytes", "push.view.count", "push.view.bytes
 export const REPORTED: Record<string, string[]> = {
     "startup.restart": [...common],
     "sessions.list": [...common, "http.body.bytes"],
-    "session.open": [...common, ...pushes],
+    "session.open": [...common, "view.entry.visits", ...pushes],
     "turn.cold": [...common, "subprocess.git", ...pushes],
-    "turn.warm": [...common, "subprocess.git", ...pushes],
+    "turn.warm": [...common, "subprocess.git", "view.entry.visits", ...pushes],
     // Paced chunks race the 90 ms push coalescing, so its push counts depend on timing: candidates until proven stable.
-    "turn.paced": [...common, "subprocess.git", ...pushes],
+    "turn.paced": [...common, "subprocess.git", "view.entry.visits", ...pushes],
     "git.changes": [...common, "subprocess.git", "http.body.bytes"],
     "git.diff": [...common, "subprocess.git", "http.body.bytes"],
     "git.branches": [...common, "subprocess.git", "http.body.bytes"],
@@ -183,6 +188,7 @@ export const REPORTED: Record<string, string[]> = {
         "sql.statements",
         "sql.rows",
         "subprocess.total",
+        "view.entry.visits",
         ...pushes,
         "http.requests",
         "cdp.LayoutCount",

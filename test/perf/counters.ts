@@ -20,8 +20,10 @@ import { DatabaseSync, StatementSync } from "node:sqlite";
 import {
     nativeStartChannel,
     pushChannel,
+    viewProjectionChannel,
     type NativeStartSignal,
     type PushSignal,
+    type ViewProjectionSignal,
 } from "../../src/server/perf-channels.ts";
 
 export type Counts = Record<string, number>;
@@ -165,6 +167,10 @@ pushChannel.subscribe((message) => {
         add(`push.${event}.bytes`, bytes);
     }
 });
+
+viewProjectionChannel.subscribe((message) =>
+    add("view.entry.visits", (message as ViewProjectionSignal).entryVisits),
+);
 
 nativeStartChannel.subscribe((message) => {
     for (const [name, ms] of Object.entries(message as unknown as NativeStartSignal)) {

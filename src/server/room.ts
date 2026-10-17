@@ -51,6 +51,7 @@ import {
     projectLive,
     projectStats,
 } from "./projection.ts";
+import { viewProjectionChannel, type ViewProjectionSignal } from "./perf-channels.ts";
 import { describeRepeat } from "./when.ts";
 
 const context = BACKGROUND_CONTEXT;
@@ -380,6 +381,12 @@ export class Room {
                 client.sentEntries.add(projected.id);
                 entries.push(projected);
             }
+        }
+
+        if (viewProjectionChannel.hasSubscribers) {
+            viewProjectionChannel.publish({
+                entryVisits: view.entries.length,
+            } satisfies ViewProjectionSignal);
         }
 
         const orderKey = order.join(",");
