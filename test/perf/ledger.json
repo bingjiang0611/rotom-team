@@ -1264,6 +1264,118 @@
             "baselines": {
                 "darwin-arm64": 971
             }
+        },
+        "git.diff/sql.statements": {
+            "scenario": "git.diff",
+            "metric": "sql.statements",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 20 changed files; GET changes/diff for tracked src/file-0.txt",
+            "source": "node:sqlite StatementSync run/get/all/iterate + DatabaseSync.exec (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "git.diff/sql.rows": {
+            "scenario": "git.diff",
+            "metric": "sql.rows",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 20 changed files; GET changes/diff for tracked src/file-0.txt",
+            "source": "rows returned by StatementSync all/get (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "git.diff/subprocess.total": {
+            "scenario": "git.diff",
+            "metric": "subprocess.total",
+            "layer": "process",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 20 changed files; GET changes/diff for tracked src/file-0.txt",
+            "source": "ChildProcess.prototype.spawn + spawnSync/execFileSync/execSync (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 4
+            }
+        },
+        "git.diff/json.parse.calls": {
+            "scenario": "git.diff",
+            "metric": "json.parse.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 20 changed files; GET changes/diff for tracked src/file-0.txt",
+            "source": "global JSON.parse calls in the server process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "git.diff/json.parse.chars": {
+            "scenario": "git.diff",
+            "metric": "json.parse.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 20 changed files; GET changes/diff for tracked src/file-0.txt",
+            "source": "characters given to JSON.parse (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "git.diff/json.stringify.chars": {
+            "scenario": "git.diff",
+            "metric": "json.stringify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 20 changed files; GET changes/diff for tracked src/file-0.txt",
+            "source": "characters JSON.stringify produced (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 34,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 34
+            }
+        },
+        "git.diff/subprocess.git": {
+            "scenario": "git.diff",
+            "metric": "subprocess.git",
+            "layer": "process",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 20 changed files; GET changes/diff for tracked src/file-0.txt",
+            "source": "child processes whose program is git (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 4
+            }
+        },
+        "git.diff/http.body.bytes": {
+            "scenario": "git.diff",
+            "metric": "http.body.bytes",
+            "layer": "http",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 20 changed files; GET changes/diff for tracked src/file-0.txt",
+            "source": "answer body bytes the benchmark received (test/perf/scenarios.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1195
+            }
         }
     }
 }

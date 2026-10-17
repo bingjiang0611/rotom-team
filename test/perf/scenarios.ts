@@ -320,6 +320,19 @@ await watcher.close();
 await scenario("git.changes", async () => ({
     "http.body.bytes": (await call(`c/${history}/changes`)).bytes,
 }));
+await scenario("git.diff", async () => {
+    const response = await fetch(`${base}/api/c/${history}/changes/diff?path=src/file-0.txt`, {
+        headers: { authorization: `Bearer ${token}` },
+    });
+    const text = await response.text();
+
+    assert.equal(response.status, 200);
+    assert.match(text, /^diff --git a\/src\/file-0.txt b\/src\/file-0.txt$/m);
+    assert.match(text, /^-line 0$/m);
+    assert.match(text, /^\+changed 0$/m);
+
+    return { "http.body.bytes": Buffer.byteLength(text) };
+});
 await scenario("git.branches", async () => ({
     "http.body.bytes": (await call(`c/${history}/branches`)).bytes,
 }));

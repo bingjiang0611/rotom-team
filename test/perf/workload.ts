@@ -26,6 +26,7 @@ export const SCENARIOS: Record<string, string> = {
     "turn.warm": `${seeded}; second prompt of that session with one tab watching, until settled and quiet`,
     "turn.paced": `${seeded}; third prompt of that session, its answer paced ${WORKLOAD.pacedChunkMs} ms per chunk, one tab watching, until settled and quiet`,
     "git.changes": `${seeded}; Git workspace with ${WORKLOAD.changedFiles} changed files; GET changes`,
+    "git.diff": `${seeded}; Git workspace with ${WORKLOAD.changedFiles} changed files; GET changes/diff for tracked src/file-0.txt`,
     "git.branches": `${seeded}; Git workspace with 2 branches; GET branches`,
     "commands.list": `${seeded}; GET the native slash-command list`,
     "web.open": `${seeded}; headless Chromium signed in, opens /s/<session> until the last answer is in the page`,
@@ -140,6 +141,7 @@ export const REPORTED: Record<string, string[]> = {
     // Paced chunks race the 90 ms push coalescing, so its push counts depend on timing: candidates until proven stable.
     "turn.paced": [...common, "subprocess.git", ...pushes],
     "git.changes": [...common, "subprocess.git", "http.body.bytes"],
+    "git.diff": [...common, "subprocess.git", "http.body.bytes"],
     "git.branches": [...common, "subprocess.git", "http.body.bytes"],
     "commands.list": [...common, "http.body.bytes"],
     // JSON counts leave web.open out: the DevTools connection that drives Chromium parses and writes JSON too.
