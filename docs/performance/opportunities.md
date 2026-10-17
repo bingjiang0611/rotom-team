@@ -86,6 +86,26 @@ No comparison qualifies as `faster`; initial Git baselines were loaded, later co
 speedup is claimed. Three experiments close this session. Next: controlled native startup phase measurement, then
 one measured resource/bootstrap optimisation. Stage 3 projection/protocol redesign remains unimplemented.
 
+## Second climb batch — 2026-10-17
+
+Three experiments completed; still no L2/L3 claim:
+
+- **Cold startup is native initialization, not process creation.** Stage spans show about 2–3 ms Team pin validation,
+  67–76 ms resource preparation, 0.5–0.6 ms OS spawn, and 1.5–1.6 s native RPC readiness. Leave safety checks intact.
+  Native module/extension/MCP breakdown is not yet measured. See [measurement](experiments/2026-10-17-native-start-phases.md).
+- **Identical resource writes retained as an L1 win.** Cold discovery parent writes 4→1, bytes 1,213→396, renames 3→0.
+  Unchanged private regular files keep inode/mtime; matching public-mode files still get private atomic replacement.
+  Policy, package resolution and exact byte comparisons stay on the path. Total latency compares as noise.
+  See [experiment](experiments/2026-10-17-skip-identical-resource-writes.md).
+- **View traversal is measured.** Two five-run reports reproduce entry visits 56/session open, 8/warm turn, 82/paced
+  turn, 28/web open. Small fixtures do not establish large-history cost. Four new candidates, no promotion. See
+  [measurement](experiments/2026-10-17-view-entry-visits.md).
+
+Final current-code checks pass (440 unit tests; synthetic kernel proof with 82 loopback requests), no account/service
+use. Next authorised experiment: large-history/multi-tab projection workload, then cached order with exact append/reset
+invalidation. Native startup internals remain another lead needing a supported phase/profile investigation, not a
+raw-Pi or shared-credential shortcut.
+
 ## Open
 
 - **A warm turn parses about 93 times its answer as JSON.** `turn.warm/json.parse.chars` 558 969 for a

@@ -33,9 +33,26 @@ These are the batch's three experiments; no fourth hypothesis is started in this
 (439), as do the synthetic kernel and native-command proofs. All latency comparisons remain noise; no L2/L3
 improvement is claimed. Stage 1 is partial, stage 2 has measurement coverage only, and stage 3 is not implemented.
 
-Next authorised action: add controlled native startup phase measurements to separate resource resolution/materialisation,
-bootstrap and RPC/registry costs; then select one measured stage-2 optimisation. Do not automatically prewarm on GET
-or weaken pin verification. The larger projection/protocol work remains sequenced behind these measurements.
+## Second implementation batch
+
+- [Native startup phases](experiments/2026-10-17-native-start-phases.md) separate Team verification/resources/helper
+  and OS spawn from native initialization. Typical cold startup: verify 2–3 ms, resources 67–76 ms, OS spawn about
+  0.5–0.6 ms, native initialization about 1.5–1.6 s. This confirms the large waiting path is inside native startup,
+  not OS process creation. Native extension/MCP/module subphases remain unmeasured; no attribution is guessed.
+- [Identical managed writes removed](experiments/2026-10-17-skip-identical-resource-writes.md): cold discovery writes
+  4→1, bytes 1,213→396, atomic renames 3→0. Every policy/source/derivation check remains; identical public-mode files
+  still take atomic replacement to repair permissions. L1 only; cold median 1,726→1,668 ms compares as noise.
+- [Room projection visits](experiments/2026-10-17-view-entry-visits.md): ten runs reproduce session-open 56 visits,
+  warm 8, paced 82, web-open 28 with zero spread. New candidates only, not gate promotion or a speedup.
+
+The second batch closes after three experiments. Final current-code validation: check, lint, format check and 440
+unit tests pass; synthetic kernel proof passes with 82 loopback requests, no real provider or browser validation.
+Stage 2 now has one small IO optimisation; stage 3 has measurement coverage but no projection/protocol optimisation.
+
+Next authorised action: add large-history/multi-tab scenarios under new keys, then evaluate cached server order with
+append/reset invalidation before any wire-protocol changes. Native initialization remains a high-value lead, but
+altering the pinned native boundary or automatically starting trusted extensions is not authorised by these results.
+A supported native phase/profile investigation is still needed before selecting launcher/runtime work.
 
 ## Evidence
 
