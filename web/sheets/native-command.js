@@ -45,6 +45,18 @@ export function showNativeResult(result, commandName) {
         notify("info", "Native resources reloaded.");
     }
 
+    if (
+        ["clone", "fork"].includes(commandName) &&
+        result.status === "handled" &&
+        result.conversationId !== undefined &&
+        result.conversationId !== store.state.conversationId
+    ) {
+        notify(
+            "info",
+            "Conversation copied. Both sessions use the same project folder; files were not copied.",
+        );
+    }
+
     const navigation = result.nativeResult?.navigation;
 
     if (navigation?.cancelled) {

@@ -341,6 +341,29 @@ export class RotomJournal {
         };
     }
 
+    /** Current head models for sidebar projection in one read; never mutate identity/receipt bindings. */
+    modelNames(): Map<string, string> {
+        const rows = this.#db
+            .prepare(
+                `
+            SELECT h.conversation_id AS id, json_extract(COALESCE(m.binding, s.binding), '$.model') AS model
+            FROM kernel_heads h
+            JOIN kernel_sessions s ON s.id=h.session_id
+            LEFT JOIN kernel_segment_models m ON m.segment_id=s.id
+        `,
+            )
+            .all();
+        const models = new Map<string, string>();
+
+        for (const row of rows) {
+            if (typeof row.model === "string") {
+                models.set(String(row.id), row.model);
+            }
+        }
+
+        return models;
+    }
+
     hasConversation(id: string): boolean {
         return (
             this.#db.prepare("SELECT 1 FROM kernel_heads WHERE conversation_id=?").get(id) !==

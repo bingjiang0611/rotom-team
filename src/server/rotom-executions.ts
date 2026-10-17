@@ -136,7 +136,11 @@ export type RunHooks = {
     /** The intent is durably committed: the request can no longer be lost, only end unknown. */
     onReserved?: (receipt: KernelReceipt) => void | Promise<void>;
     /** A dynamic slash passed live registry validation; the consumer may still refuse before dispatch. */
-    onCommandAdmitted?: (command: { name: string; source?: unknown }) => void | Promise<void>;
+    onCommandAdmitted?: (command: {
+        name: string;
+        source?: unknown;
+        args?: string;
+    }) => void | Promise<void>;
     /** Every kernel event, for provisional display only. */
     onEvent?: (event: RpcRecord) => void;
     /** The registry captured from this authorized kernel process. */
@@ -472,7 +476,7 @@ export class RotomExecutions {
 
                     const source = dynamic.find((command) => command.name === name)?.source;
 
-                    await admitCommand?.({ name: name!, source });
+                    await admitCommand?.({ name: name!, source, args: nativeCommandArgs(text) });
 
                     if (source === "prompt" || source === "skill") {
                         await queueInput();
@@ -1312,7 +1316,11 @@ export class RotomExecutions {
                         activeAttempt.operation = operation;
                     }
 
-                    await hooks.onCommandAdmitted?.({ name: name!, source });
+                    await hooks.onCommandAdmitted?.({
+                        name: name!,
+                        source,
+                        args: nativeCommandArgs(prompt),
+                    });
                 }
             }
 

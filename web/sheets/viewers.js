@@ -1,21 +1,56 @@
 // Artifacts and images, each in a viewer of its own.
-import { useEffect, useState } from "preact/hooks";
-import { closeSheet, openSheet, store } from "../store.js";
-import { formatBytes, html, Icon, Sheet, timeAgo } from "../ui.js";
+import { useEffect, useMemo, useState } from "preact/hooks";
+import { writtenFiles } from "../calls.js";
+import { filesAvailable, setFilesOpen } from "../files-panel.js";
+import { canSteer, closeSheet, openSheet, store } from "../store.js";
+import { downloadUrl, formatBytes, html, Icon, openFile, Sheet, timeAgo } from "../ui.js";
 
 export function ArtifactsSheet() {
-    const { artifacts } = store.state.view;
+    const { artifacts, order, entries } = store.state.view;
+    const files = useMemo(
+        () => writtenFiles(order.map((id) => entries.get(id)).filter(Boolean)),
+        [order],
+    );
     const items = [...artifacts].sort(
         (a, b) => (b.versions.at(-1)?.createdAt ?? 0) - (a.versions.at(-1)?.createdAt ?? 0),
     );
 
-    return html`<${Sheet} title="Artifacts" onClose=${closeSheet}>
-        ${
-            items.length === 0 &&
-            html`<p class="muted">
-                No artifacts yet. Ask Pi to build something you can look at: a chart, a demo, a game.
-            </p>`
-        }
+    return html`<${Sheet} title="Outputs" onClose=${closeSheet}>
+        <p class="muted small">
+            Files written in this conversation's history, including inherited history. These open the
+            current files, not saved versions; copies and branches can share the same folder.
+        </p>
+        ${filesAvailable() && html`<button class="button" onClick=${() => setFilesOpen(true, "files")}>Browse project files</button>`}
+        <div class="group-title">Files · ${files.length}</div>
+        ${files.length === 0 && html`<p class="muted">No successful file writes recorded yet. Files made by shell commands or other tools can be found in the project folder.</p>`}
+        ${files.map(
+            (file) => html`<a
+            class="list-item output-file"
+            href=${downloadUrl(file.path)}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick=${(event) => {
+                if (
+                    canSteer() &&
+                    !event.ctrlKey &&
+                    !event.metaKey &&
+                    !event.shiftKey &&
+                    !event.altKey
+                ) {
+                    event.preventDefault();
+                    openFile(file.path);
+                }
+            }}
+        >
+            <span>
+                <span class="mono">${file.path}</span>
+                <span class="muted small">${file.action === "write" ? "Written" : "Edited"} · open current file</span>
+            </span>
+            <${Icon} name="file" size=${16} />
+        </a>`,
+        )}
+        <div class="group-title">Published artifacts · ${items.length}</div>
+        ${items.length === 0 && html`<p class="muted">No separately published artifacts. Generated files appear above; open an HTML file to preview or run it.</p>`}
         ${items.map((artifact) =>
             [...artifact.versions].reverse().map(
                 (version) => html`<button

@@ -1,10 +1,11 @@
 // Pi Pocket web app. No build step: edit a file under web/ and every open browser reloads.
 import { render } from "preact";
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { canGoBack, goBack, goHome, replaceAddress, startHistory, useBack } from "./back.js";
 import { BrowserButton, BrowserPanel } from "./browser-panel.js";
 import { browserAvailable, toggleBrowser } from "./browser.js";
 import { PeopleButton, PeoplePanel } from "./chat.js";
+import { writtenFiles } from "./calls.js";
 import { Composer } from "./composer.js";
 import {
     FilesButton,
@@ -61,7 +62,13 @@ const toSessions = () => goHome(() => navigate(null, { replace: true }));
 function Topbar() {
     const { view, server } = store.state;
     const conversation = view.conversation;
-    const artifacts = view.artifacts?.length ?? 0;
+    const artifacts = useMemo(
+        () =>
+            view.artifacts.length +
+            writtenFiles(view.order.map((id) => view.entries.get(id)).filter(Boolean)).length,
+        // Persisted transcript entries are immutable; live token updates keep the same order reference.
+        [view.artifacts, view.order],
+    );
     const subtitle =
         conversation?.kind === "subagent"
             ? `subagent of ${conversation.parent?.title ?? "?"}`
@@ -112,7 +119,7 @@ function Topbar() {
         ${!view.kernel && html`<${BrowserButton} />`}
         <button
             class=${`icon-button badge-host ${artifacts > 0 ? "" : "quiet"}`}
-            aria-label="Artifacts"
+            aria-label="Outputs"
             onClick=${() => openSheet({ type: "artifacts" })}
         >
             <${Icon} name="artifact" />

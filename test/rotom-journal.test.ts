@@ -47,6 +47,71 @@ function setup() {
     return { root, data, binding };
 }
 
+test("batch model projection follows current heads and model intents, not immutable identity or old segments", () => {
+    const f = setup();
+    let journal = new RotomJournal(f.data);
+
+    try {
+        assert.equal(journal.modelNames().size, 0);
+        journal.bind("a", f.binding);
+        journal.bind("b", f.binding);
+        const first = journal.reserve("a", "original", "/name first", "command");
+
+        journal.attach(first.id, join(f.root, "first.jsonl"), "first-native");
+        journal.finish(first.id, "handled", []);
+        const changed = journal.reserve("a", "switch", "/model fixture/model-2", "command", {
+            expectedHead: "a",
+            binding: { ...f.binding, model: "model-2" },
+        });
+
+        assert.deepEqual(
+            journal.modelNames(),
+            new Map([
+                ["a", "model-2"],
+                ["b", "model-1"],
+            ]),
+        );
+        assert.equal(journal.receipt(first.id).binding.model, "model-1");
+        journal.fail(changed.id, "unknown");
+        const next = journal.handoff("b", "handoff", "b", {
+            ...f.binding,
+            accountGeneration: "grant-2",
+            model: "model-3",
+        });
+
+        assert.equal(
+            journal.modelNames().get("b"),
+            "model-1",
+            "uncommitted handoff is not the head",
+        );
+        journal.finish(next.id, "settled", []);
+        assert.equal(journal.modelNames().get("b"), "model-3");
+        assert.equal(
+            journal.modelNames().has(next.segmentId),
+            false,
+            "only conversation heads are listed",
+        );
+        journal.close();
+        journal = new RotomJournal(f.data);
+        assert.deepEqual(
+            journal.modelNames(),
+            new Map([
+                ["a", "model-2"],
+                ["b", "model-3"],
+            ]),
+        );
+        assert.equal(journal.receipt(first.id).binding.model, "model-1");
+        assert.equal(
+            journal.receipt(changed.id).status,
+            "unknown",
+            "projection never reconciles or replays",
+        );
+    } finally {
+        journal.close();
+        rmSync(f.root, { recursive: true, force: true });
+    }
+});
+
 test("current thinking follows native ancestry without changing immutable receipt bindings", () => {
     const f = setup();
     let journal = new RotomJournal(f.data);

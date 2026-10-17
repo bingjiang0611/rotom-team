@@ -188,6 +188,34 @@ The same fixture checks duplicate candidates, hidden ignored skills, unauthorize
 in both viewers, manual absolute-path entry, 390px layout, and document-relative Markdown links/cache isolation.
 Binary files still download instead of pretending to be previewable; missing files are not reconstructed.
 
+## UX audit follow-up: outputs, identity and dynamic commands
+
+- `node --test test/output-files.test.ts test/team-command-policy.test.ts`: successful paired writes/edits (including
+  Qoder `Write/file_path`), latest-per-path ordering, failed/pending/read/clipped rejection, codemode `ok` child effects
+  even after a later parent error when a public path is reported, ignored shell/script text and unprojected nested
+  arguments, malformed paths, all 15 extension capability entries,
+  prototype-like command names, native precedence, and argument-dependent rejection. No directory scans or raw native
+  history are used.
+- `node test/native-commands-proof.ts --ui`: current native model in two members' session lists and after restart;
+  visible Team-only source name retained by clone/replay/continuation/restart; explicit mirror cannot import a source
+  title into a copy/fork; 15 real discovered extension entries carry guidance; known-invalid llama/MCP/stop inputs
+  start no process/receipt/inference or binding change; eight native read-only/report handlers run with zero inference.
+  Existing private-account, handoff, unknown/no-replay and branch fixtures still run. All provider calls are synthetic.
+- The same browser proof checks terminal-only disabled suggestions/draft retention and required run-id guidance.
+  Outputs rendering uses explicitly synthetic **public projection** entries plus fixture files, not a claim of native
+  file generation: two successful paths appear, a failed path does not, the mobile sheet stays in bounds, and an HTML
+  row opens the real authorized file viewer with Preview. It saves `outputs-{desktop,mobile,file-viewer}.jpg` alongside
+  the existing native-command screenshots in the printed temporary fixture directory. `outputs-light.jpg` covers the
+  existing light theme. Model A→B sidebar text is asserted through the live session subscription without a page reload.
+- `test/app.test.ts` checks rotom team branding in normal/owner/recovery invites, sign-in/switching, expired invite/token
+  errors, and the share entry point. `test/delivered-files.test.ts` retains real HTTP member/viewer/session/realpath
+  authorization tests and browser delivery tests; file permissions were not widened.
+
+This is not a real-device or visual-user acceptance, a current-branch deliverables manifest, or a live installer/MCP/
+SQL/mobile/paid-account test. See [NATIVE-COMMAND-COMPATIBILITY.md](NATIVE-COMMAND-COMPATIBILITY.md) for the complete
+source/fixture distinction and parameter limits; [the local design record](../designs/ux-audit-followup/brief.md) records
+scope, reuse, reference reasoning and acceptance state.
+
 ## Acceptance boundaries
 
 - Type checking and automated tests do not establish real-account authorization, provider approval, complete billing or target-device readiness.

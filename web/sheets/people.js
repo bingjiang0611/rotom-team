@@ -108,7 +108,7 @@ export function InviteSheet({ session = null, member = null }) {
             if (asOwner && answer.grant?.role !== "owner") {
                 setFailed(true);
 
-                throw new Error("Restart Pi Pocket to sign in another device as the owner.");
+                throw new Error("Restart rotom team to sign in another device as the owner.");
             }
 
             if (
@@ -235,7 +235,7 @@ export function InviteSheet({ session = null, member = null }) {
                     ${
                         invite.local &&
                         html`<div class="error-box">
-                            This link only works on this device. To let other devices in, press <span class="mono">a</span> in the Pi Pocket terminal (or start it with <span class="mono">--access</span>) and pick Local network, Cloudflare Tunnel, or Tailscale. Then make a new invite.
+                            This link only works on this device. To let other devices in, press <span class="mono">a</span> in the rotom team terminal (or start it with <span class="mono">--access</span>) and pick Local network, Cloudflare Tunnel, or Tailscale. Then make a new invite.
                         </div>`
                     }
                     <div class="qr" dangerouslySetInnerHTML=${{ __html: invite.svg }}></div>
