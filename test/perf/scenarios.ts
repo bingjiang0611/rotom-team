@@ -47,6 +47,8 @@ const answer = (turn: number) => {
     return `${body} ${marker}`;
 };
 
+let inferenceRequests = 0;
+
 const model = createServer(async (req, res) => {
     let body = "";
 
@@ -55,6 +57,8 @@ const model = createServer(async (req, res) => {
     }
 
     const input = raw.parse(body) as { messages: { role: string; content: unknown }[] };
+
+    inferenceRequests++;
     const users = input.messages.filter((m) => m.role === "user");
     const text = answer(users.length);
     // A paced answer streams like a real model, so the server's 90 ms push coalescing has something to coalesce.
@@ -354,6 +358,35 @@ results.push(
         ? { scenario: "web.open", unavailable: web.unavailable }
         : { scenario: "web.open", ms: web.ms, counts: web.counts, extra: web.metrics },
 );
+
+// Append readiness workloads only after the existing scenarios: their session/history inputs stay unchanged.
+const prepared = (await call("sessions", "POST", { title: "Prepared", backend: "rotom" })).value
+    .id as number;
+const preparedTab = tab(prepared);
+
+await preparedTab.fullView;
+
+async function discover(requestId: string): Promise<Record<string, number>> {
+    const beforeCalls = inferenceRequests;
+    const response = await call(`c/${prepared}/prompts`, "POST", { requestId });
+    const value = response.value as { receipt: { status: string }; dynamicReady: boolean };
+
+    assert.equal(value.receipt.status, "handled");
+    assert.equal(value.dynamicReady, true);
+    assert.equal(inferenceRequests, beforeCalls, "native discovery must not make a model request");
+
+    return { "http.body.bytes": response.bytes };
+}
+
+await scenario("commands.discover.cold", () => discover("perf-discover-cold"));
+await scenario("commands.discover.warm", () => discover("perf-discover-warm"));
+await scenario("turn.prepared", async () => {
+    const beforeCalls = inferenceRequests;
+
+    assert.equal((await submit(prepared, 1)).value.status, "settled");
+    assert.equal(inferenceRequests, beforeCalls + 1, "the prepared prompt makes one model request");
+});
+await preparedTab.close();
 
 writeFileSync(out, raw.stringify({ workload: WORKLOAD, results }, null, 2));
 server.closeAllConnections();

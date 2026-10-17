@@ -8,6 +8,84 @@ Workload: `test/perf/workload.ts` as of 2026-10-16 (12 seeded turns of 6000-char
 `darwin-arm64` ledger baselines (worst of 10 runs from temporary checkouts) and benchmark medians, Apple M1, load below
 the core count.
 
+## Journal analysis — 2026-10-17
+
+L3 observations only, not a before/after speed claim. A read-only snapshot covers 2026-10-16 15:42 through
+2026-10-17 01:33 UTC (about 9 h 51 min): 1,650 parsed records, 972 HTTP requests, four server sessions/releases,
+no cut-off lines, and zero drops in the three shutdown health records. The latest release, `45d45275`, covers
+18:12–01:33 UTC. There is no earlier journal in this snapshot, so this does not establish a recent regression.
+Groups below 30 samples are leads, not findings. Route and native durations overlap; do not add them together.
+
+### Ranked leads
+
+1. **Task execution has the largest observed duration, mostly tools in the longest run.** Four settled prompts
+   total 94.9 s (range 4.8–55.5 s). The 55.5 s run contains 45.2 s with a tool running; tool-active time totals
+   54.1 s across the four prompts. The journal does not identify tools, so this is not proof of a slow model or a
+   Team bug. First native `message_update` arrives 2.84–4.17 s after dispatch; it is not necessarily visible text
+   or a first token. Benchmark: `turn.cold`, `turn.warm`, and `turn.paced` cover synthetic prompts, but no scenario
+   reproduces the observed long tool. Next: create a separate deterministic slow-tool measurement before trying
+   to optimise this path; identifying the real tool needs an explicitly scoped private trace review, not broader
+   journal collection.
+2. **Changes is the strongest repeated HTTP lead.** Diff: 35 requests, p50 141 ms, p95 222 ms, total 5.26 s.
+   Listing: 13 requests, p50 216 ms, max 495 ms, total 3.32 s (small sample). Together they account for 8.58 s,
+   about 33% of the 25.91 s summed HTTP durations. In the latest release alone, diff has 21 samples, p50 134 ms,
+   total 3.08 s; listing has seven, p50 201 ms, total 1.59 s. Code reading confirms `diffOf` runs four sequential
+   Git commands on the ordinary path, including whole-repository status for each file; `changesIn` runs five
+   and `Workspace.changes` also reads transcript entries. These modules match the deployed release by SHA-256.
+   Benchmark: `git.changes` covers listing, **not diff**. Next: add a `git.diff` scenario in a measurement-only
+   commit, then test reducing repeated work without weakening path permissions or freshness.
+3. **Native discovery and cold dispatch cause multi-second interaction tails.** Across releases, submit totals
+   6.59 s over 11 requests (p50 98 ms, max 3.87 s); POST prompts totals 4.59 s over five (p50 142 ms, max 4.09 s).
+   The 3.87 s submit coincides with a 3.63 s discovery, and the latest release's 4.09 s prompts request coincides
+   with a 3.80 s discovery. Other discoveries take 58–154 ms. For the four measured prompts, started-process
+   dispatch takes 2.67/3.45 s versus 48/52 ms when reused. This supports investigating the startup path; discovery
+   itself has no phase breakdown, so its cold-start attribution remains unverified. Benchmark: `turn.cold` and
+   `turn.warm` cover prompt startup; `commands.list` only issues GET and does not reproduce POST discovery.
+   Next: add cold/warm POST-discovery coverage, preserving member routing and native resource freshness.
+4. **Configuration has a 2.92 s tail, but only one sample.** Its native command takes 2.90 s; the latest release
+   also has a 1.82 s submit coinciding with a 1.80 s command. Command names and phases are not recorded, so these
+   cannot be assigned to a specific setting. No current scenario reproduces configure. Next: add a synthetic
+   configure scenario before selecting an optimisation.
+
+### Cross-checks and limits
+
+- Event-loop p99 median is 2.3 ms, worst minute p99 28.3 ms; longest individual stall is 607 ms. Server event-loop
+  utilization median is 0.4%, worst 2.7%. This does not suggest sustained main-loop saturation, but does not
+  measure whole-machine or native-child load. The 607 ms stall has no causal profile; attribution needs a
+  controlled reproduction, not a production restart or profiler enabled without approval.
+- Push traffic averages 70,253 view bytes and 65,415 session-list bytes per active minute (all sized stream
+  events). These are totals sent to tabs, not per-tab sizes. Existing `turn.warm`/`turn.paced` and `sessions.list`
+  scenarios are relevant; this snapshot alone does not establish a bandwidth bottleneck.
+- Startup open time is 2.33–3.21 s across four starts; `startup.restart` covers that path. Task process startup
+  and server startup are different measurements.
+- Browser timings are mostly unavailable: 14 hidden-tab observations and only one usable session-open sample
+  (1.33 s). There is not enough evidence to rank rendering or network latency. `web.open` is the existing
+  controlled scenario; further real-use evidence needs a visible-tab sample, not treating hidden values as zero.
+- No controlled timing run, L1 counter reduction, or L2 speedup was measured. No service, account, journal
+  collection, ceiling, or runtime code was changed. Recommended first climb: add diff coverage, then reduce Git
+  work in the Changes path; discovery startup is the next, higher-tail but lower-sample lead.
+
+## First climb batch — 2026-10-17
+
+User approved all three [programs](2026-10-17-proposals.md), delivered incrementally. Current results are L1 only:
+
+- **Git metadata batching retained:** ordinary listing launches 3 instead of 5 processes; diff 3 instead of 4.
+  State remains freshly queried; porcelain-v1 status and path checks are unchanged. Unusual/unborn HEAD falls back
+  to original scalar reads and has one extra attempted command. See [experiment](experiments/2026-10-17-git-metadata-batch.md).
+- **Mirror suffix decoding retained:** warm JSON parses 203→145, characters about 559k→343k; paced parses 353→279,
+  characters about 1.07m→823k. SQL statements and payload sizes do not increase. First history inspection remains
+  after restart; the branch-notice negative control fails when it is removed. SQLite OFFSET still scans the prefix;
+  only returned rows/parent decoding were removed. See [experiment](experiments/2026-10-17-native-mirror-suffix.md).
+- **Native discovery is now reproduced:** two five-run samples measure cold explicit discovery at about 1.63–1.67 s,
+  warm discovery at 85–88 ms, and a first prompt on the retained segment at 106–109 ms. Discovery makes no model
+  request; process starts are 1/0/0 respectively. This measures existing retention, not a new prewarming optimisation.
+  See [measurement](experiments/2026-10-17-native-readiness-measurement.md).
+
+No comparison qualifies as `faster`; initial Git baselines were loaded, later comparisons were noise even when
+`highLoad: false`. Tests: 439 passed, synthetic kernel/native-command proofs passed; no browser/device or production
+speedup is claimed. Three experiments close this session. Next: controlled native startup phase measurement, then
+one measured resource/bootstrap optimisation. Stage 3 projection/protocol redesign remains unimplemented.
+
 ## Open
 
 - **A warm turn parses about 93 times its answer as JSON.** `turn.warm/json.parse.chars` 558 969 for a

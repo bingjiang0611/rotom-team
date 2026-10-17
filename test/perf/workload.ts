@@ -30,6 +30,9 @@ export const SCENARIOS: Record<string, string> = {
     "git.branches": `${seeded}; Git workspace with 2 branches; GET branches`,
     "commands.list": `${seeded}; GET the native slash-command list`,
     "web.open": `${seeded}; headless Chromium signed in, opens /s/<session> until the last answer is in the page`,
+    "commands.discover.cold": `${seeded}; after all existing scenarios, an additional new native session with one tab; first explicit POST prompts, with no model request`,
+    "commands.discover.warm": `${seeded}; same additional session/tab after cold discovery; a second explicit POST prompts with a new request ID, with no model request`,
+    "turn.prepared": `${seeded}; same additional session/tab after both discoveries; first ordinary prompt, until settled and quiet`,
 };
 
 export type Layer = "storage" | "process" | "cpu" | "push" | "http" | "web";
@@ -58,6 +61,11 @@ const COUNTERS: Record<string, MetricSpec> = {
         layer: "process",
         unit: "count",
         source: "child processes whose program is git (test/perf/counters.ts)",
+    },
+    "subprocess.rotom": {
+        layer: "process",
+        unit: "count",
+        source: "child processes whose program is rotom (test/perf/counters.ts)",
     },
     "json.parse.calls": {
         layer: "cpu",
@@ -144,6 +152,9 @@ export const REPORTED: Record<string, string[]> = {
     "git.diff": [...common, "subprocess.git", "http.body.bytes"],
     "git.branches": [...common, "subprocess.git", "http.body.bytes"],
     "commands.list": [...common, "http.body.bytes"],
+    "commands.discover.cold": [...common, "subprocess.rotom", ...pushes, "http.body.bytes"],
+    "commands.discover.warm": [...common, "subprocess.rotom", ...pushes, "http.body.bytes"],
+    "turn.prepared": [...common, "subprocess.rotom", ...pushes],
     // JSON counts leave web.open out: the DevTools connection that drives Chromium parses and writes JSON too.
     "web.open": [
         "sql.statements",
