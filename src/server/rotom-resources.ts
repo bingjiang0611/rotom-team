@@ -39,9 +39,26 @@ function json(file: string): Record<string, any> {
 
 function write(file: string, value: string | Buffer) {
     mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
+    const wanted = Buffer.isBuffer(value) ? value : Buffer.from(value);
+
+    if (existsSync(file)) {
+        const info = lstatSync(file);
+
+        // Existing public-mode legacy files still need replacement with a private atomic write. Never follow a link
+        // for the byte comparison; the policy checks above decide whether replacing it is allowed.
+        if (
+            info.isFile() &&
+            !info.isSymbolicLink() &&
+            !(info.mode & 0o077) &&
+            readFileSync(file).equals(wanted)
+        ) {
+            return;
+        }
+    }
+
     const temporary = `${file}.${randomUUID()}.tmp`;
 
-    writeFileSync(temporary, value, { mode: 0o600 });
+    writeFileSync(temporary, wanted, { mode: 0o600 });
     renameSync(temporary, file);
 }
 

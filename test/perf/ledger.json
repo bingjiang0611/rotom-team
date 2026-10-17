@@ -1794,7 +1794,7 @@
             "tolerance": 3935,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 121742
+                "darwin-arm64": 119968
             }
         },
         "turn.prepared/subprocess.rotom": {
@@ -1836,7 +1836,7 @@
             "tolerance": 3314,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 15443
+                "darwin-arm64": 13418
             }
         },
         "turn.prepared/push.view.count": {
@@ -1864,7 +1864,7 @@
             "tolerance": 3314,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 10646
+                "darwin-arm64": 8621
             }
         },
         "commands.discover.cold/fs.write.calls": {
@@ -1878,7 +1878,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 4
+                "darwin-arm64": 1
             }
         },
         "commands.discover.cold/fs.write.bytes": {
@@ -1892,7 +1892,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 1213
+                "darwin-arm64": 396
             }
         },
         "commands.discover.cold/fs.rename.calls": {
@@ -1906,7 +1906,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 3
+                "darwin-arm64": 0
             }
         }
     }

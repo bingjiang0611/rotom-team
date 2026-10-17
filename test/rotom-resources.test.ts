@@ -8,6 +8,8 @@ import {
     rmSync,
     symlinkSync,
     linkSync,
+    statSync,
+    chmodSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -248,6 +250,39 @@ test("private member role/config readers reject customization and preserve runti
         readFileSync(join(home, ".pi/agent/agents/shared.md"), "utf8").includes("shared-role"),
     );
     assert.equal(teamSubagentEnvironment(shared).npm_config_prefix, join(shared, "global-npm"));
+});
+
+test("unchanged managed resources keep their inode, timestamp, and private mode", async () => {
+    const { home, shared, project } = fixture();
+    const file = join(home, ".pi/agent/settings.json");
+    const view = join(home, ".pi/agent/team-resource-view.json");
+
+    writeFileSync(join(shared, "AGENTS.md"), "stable");
+    await prepareTeamResources(home, shared, project);
+    const before = { file: statSync(file), view: statSync(view) };
+
+    await prepareTeamResources(home, shared, project);
+    const after = { file: statSync(file), view: statSync(view) };
+
+    assert.equal(after.file.ino, before.file.ino);
+    assert.equal(after.file.mtimeMs, before.file.mtimeMs);
+    assert.equal(after.view.ino, before.view.ino);
+    assert.equal(after.view.mtimeMs, before.view.mtimeMs);
+    assert.equal(after.file.mode & 0o777, 0o600);
+    assert.equal(after.view.mode & 0o777, 0o600);
+
+    chmodSync(file, 0o644);
+    await prepareTeamResources(home, shared, project);
+    assert.equal(
+        statSync(file).mode & 0o777,
+        0o600,
+        "matching bytes still repair public-mode legacy files",
+    );
+    assert.notEqual(
+        statSync(file).ino,
+        after.file.ino,
+        "mode repair uses the existing atomic replacement",
+    );
 });
 
 test("shared add/change/remove updates two members without deleting unknown state", async () => {
