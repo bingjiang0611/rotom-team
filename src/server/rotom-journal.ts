@@ -1209,19 +1209,26 @@ export class RotomJournal {
         return row ? this.receipt(String(row.id)) : undefined;
     }
 
-    /** The conversation's own history in journal order (append-only), without handoff seed copies. */
-    entries(sessionId: string): {
+    /** Own history in append-only order, skipping an already-consumed prefix (never handoff seed copies). */
+    entries(
+        sessionId: string,
+        skip = 0,
+    ): {
         attemptId: string;
         entry: KernelEntry;
         operation: KernelOperation;
         requestId: string;
         memberId: string;
     }[] {
+        if (!Number.isSafeInteger(skip) || skip < 0) {
+            throw new RangeError("Native history offset must be a non-negative safe integer");
+        }
+
         return this.#db
             .prepare(
-                "SELECT e.attempt_id,e.body,a.operation,a.request_id,a.binding FROM kernel_entries e JOIN kernel_attempts a ON a.id=e.attempt_id WHERE a.conversation_id=? AND a.operation<>'handoff' ORDER BY e.rowid",
+                "SELECT e.attempt_id,e.body,a.operation,a.request_id,a.binding FROM kernel_entries e JOIN kernel_attempts a ON a.id=e.attempt_id WHERE a.conversation_id=? AND a.operation<>'handoff' ORDER BY e.rowid LIMIT -1 OFFSET ?",
             )
-            .all(sessionId)
+            .all(sessionId, skip)
             .map((row) => ({
                 attemptId: String(row.attempt_id),
                 entry: JSON.parse(String(row.body)),

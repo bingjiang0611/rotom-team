@@ -380,7 +380,7 @@
             "tolerance": 10,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 139
+                "darwin-arm64": 119
             }
         },
         "turn.cold/subprocess.total": {
@@ -408,7 +408,7 @@
             "tolerance": 10,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 259
+                "darwin-arm64": 219
             }
         },
         "turn.cold/json.parse.chars": {
@@ -422,7 +422,7 @@
             "tolerance": 3378,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 873804
+                "darwin-arm64": 729074
             }
         },
         "turn.cold/json.stringify.chars": {
@@ -534,7 +534,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 120
+                "darwin-arm64": 91
             }
         },
         "turn.warm/subprocess.total": {
@@ -562,7 +562,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 203
+                "darwin-arm64": 145
             }
         },
         "turn.warm/json.parse.chars": {
@@ -576,7 +576,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 558969
+                "darwin-arm64": 342905
             }
         },
         "turn.warm/json.stringify.chars": {
@@ -688,7 +688,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 348
+                "darwin-arm64": 311
             }
         },
         "turn.paced/subprocess.total": {
@@ -716,7 +716,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 353
+                "darwin-arm64": 279
             }
         },
         "turn.paced/json.parse.chars": {
@@ -730,7 +730,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 1069876
+                "darwin-arm64": 822690
             }
         },
         "turn.paced/json.stringify.chars": {

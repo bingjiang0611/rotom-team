@@ -1795,7 +1795,19 @@ try {
         JSON.stringify(shown.at(-1)).includes("PARTIAL_NATIVE STREAM_DONE"),
         JSON.stringify(shown.at(-1)),
     );
-    assert.equal(calls, 15);
+    await app.kernel!.mirror(shared2.id as never);
+    await app.kernel!.mirror(shared2.id as never);
+    assert.deepEqual(
+        room.value!.entries.filter((entry) => entry.kind === NATIVE_ENTRY),
+        mirrored,
+        "repeated suffix mirrors neither duplicate nor replace audited entries",
+    );
+    assert.deepEqual(
+        users.map((entry) => room.authors[String(entry.id)]),
+        [a.id, dana.user.id, a.id],
+        "suffix readback preserves authors across handoffs",
+    );
+    assert.equal(calls, 15, "mirror readback never makes another model request");
     report.unifiedTranscriptLiveAndMirrored = true;
 
     // An extension's question reaches the paying member, and only their answer goes back to the run.

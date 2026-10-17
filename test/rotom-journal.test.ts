@@ -82,6 +82,43 @@ test("current thinking follows native ancestry without changing immutable receip
     }
 });
 
+test("history suffix reads preserve ordering, bindings and restart without replaying the prefix", () => {
+    const f = setup();
+    let journal = new RotomJournal(f.data);
+
+    try {
+        journal.bind("native", f.binding);
+        const run = journal.reserve("native", "suffix", "work");
+
+        journal.attach(run.id, "/tmp/native-suffix.jsonl", "suffix-id");
+        journal.progress(run.id, [
+            { id: "first", parentId: null, type: "message", message: { role: "user" } },
+            { id: "second", parentId: "first", type: "custom", customType: "team-kernel-branch" },
+        ]);
+        const prefix = journal.entries("native");
+
+        assert.deepEqual(journal.entries("native", 1), prefix.slice(1));
+        assert.deepEqual(journal.entries("native", prefix.length), []);
+        assert.deepEqual(journal.entries("native", prefix.length + 1), []);
+        journal.progress(run.id, [{ id: "third", parentId: "second", type: "custom" }]);
+        const suffix = journal.entries("native", prefix.length);
+
+        assert.equal(suffix.length, 1);
+        assert.equal(suffix[0]!.entry.id, "third");
+        assert.equal(suffix[0]!.memberId, f.binding.memberId);
+        assert.deepEqual([...prefix, ...suffix], journal.entries("native"));
+        journal.close();
+        journal = new RotomJournal(f.data);
+        assert.deepEqual(journal.entries("native", prefix.length), suffix);
+        assert.equal(journal.receipt(run.id).status, "unknown");
+        assert.throws(() => journal.entries("native", -1), RangeError);
+        assert.throws(() => journal.entries("native", 0.5), RangeError);
+    } finally {
+        journal.close();
+        rmSync(f.root, { recursive: true, force: true });
+    }
+});
+
 test("finalization is durable before readback: restart never turns it into another model request", () => {
     const f = setup();
     let journal = new RotomJournal(f.data);

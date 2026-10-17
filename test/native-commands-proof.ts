@@ -735,6 +735,16 @@ try {
 
     assert.equal(treeResult.nativeResult.navigation.editorText, "SECOND_USER_MARKER");
     assert.equal(treeResult.nativeResult.navigation.cancelled, false);
+    await app.kernel!.mirror(id);
+    const firstBranchState = app.kernel!.roomState(id, alice);
+
+    assert.ok("hasBranchedHistory" in firstBranchState && firstBranchState.hasBranchedHistory);
+    await app.kernel!.mirror(id);
+    const repeatedBranchState = app.kernel!.roomState(id, alice);
+
+    assert.ok(
+        "hasBranchedHistory" in repeatedBranchState && repeatedBranchState.hasBranchedHistory,
+    );
     await json(await submit(alice, "AFTER_TREE_MARKER"));
     assert.ok(JSON.stringify(calls.at(-1)!.body).includes("FIRST_USER_MARKER"));
     assert.ok(!JSON.stringify(calls.at(-1)!.body).includes("SECOND_USER_MARKER"));
@@ -895,6 +905,17 @@ try {
     assert.equal(app.sessionMeta(id)?.title, "Synchronized Native Name");
     assert.equal(app.kernel!.executions.journal.session(String(id)).binding.model, "model-b");
     assert.equal(app.kernel!.agentInfo(id).thinkingLevel, "high");
+    const callsBeforeMirror = calls.length;
+
+    await app.kernel!.mirror(id);
+    const restoredBranchState = app.kernel!.roomState(id, alice);
+
+    assert.ok(
+        "hasBranchedHistory" in restoredBranchState && restoredBranchState.hasBranchedHistory,
+        "initial prefix inspection restores branch notices even when all entries were mirrored before restart",
+    );
+    await app.kernel!.mirror(id);
+    assert.equal(calls.length, callsBeforeMirror, "mirror catch-up does not invoke a model");
     await json(await submit(alice, "THINKING_AFTER_RESTART"));
     assert.equal(calls.at(-1)!.body.reasoning_effort, "high");
     const startsAfterRestart = readFileSync(startsFile, "utf8");

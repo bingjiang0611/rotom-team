@@ -227,6 +227,7 @@ export class TeamKernel {
     readonly #commands = new Map<ConversationId, NativeCommandCatalog>();
     readonly #nativeGoal = new Map<ConversationId, unknown>();
     readonly #branchedHistory = new Set<ConversationId>();
+    readonly #mirrorHistoryLoaded = new Set<ConversationId>();
     readonly #mcp: McpSignIns;
     readonly #mirrors = new Map<ConversationId, Promise<void>>();
     readonly #operations = new Map<
@@ -2385,21 +2386,30 @@ export class TeamKernel {
 
     async #mirrorNow(id: ConversationId): Promise<void> {
         const app = this.#app;
-        const rows = this.executions.journal.entries(String(id));
+        const mirrored =
+            (await app.harness.snapshot(NativeMirrorDoc, id, BACKGROUND_CONTEXT))?.count ?? 0;
+        // Once per process, inspect the prefix too so historical branch notices survive restart.
+        // Thereafter SQL returns only the unmirrored suffix, avoiding old body/binding JSON decoding.
+        const skip = this.#mirrorHistoryLoaded.has(id) ? mirrored : 0;
+        const rows = this.executions.journal.entries(String(id), skip);
+        const count = skip + rows.length;
 
         if (rows.some((row) => row.entry.customType === "team-kernel-branch")) {
             this.#branchedHistory.add(id);
         }
 
-        const mirrored = (await app.harness.snapshot(NativeMirrorDoc, id, BACKGROUND_CONTEXT))
-            ?.count;
+        this.#mirrorHistoryLoaded.add(id);
 
-        if (rows.length > (mirrored ?? 0)) {
+        if (count > mirrored) {
             await app.harness.commit(async (tx) => {
                 const doc = await tx.doc(NativeMirrorDoc, id);
                 const authors = await tx.doc(AuthorsDoc, id);
 
-                for (const row of rows.slice(doc.count)) {
+                if (doc.count < skip) {
+                    throw new Error("Native mirror prefix moved backwards");
+                }
+
+                for (const row of rows.slice(doc.count - skip)) {
                     if (row.entry.type === "session_info" && typeof row.entry.name === "string") {
                         const meta = (await tx.doc(SessionsDoc)).items[String(id)];
 
@@ -2426,7 +2436,7 @@ export class TeamKernel {
                     }
                 }
 
-                doc.count = rows.length;
+                doc.count = count;
             }, BACKGROUND_CONTEXT);
         }
 
