@@ -9,7 +9,7 @@ existing scenario so their inputs stay unchanged:
 - keep all four attached for one normal 6,000-character answer paced in 30 chunks.
 
 The server, Durable journal, HTTP/SSE path, coalescing timer and synthetic-account boundary are unchanged. Short seed
-answers control benchmark runtime; the measured history still has 256 Durable entries before the paced prompt.
+answers control benchmark runtime; the entry counter and push count imply 132 active Durable entries at open.
 
 ## Two-times baseline
 
@@ -19,12 +19,12 @@ false`. Reports: `/tmp/rt-projection-large-base-a.json` (load 1.69→2.98) and
 
 | Scenario                | Median duration A / B | Entry visits (all ten runs) | View pushes (all ten runs) |
 | ----------------------- | --------------------: | --------------------------: | -------------------------: |
-| Open four tabs          |        49.5 / 47.1 ms |                       2,560 |                         10 |
-| Paced answer, four tabs |      881.2 / 881.8 ms |                       8,640 |                         32 |
+| Open four tabs          |        49.5 / 47.1 ms |                       1,848 |                         14 |
+| Paced answer, four tabs |      881.2 / 881.8 ms |                       4,792 |                         36 |
 
 The entry counter is stable with zero spread and exposes exact fanout: opening a tab also refreshes every existing tab,
-so the four sequential opens produce 1+2+3+4=10 full-history visits; paced streaming produces eight coalesced pushes
-for each of four tabs. The paced duration is deliberately dominated by 30×25 ms model pacing, so it is not latency
+so the four sequential opens produce 1+2+3+4=10 immediate full-history visits plus four quiet-window pushes;
+paced streaming produces nine pushes for each of four tabs. The paced duration is deliberately dominated by 30×25 ms model pacing, so it is not latency
 correlation evidence. The open scenario is a useful waiting-path benchmark, but ten timings are still noise evidence,
 not an optimisation result.
 
