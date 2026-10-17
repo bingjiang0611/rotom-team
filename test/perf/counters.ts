@@ -13,14 +13,21 @@
  */
 import childProcess from "node:child_process";
 import { subscribe } from "node:diagnostics_channel";
+import fs from "node:fs";
 import { syncBuiltinESMExports } from "node:module";
 import { basename } from "node:path";
 import { DatabaseSync, StatementSync } from "node:sqlite";
-import { pushChannel, type PushSignal } from "../../src/server/perf-channels.ts";
+import {
+    nativeStartChannel,
+    pushChannel,
+    type NativeStartSignal,
+    type PushSignal,
+} from "../../src/server/perf-channels.ts";
 
 export type Counts = Record<string, number>;
 
 const counts: Counts = {};
+const nativeTimings: Counts = {};
 
 const add = (name: string, amount = 1) => {
     counts[name] = (counts[name] ?? 0) + amount;
@@ -119,7 +126,32 @@ for (const name of ["spawnSync", "execFileSync", "execSync"] as const) {
     };
 }
 
-// Named imports of node:child_process see the wrapped functions too.
+const writeFileSync = fs.writeFileSync;
+const renameSync = fs.renameSync;
+
+fs.writeFileSync = (...args: Parameters<typeof fs.writeFileSync>) => {
+    const data = args[1];
+
+    add("fs.write.calls");
+    add(
+        "fs.write.bytes",
+        typeof data === "string"
+            ? Buffer.byteLength(data)
+            : ArrayBuffer.isView(data)
+              ? data.byteLength
+              : 0,
+    );
+
+    return writeFileSync(...args);
+};
+
+fs.renameSync = (...args: Parameters<typeof fs.renameSync>) => {
+    add("fs.rename.calls");
+
+    return renameSync(...args);
+};
+
+// Named imports of built-ins see the wrapped functions too.
 syncBuiltinESMExports();
 
 pushChannel.subscribe((message) => {
@@ -134,7 +166,25 @@ pushChannel.subscribe((message) => {
     }
 });
 
+nativeStartChannel.subscribe((message) => {
+    for (const [name, ms] of Object.entries(message as unknown as NativeStartSignal)) {
+        nativeTimings[`nativeStart${name[0]!.toUpperCase()}${name.slice(1)}`] =
+            (nativeTimings[`nativeStart${name[0]!.toUpperCase()}${name.slice(1)}`] ?? 0) + ms;
+    }
+});
+
 subscribe("http.server.request.start", () => add("http.requests"));
+
+export const nativeTimingSnapshot = (): Counts => ({ ...nativeTimings });
+
+/** Successful cold-start phase milliseconds since a snapshot; empty when no native process started. */
+export function nativeTimingSince(before: Counts): Counts {
+    return Object.fromEntries(
+        Object.entries(nativeTimings)
+            .map(([name, value]) => [name, value - (before[name] ?? 0)] as const)
+            .filter(([, value]) => value !== 0),
+    );
+}
 
 /** What the counters say now. */
 export function snapshot(): Counts {

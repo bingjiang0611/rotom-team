@@ -77,6 +77,21 @@ const COUNTERS: Record<string, MetricSpec> = {
         unit: "chars",
         source: "characters given to JSON.parse (test/perf/counters.ts)",
     },
+    "fs.write.calls": {
+        layer: "storage",
+        unit: "count",
+        source: "node:fs writeFileSync calls in the server process (test/perf/counters.ts)",
+    },
+    "fs.write.bytes": {
+        layer: "storage",
+        unit: "bytes",
+        source: "bytes passed to node:fs writeFileSync in the server process (test/perf/counters.ts)",
+    },
+    "fs.rename.calls": {
+        layer: "storage",
+        unit: "count",
+        source: "node:fs renameSync calls in the server process (test/perf/counters.ts)",
+    },
     "json.stringify.chars": {
         layer: "cpu",
         unit: "chars",
@@ -152,7 +167,15 @@ export const REPORTED: Record<string, string[]> = {
     "git.diff": [...common, "subprocess.git", "http.body.bytes"],
     "git.branches": [...common, "subprocess.git", "http.body.bytes"],
     "commands.list": [...common, "http.body.bytes"],
-    "commands.discover.cold": [...common, "subprocess.rotom", ...pushes, "http.body.bytes"],
+    "commands.discover.cold": [
+        ...common,
+        "subprocess.rotom",
+        "fs.write.calls",
+        "fs.write.bytes",
+        "fs.rename.calls",
+        ...pushes,
+        "http.body.bytes",
+    ],
     "commands.discover.warm": [...common, "subprocess.rotom", ...pushes, "http.body.bytes"],
     "turn.prepared": [...common, "subprocess.rotom", ...pushes],
     // JSON counts leave web.open out: the DevTools connection that drives Chromium parses and writes JSON too.

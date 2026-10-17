@@ -1866,6 +1866,48 @@
             "baselines": {
                 "darwin-arm64": 10646
             }
+        },
+        "commands.discover.cold/fs.write.calls": {
+            "scenario": "commands.discover.cold",
+            "metric": "fs.write.calls",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all existing scenarios, an additional new native session with one tab; first explicit POST prompts, with no model request",
+            "source": "node:fs writeFileSync calls in the server process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 4
+            }
+        },
+        "commands.discover.cold/fs.write.bytes": {
+            "scenario": "commands.discover.cold",
+            "metric": "fs.write.bytes",
+            "layer": "storage",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all existing scenarios, an additional new native session with one tab; first explicit POST prompts, with no model request",
+            "source": "bytes passed to node:fs writeFileSync in the server process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1213
+            }
+        },
+        "commands.discover.cold/fs.rename.calls": {
+            "scenario": "commands.discover.cold",
+            "metric": "fs.rename.calls",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all existing scenarios, an additional new native session with one tab; first explicit POST prompts, with no model request",
+            "source": "node:fs renameSync calls in the server process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 3
+            }
         }
     }
 }

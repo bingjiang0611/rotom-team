@@ -11,6 +11,7 @@ import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { RotomRpc } from "./rotom-rpc.ts";
+import { nativeStartChannel, type NativeStartSignal } from "./perf-channels.ts";
 import { prepareTeamResources, sharedContextPaths } from "./rotom-resources.ts";
 
 const runtime = fileURLToPath(new URL("../../runtime/rotom/", import.meta.url));
@@ -378,7 +379,12 @@ export async function startRotomKernel(options: {
     teamAgentDir: string;
     configuration?: { contextFile: string; skills: string[] };
 }): Promise<RotomRpc> {
+    const started = performance.now();
+    let phase = started;
     const { executable } = verifyRotomKernel();
+    const verifyMs = performance.now() - phase;
+
+    phase = performance.now();
     const home = canonical(options.home, "directory"),
         workspace = canonical(options.workspace, "directory");
 
@@ -411,11 +417,16 @@ export async function startRotomKernel(options: {
     }
 
     const teamAgentDir = options.teamAgentDir;
+    const validateMs = performance.now() - phase;
 
+    phase = performance.now();
     await prepareTeamResources(home, teamAgentDir, workspace, {
         provider: options.provider,
         model: options.model,
     });
+    const resourcesMs = performance.now() - phase;
+
+    phase = performance.now();
     const node = realpathSync(process.execPath);
     // Desktop tools run as the service user. The member HOME isolates credentials, not the screen:
     // reuse the service user's installed (and TCC-authorized) Computer Use helper.
@@ -433,6 +444,9 @@ export async function startRotomKernel(options: {
         await startComputerUseHelper(computerUseApp);
     }
 
+    const helperMs = performance.now() - phase;
+
+    phase = performance.now();
     const client = new RotomRpc(
         executable,
         [
@@ -560,6 +574,26 @@ export async function startRotomKernel(options: {
             } finally {
                 detach();
             }
+        }
+
+        if (nativeStartChannel.hasSubscribers) {
+            const rpcReadyMs = performance.now() - phase;
+            const rpcSpawnMs = client.spawnMs;
+
+            if (rpcSpawnMs === undefined) {
+                throw new Error("Native RPC answered before its process spawn was observed");
+            }
+
+            nativeStartChannel.publish({
+                verifyMs,
+                validateMs,
+                resourcesMs,
+                helperMs,
+                rpcSpawnMs,
+                rpcInitializeMs: rpcReadyMs - rpcSpawnMs,
+                rpcReadyMs,
+                totalMs: performance.now() - started,
+            } satisfies NativeStartSignal);
         }
 
         return client;

@@ -18,6 +18,8 @@ export class RotomRpc {
     readonly #child: ChildProcessWithoutNullStreams;
     readonly #timeout: number;
     readonly #recordLimit: number;
+    readonly #startedAt: number;
+    #spawnedAt?: number;
     readonly #closed: Promise<void>;
     readonly #pending = new Map<
         string,
@@ -55,6 +57,7 @@ export class RotomRpc {
     ) {
         this.#timeout = options.timeoutMs ?? 30_000;
         this.#recordLimit = options.recordLimit ?? 8 * 1024 * 1024;
+        this.#startedAt = performance.now();
         this.#child = spawn(command, args, {
             cwd: options.cwd,
             env: options.env,
@@ -62,6 +65,7 @@ export class RotomRpc {
         });
         const decoder = new StringDecoder("utf8");
 
+        this.#child.once("spawn", () => (this.#spawnedAt = performance.now()));
         this.#child.stdout.on("data", (data: Buffer) => this.#consume(decoder.write(data)));
         // Diagnostics may contain tokens or prompt bodies. Drain without retaining or forwarding them.
         this.#child.stderr.resume();
@@ -76,6 +80,11 @@ export class RotomRpc {
                 resolve();
             }),
         );
+    }
+
+    /** Time from spawn() call until the OS reports the child started; available after its first RPC response. */
+    get spawnMs(): number | undefined {
+        return this.#spawnedAt === undefined ? undefined : this.#spawnedAt - this.#startedAt;
     }
 
     /** The kernel's process id, recorded so a later startup can tell a dead run from a live one. */

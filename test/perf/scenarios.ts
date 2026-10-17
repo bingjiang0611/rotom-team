@@ -7,7 +7,14 @@
  *
  * `measure.ts` runs this several times, each in a fresh process, and turns the runs into a report.
  */
-import { raw, since, snapshot, type Counts } from "./counters.ts";
+import {
+    nativeTimingSince,
+    nativeTimingSnapshot,
+    raw,
+    since,
+    snapshot,
+    type Counts,
+} from "./counters.ts";
 import { cleanUp, owner, root, work } from "../helpers.ts";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -261,12 +268,19 @@ async function scenario(
 ): Promise<void> {
     await quiet();
     const before = snapshot();
+    const timingBefore = nativeTimingSnapshot();
     const started = performance.now();
     const extra = await action();
     const ms = performance.now() - started;
+    const native = nativeTimingSince(timingBefore);
 
     await quiet();
-    results.push({ scenario: name, ms, counts: { ...since(before), ...extra } });
+    results.push({
+        scenario: name,
+        ms,
+        counts: { ...since(before), ...extra },
+        ...(Object.keys(native).length === 0 ? {} : { extra: native }),
+    });
 }
 
 const submit = (id: number, turn: number, text = `Question ${turn}.`) =>

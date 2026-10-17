@@ -11,5 +11,18 @@ export type PushSignal = { event: string; bytes: number | null; transport: "stre
 /** One native kernel run, from its admission to its receipt; `outcome` is `<operation>:<status>`, or `error` when it threw. */
 export type KernelRunSignal = { ms: number; outcome: string };
 
+/** Successful cold native startup phases; content-free and published only while a benchmark subscribes. */
+export type NativeStartSignal = {
+    verifyMs: number;
+    validateMs: number;
+    resourcesMs: number;
+    helperMs: number;
+    rpcSpawnMs: number;
+    rpcInitializeMs: number;
+    rpcReadyMs: number;
+    totalMs: number;
+};
+
 export const pushChannel = channel("rotom-team:push");
 export const kernelRunChannel = channel("rotom-team:kernel-run");
+export const nativeStartChannel = channel("rotom-team:native-start");
