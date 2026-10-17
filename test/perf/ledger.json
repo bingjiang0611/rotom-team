@@ -366,7 +366,7 @@
             "tolerance": 15,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 219
+                "darwin-arm64": 204
             }
         },
         "turn.cold/sql.rows": {
@@ -380,7 +380,7 @@
             "tolerance": 10,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 119
+                "darwin-arm64": 112
             }
         },
         "turn.cold/subprocess.total": {
@@ -408,7 +408,7 @@
             "tolerance": 10,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 219
+                "darwin-arm64": 215
             }
         },
         "turn.cold/json.parse.chars": {
@@ -422,7 +422,7 @@
             "tolerance": 3378,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 729074
+                "darwin-arm64": 727696
             }
         },
         "turn.cold/json.stringify.chars": {
@@ -436,7 +436,7 @@
             "tolerance": 281,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 125193
+                "darwin-arm64": 124912
             }
         },
         "turn.cold/subprocess.git": {
@@ -912,7 +912,7 @@
             "tolerance": 7,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 2540
+                "darwin-arm64": 2539
             }
         },
         "git.branches/sql.statements": {
@@ -1724,7 +1724,7 @@
             "tolerance": 26,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 202
+                "darwin-arm64": 197
             }
         },
         "turn.prepared/sql.rows": {
@@ -1738,7 +1738,7 @@
             "tolerance": 25,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 121
+                "darwin-arm64": 120
             }
         },
         "turn.prepared/subprocess.total": {
@@ -1766,7 +1766,7 @@
             "tolerance": 14,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 174
+                "darwin-arm64": 173
             }
         },
         "turn.prepared/json.parse.chars": {
@@ -1794,7 +1794,7 @@
             "tolerance": 3935,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 119968
+                "darwin-arm64": 119751
             }
         },
         "turn.prepared/subprocess.rotom": {
@@ -1920,7 +1920,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 56
+                "darwin-arm64": 28
             }
         },
         "turn.warm/view.entry.visits": {
@@ -1948,7 +1948,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 82
+                "darwin-arm64": 19
             }
         },
         "web.open/view.entry.visits": {
@@ -1962,7 +1962,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 28
+                "darwin-arm64": 0
             }
         },
         "projection.large.open/sql.statements": {
@@ -2060,7 +2060,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 1848
+                "darwin-arm64": 132
             }
         },
         "projection.large.open/push.events": {
@@ -2200,7 +2200,7 @@
             "tolerance": 41,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 476332
+                "darwin-arm64": 476331
             }
         },
         "projection.large.paced/subprocess.git": {
@@ -2228,7 +2228,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 4792
+                "darwin-arm64": 267
             }
         },
         "projection.large.paced/push.events": {

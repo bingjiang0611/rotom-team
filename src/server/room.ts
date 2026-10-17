@@ -155,6 +155,8 @@ export class Room {
     /** The branch this view last read, as JSON. */
     #head = "";
     readonly #projected = new Map<number, ClientEntry | null>();
+    #entrySource: ConversationView["entries"] | undefined;
+    #entrySequence: { entries: ClientEntry[]; order: number[]; orderKey: string } | undefined;
     authors: Record<string, string> = {};
     artifacts: Record<string, ArtifactMeta> = {};
     subagents: Record<string, SubagentRecord> = {};
@@ -349,6 +351,36 @@ export class Room {
         return projected;
     }
 
+    /** Durable replaces the entry array on append/head reset, but keeps it for doc-only streaming updates. */
+    #sequence(source: ConversationView["entries"]) {
+        if (this.#entrySource === source && this.#entrySequence !== undefined) {
+            return this.#entrySequence;
+        }
+
+        const entries: ClientEntry[] = [];
+        const order: number[] = [];
+
+        for (const entry of source) {
+            const projected = this.#entry(entry);
+
+            if (projected !== null) {
+                entries.push(projected);
+                order.push(projected.id);
+            }
+        }
+
+        if (viewProjectionChannel.hasSubscribers) {
+            viewProjectionChannel.publish({
+                entryVisits: source.length,
+            } satisfies ViewProjectionSignal);
+        }
+
+        this.#entrySource = source;
+        this.#entrySequence = { entries, order, orderKey: order.join(",") };
+
+        return this.#entrySequence;
+    }
+
     /** Send this client what changed since its last update, or everything with `full`. */
     push(client: Client, full: boolean): void {
         const view = this.#view?.value;
@@ -366,30 +398,15 @@ export class Room {
         }
 
         const entries: ClientEntry[] = [];
-        const order: number[] = [];
+        const { entries: projectedEntries, order, orderKey } = this.#sequence(view.entries);
 
-        for (const entry of view.entries) {
-            const projected = this.#entry(entry);
-
-            if (projected === null) {
-                continue;
-            }
-
-            order.push(projected.id);
-
+        for (const projected of projectedEntries) {
             if (!client.sentEntries.has(projected.id)) {
                 client.sentEntries.add(projected.id);
                 entries.push(projected);
             }
         }
 
-        if (viewProjectionChannel.hasSubscribers) {
-            viewProjectionChannel.publish({
-                entryVisits: view.entries.length,
-            } satisfies ViewProjectionSignal);
-        }
-
-        const orderKey = order.join(",");
         const orderChanged = orderKey !== client.orderKey;
 
         client.orderKey = orderKey;
@@ -711,5 +728,7 @@ export class Room {
         this.#view?.dispose();
         this.#view = undefined;
         this.#projected.clear();
+        this.#entrySource = undefined;
+        this.#entrySequence = undefined;
     }
 }
