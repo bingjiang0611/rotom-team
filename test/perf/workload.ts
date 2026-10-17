@@ -11,6 +11,9 @@ export const WORKLOAD = {
     streamChunks: 30,
     extraSessions: 12,
     changedFiles: 20,
+    projectionTurns: 64,
+    projectionTabs: 4,
+    projectionAnswerChars: 120,
     /** The pause between chunks of a paced answer, as a real model streams. */
     pacedChunkMs: 25,
 } as const;
@@ -33,6 +36,8 @@ export const SCENARIOS: Record<string, string> = {
     "commands.discover.cold": `${seeded}; after all existing scenarios, an additional new native session with one tab; first explicit POST prompts, with no model request`,
     "commands.discover.warm": `${seeded}; same additional session/tab after cold discovery; a second explicit POST prompts with a new request ID, with no model request`,
     "turn.prepared": `${seeded}; same additional session/tab after both discoveries; first ordinary prompt, until settled and quiet`,
+    "projection.large.open": `a separate ${WORKLOAD.projectionTurns}-turn session with ${WORKLOAD.projectionAnswerChars}-char answers; open ${WORKLOAD.projectionTabs} event-stream tabs in sequence until each full view`,
+    "projection.large.paced": `the same ${WORKLOAD.projectionTurns}-turn session and ${WORKLOAD.projectionTabs} attached tabs; one ${WORKLOAD.answerChars}-char answer paced ${WORKLOAD.pacedChunkMs} ms per chunk, until settled and quiet`,
 };
 
 export type Layer = "storage" | "process" | "cpu" | "push" | "http" | "web";
@@ -183,6 +188,8 @@ export const REPORTED: Record<string, string[]> = {
     ],
     "commands.discover.warm": [...common, "subprocess.rotom", ...pushes, "http.body.bytes"],
     "turn.prepared": [...common, "subprocess.rotom", ...pushes],
+    "projection.large.open": [...common, "view.entry.visits", ...pushes],
+    "projection.large.paced": [...common, "subprocess.git", "view.entry.visits", ...pushes],
     // JSON counts leave web.open out: the DevTools connection that drives Chromium parses and writes JSON too.
     "web.open": [
         "sql.statements",

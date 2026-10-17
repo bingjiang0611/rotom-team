@@ -1964,6 +1964,328 @@
             "baselines": {
                 "darwin-arm64": 28
             }
+        },
+        "projection.large.open/sql.statements": {
+            "scenario": "projection.large.open",
+            "metric": "sql.statements",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "node:sqlite StatementSync run/get/all/iterate + DatabaseSync.exec (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 283
+            }
+        },
+        "projection.large.open/sql.rows": {
+            "scenario": "projection.large.open",
+            "metric": "sql.rows",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "rows returned by StatementSync all/get (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 2211
+            }
+        },
+        "projection.large.open/subprocess.total": {
+            "scenario": "projection.large.open",
+            "metric": "subprocess.total",
+            "layer": "process",
+            "unit": "count",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "ChildProcess.prototype.spawn + spawnSync/execFileSync/execSync (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "projection.large.open/json.parse.calls": {
+            "scenario": "projection.large.open",
+            "metric": "json.parse.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "global JSON.parse calls in the server process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 2071
+            }
+        },
+        "projection.large.open/json.parse.chars": {
+            "scenario": "projection.large.open",
+            "metric": "json.parse.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "characters given to JSON.parse (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 105,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1462211
+            }
+        },
+        "projection.large.open/json.stringify.chars": {
+            "scenario": "projection.large.open",
+            "metric": "json.stringify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "characters JSON.stringify produced (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 211162
+            }
+        },
+        "projection.large.open/view.entry.visits": {
+            "scenario": "projection.large.open",
+            "metric": "view.entry.visits",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "durable entries traversed to project room views (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1848
+            }
+        },
+        "projection.large.open/push.events": {
+            "scenario": "projection.large.open",
+            "metric": "push.events",
+            "layer": "push",
+            "unit": "count",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "events written to tabs, rotom-team:push channel (src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 49
+            }
+        },
+        "projection.large.open/push.bytes": {
+            "scenario": "projection.large.open",
+            "metric": "push.bytes",
+            "layer": "push",
+            "unit": "bytes",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "event-stream bytes written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 161655
+            }
+        },
+        "projection.large.open/push.view.count": {
+            "scenario": "projection.large.open",
+            "metric": "push.view.count",
+            "layer": "push",
+            "unit": "count",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "view events written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 14
+            }
+        },
+        "projection.large.open/push.view.bytes": {
+            "scenario": "projection.large.open",
+            "metric": "push.view.bytes",
+            "layer": "push",
+            "unit": "bytes",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "view event bytes written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 112462
+            }
+        },
+        "projection.large.paced/sql.statements": {
+            "scenario": "projection.large.paced",
+            "metric": "sql.statements",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "the same 64-turn session and 4 attached tabs; one 6000-char answer paced 25 ms per chunk, until settled and quiet",
+            "source": "node:sqlite StatementSync run/get/all/iterate + DatabaseSync.exec (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1003
+            }
+        },
+        "projection.large.paced/sql.rows": {
+            "scenario": "projection.large.paced",
+            "metric": "sql.rows",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "the same 64-turn session and 4 attached tabs; one 6000-char answer paced 25 ms per chunk, until settled and quiet",
+            "source": "rows returned by StatementSync all/get (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 5625
+            }
+        },
+        "projection.large.paced/subprocess.total": {
+            "scenario": "projection.large.paced",
+            "metric": "subprocess.total",
+            "layer": "process",
+            "unit": "count",
+            "workload": "the same 64-turn session and 4 attached tabs; one 6000-char answer paced 25 ms per chunk, until settled and quiet",
+            "source": "ChildProcess.prototype.spawn + spawnSync/execFileSync/execSync (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "projection.large.paced/json.parse.calls": {
+            "scenario": "projection.large.paced",
+            "metric": "json.parse.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "the same 64-turn session and 4 attached tabs; one 6000-char answer paced 25 ms per chunk, until settled and quiet",
+            "source": "global JSON.parse calls in the server process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 5423
+            }
+        },
+        "projection.large.paced/json.parse.chars": {
+            "scenario": "projection.large.paced",
+            "metric": "json.parse.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "the same 64-turn session and 4 attached tabs; one 6000-char answer paced 25 ms per chunk, until settled and quiet",
+            "source": "characters given to JSON.parse (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 266,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 3921564
+            }
+        },
+        "projection.large.paced/json.stringify.chars": {
+            "scenario": "projection.large.paced",
+            "metric": "json.stringify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "the same 64-turn session and 4 attached tabs; one 6000-char answer paced 25 ms per chunk, until settled and quiet",
+            "source": "characters JSON.stringify produced (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 41,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 476332
+            }
+        },
+        "projection.large.paced/subprocess.git": {
+            "scenario": "projection.large.paced",
+            "metric": "subprocess.git",
+            "layer": "process",
+            "unit": "count",
+            "workload": "the same 64-turn session and 4 attached tabs; one 6000-char answer paced 25 ms per chunk, until settled and quiet",
+            "source": "child processes whose program is git (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "projection.large.paced/view.entry.visits": {
+            "scenario": "projection.large.paced",
+            "metric": "view.entry.visits",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "the same 64-turn session and 4 attached tabs; one 6000-char answer paced 25 ms per chunk, until settled and quiet",
+            "source": "durable entries traversed to project room views (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 4792
+            }
+        },
+        "projection.large.paced/push.events": {
+            "scenario": "projection.large.paced",
+            "metric": "push.events",
+            "layer": "push",
+            "unit": "count",
+            "workload": "the same 64-turn session and 4 attached tabs; one 6000-char answer paced 25 ms per chunk, until settled and quiet",
+            "source": "events written to tabs, rotom-team:push channel (src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 44
+            }
+        },
+        "projection.large.paced/push.bytes": {
+            "scenario": "projection.large.paced",
+            "metric": "push.bytes",
+            "layer": "push",
+            "unit": "bytes",
+            "workload": "the same 64-turn session and 4 attached tabs; one 6000-char answer paced 25 ms per chunk, until settled and quiet",
+            "source": "event-stream bytes written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 231388
+            }
+        },
+        "projection.large.paced/push.view.count": {
+            "scenario": "projection.large.paced",
+            "metric": "push.view.count",
+            "layer": "push",
+            "unit": "count",
+            "workload": "the same 64-turn session and 4 attached tabs; one 6000-char answer paced 25 ms per chunk, until settled and quiet",
+            "source": "view events written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 36
+            }
+        },
+        "projection.large.paced/push.view.bytes": {
+            "scenario": "projection.large.paced",
+            "metric": "push.view.bytes",
+            "layer": "push",
+            "unit": "bytes",
+            "workload": "the same 64-turn session and 4 attached tabs; one 6000-char answer paced 25 ms per chunk, until settled and quiet",
+            "source": "view event bytes written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 190016
+            }
         }
     }
 }

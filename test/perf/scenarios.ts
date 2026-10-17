@@ -67,9 +67,13 @@ const model = createServer(async (req, res) => {
 
     inferenceRequests++;
     const users = input.messages.filter((m) => m.role === "user");
-    const text = answer(users.length);
+    const request = raw.stringify(users.at(-1)?.content ?? "");
+    const fullAnswer = answer(users.length);
+    const text = request.includes("PROJECTION-SEED")
+        ? fullAnswer.slice(0, WORKLOAD.projectionAnswerChars)
+        : fullAnswer;
     // A paced answer streams like a real model, so the server's 90 ms push coalescing has something to coalesce.
-    const paced = raw.stringify(users.at(-1)?.content ?? "").includes("PACED");
+    const paced = request.includes("PACED");
     const size = Math.ceil(text.length / WORKLOAD.streamChunks);
     const emit = (delta: object, finish: string | null = null) =>
         res.write(
@@ -401,6 +405,36 @@ await scenario("turn.prepared", async () => {
     assert.equal(inferenceRequests, beforeCalls + 1, "the prepared prompt makes one model request");
 });
 await preparedTab.close();
+
+// Append projection workloads last so their larger history and extra tabs cannot alter established scenarios.
+const projection = (await call("sessions", "POST", { title: "Projection", backend: "rotom" })).value
+    .id as number;
+
+for (let turn = 1; turn <= WORKLOAD.projectionTurns; turn++) {
+    assert.equal(
+        (await submit(projection, turn, `Projection seed ${turn}, PROJECTION-SEED.`)).value.status,
+        "settled",
+    );
+}
+
+const projectionTabs: ReturnType<typeof tab>[] = [];
+
+await scenario("projection.large.open", async () => {
+    for (let index = 0; index < WORKLOAD.projectionTabs; index++) {
+        const watcher = tab(projection);
+
+        projectionTabs.push(watcher);
+        await watcher.fullView;
+    }
+});
+await scenario("projection.large.paced", async () => {
+    assert.equal(
+        (await submit(projection, WORKLOAD.projectionTurns + 1, "Projection paced, PACED.")).value
+            .status,
+        "settled",
+    );
+});
+await Promise.all(projectionTabs.map((watcher) => watcher.close()));
 
 writeFileSync(out, raw.stringify({ workload: WORKLOAD, results }, null, 2));
 server.closeAllConnections();
