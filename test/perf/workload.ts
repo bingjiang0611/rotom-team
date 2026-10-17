@@ -107,6 +107,16 @@ const COUNTERS: Record<string, MetricSpec> = {
         unit: "count",
         source: "durable entries traversed to project room views (src/server/room.ts)",
     },
+    "view.client.entry.scans": {
+        layer: "cpu",
+        unit: "count",
+        source: "cached projected entries scanned for a client's missing IDs (src/server/room.ts)",
+    },
+    "view.stats.entry.scans": {
+        layer: "cpu",
+        unit: "count",
+        source: "entries visited in the stats reverse scan (src/server/projection.ts)",
+    },
     "push.events": {
         layer: "push",
         unit: "count",
@@ -163,16 +173,17 @@ const common = [
     "json.stringify.chars",
 ];
 const pushes = ["push.events", "push.bytes", "push.view.count", "push.view.bytes"];
+const projection = ["view.entry.visits", "view.client.entry.scans", "view.stats.entry.scans"];
 
 /** The counters each scenario reports. */
 export const REPORTED: Record<string, string[]> = {
     "startup.restart": [...common],
     "sessions.list": [...common, "http.body.bytes"],
-    "session.open": [...common, "view.entry.visits", ...pushes],
+    "session.open": [...common, ...projection, ...pushes],
     "turn.cold": [...common, "subprocess.git", ...pushes],
-    "turn.warm": [...common, "subprocess.git", "view.entry.visits", ...pushes],
+    "turn.warm": [...common, "subprocess.git", ...projection, ...pushes],
     // Paced chunks race the 90 ms push coalescing, so its push counts depend on timing: candidates until proven stable.
-    "turn.paced": [...common, "subprocess.git", "view.entry.visits", ...pushes],
+    "turn.paced": [...common, "subprocess.git", ...projection, ...pushes],
     "git.changes": [...common, "subprocess.git", "http.body.bytes"],
     "git.diff": [...common, "subprocess.git", "http.body.bytes"],
     "git.branches": [...common, "subprocess.git", "http.body.bytes"],
@@ -188,14 +199,14 @@ export const REPORTED: Record<string, string[]> = {
     ],
     "commands.discover.warm": [...common, "subprocess.rotom", ...pushes, "http.body.bytes"],
     "turn.prepared": [...common, "subprocess.rotom", ...pushes],
-    "projection.large.open": [...common, "view.entry.visits", ...pushes],
-    "projection.large.paced": [...common, "subprocess.git", "view.entry.visits", ...pushes],
+    "projection.large.open": [...common, ...projection, ...pushes],
+    "projection.large.paced": [...common, "subprocess.git", ...projection, ...pushes],
     // JSON counts leave web.open out: the DevTools connection that drives Chromium parses and writes JSON too.
     "web.open": [
         "sql.statements",
         "sql.rows",
         "subprocess.total",
-        "view.entry.visits",
+        ...projection,
         ...pushes,
         "http.requests",
         "cdp.LayoutCount",

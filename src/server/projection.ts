@@ -3,6 +3,7 @@
  * contents in tool arguments, long tool output) are clipped; a client asks for the full entry when the user expands it.
  */
 import type { EntryRecord, LiveState, UsageState } from "@earendil-works/pi-durable";
+import { viewProjectionChannel, type ViewProjectionSignal } from "./perf-channels.ts";
 import {
     ATTACHMENTS_HEADING,
     FILE_BLOCK,
@@ -512,8 +513,10 @@ export function projectStats(
 
     const prompt = input + cacheRead + cacheWrite;
     let contextTokens: number | undefined;
+    let statsEntryScans = 0;
 
     for (let index = entries.length - 1; index >= 0; index--) {
+        statsEntryScans++;
         const entry = nativeModel(entries[index]!);
         const message = entry.model?.[0] as
             { role?: string; usage?: UsageNumbers; stopReason?: string } | undefined;
@@ -542,6 +545,10 @@ export function projectStats(
             contextTokens = total;
             break;
         }
+    }
+
+    if (viewProjectionChannel.hasSubscribers) {
+        viewProjectionChannel.publish({ statsEntryScans } satisfies ViewProjectionSignal);
     }
 
     return {

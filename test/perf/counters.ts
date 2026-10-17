@@ -168,9 +168,21 @@ pushChannel.subscribe((message) => {
     }
 });
 
-viewProjectionChannel.subscribe((message) =>
-    add("view.entry.visits", (message as ViewProjectionSignal).entryVisits),
-);
+viewProjectionChannel.subscribe((message) => {
+    const { entryVisits, clientEntryScans, statsEntryScans } = message as ViewProjectionSignal;
+
+    if (entryVisits !== undefined) {
+        add("view.entry.visits", entryVisits);
+    }
+
+    if (clientEntryScans !== undefined) {
+        add("view.client.entry.scans", clientEntryScans);
+    }
+
+    if (statsEntryScans !== undefined) {
+        add("view.stats.entry.scans", statsEntryScans);
+    }
+});
 
 nativeStartChannel.subscribe((message) => {
     for (const [name, ms] of Object.entries(message as unknown as NativeStartSignal)) {

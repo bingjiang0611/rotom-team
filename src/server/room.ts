@@ -400,6 +400,12 @@ export class Room {
         const entries: ClientEntry[] = [];
         const { entries: projectedEntries, order, orderKey } = this.#sequence(view.entries);
 
+        if (viewProjectionChannel.hasSubscribers) {
+            viewProjectionChannel.publish({
+                clientEntryScans: projectedEntries.length,
+            } satisfies ViewProjectionSignal);
+        }
+
         for (const projected of projectedEntries) {
             if (!client.sentEntries.has(projected.id)) {
                 client.sentEntries.add(projected.id);

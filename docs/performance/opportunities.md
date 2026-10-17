@@ -106,6 +106,22 @@ use. Next authorised experiment: large-history/multi-tab projection workload, th
 invalidation. Native startup internals remain another lead needing a supported phase/profile investigation, not a
 raw-Pi or shared-credential shortcut.
 
+## Third climb batch — 2026-10-17
+
+Large-history/four-tab measurement and one L1 optimisation completed:
+
+- Source projection/order visits fell **1,848→132** on four-tab open and **4,792→267** on a paced answer. View push
+  counts/bytes are identical; durations are noise. Room cache invalidates on immutable entry-array replacement, so
+  append and head reset remain fresh; full reconnect, fork and restart are covered. See
+  [experiment](experiments/2026-10-17-room-entry-sequence-cache.md).
+- Residual exact counts show the next work: four-tab open still performs 1,792 cached visible-entry scans and 1,848
+  stats-entry scans; paced performs 4,648 and 4,792. See
+  [measurement](experiments/2026-10-17-room-projection-residual-work.md).
+
+L1 only; no L2/L3 claim or gate promotion. Next authorised hypothesis is room-wide stats caching by both immutable
+entries-array and usage-document identities. Per-client append/reset cursors follow only after that. Wire pagination
+still needs payload/browser-copy evidence.
+
 ## Open
 
 - **A warm turn parses about 93 times its answer as JSON.** `turn.warm/json.parse.chars` 558 969 for a

@@ -23,7 +23,11 @@ export type NativeStartSignal = {
     totalMs: number;
 };
 
-export type ViewProjectionSignal = { entryVisits: number };
+export type ViewProjectionSignal = {
+    entryVisits?: number;
+    clientEntryScans?: number;
+    statsEntryScans?: number;
+};
 
 export const pushChannel = channel("rotom-team:push");
 export const kernelRunChannel = channel("rotom-team:kernel-run");

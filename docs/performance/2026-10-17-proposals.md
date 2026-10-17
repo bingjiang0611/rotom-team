@@ -54,6 +54,26 @@ append/reset invalidation before any wire-protocol changes. Native initializatio
 altering the pinned native boundary or automatically starting trusted extensions is not authorised by these results.
 A supported native phase/profile investigation is still needed before selecting launcher/runtime work.
 
+## Third implementation batch
+
+- [Large-history, four-tab workload](experiments/2026-10-17-large-projection-baseline.md): opening tabs caused 1,848
+  Durable source-entry visits; one paced reply caused 4,792. Both were exact across ten runs.
+- [Room entry-sequence cache](experiments/2026-10-17-room-entry-sequence-cache.md): cache projected entries/order by
+  the immutable Durable entries array. Four-tab open visits 1,848→132; paced visits 4,792→267. Push counts and bytes
+  are identical. Append, head reset, reconnect/full resend, fork and restart tests plus two negative controls pass.
+  Durations compare as noise, so this is L1 only.
+- [Residual projection work](experiments/2026-10-17-room-projection-residual-work.md): after caching, four-tab open
+  still scans 1,792 cached entries per-client and 1,848 entries for stats; paced scans 4,648 and 4,792. These are new
+  candidates, not speed claims or promoted gates.
+
+The third batch closes after three experiments. Current-code type/lint/format checks, 442 unit tests and synthetic
+kernel proof pass; no real provider or browser UI used. Stage 3 now has one conservative server-side projection cache,
+but no incremental per-client cursor or wire protocol.
+
+Next authorised action: cache room-wide stats by immutable entries-array and usage-doc identities, then measure again.
+Only after that should per-client append/reset cursors be attempted. Pagination/versioned wire changes remain behind
+payload or browser-copy evidence; they are not justified by source-entry visits alone.
+
 ## Evidence
 
 ### Fresh controlled baseline

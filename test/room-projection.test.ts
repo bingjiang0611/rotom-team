@@ -26,7 +26,7 @@ function push(room: Room, client: Client, full: boolean): number {
     let visits = 0;
 
     const listener = (message: unknown) => {
-        visits += (message as ViewProjectionSignal).entryVisits;
+        visits += (message as ViewProjectionSignal).entryVisits ?? 0;
     };
 
     viewProjectionChannel.subscribe(listener);
