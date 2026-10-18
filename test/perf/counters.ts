@@ -169,7 +169,13 @@ pushChannel.subscribe((message) => {
 });
 
 viewProjectionChannel.subscribe((message) => {
-    const { entryVisits, clientEntryScans, statsEntryScans } = message as ViewProjectionSignal;
+    const {
+        entryVisits,
+        clientEntryScans,
+        statsEntryScans,
+        fieldStringifyCalls,
+        fieldStringifyChars,
+    } = message as ViewProjectionSignal;
 
     if (entryVisits !== undefined) {
         add("view.entry.visits", entryVisits);
@@ -181,6 +187,14 @@ viewProjectionChannel.subscribe((message) => {
 
     if (statsEntryScans !== undefined) {
         add("view.stats.entry.scans", statsEntryScans);
+    }
+
+    if (fieldStringifyCalls !== undefined) {
+        add("view.fields.stringify.calls", fieldStringifyCalls);
+    }
+
+    if (fieldStringifyChars !== undefined) {
+        add("view.fields.stringify.chars", fieldStringifyChars);
     }
 });
 

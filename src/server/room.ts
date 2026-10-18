@@ -536,14 +536,27 @@ export class Room {
                 : {}),
         };
 
+        let fieldStringifyCalls = 0;
+        let fieldStringifyChars = 0;
+
         for (const [key, value] of Object.entries(fields)) {
             const json = JSON.stringify(value);
+
+            fieldStringifyCalls++;
+            fieldStringifyChars += json.length;
 
             if (sentFields.get(key) === json) {
                 delete fields[key];
             } else {
                 sentFields.set(key, json);
             }
+        }
+
+        if (viewProjectionChannel.hasSubscribers) {
+            viewProjectionChannel.publish({
+                fieldStringifyCalls,
+                fieldStringifyChars,
+            } satisfies ViewProjectionSignal);
         }
 
         client.send("view", {

@@ -74,6 +74,25 @@ Next authorised action: cache room-wide stats by immutable entries-array and usa
 Only after that should per-client append/reset cursors be attempted. Pagination/versioned wire changes remain behind
 payload or browser-copy evidence; they are not justified by source-entry visits alone.
 
+## Fourth implementation batch
+
+- [Room stats cache](experiments/2026-10-17-room-stats-cache.md): cache `{cost, cacheRate, contextTokens}` by exact
+  immutable entries-array and usage-document identities. Four-tab open stats scans 1,848→132; paced 4,792→267.
+  Usage-only updates, newest answer, head reset, reconnect, fork/restart and two negative controls are covered.
+- [Per-client projection cursors](experiments/2026-10-17-room-client-cursors.md): unchanged sequence scans nothing;
+  strict append scans only the projected tail; full reconnect, missed revisions and reset conservatively full-scan.
+  Four-tab open scans 1,792→512; paced 4,648→8. Push counts/bytes are unchanged.
+- [Slow-field serialization](experiments/2026-10-17-view-field-serialization.md): four-tab open performs 168 field
+  serializations / 41,328 characters; paced performs 432 / 107,892. Stable new candidates; no optimization attempted.
+
+Both retained changes are L1 only; all scenario durations compare as noise and no L3 deployment occurred. Final checks:
+type/lint/format, 444 unit tests and synthetic kernel proof pass. The first full run hit the suite's documented drop-in
+watcher timeout (443/444); isolated rerun passed and the unchanged full suite then passed 444/444. No real provider or
+browser UI was used. The fourth batch closes after three experiments.
+
+Next authorised action: measure live/inbox/native-kernel payload construction and client-side parse/copy separately.
+Do not add a general slow-field cache or versioned/paginated protocol until those counters identify the dominant work.
+
 ## Evidence
 
 ### Fresh controlled baseline

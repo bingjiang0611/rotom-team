@@ -27,6 +27,8 @@ export type ViewProjectionSignal = {
     entryVisits?: number;
     clientEntryScans?: number;
     statsEntryScans?: number;
+    fieldStringifyCalls?: number;
+    fieldStringifyChars?: number;
 };
 
 export const pushChannel = channel("rotom-team:push");

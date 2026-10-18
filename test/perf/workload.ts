@@ -117,6 +117,16 @@ const COUNTERS: Record<string, MetricSpec> = {
         unit: "count",
         source: "entries visited in the stats reverse scan (src/server/projection.ts)",
     },
+    "view.fields.stringify.calls": {
+        layer: "cpu",
+        unit: "count",
+        source: "slow view fields serialized for per-client change detection (src/server/room.ts)",
+    },
+    "view.fields.stringify.chars": {
+        layer: "cpu",
+        unit: "chars",
+        source: "characters of slow view fields serialized before unchanged fields are omitted (src/server/room.ts)",
+    },
     "push.events": {
         layer: "push",
         unit: "count",
@@ -173,7 +183,13 @@ const common = [
     "json.stringify.chars",
 ];
 const pushes = ["push.events", "push.bytes", "push.view.count", "push.view.bytes"];
-const projection = ["view.entry.visits", "view.client.entry.scans", "view.stats.entry.scans"];
+const projection = [
+    "view.entry.visits",
+    "view.client.entry.scans",
+    "view.stats.entry.scans",
+    "view.fields.stringify.calls",
+    "view.fields.stringify.chars",
+];
 
 /** The counters each scenario reports. */
 export const REPORTED: Record<string, string[]> = {

@@ -122,6 +122,24 @@ L1 only; no L2/L3 claim or gate promotion. Next authorised hypothesis is room-wi
 entries-array and usage-document identities. Per-client append/reset cursors follow only after that. Wire pagination
 still needs payload/browser-copy evidence.
 
+## Fourth climb batch — 2026-10-17
+
+Two L1 changes retained; still no L2/L3 claim:
+
+- **Room-wide stats cache:** scans 1,848→132 on four-tab open; 4,792→267 on the paced reply. Invalidates on exact
+  entries and usage-doc revision, so usage-only commits and head reset stay fresh. See
+  [experiment](experiments/2026-10-17-room-stats-cache.md).
+- **Client projection cursor:** visible-entry scans 1,792→512 at open; 4,648→8 on paced reply. Full reconnect/reset
+  or missed revision safely rescans active order. No retained history chain, no protocol change. See
+  [experiment](experiments/2026-10-17-room-client-cursors.md).
+- **Slow-field JSON measured:** open 168 calls / 41,328 chars; paced 432 / 107,892, zero spread in ten runs. Fields
+  are only about 250 chars per push, so another broad cache is not the next justified investment. See
+  [measurement](experiments/2026-10-17-view-field-serialization.md).
+
+Final type/lint/format, 444 tests and synthetic kernel proof pass. First full run hit the documented drop-in watcher
+flake; isolated then unchanged full rerun pass. Next authorised measurement: live/inbox/kernel payload and browser
+parse/copy work, before any pagination/delta protocol decision. No service, account or deployment used.
+
 ## Open
 
 - **A warm turn parses about 93 times its answer as JSON.** `turn.warm/json.parse.chars` 558 969 for a

@@ -2454,6 +2454,174 @@
             "baselines": {
                 "darwin-arm64": 267
             }
+        },
+        "session.open/view.fields.stringify.calls": {
+            "scenario": "session.open",
+            "metric": "view.fields.stringify.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; a new event-stream tab on it, until its first full view",
+            "source": "slow view fields serialized for per-client change detection (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 24
+            }
+        },
+        "session.open/view.fields.stringify.chars": {
+            "scenario": "session.open",
+            "metric": "view.fields.stringify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; a new event-stream tab on it, until its first full view",
+            "source": "characters of slow view fields serialized before unchanged fields are omitted (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1200
+            }
+        },
+        "turn.warm/view.fields.stringify.calls": {
+            "scenario": "turn.warm",
+            "metric": "view.fields.stringify.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; second prompt of that session with one tab watching, until settled and quiet",
+            "source": "slow view fields serialized for per-client change detection (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 12
+            }
+        },
+        "turn.warm/view.fields.stringify.chars": {
+            "scenario": "turn.warm",
+            "metric": "view.fields.stringify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; second prompt of that session with one tab watching, until settled and quiet",
+            "source": "characters of slow view fields serialized before unchanged fields are omitted (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 162
+            }
+        },
+        "turn.paced/view.fields.stringify.calls": {
+            "scenario": "turn.paced",
+            "metric": "view.fields.stringify.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; third prompt of that session, its answer paced 25 ms per chunk, one tab watching, until settled and quiet",
+            "source": "slow view fields serialized for per-client change detection (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 108
+            }
+        },
+        "turn.paced/view.fields.stringify.chars": {
+            "scenario": "turn.paced",
+            "metric": "view.fields.stringify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; third prompt of that session, its answer paced 25 ms per chunk, one tab watching, until settled and quiet",
+            "source": "characters of slow view fields serialized before unchanged fields are omitted (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1863
+            }
+        },
+        "web.open/view.fields.stringify.calls": {
+            "scenario": "web.open",
+            "metric": "view.fields.stringify.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; headless Chromium signed in, opens /s/<session> until the last answer is in the page",
+            "source": "slow view fields serialized for per-client change detection (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 12
+            }
+        },
+        "web.open/view.fields.stringify.chars": {
+            "scenario": "web.open",
+            "metric": "view.fields.stringify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; headless Chromium signed in, opens /s/<session> until the last answer is in the page",
+            "source": "characters of slow view fields serialized before unchanged fields are omitted (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 600
+            }
+        },
+        "projection.large.open/view.fields.stringify.calls": {
+            "scenario": "projection.large.open",
+            "metric": "view.fields.stringify.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "slow view fields serialized for per-client change detection (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 168
+            }
+        },
+        "projection.large.open/view.fields.stringify.chars": {
+            "scenario": "projection.large.open",
+            "metric": "view.fields.stringify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "characters of slow view fields serialized before unchanged fields are omitted (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 41328
+            }
+        },
+        "projection.large.paced/view.fields.stringify.calls": {
+            "scenario": "projection.large.paced",
+            "metric": "view.fields.stringify.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "the same 64-turn session and 4 attached tabs; one 6000-char answer paced 25 ms per chunk, until settled and quiet",
+            "source": "slow view fields serialized for per-client change detection (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 432
+            }
+        },
+        "projection.large.paced/view.fields.stringify.chars": {
+            "scenario": "projection.large.paced",
+            "metric": "view.fields.stringify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "the same 64-turn session and 4 attached tabs; one 6000-char answer paced 25 ms per chunk, until settled and quiet",
+            "source": "characters of slow view fields serialized before unchanged fields are omitted (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 107892
+            }
         }
     }
 }
