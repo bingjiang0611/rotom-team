@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { DatabaseSync } from "node:sqlite";
+import { DatabaseSync, StatementSync } from "node:sqlite";
 import {
     mkdtempSync,
     mkdirSync,
@@ -651,6 +651,121 @@ test("writer and backup share an exclusion fence; restore strips native grants a
             "dead parent is not proof its tools stopped",
         );
     } finally {
+        rmSync(f.root, { recursive: true, force: true });
+    }
+});
+
+test("latest and pending read one complete receipt row and preserve fresh fences after restart", () => {
+    const f = setup();
+    let journal = new RotomJournal(f.data);
+    const originalGet = StatementSync.prototype.get;
+    let attemptReads = 0;
+    let fenceReads = 0;
+
+    const counted = <T>(read: () => T) => {
+        attemptReads = 0;
+        fenceReads = 0;
+
+        StatementSync.prototype.get = function (...args) {
+            if (/FROM kernel_attempts/i.test(this.sourceSQL)) {
+                attemptReads++;
+            }
+
+            if (/FROM kernel_command_inputs/i.test(this.sourceSQL)) {
+                fenceReads++;
+            }
+
+            return Reflect.apply(originalGet, this, args);
+        };
+
+        try {
+            return read();
+        } finally {
+            StatementSync.prototype.get = originalGet;
+        }
+    };
+
+    try {
+        journal.bind("native", f.binding);
+        assert.equal(
+            counted(() => journal.latest("native")),
+            undefined,
+        );
+        assert.equal(attemptReads, 1);
+        assert.equal(fenceReads, 0);
+        assert.equal(
+            counted(() => journal.pendingConversation("native")),
+            undefined,
+        );
+        assert.equal(attemptReads, 1);
+        assert.equal(fenceReads, 0);
+        const prior = journal.reserve("native", "prior", "rejected prompt");
+
+        journal.fail(prior.id, "rejected");
+        assert.equal(journal.latest("native")?.id, prior.id);
+        assert.equal(
+            counted(() => journal.pendingConversation("native")),
+            undefined,
+        );
+        assert.equal(attemptReads, 1, "a known rejection is not a pending fence");
+        assert.equal(fenceReads, 0);
+        const first = journal.reserve("native", "first", "ordinary");
+
+        journal.attach(first.id, join(f.binding.home, "session.jsonl"), "native-id", 123);
+        const input = journal.beginCommandInput(first.id, "/queued");
+        const expected = journal.receipt(first.id);
+
+        assert.deepEqual(
+            counted(() => journal.latest("native")),
+            expected,
+        );
+        assert.equal(attemptReads, 1);
+        assert.equal(fenceReads, 1, "full receipt still checks unresolved input");
+        assert.deepEqual(
+            counted(() => journal.pendingConversation("native")),
+            expected,
+        );
+        assert.equal(attemptReads, 1);
+        assert.equal(fenceReads, 1);
+        journal.completeCommandInput(input);
+        assert.equal(journal.latest("native")?.unresolvedCommandInput, undefined);
+        assert.equal(journal.pendingConversation("native")?.unresolvedCommandInput, undefined);
+        journal.setPhase(first.id, "finalization");
+        journal.recordFailure(first.id, "rpc-record-limit");
+        journal.fail(first.id, "unknown");
+        const failed = journal.receipt(first.id);
+
+        assert.deepEqual(journal.latest("native"), failed);
+        assert.deepEqual(journal.pendingConversation("native"), failed);
+        assert.equal(failed.phase, "finalization");
+        assert.equal(failed.failure, "rpc-record-limit");
+        const bobHome = join(f.data, "kernel-homes", "bob");
+
+        mkdirSync(bobHome, { mode: 0o700 });
+        journal.bind("other", { ...f.binding, memberId: "bob", home: bobHome });
+        const second = journal.reserve("other", "second", "another");
+
+        assert.notEqual(second.id, first.id);
+        assert.equal(journal.latest("native")?.id, first.id, "lookup is conversation scoped");
+        assert.equal(journal.pendingConversation("native")?.id, first.id);
+        journal.close();
+        journal = new RotomJournal(f.data);
+        assert.deepEqual(
+            counted(() => journal.latest("native")),
+            failed,
+        );
+        assert.equal(attemptReads, 1);
+        assert.equal(fenceReads, 1);
+        assert.deepEqual(
+            counted(() => journal.pendingConversation("native")),
+            failed,
+        );
+        assert.equal(attemptReads, 1);
+        assert.equal(fenceReads, 1);
+        assert.throws(() => journal.receipt("missing"), /Unknown kernel receipt/);
+    } finally {
+        StatementSync.prototype.get = originalGet;
+        journal.close();
         rmSync(f.root, { recursive: true, force: true });
     }
 });

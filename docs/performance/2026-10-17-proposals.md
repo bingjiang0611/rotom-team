@@ -114,6 +114,26 @@ Next authorised hypothesis: reuse the same synchronous `roomState` session snaps
 all viewer/member/segment/model/binding checks and fresh pending/unknown/cutoff reads. This removes duplicate work
 without a long-lived credential/state cache. Protocol pagination remains behind long-history browser/payload evidence.
 
+## Sixth implementation batch
+
+- [Exact session reuse](experiments/2026-10-17-roomstate-session-reuse.md): pass roomState's fresh session snapshot
+  into same-call catalog validation. No cache; full member/segment/binding predicates retained. Four-tab open kernel
+  SQL 140→98 and parses 42→28; paced common/worst SQL 424→316, parses 140→104.
+- [Query-category measurement](experiments/2026-10-17-kernel-query-categories.md): after that change, attempts-table
+  reads dominate (42 at open; 140 at paced), exposing ID-then-full-row receipt reads. Candidates only.
+- [Full-row receipts](experiments/2026-10-17-receipt-row-read.md): latest/pending now decode their first full row;
+  required unresolved-input checks and current unknown/phase/failure fields are unchanged. Open kernel SQL 98→84;
+  paced 316→248. Tests detect both duplicate reads and missing fences.
+
+The two retained changes reach L1 only. Cumulative common/worst kernel SQL is 140→84 at open and 424→248 at paced;
+scenario durations compare as noise, and no L3 release was deployed. Final type/lint/format, 448 tests, synthetic kernel
+and native-command proofs pass. Real Chromium benchmarks read open and streamed final answers. Other uncommitted user
+changes are preserved. The sixth batch stops after three experiments.
+
+Next authorised hypothesis: a fresh joined read for presence/head/session, with explicit absent-conversation versus
+corrupt-head errors and exact full binding; measure query-plan/parity before implementation. No cross-call cache or
+receipt-fence weakening. Pagination remains sequenced behind long-history browser/payload evidence.
+
 ## Evidence
 
 ### Fresh controlled baseline

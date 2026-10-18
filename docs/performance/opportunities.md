@@ -155,6 +155,22 @@ real accounts. No L2/L3, production or protocol claim. Next authorised hypothesi
 snapshot inside the same synchronous roomState call, not a cross-call cache; keep exact viewer/binding and fresh
 unknown/pending/cutoff checks. Polling, long browser history and full device/UI acceptance remain unverified.
 
+## Sixth climb batch — 2026-10-17
+
+Two L1 wins; no L2/L3:
+
+- **Same-call session reuse:** full exact catalog binding comparison still runs, but duplicate session/presence reads
+  do not. Open kernel SQL 140→98; paced 424→316. See
+  [experiment](experiments/2026-10-17-roomstate-session-reuse.md).
+- **Complete receipt row read:** latest/pending preserve filters/errors and required fresh unresolved-input queries.
+  Open kernel SQL 98→84; paced 316→248; parses and fences unchanged. See
+  [experiment](experiments/2026-10-17-receipt-row-read.md).
+
+Final type/lint/format, 448 tests, synthetic kernel and native-command proofs pass; real Chromium readback succeeds.
+Cumulative common/worst SQL reduction is 40% at open and about 42% at paced. No timing improvement, production or real
+account claim. Next authorised hypothesis: combine presence/head/session with a fresh joined query, after error/parity
+and query-plan verification. Current unknown/input fences must not be cached away.
+
 ## Open
 
 - **A warm turn parses about 93 times its answer as JSON.** `turn.warm/json.parse.chars` 558 969 for a

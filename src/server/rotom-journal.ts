@@ -1,6 +1,6 @@
 /** Private execution receipts. RPC correlation IDs are not durable idempotency keys. */
 import { randomUUID, createHash } from "node:crypto";
-import { DatabaseSync } from "node:sqlite";
+import { DatabaseSync, type SQLOutputValue } from "node:sqlite";
 import {
     closeSync,
     existsSync,
@@ -438,6 +438,12 @@ export class RotomJournal {
             throw new Error("Unknown kernel receipt");
         }
 
+        return this.#receipt(row);
+    }
+
+    #receipt(row: Record<string, SQLOutputValue>): KernelReceipt {
+        const id = String(row.id);
+
         return {
             id,
             sessionId: String(row.conversation_id),
@@ -843,11 +849,11 @@ export class RotomJournal {
     latest(sessionId: string): KernelReceipt | undefined {
         const row = this.#db
             .prepare(
-                "SELECT id FROM kernel_attempts WHERE conversation_id=? ORDER BY rowid DESC LIMIT 1",
+                "SELECT * FROM kernel_attempts WHERE conversation_id=? ORDER BY rowid DESC LIMIT 1",
             )
             .get(sessionId);
 
-        return row ? this.receipt(String(row.id)) : undefined;
+        return row ? this.#receipt(row) : undefined;
     }
 
     /** Thinking is mutable native session state; the receipt binding retains its initial value. */
@@ -1192,11 +1198,11 @@ export class RotomJournal {
     pendingConversation(sessionId: string): KernelReceipt | undefined {
         const row = this.#db
             .prepare(
-                "SELECT id FROM kernel_attempts WHERE conversation_id=? AND status IN ('dispatch-intent','unknown') LIMIT 1",
+                "SELECT * FROM kernel_attempts WHERE conversation_id=? AND status IN ('dispatch-intent','unknown') LIMIT 1",
             )
             .get(sessionId);
 
-        return row ? this.receipt(String(row.id)) : undefined;
+        return row ? this.#receipt(row) : undefined;
     }
 
     pending(memberId: string): KernelReceipt | undefined {
