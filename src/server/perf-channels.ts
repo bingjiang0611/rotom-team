@@ -47,6 +47,8 @@ export type ParseWork =
     | "native-readback"
     | "native-rpc"
     | "native-jsonl"
+    | "native-jsonl-ingest"
+    | "native-jsonl-snapshot"
     | "native-gate"
     | "http";
 /** The benchmark subscribes only to enable bounded source attribution; no content is published. */

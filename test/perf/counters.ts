@@ -60,6 +60,8 @@ const parseSource = () => {
         case "native-readback":
         case "native-rpc":
         case "native-jsonl":
+        case "native-jsonl-ingest":
+        case "native-jsonl-snapshot":
         case "native-gate":
             return "nativeReadback";
         case "http":
@@ -79,16 +81,20 @@ JSON.parse = function parse(text: string, reviver?: Parameters<typeof JSON.parse
     add(`json.parse.${source}.chars`, chars);
 
     const scope = currentParseWork();
-    const nativePart =
+    const nativeParts =
         scope === "native-rpc"
-            ? "nativeRpc"
+            ? ["nativeRpc"]
             : scope === "native-jsonl"
-              ? "nativeJsonl"
-              : scope === "native-gate"
-                ? "nativeGate"
-                : undefined;
+              ? ["nativeJsonl"]
+              : scope === "native-jsonl-ingest"
+                ? ["nativeJsonl", "nativeJsonlIngest"]
+                : scope === "native-jsonl-snapshot"
+                  ? ["nativeJsonl", "nativeJsonlSnapshot"]
+                  : scope === "native-gate"
+                    ? ["nativeGate"]
+                    : [];
 
-    if (nativePart !== undefined) {
+    for (const nativePart of nativeParts) {
         add(`json.parse.${nativePart}.calls`);
         add(`json.parse.${nativePart}.chars`, chars);
     }

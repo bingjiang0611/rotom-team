@@ -234,6 +234,26 @@ Timing remains noise, so L1 only; no L3/production/real-account claim. Stop afte
 readback is RPC 48 plus fresh JSONL 135 plus gate 1 in the large paced case; further progress needs a new batch and a
 new attribution inside the fresh half, not weaker prefix/error checking.
 
+## Eleventh climb batch — 2026-10-18
+
+- **Retained-memory cost measured:** unbounded tail reuse retained about 8 MiB heap for an 8 MiB text history and
+  about 65–70 MiB for a 70 MiB image-sized history. It reduced three-snapshot process high-water RSS, but that does
+  not justify lifetime-proportional heap. See
+  [measurement](experiments/2026-10-18-native-tail-memory-baseline.md).
+- **Entry reuse bounded at 1 MiB:** small histories keep the previous JSONL reduction; larger prefixes release cached
+  bodies and use the original fresh full parse. The 8/70 MiB idle heap returns to pre-reuse levels. ID-tree validation
+  and undelivered journal entries remain live, so append, corruption, selected branch and finalization semantics stay
+  unchanged. See [experiment](experiments/2026-10-18-native-tail-bounded-cache.md).
+- **Remaining JSONL is first ingestion:** all ten runs partition exactly. Large paced JSONL 135 = ingestion 135 +
+  snapshot/fallback 0; warm 9 = 9 + 0. There is no duplicate prefix parse left in controlled turns. Do not remove this
+  validation without a separately approved protocol/storage contract change. See
+  [attribution](experiments/2026-10-18-native-jsonl-ingest-attribution.md).
+
+Final type/lint/format, 456 tests, 82-request kernel proof and 28-inference native command/Chromium proof pass. Timing
+remains noise, so L1 only; no L3/production/real-account claim. Stop after three experiments. Next batch may split the
+stable 48 RPC parses into transport records and nested bridge payloads before choosing another optimization; the fresh
+one-call gate is not a lead.
+
 ## Open
 
 - **A warm turn parses about 93 times its answer as JSON.** `turn.warm/json.parse.chars` 558 969 for a

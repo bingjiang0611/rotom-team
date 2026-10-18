@@ -83,6 +83,8 @@ test("parse source counters partition calls/chars without changing JSON results"
         ["native-readback", "nativeReadback"],
         ["native-rpc", "nativeReadback"],
         ["native-jsonl", "nativeReadback"],
+        ["native-jsonl-ingest", "nativeReadback"],
+        ["native-jsonl-snapshot", "nativeReadback"],
         ["native-gate", "nativeReadback"],
         ["http", "http"],
     ] as const;
@@ -94,8 +96,8 @@ test("parse source counters partition calls/chars without changing JSON results"
     assert.equal(JSON.parse("3"), 3);
     const counts = since(before);
 
-    assert.equal(counts["json.parse.calls"], 11);
-    assert.equal(counts["json.parse.chars"], 111);
+    assert.equal(counts["json.parse.calls"], 13);
+    assert.equal(counts["json.parse.chars"], 133);
 
     const totals = new Map<string, number>();
 
@@ -108,10 +110,13 @@ test("parse source counters partition calls/chars without changing JSON results"
         assert.equal(counts[`json.parse.${source}.chars`], 11 * count);
     }
 
-    for (const source of ["nativeRpc", "nativeJsonl", "nativeGate"]) {
+    for (const source of ["nativeRpc", "nativeJsonlIngest", "nativeJsonlSnapshot", "nativeGate"]) {
         assert.equal(counts[`json.parse.${source}.calls`], 1);
         assert.equal(counts[`json.parse.${source}.chars`], 11);
     }
+
+    assert.equal(counts["json.parse.nativeJsonl.calls"], 3);
+    assert.equal(counts["json.parse.nativeJsonl.chars"], 33);
 
     assert.equal(
         counts["json.parse.nativeRpc.calls"]! +

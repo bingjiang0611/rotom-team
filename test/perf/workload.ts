@@ -56,7 +56,13 @@ const parseSources = [
     "http",
     "other",
 ];
-const nativeReadbackSources = ["nativeRpc", "nativeJsonl", "nativeGate"];
+const nativeReadbackSources = [
+    "nativeRpc",
+    "nativeJsonl",
+    "nativeJsonlIngest",
+    "nativeJsonlSnapshot",
+    "nativeGate",
+];
 const parseAttribution = [...parseSources, ...nativeReadbackSources].flatMap((source) => [
     `json.parse.${source}.calls`,
     `json.parse.${source}.chars`,

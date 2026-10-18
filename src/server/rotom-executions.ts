@@ -1646,7 +1646,12 @@ export async function readNativeSnapshot(
     const persisted = existsSync(state.sessionFile)
         ? (tail
               ? tail.snapshot(state.sessionFile, state.sessionId, workspace)
-              : new NativeTail(state.sessionFile, state.sessionId, workspace).read()
+              : new NativeTail(
+                    state.sessionFile,
+                    state.sessionId,
+                    workspace,
+                    "native-jsonl-snapshot",
+                ).read()
           ).filter((entry) => entry.type !== "session")
         : [];
     const since = persisted.at(-1)?.id;
@@ -1660,7 +1665,7 @@ export async function readNativeSnapshot(
 
 /** One complete snapshot of a native session file. */
 function readNativeEntries(path: string, sessionId: string, workspace: string): KernelEntry[] {
-    const tail = new NativeTail(path, sessionId, workspace);
+    const tail = new NativeTail(path, sessionId, workspace, "native-jsonl-snapshot");
     const entries = tail.read();
 
     if (!tail.complete) {
@@ -1678,6 +1683,7 @@ export class NativeTail {
     readonly #path: string;
     readonly #sessionId: string;
     readonly #workspace: string;
+    readonly #source: "native-jsonl-ingest" | "native-jsonl-snapshot";
     readonly #ids = new Set<string>();
     #cachedEntries: KernelEntry[] | undefined = [];
     readonly #prefixHash = createHash("sha256");
@@ -1685,10 +1691,16 @@ export class NativeTail {
     #offset = 0;
     #pending = Buffer.alloc(0);
     #header = false;
-    constructor(path: string, sessionId: string, workspace: string) {
+    constructor(
+        path: string,
+        sessionId: string,
+        workspace: string,
+        source: "native-jsonl-ingest" | "native-jsonl-snapshot" = "native-jsonl-ingest",
+    ) {
         this.#path = path;
         this.#sessionId = sessionId;
         this.#workspace = workspace;
+        this.#source = source;
     }
 
     /** True when the last read ended exactly at a line break. */
@@ -1716,7 +1728,13 @@ export class NativeTail {
             throw new Error("Native tail snapshot identity mismatch");
         }
 
-        const fresh = () => new NativeTail(this.#path, this.#sessionId, this.#workspace).read();
+        const fresh = () =>
+            new NativeTail(
+                this.#path,
+                this.#sessionId,
+                this.#workspace,
+                "native-jsonl-snapshot",
+            ).read();
 
         try {
             this.#refresh();
@@ -1814,7 +1832,7 @@ export class NativeTail {
                 throw new Error("Native session line exceeds the import bound");
             }
 
-            const entry = parseWithWork("native-jsonl", line) as KernelEntry;
+            const entry = parseWithWork(this.#source, line) as KernelEntry;
 
             if (!this.#header) {
                 if (
