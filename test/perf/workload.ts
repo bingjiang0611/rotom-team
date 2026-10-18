@@ -143,6 +143,31 @@ const COUNTERS: Record<string, MetricSpec> = {
         unit: "count",
         source: "native kernel projections constructed per client push (src/server/room.ts)",
     },
+    "view.kernel.sql.heads": {
+        layer: "storage",
+        unit: "count",
+        source: "SQL FROM kernel_heads during synchronous roomState projection (test/perf/counters.ts)",
+    },
+    "view.kernel.sql.sessions": {
+        layer: "storage",
+        unit: "count",
+        source: "SQL FROM kernel_sessions during synchronous roomState projection (test/perf/counters.ts)",
+    },
+    "view.kernel.sql.attempts": {
+        layer: "storage",
+        unit: "count",
+        source: "SQL FROM kernel_attempts during synchronous roomState projection (test/perf/counters.ts)",
+    },
+    "view.kernel.sql.command_inputs": {
+        layer: "storage",
+        unit: "count",
+        source: "SQL FROM kernel_command_inputs during synchronous roomState projection (test/perf/counters.ts)",
+    },
+    "view.kernel.sql.resume": {
+        layer: "storage",
+        unit: "count",
+        source: "SQL FROM kernel_resume during synchronous roomState projection (test/perf/counters.ts)",
+    },
     "view.kernel.sql.statements": {
         layer: "storage",
         unit: "count",
@@ -264,6 +289,11 @@ const projection = [
     "view.inbox.project.calls",
     "view.kernel.project.calls",
     "view.kernel.sql.statements",
+    "view.kernel.sql.heads",
+    "view.kernel.sql.sessions",
+    "view.kernel.sql.attempts",
+    "view.kernel.sql.command_inputs",
+    "view.kernel.sql.resume",
     "view.kernel.sql.rows",
     "view.kernel.json.parse.calls",
     "view.kernel.json.parse.chars",

@@ -32,6 +32,7 @@ export type Counts = Record<string, number>;
 
 const counts: Counts = {};
 const nativeTimings: Counts = {};
+let kernelRoomActive = false;
 
 const add = (name: string, amount = 1) => {
     counts[name] = (counts[name] ?? 0) + amount;
@@ -65,6 +66,18 @@ for (const method of ["run", "get", "all", "iterate"] as StatementMethod[]) {
         ...args: unknown[]
     ) {
         add("sql.statements");
+
+        if (kernelRoomActive) {
+            const table =
+                /\bFROM (kernel_heads|kernel_sessions|kernel_attempts|kernel_command_inputs|kernel_resume)\b/i
+                    .exec(this.sourceSQL)?.[1]
+                    ?.replace("kernel_", "");
+
+            if (table !== undefined) {
+                add(`view.kernel.sql.${table}`);
+            }
+        }
+
         const result = original.apply(this, args);
 
         if (method === "all") {
@@ -209,7 +222,15 @@ roomPartChannel.subscribe((message) => {
         add(`view.${part}.project.calls`);
         roomPartStarts.set(part, snapshot());
 
+        if (part === "kernel") {
+            kernelRoomActive = true;
+        }
+
         return;
+    }
+
+    if (part === "kernel") {
+        kernelRoomActive = false;
     }
 
     const name = `room${part[0]!.toUpperCase()}${part.slice(1)}ProjectMs`;
