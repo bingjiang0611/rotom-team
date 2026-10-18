@@ -2159,15 +2159,24 @@ export class TeamKernel {
         }
     }
 
-    #commandSnapshot(id: ConversationId, memberId: string) {
+    #commandSnapshot(
+        id: ConversationId,
+        memberId: string,
+        knownSession?: { segmentId: string; binding: KernelBinding },
+    ) {
         const cached = this.#commands.get(id);
 
-        // A session the kernel never started has no native commands yet.
-        if (!cached || !this.executions.journal.hasConversation(String(id))) {
+        if (!cached) {
             return undefined;
         }
 
-        const session = this.executions.journal.session(String(id));
+        // A standalone catalog read must prove the session still exists. roomState already read this exact snapshot
+        // synchronously, so reuse it there instead of querying and decoding the same binding again.
+        if (knownSession === undefined && !this.executions.journal.hasConversation(String(id))) {
+            return undefined;
+        }
+
+        const session = knownSession ?? this.executions.journal.session(String(id));
 
         if (
             cached?.memberId === memberId &&
@@ -2293,7 +2302,9 @@ export class TeamKernel {
             thinkingLevel: binding.thinkingLevel ?? "off",
             kernelVersion: binding.kernelVersion,
             yours: binding.memberId === viewer.id,
-            commandsRevision: commandCatalogRevision(this.#commandSnapshot(id, viewer.id)),
+            commandsRevision: commandCatalogRevision(
+                this.#commandSnapshot(id, viewer.id, { binding, segmentId }),
+            ),
             hasBranchedHistory: this.#branchedHistory.has(id),
             dialogs: this.#live.get(id)?.dialogs ?? [],
             statuses: this.#live.get(id)?.statuses ?? {},

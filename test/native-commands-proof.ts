@@ -392,6 +392,56 @@ try {
     assert.equal((await json(await request(viewer, `c/${id}/prompts`))).dynamicReady, false);
 
     assert.ok(registry.dynamicReady);
+    assert.notEqual(
+        (app.kernel!.roomState(id, alice) as { commandsRevision: string | null }).commandsRevision,
+        null,
+        "the catalog revision reaches only its exact member and binding",
+    );
+    assert.equal(
+        (app.kernel!.roomState(id, bob) as { commandsRevision: string | null }).commandsRevision,
+        null,
+    );
+    assert.equal(
+        (app.kernel!.roomState(id, viewer) as { commandsRevision: string | null }).commandsRevision,
+        null,
+    );
+    const projectionJournal = app.kernel!.executions.journal;
+    const originalSession = projectionJournal.session;
+    let projectionReads = 0;
+
+    try {
+        projectionJournal.session = function (sessionId) {
+            projectionReads++;
+
+            return originalSession.call(this, sessionId);
+        };
+
+        assert.notEqual(
+            (app.kernel!.roomState(id, alice) as { commandsRevision: string | null })
+                .commandsRevision,
+            null,
+        );
+        assert.equal(projectionReads, 1, "one roomState reuses exactly one fresh session read");
+
+        projectionJournal.session = function (sessionId) {
+            const session = originalSession.call(this, sessionId);
+
+            return {
+                ...session,
+                binding: { ...session.binding, model: "unmatched-projection-model" },
+            };
+        };
+
+        assert.equal(
+            (app.kernel!.roomState(id, alice) as { commandsRevision: string | null })
+                .commandsRevision,
+            null,
+            "even the same member and segment need exact full binding equality",
+        );
+    } finally {
+        projectionJournal.session = originalSession;
+    }
+
     const publicNames = new Set(registry.commands.map((command: { name: string }) => command.name));
 
     for (const name of [

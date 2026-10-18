@@ -366,7 +366,7 @@
             "tolerance": 15,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 204
+                "darwin-arm64": 201
             }
         },
         "turn.cold/sql.rows": {
@@ -380,7 +380,7 @@
             "tolerance": 10,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 112
+                "darwin-arm64": 109
             }
         },
         "turn.cold/subprocess.total": {
@@ -408,7 +408,7 @@
             "tolerance": 10,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 215
+                "darwin-arm64": 214
             }
         },
         "turn.cold/json.parse.chars": {
@@ -422,7 +422,7 @@
             "tolerance": 3378,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 727696
+                "darwin-arm64": 727155
             }
         },
         "turn.cold/json.stringify.chars": {
@@ -520,7 +520,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 148
+                "darwin-arm64": 145
             }
         },
         "turn.warm/sql.rows": {
@@ -534,7 +534,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 91
+                "darwin-arm64": 88
             }
         },
         "turn.warm/subprocess.total": {
@@ -562,7 +562,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 145
+                "darwin-arm64": 144
             }
         },
         "turn.warm/json.parse.chars": {
@@ -576,7 +576,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 342905
+                "darwin-arm64": 342364
             }
         },
         "turn.warm/json.stringify.chars": {
@@ -674,7 +674,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 318
+                "darwin-arm64": 291
             }
         },
         "turn.paced/sql.rows": {
@@ -688,7 +688,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 311
+                "darwin-arm64": 284
             }
         },
         "turn.paced/subprocess.total": {
@@ -716,7 +716,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 279
+                "darwin-arm64": 270
             }
         },
         "turn.paced/json.parse.chars": {
@@ -730,7 +730,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 822690
+                "darwin-arm64": 817821
             }
         },
         "turn.paced/json.stringify.chars": {
@@ -1122,7 +1122,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 22
+                "darwin-arm64": 19
             }
         },
         "web.open/sql.rows": {
@@ -1136,7 +1136,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 74
+                "darwin-arm64": 71
             }
         },
         "web.open/subprocess.total": {
@@ -1388,7 +1388,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 86
+                "darwin-arm64": 83
             }
         },
         "commands.discover.cold/sql.rows": {
@@ -1402,7 +1402,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 43
+                "darwin-arm64": 40
             }
         },
         "commands.discover.cold/subprocess.total": {
@@ -1430,7 +1430,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 116
+                "darwin-arm64": 115
             }
         },
         "commands.discover.cold/json.parse.chars": {
@@ -1444,7 +1444,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 413701
+                "darwin-arm64": 413160
             }
         },
         "commands.discover.cold/json.stringify.chars": {
@@ -1556,7 +1556,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 79
+                "darwin-arm64": 76
             }
         },
         "commands.discover.warm/sql.rows": {
@@ -1570,7 +1570,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 44
+                "darwin-arm64": 41
             }
         },
         "commands.discover.warm/subprocess.total": {
@@ -1598,7 +1598,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 68
+                "darwin-arm64": 67
             }
         },
         "commands.discover.warm/json.parse.chars": {
@@ -1612,7 +1612,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 213838
+                "darwin-arm64": 213297
             }
         },
         "commands.discover.warm/json.stringify.chars": {
@@ -1724,7 +1724,7 @@
             "tolerance": 26,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 197
+                "darwin-arm64": 191
             }
         },
         "turn.prepared/sql.rows": {
@@ -1738,7 +1738,7 @@
             "tolerance": 25,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 120
+                "darwin-arm64": 114
             }
         },
         "turn.prepared/subprocess.total": {
@@ -1766,7 +1766,7 @@
             "tolerance": 14,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 173
+                "darwin-arm64": 171
             }
         },
         "turn.prepared/json.parse.chars": {
@@ -1780,7 +1780,7 @@
             "tolerance": 50560,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 574631
+                "darwin-arm64": 573549
             }
         },
         "turn.prepared/json.stringify.chars": {
@@ -1976,7 +1976,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 283
+                "darwin-arm64": 241
             }
         },
         "projection.large.open/sql.rows": {
@@ -1990,7 +1990,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 2211
+                "darwin-arm64": 2169
             }
         },
         "projection.large.open/subprocess.total": {
@@ -2018,7 +2018,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 2071
+                "darwin-arm64": 2057
             }
         },
         "projection.large.open/json.parse.chars": {
@@ -2032,7 +2032,7 @@
             "tolerance": 105,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 1462181
+                "darwin-arm64": 1454667
             }
         },
         "projection.large.open/json.stringify.chars": {
@@ -2130,7 +2130,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 1003
+                "darwin-arm64": 895
             }
         },
         "projection.large.paced/sql.rows": {
@@ -2144,7 +2144,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 5625
+                "darwin-arm64": 5517
             }
         },
         "projection.large.paced/subprocess.total": {
@@ -2172,7 +2172,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 5423
+                "darwin-arm64": 5387
             }
         },
         "projection.large.paced/json.parse.chars": {
@@ -2186,7 +2186,7 @@
             "tolerance": 266,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 3921488
+                "darwin-arm64": 3902164
             }
         },
         "projection.large.paced/json.stringify.chars": {
@@ -2200,7 +2200,7 @@
             "tolerance": 41,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 476330
+                "darwin-arm64": 476327
             }
         },
         "projection.large.paced/subprocess.git": {
@@ -2900,7 +2900,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 365
+                "darwin-arm64": 335
             }
         },
         "web.paced/sql.rows": {
@@ -2914,7 +2914,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 617
+                "darwin-arm64": 587
             }
         },
         "web.paced/subprocess.total": {
@@ -3124,7 +3124,7 @@
             "tolerance": 1,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 13
+                "darwin-arm64": 12
             }
         },
         "web.paced/cdp.RecalcStyleCount": {
@@ -3152,7 +3152,7 @@
             "tolerance": 33,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 1252
+                "darwin-arm64": 1222
             }
         },
         "web.paced/web.event.parse.calls": {
@@ -3404,7 +3404,7 @@
             "tolerance": 12,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 22
+                "darwin-arm64": 7
             }
         },
         "turn.warm/view.kernel.sql.rows": {
@@ -3418,7 +3418,7 @@
             "tolerance": 10,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 18
+                "darwin-arm64": 5
             }
         },
         "turn.warm/view.kernel.json.parse.calls": {
@@ -3432,7 +3432,7 @@
             "tolerance": 4,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 7
+                "darwin-arm64": 2
             }
         },
         "turn.warm/view.kernel.json.parse.chars": {
@@ -3446,7 +3446,7 @@
             "tolerance": 2164,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 3787
+                "darwin-arm64": 1082
             }
         },
         "turn.paced/view.kernel.sql.statements": {
@@ -3460,7 +3460,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 106
+                "darwin-arm64": 79
             }
         },
         "turn.paced/view.kernel.sql.rows": {
@@ -3474,7 +3474,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 88
+                "darwin-arm64": 61
             }
         },
         "turn.paced/view.kernel.json.parse.calls": {
@@ -3488,7 +3488,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 35
+                "darwin-arm64": 26
             }
         },
         "turn.paced/view.kernel.json.parse.chars": {
@@ -3502,7 +3502,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 18935
+                "darwin-arm64": 14066
             }
         },
         "web.open/view.kernel.sql.statements": {
@@ -3516,7 +3516,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 10
+                "darwin-arm64": 7
             }
         },
         "web.open/view.kernel.sql.rows": {
@@ -3530,7 +3530,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 8
+                "darwin-arm64": 5
             }
         },
         "web.open/view.kernel.json.parse.calls": {
@@ -3544,7 +3544,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 3
+                "darwin-arm64": 2
             }
         },
         "web.open/view.kernel.json.parse.chars": {
@@ -3558,7 +3558,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 1623
+                "darwin-arm64": 1082
             }
         },
         "web.paced/view.kernel.sql.statements": {
@@ -3572,7 +3572,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 118
+                "darwin-arm64": 88
             }
         },
         "web.paced/view.kernel.sql.rows": {
@@ -3586,7 +3586,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 98
+                "darwin-arm64": 68
             }
         },
         "web.paced/view.kernel.json.parse.calls": {
@@ -3600,7 +3600,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 39
+                "darwin-arm64": 29
             }
         },
         "web.paced/view.kernel.json.parse.chars": {
@@ -3614,7 +3614,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 21099
+                "darwin-arm64": 15689
             }
         },
         "projection.large.open/view.kernel.sql.statements": {
@@ -3628,7 +3628,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 140
+                "darwin-arm64": 98
             }
         },
         "projection.large.open/view.kernel.sql.rows": {
@@ -3642,7 +3642,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 112
+                "darwin-arm64": 70
             }
         },
         "projection.large.open/view.kernel.json.parse.calls": {
@@ -3656,7 +3656,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 42
+                "darwin-arm64": 28
             }
         },
         "projection.large.open/view.kernel.json.parse.chars": {
@@ -3670,7 +3670,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 22722
+                "darwin-arm64": 15148
             }
         },
         "projection.large.paced/view.kernel.sql.statements": {
@@ -3684,7 +3684,7 @@
             "tolerance": 48,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 424
+                "darwin-arm64": 316
             }
         },
         "projection.large.paced/view.kernel.sql.rows": {
@@ -3698,7 +3698,7 @@
             "tolerance": 40,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 352
+                "darwin-arm64": 244
             }
         },
         "projection.large.paced/view.kernel.json.parse.calls": {
@@ -3712,7 +3712,7 @@
             "tolerance": 16,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 140
+                "darwin-arm64": 104
             }
         },
         "projection.large.paced/view.kernel.json.parse.chars": {
@@ -3726,7 +3726,7 @@
             "tolerance": 8656,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 75740
+                "darwin-arm64": 56264
             }
         }
     }
