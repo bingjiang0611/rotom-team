@@ -52,8 +52,26 @@ import {
     projectLive,
     projectStats,
 } from "./projection.ts";
-import { viewProjectionChannel, type ViewProjectionSignal } from "./perf-channels.ts";
+import {
+    roomPartChannel,
+    type RoomPartSignal,
+    viewProjectionChannel,
+    type ViewProjectionSignal,
+} from "./perf-channels.ts";
 import { describeRepeat } from "./when.ts";
+
+function roomPart<T>(part: RoomPartSignal["part"], project: () => T): T {
+    if (!roomPartChannel.hasSubscribers) {
+        return project();
+    }
+
+    const started = performance.now();
+    const result = project();
+
+    roomPartChannel.publish({ part, ms: performance.now() - started } satisfies RoomPartSignal);
+
+    return result;
+}
 
 const context = BACKGROUND_CONTEXT;
 
@@ -564,33 +582,44 @@ export class Room {
             conversation: this.#app.conversationInfo(this),
             entries,
             ...(orderChanged || full ? { order } : {}),
-            live: this.#native() ? this.#app.kernel!.clientLive(this.id) : projectLive(live),
-            inbox: inbox.items.map((item) =>
-                item.mode === "write"
-                    ? {
-                          id: item.id,
-                          mode: item.mode,
-                          ...(item.entry.kind === SHELL_ENTRY
-                              ? {
-                                    text: `$ ${String((item.entry.data as { command?: unknown } | undefined)?.command ?? "")}`,
-                                }
-                              : {}),
-                      }
-                    : {
-                          id: item.id,
-                          mode: item.mode,
-                          text:
-                              typeof item.content === "string"
-                                  ? item.content
-                                  : JSON.stringify(item.content).slice(0, 500),
-                          ...this.#app.attribution.submitterOf(item.id as unknown as number, this),
-                      },
+            live: roomPart("live", () =>
+                this.#native() ? this.#app.kernel!.clientLive(this.id) : projectLive(live),
+            ),
+            inbox: roomPart("inbox", () =>
+                inbox.items.map((item) =>
+                    item.mode === "write"
+                        ? {
+                              id: item.id,
+                              mode: item.mode,
+                              ...(item.entry.kind === SHELL_ENTRY
+                                  ? {
+                                        text: `$ ${String((item.entry.data as { command?: unknown } | undefined)?.command ?? "")}`,
+                                    }
+                                  : {}),
+                          }
+                        : {
+                              id: item.id,
+                              mode: item.mode,
+                              text:
+                                  typeof item.content === "string"
+                                      ? item.content
+                                      : JSON.stringify(item.content).slice(0, 500),
+                              ...this.#app.attribution.submitterOf(
+                                  item.id as unknown as number,
+                                  this,
+                              ),
+                          },
+                ),
             ),
             agent: this.#native()
                 ? this.#app.kernel!.agentInfo(this.id)
                 : agentInfo(this.#app.models, agentState, this.#app.defaultCwd),
             ...(this.#native()
-                ? { kernel: this.#app.kernel!.roomState(this.id, client.user) }
+                ? {
+                      kernel: roomPart("kernel", () =>
+                          this.#app.kernel!.roomState(this.id, client.user),
+                      ),
+                  }
                 : {}),
             stats: this.#projectStats(
                 view.docs["pi.usage"] as UsageState | undefined,

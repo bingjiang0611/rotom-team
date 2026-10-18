@@ -436,6 +436,36 @@ await scenario("projection.large.paced", async () => {
 });
 await Promise.all(projectionTabs.map((watcher) => watcher.close()));
 
+const webPaced = await measureWebOpen({
+    base,
+    ownerToken: app.config.ownerToken,
+    sessionId: history,
+    marker: `END-OF-ANSWER-${WORKLOAD.seededTurns}`,
+    quiet,
+    profile: join(root, "perf-browser-paced"),
+    afterOpen: {
+        marker: `END-OF-ANSWER-${WORKLOAD.seededTurns + 1}`,
+        action: async () => {
+            assert.equal(
+                (await submit(history, WORKLOAD.seededTurns + 1, "Browser reply, PACED.")).value
+                    .status,
+                "settled",
+            );
+        },
+    },
+});
+
+results.push(
+    "unavailable" in webPaced
+        ? { scenario: "web.paced", unavailable: webPaced.unavailable }
+        : {
+              scenario: "web.paced",
+              ms: webPaced.ms,
+              counts: webPaced.counts,
+              extra: webPaced.metrics,
+          },
+);
+
 writeFileSync(out, raw.stringify({ workload: WORKLOAD, results }, null, 2));
 server.closeAllConnections();
 server.close();

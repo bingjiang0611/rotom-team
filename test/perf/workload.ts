@@ -33,6 +33,7 @@ export const SCENARIOS: Record<string, string> = {
     "git.branches": `${seeded}; Git workspace with 2 branches; GET branches`,
     "commands.list": `${seeded}; GET the native slash-command list`,
     "web.open": `${seeded}; headless Chromium signed in, opens /s/<session> until the last answer is in the page`,
+    "web.paced": `${seeded}; after all established scenarios, a new headless Chromium tab opens that history unmeasured, then submits one ${WORKLOAD.answerChars}-char answer paced ${WORKLOAD.pacedChunkMs} ms per chunk until it appears`,
     "commands.discover.cold": `${seeded}; after all existing scenarios, an additional new native session with one tab; first explicit POST prompts, with no model request`,
     "commands.discover.warm": `${seeded}; same additional session/tab after cold discovery; a second explicit POST prompts with a new request ID, with no model request`,
     "turn.prepared": `${seeded}; same additional session/tab after both discoveries; first ordinary prompt, until settled and quiet`,
@@ -127,6 +128,21 @@ const COUNTERS: Record<string, MetricSpec> = {
         unit: "chars",
         source: "characters of slow view fields serialized before unchanged fields are omitted (src/server/room.ts)",
     },
+    "view.live.project.calls": {
+        layer: "cpu",
+        unit: "count",
+        source: "live projections constructed per client push (src/server/room.ts)",
+    },
+    "view.inbox.project.calls": {
+        layer: "cpu",
+        unit: "count",
+        source: "inbox projections constructed per client push (src/server/room.ts)",
+    },
+    "view.kernel.project.calls": {
+        layer: "cpu",
+        unit: "count",
+        source: "native kernel projections constructed per client push (src/server/room.ts)",
+    },
     "push.events": {
         layer: "push",
         unit: "count",
@@ -172,6 +188,41 @@ const COUNTERS: Record<string, MetricSpec> = {
         unit: "count",
         source: "Chromium Performance.getMetrics Nodes once the answer shows (test/perf/browser.ts)",
     },
+    "web.event.parse.calls": {
+        layer: "web",
+        unit: "count",
+        source: "browser event-stream JSON.parse calls (web/store.js)",
+    },
+    "web.event.parse.chars": {
+        layer: "web",
+        unit: "chars",
+        source: "browser event-stream characters parsed as JSON (web/store.js)",
+    },
+    "web.view.apply.calls": {
+        layer: "web",
+        unit: "count",
+        source: "browser view events applied to the store (web/store.js)",
+    },
+    "web.view.base.entry.copies": {
+        layer: "web",
+        unit: "count",
+        source: "existing Map entries copied while applying view events (web/store.js)",
+    },
+    "web.view.delta.entries": {
+        layer: "web",
+        unit: "count",
+        source: "new or replacement entries merged while applying view events (web/store.js)",
+    },
+    "web.view.prune.checks": {
+        layer: "web",
+        unit: "count",
+        source: "browser entry IDs tested against a changed server order (web/store.js)",
+    },
+    "web.view.order.ids": {
+        layer: "web",
+        unit: "count",
+        source: "server order IDs copied into browser keep sets (web/store.js)",
+    },
 };
 
 const common = [
@@ -189,6 +240,9 @@ const projection = [
     "view.stats.entry.scans",
     "view.fields.stringify.calls",
     "view.fields.stringify.chars",
+    "view.live.project.calls",
+    "view.inbox.project.calls",
+    "view.kernel.project.calls",
 ];
 
 /** The counters each scenario reports. */
@@ -228,6 +282,31 @@ export const REPORTED: Record<string, string[]> = {
         "cdp.LayoutCount",
         "cdp.RecalcStyleCount",
         "cdp.Nodes",
+        "web.event.parse.calls",
+        "web.event.parse.chars",
+        "web.view.apply.calls",
+        "web.view.base.entry.copies",
+        "web.view.delta.entries",
+        "web.view.prune.checks",
+        "web.view.order.ids",
+    ],
+    "web.paced": [
+        "sql.statements",
+        "sql.rows",
+        "subprocess.total",
+        ...projection,
+        ...pushes,
+        "http.requests",
+        "cdp.LayoutCount",
+        "cdp.RecalcStyleCount",
+        "cdp.Nodes",
+        "web.event.parse.calls",
+        "web.event.parse.chars",
+        "web.view.apply.calls",
+        "web.view.base.entry.copies",
+        "web.view.delta.entries",
+        "web.view.prune.checks",
+        "web.view.order.ids",
     ],
 };
 

@@ -20,9 +20,11 @@ import { DatabaseSync, StatementSync } from "node:sqlite";
 import {
     nativeStartChannel,
     pushChannel,
+    roomPartChannel,
     viewProjectionChannel,
     type NativeStartSignal,
     type PushSignal,
+    type RoomPartSignal,
     type ViewProjectionSignal,
 } from "../../src/server/perf-channels.ts";
 
@@ -196,6 +198,15 @@ viewProjectionChannel.subscribe((message) => {
     if (fieldStringifyChars !== undefined) {
         add("view.fields.stringify.chars", fieldStringifyChars);
     }
+});
+
+roomPartChannel.subscribe((message) => {
+    const { part, ms } = message as RoomPartSignal;
+
+    add(`view.${part}.project.calls`);
+    const name = `room${part[0]!.toUpperCase()}${part.slice(1)}ProjectMs`;
+
+    nativeTimings[name] = (nativeTimings[name] ?? 0) + ms;
 });
 
 nativeStartChannel.subscribe((message) => {

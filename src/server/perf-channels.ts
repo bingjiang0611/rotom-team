@@ -31,6 +31,9 @@ export type ViewProjectionSignal = {
     fieldStringifyChars?: number;
 };
 
+export type RoomPartSignal = { part: "live" | "inbox" | "kernel"; ms: number };
+export const roomPartChannel = channel("rotom-team:room-part");
+
 export const pushChannel = channel("rotom-team:push");
 export const kernelRunChannel = channel("rotom-team:kernel-run");
 export const nativeStartChannel = channel("rotom-team:native-start");

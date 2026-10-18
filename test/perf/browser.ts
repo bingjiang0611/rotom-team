@@ -18,6 +18,7 @@ export async function measureWebOpen(options: {
     marker: string;
     quiet: () => Promise<void>;
     profile: string;
+    afterOpen?: { action: () => Promise<void>; marker: string };
 }): Promise<{ ms: number; counts: Counts; metrics: Metrics } | { unavailable: string }> {
     const executable = findBrowser();
 
@@ -72,7 +73,12 @@ export async function measureWebOpen(options: {
         await cdp.send(
             "Page.addScriptToEvaluateOnNewDocument",
             {
-                source: `window.__perfShown = new Promise((resolve) => {
+                source: `window.__rotomPerf = {
+                    eventParseCalls: 0, eventParseChars: 0, eventParseMs: 0,
+                    viewApplyCalls: 0, viewApplyMs: 0, viewBaseEntryCopies: 0,
+                    viewDeltaEntries: 0, viewPruneChecks: 0, viewOrderIds: 0
+                };
+                window.__perfShown = new Promise((resolve) => {
                     const shown = () => document.documentElement?.textContent.includes(${raw.stringify(options.marker)});
                     const done = () => requestAnimationFrame(() => resolve(performance.now()));
                     const observer = new MutationObserver(() => {
@@ -95,19 +101,60 @@ export async function measureWebOpen(options: {
                     }
                 ).metrics.map(({ name, value }) => [name, value]),
             ) as Metrics;
-        const before = await metrics();
-        const counted = snapshot();
+        let before = await metrics();
+        let counted = snapshot();
 
         await tab.navigate(`${options.base}/s/${options.sessionId}`);
-        const shown = await cdp.send(
+        let shown = await cdp.send(
             "Runtime.evaluate",
             { expression: "window.__perfShown", awaitPromise: true, returnByValue: true },
             tab.sessionId,
             30_000,
         );
-        const after = await metrics();
+        let after = await metrics();
 
         await options.quiet();
+
+        if (options.afterOpen) {
+            await cdp.send(
+                "Runtime.evaluate",
+                {
+                    expression: `Object.keys(window.__rotomPerf).forEach(k => window.__rotomPerf[k] = 0);
+                    window.__perfTurn = new Promise(resolve => {
+                        const observer = new MutationObserver(() => {
+                            if (document.documentElement.textContent.includes(${raw.stringify(options.afterOpen.marker)})) {
+                                observer.disconnect();
+                                requestAnimationFrame(() => resolve(performance.now()));
+                            }
+                        });
+                        observer.observe(document, {subtree:true,childList:true,characterData:true});
+                    }); window.__perfStarted = performance.now();`,
+                },
+                tab.sessionId,
+            );
+            before = await metrics();
+            counted = snapshot();
+            await options.afterOpen.action();
+            shown = await cdp.send(
+                "Runtime.evaluate",
+                {
+                    expression: "window.__perfTurn.then(at => at - window.__perfStarted)",
+                    awaitPromise: true,
+                    returnByValue: true,
+                },
+                tab.sessionId,
+                30_000,
+            );
+            after = await metrics();
+            await options.quiet();
+        }
+
+        const work = await cdp.send(
+            "Runtime.evaluate",
+            { expression: "window.__rotomPerf", returnByValue: true },
+            tab.sessionId,
+        );
+        const client = work.result.value as Metrics;
 
         return {
             ms: Number(shown.result.value),
@@ -117,11 +164,20 @@ export async function measureWebOpen(options: {
                 "cdp.RecalcStyleCount":
                     (after.RecalcStyleCount ?? 0) - (before.RecalcStyleCount ?? 0),
                 "cdp.Nodes": after.Nodes ?? 0,
+                "web.event.parse.calls": client.eventParseCalls!,
+                "web.event.parse.chars": client.eventParseChars!,
+                "web.view.apply.calls": client.viewApplyCalls!,
+                "web.view.base.entry.copies": client.viewBaseEntryCopies!,
+                "web.view.delta.entries": client.viewDeltaEntries!,
+                "web.view.prune.checks": client.viewPruneChecks!,
+                "web.view.order.ids": client.viewOrderIds!,
             },
             metrics: {
                 scriptMs: ((after.ScriptDuration ?? 0) - (before.ScriptDuration ?? 0)) * 1000,
                 taskMs: ((after.TaskDuration ?? 0) - (before.TaskDuration ?? 0)) * 1000,
                 heapUsedBytes: after.JSHeapUsedSize ?? 0,
+                eventParseMs: client.eventParseMs!,
+                viewApplyMs: client.viewApplyMs!,
             },
         };
     } finally {
