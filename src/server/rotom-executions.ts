@@ -294,12 +294,12 @@ export class RotomExecutions {
         );
     }
 
-    thinkingLevel(sessionId: string): string {
+    thinkingLevel(sessionId: string, readEntries?: (segmentId: string) => KernelEntry[]): string {
         const { segmentId } = this.journal.session(sessionId);
 
         return (
             this.#kernels.get(segmentId)?.state.thinkingLevel ??
-            this.journal.thinkingLevel(sessionId)
+            this.journal.thinkingLevel(sessionId, readEntries)
         );
     }
 

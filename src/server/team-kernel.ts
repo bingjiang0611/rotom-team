@@ -1765,7 +1765,7 @@ export class TeamKernel {
     }
 
     /** The room's agent line for a native conversation: what the current segment runs on, and for whom. */
-    agentInfo(id: ConversationId) {
+    agentInfo(id: ConversationId, readEntries?: (segmentId: string) => KernelEntry[]) {
         const cwd = this.#app.sessionMeta(id)?.cwd ?? this.#app.defaultCwd;
 
         if (!this.executions.journal.hasConversation(String(id))) {
@@ -1779,7 +1779,7 @@ export class TeamKernel {
             modelName: binding.model,
             accountName: this.#app.config.userById(binding.memberId)?.name ?? "A former member",
             personalAccount: true,
-            thinkingLevel: this.executions.thinkingLevel(String(id)),
+            thinkingLevel: this.executions.thinkingLevel(String(id), readEntries),
             cwd: binding.workspace,
             available: true,
         };
@@ -2265,7 +2265,10 @@ export class TeamKernel {
     }
 
     /** Canonical Goal snapshot captured after the native command barrier, if one has been observed. */
-    nativeGoal(id: ConversationId): unknown {
+    nativeGoal(
+        id: ConversationId,
+        readEntries = (segmentId: string) => this.executions.journal.segmentEntries(segmentId),
+    ): unknown {
         if (this.#nativeGoal.has(id)) {
             return this.#nativeGoal.get(id);
         }
@@ -2276,9 +2279,31 @@ export class TeamKernel {
 
         const { segmentId } = this.executions.journal.session(String(id));
 
-        const entries = this.executions.journal.segmentEntries(segmentId);
+        const entries = readEntries(segmentId);
 
         return currentBranchGoalState({ entries, leafId: entries.at(-1)?.id });
+    }
+
+    /** Room-wide public readback; share complete history only within this synchronous projection. */
+    roomInfo(id: ConversationId) {
+        const bySegment = new Map<string, KernelEntry[]>();
+
+        const readEntries = (segmentId: string) => {
+            let entries = bySegment.get(segmentId);
+
+            if (entries === undefined) {
+                entries = this.executions.journal.segmentEntries(segmentId);
+                bySegment.set(segmentId, entries);
+            }
+
+            return entries;
+        };
+
+        // Goal used to be read before agentInfo; keep that error/live-state ordering.
+        const goal = this.nativeGoal(id, readEntries);
+        const agent = this.agentInfo(id, readEntries);
+
+        return { goal, agent };
     }
 
     /** What the web app needs to drive a native conversation: the head it acts on, and who pays for it. */

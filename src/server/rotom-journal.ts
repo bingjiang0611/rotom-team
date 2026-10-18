@@ -888,9 +888,12 @@ export class RotomJournal {
     }
 
     /** Thinking is mutable native session state; the receipt binding retains its initial value. */
-    thinkingLevel(sessionId: string): string {
+    thinkingLevel(
+        sessionId: string,
+        readEntries: (segmentId: string) => KernelEntry[] = (id) => this.segmentEntries(id),
+    ): string {
         const { segmentId, binding } = this.session(sessionId);
-        const entries = this.segmentEntries(segmentId);
+        const entries = readEntries(segmentId);
         const byId = new Map(entries.map((entry) => [entry.id, entry]));
         let entry = entries.at(-1);
 

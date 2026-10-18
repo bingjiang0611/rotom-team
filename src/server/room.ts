@@ -15,6 +15,7 @@ import type {
     UsageState,
 } from "@earendil-works/pi-durable";
 import type { PocketApp } from "./app.ts";
+import type { TeamKernel } from "./team-kernel.ts";
 import type { Head } from "./branches.ts";
 import type { User } from "./config.ts";
 import {
@@ -452,32 +453,34 @@ export class Room {
 
     /** Send one client a fresh projection; do not retain the room-wide readback across calls. */
     push(client: Client, full: boolean): void {
-        this.#push(client, full, () => this.#app.kernel!.nativeGoal(this.id));
+        let info: ReturnType<TeamKernel["roomInfo"]> | undefined;
+
+        this.#push(client, full, () => (info ??= this.#app.kernel!.roomInfo(this.id)));
     }
 
-    /** One synchronous fanout shares only the room-wide Goal readback, never viewer-specific safety fields. */
+    /** One synchronous fanout shares public room readback, never viewer-specific safety fields. */
     pushAll(fullClient?: Client): void {
-        let goal: { value: unknown } | undefined;
+        let info: ReturnType<TeamKernel["roomInfo"]> | undefined;
 
-        const nativeGoal = () => {
-            goal ??= { value: this.#app.kernel!.nativeGoal(this.id) };
+        const roomInfo = () => {
+            info ??= this.#app.kernel!.roomInfo(this.id);
 
-            return goal.value;
+            return info;
         };
 
         if (fullClient !== undefined) {
-            this.#push(fullClient, true, nativeGoal);
+            this.#push(fullClient, true, roomInfo);
         }
 
         for (const client of this.clients) {
             if (client !== fullClient) {
-                this.#push(client, false, nativeGoal);
+                this.#push(client, false, roomInfo);
             }
         }
     }
 
     /** Each client still validates its own sent entries, catalog, member and pending state. */
-    #push(client: Client, full: boolean, nativeGoal: () => unknown): void {
+    #push(client: Client, full: boolean, roomInfo: () => ReturnType<TeamKernel["roomInfo"]>): void {
         const view = this.#view?.value;
 
         if (view === undefined) {
@@ -574,7 +577,7 @@ export class Room {
                           max: this.goal.max,
                           ...(this.goal.last === undefined ? {} : { last: this.goal.last }),
                       },
-            ...(this.#native() ? { nativeGoal: nativeGoal() ?? null } : {}),
+            ...(this.#native() ? { nativeGoal: roomInfo().goal ?? null } : {}),
         };
 
         let fieldStringifyCalls = 0;
@@ -635,7 +638,7 @@ export class Room {
                 ),
             ),
             agent: this.#native()
-                ? this.#app.kernel!.agentInfo(this.id)
+                ? roomInfo().agent
                 : agentInfo(this.#app.models, agentState, this.#app.defaultCwd),
             ...(this.#native()
                 ? {
