@@ -1,5 +1,5 @@
 /** Actual pinned command adapters through Team HTTP, isolated synthetic accounts and loopback inference only. */
-import { root, owner, until } from "./helpers.ts";
+import { root, owner, until, fakeTab } from "./helpers.ts";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { once } from "node:events";
@@ -444,6 +444,104 @@ try {
         );
     } finally {
         projectionJournal.sessionIfPresent = originalSessionIfPresent;
+    }
+
+    const projectionRoom = await app.room(id);
+    const savedClients = [...projectionRoom.clients];
+    const originalGoal = app.kernel!.nativeGoal;
+    const originalRoomState = app.kernel!.roomState;
+    const aliceTab = fakeTab(id, alice);
+    const bobTab = fakeTab(id, bob);
+    const viewerTab = fakeTab(id, viewer);
+    let goalReads = 0;
+    let safetyReads = 0;
+    let nextGoal: unknown = originalGoal.call(app.kernel!, id);
+
+    try {
+        projectionRoom.clients.clear();
+        const tabs = [aliceTab, bobTab, viewerTab];
+
+        for (const tab of tabs) {
+            projectionRoom.clients.add(tab.client);
+        }
+
+        app.kernel!.nativeGoal = function () {
+            goalReads++;
+
+            return nextGoal;
+        };
+
+        app.kernel!.roomState = function (sessionId, user) {
+            safetyReads++;
+
+            return originalRoomState.call(this, sessionId, user);
+        };
+
+        projectionRoom.pushAll(aliceTab.client);
+        assert.equal(goalReads, 1, "one synchronous fanout reads native Goal once, even if absent");
+        assert.equal(safetyReads, 3, "every viewer still performs its fresh safety projection");
+        assert.equal(aliceTab.last("view")!.full, true);
+        assert.equal(bobTab.last("view")!.full, false);
+        assert.deepEqual(aliceTab.field("nativeGoal"), nextGoal ?? null);
+        assert.deepEqual(bobTab.field("nativeGoal"), nextGoal ?? null);
+        assert.notEqual(
+            (aliceTab.last("view")!.kernel as { commandsRevision: unknown }).commandsRevision,
+            null,
+        );
+        assert.equal(
+            (bobTab.last("view")!.kernel as { commandsRevision: unknown }).commandsRevision,
+            null,
+        );
+        assert.equal(
+            (viewerTab.last("view")!.kernel as { commandsRevision: unknown }).commandsRevision,
+            null,
+        );
+        nextGoal = { goal: { id: "fixture-current", status: "active" } };
+        projectionRoom.pushAll();
+        assert.equal(goalReads, 2, "the next fanout rereads Goal rather than keeping a cache");
+        assert.equal(safetyReads, 6);
+
+        for (const tab of tabs) {
+            assert.deepEqual(tab.field("nativeGoal"), nextGoal);
+        }
+
+        nextGoal = { goal: { id: "fixture-current", status: "waiting" } };
+        projectionRoom.pushAll();
+        assert.equal(goalReads, 3);
+        nextGoal = undefined;
+        projectionRoom.pushAll();
+        assert.equal(goalReads, 4);
+
+        for (const tab of tabs) {
+            assert.equal(tab.field("nativeGoal"), null, "cleared Goal is not retained");
+        }
+
+        projectionRoom.push(aliceTab.client, true);
+        projectionRoom.push(bobTab.client, true);
+        assert.equal(goalReads, 6, "standalone/reconnect pushes stay independently fresh");
+
+        app.kernel!.nativeGoal = () => {
+            throw new Error("fixture corrupt Goal read");
+        };
+
+        const before = tabs.map((tab) => tab.events.length);
+
+        assert.throws(() => projectionRoom.pushAll(), /fixture corrupt Goal read/);
+        assert.deepEqual(
+            tabs.map((tab) => tab.events.length),
+            before,
+            "read failures are not swallowed into empty state",
+        );
+        projectionRoom.clients.clear();
+        projectionRoom.pushAll();
+    } finally {
+        app.kernel!.nativeGoal = originalGoal;
+        app.kernel!.roomState = originalRoomState;
+        projectionRoom.clients.clear();
+
+        for (const client of savedClients) {
+            projectionRoom.clients.add(client);
+        }
     }
 
     const publicNames = new Set(registry.commands.map((command: { name: string }) => command.name));

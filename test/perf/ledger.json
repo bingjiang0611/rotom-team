@@ -1780,7 +1780,7 @@
             "tolerance": 50560,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 573549
+                "darwin-arm64": 568431
             }
         },
         "turn.prepared/json.stringify.chars": {
@@ -1976,7 +1976,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 199
+                "darwin-arm64": 163
             }
         },
         "projection.large.open/sql.rows": {
@@ -1990,7 +1990,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 2127
+                "darwin-arm64": 912
             }
         },
         "projection.large.open/subprocess.total": {
@@ -2018,7 +2018,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 2057
+                "darwin-arm64": 860
             }
         },
         "projection.large.open/json.parse.chars": {
@@ -2032,7 +2032,7 @@
             "tolerance": 105,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 1454607
+                "darwin-arm64": 606381
             }
         },
         "projection.large.open/json.stringify.chars": {
@@ -2130,7 +2130,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 755
+                "darwin-arm64": 647
             }
         },
         "projection.large.paced/sql.rows": {
@@ -2144,7 +2144,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 5377
+                "darwin-arm64": 1702
             }
         },
         "projection.large.paced/subprocess.total": {
@@ -2172,7 +2172,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 5387
+                "darwin-arm64": 1766
             }
         },
         "projection.large.paced/json.parse.chars": {
@@ -2186,7 +2186,7 @@
             "tolerance": 266,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 3902012
+                "darwin-arm64": 1332145
             }
         },
         "projection.large.paced/json.stringify.chars": {
@@ -4692,7 +4692,7 @@
             "tolerance": 2,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 129874
+                "darwin-arm64": 129873
             }
         },
         "session.open/json.parse.journal.calls": {
@@ -5154,7 +5154,7 @@
             "tolerance": 6,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 32
+                "darwin-arm64": 26
             }
         },
         "turn.warm/json.parse.journal.chars": {
@@ -5168,7 +5168,7 @@
             "tolerance": 3248,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 22925
+                "darwin-arm64": 19678
             }
         },
         "turn.warm/json.parse.journalHistory.calls": {
@@ -5196,7 +5196,7 @@
             "tolerance": 2,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 7777
+                "darwin-arm64": 7776
             }
         },
         "turn.warm/json.parse.journalThinking.calls": {
@@ -5238,7 +5238,7 @@
             "tolerance": 7,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 15
+                "darwin-arm64": 8
             }
         },
         "turn.warm/json.parse.journalSegments.chars": {
@@ -5252,7 +5252,7 @@
             "tolerance": 46968,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 100431
+                "darwin-arm64": 53464
             }
         },
         "turn.warm/json.parse.nativeReadback.calls": {
@@ -5280,7 +5280,7 @@
             "tolerance": 10,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 156712
+                "darwin-arm64": 156707
             }
         },
         "turn.warm/json.parse.http.calls": {
@@ -5476,7 +5476,7 @@
             "tolerance": 18,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 489511
+                "darwin-arm64": 489502
             }
         },
         "turn.paced/json.parse.nativeReadback.calls": {
@@ -5504,7 +5504,7 @@
             "tolerance": 4,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 170137
+                "darwin-arm64": 170135
             }
         },
         "turn.paced/json.parse.http.calls": {
@@ -7030,7 +7030,7 @@
             "tolerance": 6,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 12
+                "darwin-arm64": 11
             }
         },
         "turn.prepared/json.parse.journalSegments.chars": {
@@ -7044,7 +7044,7 @@
             "tolerance": 46773,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 93546
+                "darwin-arm64": 87048
             }
         },
         "turn.prepared/json.parse.nativeReadback.calls": {
@@ -7170,7 +7170,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 70
+                "darwin-arm64": 61
             }
         },
         "projection.large.open/json.parse.journal.chars": {
@@ -7184,7 +7184,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 37870
+                "darwin-arm64": 33001
             }
         },
         "projection.large.open/json.parse.journalHistory.calls": {
@@ -7254,7 +7254,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 1848
+                "darwin-arm64": 660
             }
         },
         "projection.large.open/json.parse.journalSegments.chars": {
@@ -7268,7 +7268,7 @@
             "tolerance": 112,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 1312010
+                "darwin-arm64": 468590
             }
         },
         "projection.large.open/json.parse.nativeReadback.calls": {
@@ -7394,7 +7394,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 233
+                "darwin-arm64": 206
             }
         },
         "projection.large.paced/json.parse.journal.chars": {
@@ -7408,7 +7408,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 131679
+                "darwin-arm64": 117072
             }
         },
         "projection.large.paced/json.parse.journalHistory.calls": {
@@ -7478,7 +7478,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 4792
+                "darwin-arm64": 1198
             }
         },
         "projection.large.paced/json.parse.journalSegments.chars": {
@@ -7492,7 +7492,7 @@
             "tolerance": 288,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 3407260
+                "darwin-arm64": 851842
             }
         },
         "projection.large.paced/json.parse.nativeReadback.calls": {

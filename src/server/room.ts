@@ -366,9 +366,7 @@ export class Room {
         this.#timer = setTimeout(() => {
             this.#timer = undefined;
 
-            for (const client of this.clients) {
-                this.push(client, false);
-            }
+            this.pushAll();
         }, 90);
     }
 
@@ -452,8 +450,34 @@ export class Room {
         return this.#stats;
     }
 
-    /** Send this client what changed since its last update, or everything with `full`. */
+    /** Send one client a fresh projection; do not retain the room-wide readback across calls. */
     push(client: Client, full: boolean): void {
+        this.#push(client, full, () => this.#app.kernel!.nativeGoal(this.id));
+    }
+
+    /** One synchronous fanout shares only the room-wide Goal readback, never viewer-specific safety fields. */
+    pushAll(fullClient?: Client): void {
+        let goal: { value: unknown } | undefined;
+
+        const nativeGoal = () => {
+            goal ??= { value: this.#app.kernel!.nativeGoal(this.id) };
+
+            return goal.value;
+        };
+
+        if (fullClient !== undefined) {
+            this.#push(fullClient, true, nativeGoal);
+        }
+
+        for (const client of this.clients) {
+            if (client !== fullClient) {
+                this.#push(client, false, nativeGoal);
+            }
+        }
+    }
+
+    /** Each client still validates its own sent entries, catalog, member and pending state. */
+    #push(client: Client, full: boolean, nativeGoal: () => unknown): void {
         const view = this.#view?.value;
 
         if (view === undefined) {
@@ -550,9 +574,7 @@ export class Room {
                           max: this.goal.max,
                           ...(this.goal.last === undefined ? {} : { last: this.goal.last }),
                       },
-            ...(this.#native()
-                ? { nativeGoal: this.#app.kernel!.nativeGoal(this.id) ?? null }
-                : {}),
+            ...(this.#native() ? { nativeGoal: nativeGoal() ?? null } : {}),
         };
 
         let fieldStringifyCalls = 0;

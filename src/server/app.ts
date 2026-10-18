@@ -790,7 +790,7 @@ export class PocketApp {
 
             room.keepOpen();
             room.clients.add(client);
-            room.push(client, true);
+            room.pushAll(client);
             client.send("chat", { conversationId: room.id, full: true, messages: room.chat });
             client.send("notes", { conversationId: room.id, ...room.notes });
             // Also while the browser is off: turned on later, the panel has its state at once.
@@ -798,12 +798,6 @@ export class PocketApp {
                 "browser",
                 this.#browserEvent(room.id, this.browsers.state(Number(room.id))),
             );
-
-            for (const other of room.clients) {
-                if (other !== client) {
-                    room.push(other, false);
-                }
-            }
 
             room.pushPresence();
             this.#scheduleSessions();
