@@ -111,6 +111,16 @@ const COUNTERS: Record<string, MetricSpec> = {
         unit: "chars",
         source: "characters given to JSON.parse (test/perf/counters.ts)",
     },
+    "fs.read.calls": {
+        layer: "storage",
+        unit: "count",
+        source: "synchronous readSync calls in the parent process (test/perf/counters.ts)",
+    },
+    "fs.read.bytes": {
+        layer: "storage",
+        unit: "bytes",
+        source: "bytes returned by synchronous readSync in the parent process (test/perf/counters.ts)",
+    },
     "fs.write.calls": {
         layer: "storage",
         unit: "count",
@@ -299,6 +309,8 @@ const COUNTERS: Record<string, MetricSpec> = {
 };
 
 const common = [
+    "fs.read.calls",
+    "fs.read.bytes",
     "sql.statements",
     "sql.rows",
     "subprocess.total",

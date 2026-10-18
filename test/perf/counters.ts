@@ -193,6 +193,7 @@ for (const name of ["spawnSync", "execFileSync", "execSync"] as const) {
 }
 
 const writeFileSync = fs.writeFileSync;
+const readSync = fs.readSync;
 const renameSync = fs.renameSync;
 
 fs.writeFileSync = (...args: Parameters<typeof fs.writeFileSync>) => {
@@ -210,6 +211,15 @@ fs.writeFileSync = (...args: Parameters<typeof fs.writeFileSync>) => {
 
     return writeFileSync(...args);
 };
+
+fs.readSync = ((...args: unknown[]) => {
+    const bytes = (readSync as unknown as (...values: unknown[]) => number)(...args);
+
+    add("fs.read.calls");
+    add("fs.read.bytes", bytes);
+
+    return bytes;
+}) as typeof fs.readSync;
 
 fs.renameSync = (...args: Parameters<typeof fs.renameSync>) => {
     add("fs.rename.calls");

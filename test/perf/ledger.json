@@ -8838,6 +8838,426 @@
             "baselines": {
                 "darwin-arm64": 60
             }
+        },
+        "startup.restart/fs.read.calls": {
+            "scenario": "startup.restart",
+            "metric": "fs.read.calls",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; close the app and open it again",
+            "source": "synchronous readSync calls in the parent process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 14
+            }
+        },
+        "startup.restart/fs.read.bytes": {
+            "scenario": "startup.restart",
+            "metric": "fs.read.bytes",
+            "layer": "storage",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; close the app and open it again",
+            "source": "bytes returned by synchronous readSync in the parent process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 98864
+            }
+        },
+        "sessions.list/fs.read.calls": {
+            "scenario": "sessions.list",
+            "metric": "fs.read.calls",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; GET /api/sessions",
+            "source": "synchronous readSync calls in the parent process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "sessions.list/fs.read.bytes": {
+            "scenario": "sessions.list",
+            "metric": "fs.read.bytes",
+            "layer": "storage",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; GET /api/sessions",
+            "source": "bytes returned by synchronous readSync in the parent process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open/fs.read.calls": {
+            "scenario": "session.open",
+            "metric": "fs.read.calls",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; a new event-stream tab on it, until its first full view",
+            "source": "synchronous readSync calls in the parent process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open/fs.read.bytes": {
+            "scenario": "session.open",
+            "metric": "fs.read.bytes",
+            "layer": "storage",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; a new event-stream tab on it, until its first full view",
+            "source": "bytes returned by synchronous readSync in the parent process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "turn.cold/fs.read.calls": {
+            "scenario": "turn.cold",
+            "metric": "fs.read.calls",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; first prompt of a new session with one tab watching, until settled and quiet",
+            "source": "synchronous readSync calls in the parent process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 1,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 51
+            }
+        },
+        "turn.cold/fs.read.bytes": {
+            "scenario": "turn.cold",
+            "metric": "fs.read.bytes",
+            "layer": "storage",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; first prompt of a new session with one tab watching, until settled and quiet",
+            "source": "bytes returned by synchronous readSync in the parent process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 391847
+            }
+        },
+        "turn.warm/fs.read.calls": {
+            "scenario": "turn.warm",
+            "metric": "fs.read.calls",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; second prompt of that session with one tab watching, until settled and quiet",
+            "source": "synchronous readSync calls in the parent process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 25
+            }
+        },
+        "turn.warm/fs.read.bytes": {
+            "scenario": "turn.warm",
+            "metric": "fs.read.bytes",
+            "layer": "storage",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; second prompt of that session with one tab watching, until settled and quiet",
+            "source": "bytes returned by synchronous readSync in the parent process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 4,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 255924
+            }
+        },
+        "turn.paced/fs.read.calls": {
+            "scenario": "turn.paced",
+            "metric": "fs.read.calls",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; third prompt of that session, its answer paced 25 ms per chunk, one tab watching, until settled and quiet",
+            "source": "synchronous readSync calls in the parent process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 25
+            }
+        },
+        "turn.paced/fs.read.bytes": {
+            "scenario": "turn.paced",
+            "metric": "fs.read.bytes",
+            "layer": "storage",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; third prompt of that session, its answer paced 25 ms per chunk, one tab watching, until settled and quiet",
+            "source": "bytes returned by synchronous readSync in the parent process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 4,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 269332
+            }
+        },
+        "git.changes/fs.read.calls": {
+            "scenario": "git.changes",
+            "metric": "fs.read.calls",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 20 changed files; GET changes",
+            "source": "synchronous readSync calls in the parent process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "git.changes/fs.read.bytes": {
+            "scenario": "git.changes",
+            "metric": "fs.read.bytes",
+            "layer": "storage",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 20 changed files; GET changes",
+            "source": "bytes returned by synchronous readSync in the parent process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "git.diff/fs.read.calls": {
+            "scenario": "git.diff",
+            "metric": "fs.read.calls",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 20 changed files; GET changes/diff for tracked src/file-0.txt",
+            "source": "synchronous readSync calls in the parent process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "git.diff/fs.read.bytes": {
+            "scenario": "git.diff",
+            "metric": "fs.read.bytes",
+            "layer": "storage",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 20 changed files; GET changes/diff for tracked src/file-0.txt",
+            "source": "bytes returned by synchronous readSync in the parent process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "git.branches/fs.read.calls": {
+            "scenario": "git.branches",
+            "metric": "fs.read.calls",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 2 branches; GET branches",
+            "source": "synchronous readSync calls in the parent process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "git.branches/fs.read.bytes": {
+            "scenario": "git.branches",
+            "metric": "fs.read.bytes",
+            "layer": "storage",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 2 branches; GET branches",
+            "source": "bytes returned by synchronous readSync in the parent process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "commands.list/fs.read.calls": {
+            "scenario": "commands.list",
+            "metric": "fs.read.calls",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; GET the native slash-command list",
+            "source": "synchronous readSync calls in the parent process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 7
+            }
+        },
+        "commands.list/fs.read.bytes": {
+            "scenario": "commands.list",
+            "metric": "fs.read.bytes",
+            "layer": "storage",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; GET the native slash-command list",
+            "source": "bytes returned by synchronous readSync in the parent process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 49432
+            }
+        },
+        "commands.discover.cold/fs.read.calls": {
+            "scenario": "commands.discover.cold",
+            "metric": "fs.read.calls",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all existing scenarios, an additional new native session with one tab; first explicit POST prompts, with no model request",
+            "source": "synchronous readSync calls in the parent process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 54
+            }
+        },
+        "commands.discover.cold/fs.read.bytes": {
+            "scenario": "commands.discover.cold",
+            "metric": "fs.read.bytes",
+            "layer": "storage",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all existing scenarios, an additional new native session with one tab; first explicit POST prompts, with no model request",
+            "source": "bytes returned by synchronous readSync in the parent process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 347249
+            }
+        },
+        "commands.discover.warm/fs.read.calls": {
+            "scenario": "commands.discover.warm",
+            "metric": "fs.read.calls",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; same additional session/tab after cold discovery; a second explicit POST prompts with a new request ID, with no model request",
+            "source": "synchronous readSync calls in the parent process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 29
+            }
+        },
+        "commands.discover.warm/fs.read.bytes": {
+            "scenario": "commands.discover.warm",
+            "metric": "fs.read.bytes",
+            "layer": "storage",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; same additional session/tab after cold discovery; a second explicit POST prompts with a new request ID, with no model request",
+            "source": "bytes returned by synchronous readSync in the parent process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 197932
+            }
+        },
+        "turn.prepared/fs.read.calls": {
+            "scenario": "turn.prepared",
+            "metric": "fs.read.calls",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; same additional session/tab after both discoveries; first ordinary prompt, until settled and quiet",
+            "source": "synchronous readSync calls in the parent process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 1,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 26
+            }
+        },
+        "turn.prepared/fs.read.bytes": {
+            "scenario": "turn.prepared",
+            "metric": "fs.read.bytes",
+            "layer": "storage",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; same additional session/tab after both discoveries; first ordinary prompt, until settled and quiet",
+            "source": "bytes returned by synchronous readSync in the parent process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 242536
+            }
+        },
+        "projection.large.open/fs.read.calls": {
+            "scenario": "projection.large.open",
+            "metric": "fs.read.calls",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "synchronous readSync calls in the parent process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "projection.large.open/fs.read.bytes": {
+            "scenario": "projection.large.open",
+            "metric": "fs.read.bytes",
+            "layer": "storage",
+            "unit": "bytes",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "bytes returned by synchronous readSync in the parent process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "projection.large.paced/fs.read.calls": {
+            "scenario": "projection.large.paced",
+            "metric": "fs.read.calls",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "the same 64-turn session and 4 attached tabs; one 6000-char answer paced 25 ms per chunk, until settled and quiet",
+            "source": "synchronous readSync calls in the parent process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 25
+            }
+        },
+        "projection.large.paced/fs.read.bytes": {
+            "scenario": "projection.large.paced",
+            "metric": "fs.read.bytes",
+            "layer": "storage",
+            "unit": "bytes",
+            "workload": "the same 64-turn session and 4 attached tabs; one 6000-char answer paced 25 ms per chunk, until settled and quiet",
+            "source": "bytes returned by synchronous readSync in the parent process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 18,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 350092
+            }
         }
     }
 }
