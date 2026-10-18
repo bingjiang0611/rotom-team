@@ -6,7 +6,9 @@ only; it does not intercept async reads, Chromium, native-child I/O, mmap/SQLite
 
 Five-run baseline `/tmp/rt-native-tail-base.json`, commit `a93ea06` plus measurement and unchanged user edits; macOS
 arm64 / Apple M1 eight cores / Node 24.18.0 / rotom 0.1.25. Load 2.27→2.33, timing lock `highLoad: false`.
-Counters are candidates only; a second post-change report will register them from two times before any tightening.
+Candidates were registered from that five-run baseline and the second-time one-run unchanged-code report
+`/tmp/rt-native-tail-base-b.json` before optimizing (load 2.19→2.59, `highLoad: false`). The later head comparison
+also has five runs. No read counter was tightened or promoted.
 
 This counter is total synchronous parent reads, not a NativeTail-only attribution. An optimization claim requires both
 JSONL parses and total read bytes/calls to fall or remain explainably bounded; moving work to an uncounted file API is
