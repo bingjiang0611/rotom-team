@@ -65,6 +65,7 @@ function roomPart<T>(part: RoomPartSignal["part"], project: () => T): T {
         return project();
     }
 
+    roomPartChannel.publish({ part } satisfies RoomPartSignal);
     const started = performance.now();
     const result = project();
 

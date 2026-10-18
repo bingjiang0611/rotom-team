@@ -143,6 +143,26 @@ const COUNTERS: Record<string, MetricSpec> = {
         unit: "count",
         source: "native kernel projections constructed per client push (src/server/room.ts)",
     },
+    "view.kernel.sql.statements": {
+        layer: "storage",
+        unit: "count",
+        source: "SQL statements inside synchronous native kernel roomState projection (test/perf/counters.ts)",
+    },
+    "view.kernel.sql.rows": {
+        layer: "storage",
+        unit: "count",
+        source: "SQL rows returned inside synchronous native kernel roomState projection (test/perf/counters.ts)",
+    },
+    "view.kernel.json.parse.calls": {
+        layer: "cpu",
+        unit: "count",
+        source: "JSON decodes inside synchronous native kernel roomState projection (test/perf/counters.ts)",
+    },
+    "view.kernel.json.parse.chars": {
+        layer: "cpu",
+        unit: "chars",
+        source: "characters decoded inside synchronous native kernel roomState projection (test/perf/counters.ts)",
+    },
     "push.events": {
         layer: "push",
         unit: "count",
@@ -243,6 +263,10 @@ const projection = [
     "view.live.project.calls",
     "view.inbox.project.calls",
     "view.kernel.project.calls",
+    "view.kernel.sql.statements",
+    "view.kernel.sql.rows",
+    "view.kernel.json.parse.calls",
+    "view.kernel.json.parse.chars",
 ];
 
 /** The counters each scenario reports. */

@@ -140,6 +140,21 @@ Final type/lint/format, 444 tests and synthetic kernel proof pass. First full ru
 flake; isolated then unchanged full rerun pass. Next authorised measurement: live/inbox/kernel payload and browser
 parse/copy work, before any pagination/delta protocol decision. No service, account or deployment used.
 
+## Fifth climb batch — 2026-10-17
+
+- **Browser Map reuse retained as L1:** ten paced view events carry two new entries; existing Map copies fall
+  248→49, zero spread across five runs. Full/reconnect/reset/switch/deltas keep snapshot isolation. Parse/apply is
+  only about 1 ms and all timing comparisons are noise. See
+  [experiment](experiments/2026-10-17-browser-entry-map-reuse.md).
+- **Kernel projection is the next read-path lead:** four-tab open does 140 SQL statements / 42 JSON decodes;
+  paced does 376–424 / 124–140, including duplicate session reads in command snapshot validation. Command revision
+  itself is cheap. See [measurement](experiments/2026-10-17-kernel-roomstate-work.md).
+
+Final type/lint/format, 447 tests and synthetic kernel proof pass; real Chromium open/stream readback verified without
+real accounts. No L2/L3, production or protocol claim. Next authorised hypothesis: reuse the already-read session
+snapshot inside the same synchronous roomState call, not a cross-call cache; keep exact viewer/binding and fresh
+unknown/pending/cutoff checks. Polling, long browser history and full device/UI acceptance remain unverified.
+
 ## Open
 
 - **A warm turn parses about 93 times its answer as JSON.** `turn.warm/json.parse.chars` 558 969 for a

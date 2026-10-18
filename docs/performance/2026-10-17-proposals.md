@@ -93,6 +93,27 @@ browser UI was used. The fourth batch closes after three experiments.
 Next authorised action: measure live/inbox/native-kernel payload construction and client-side parse/copy separately.
 Do not add a general slow-field cache or versioned/paginated protocol until those counters identify the dominant work.
 
+## Fifth implementation batch
+
+- [Payload/browser measurement](experiments/2026-10-17-payload-browser-measurement.md): added real Chromium
+  streamed-answer workload and SSE parse/view-copy counters. A paced reply applies ten view events with two new
+  entries but copies 248 existing Map entries. Parse/apply totals about 1 ms; kernel projection is the larger server
+  span (typically 13–15 ms over four-tab streaming).
+- [Browser Map reuse](experiments/2026-10-17-browser-entry-map-reuse.md): unchanged transcript maps are shared across
+  live/status-only views; real delta/order/full/switch paths still copy before mutation. Copies 248→49 in every run;
+  protocol, delta/prune/order counts and final answer remain unchanged. L1 only, durations compare as noise.
+- [Kernel projection work](experiments/2026-10-17-kernel-roomstate-work.md): four-tab open is 140 SQL statements,
+  42 binding decodes; paced 376–424 statements, 124–140 decodes. No cache applied. Command revision string is cheap;
+  repeated exact journal reads/decodes are the actionable lead.
+
+The fifth batch closes after three experiments. Final type/lint/format, 447 tests and synthetic kernel proof pass;
+real Chromium benchmark confirms open and streamed final-answer readback. No real account, polling-path validation or
+full UI/device acceptance. No service/deployment touched and no L2/L3 claim.
+
+Next authorised hypothesis: reuse the same synchronous `roomState` session snapshot for `#commandSnapshot`, preserving
+all viewer/member/segment/model/binding checks and fresh pending/unknown/cutoff reads. This removes duplicate work
+without a long-lived credential/state cache. Protocol pagination remains behind long-history browser/payload evidence.
+
 ## Evidence
 
 ### Fresh controlled baseline

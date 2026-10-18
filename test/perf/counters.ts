@@ -200,13 +200,26 @@ viewProjectionChannel.subscribe((message) => {
     }
 });
 
+const roomPartStarts = new Map<RoomPartSignal["part"], Counts>();
+
 roomPartChannel.subscribe((message) => {
     const { part, ms } = message as RoomPartSignal;
 
-    add(`view.${part}.project.calls`);
+    if (ms === undefined) {
+        add(`view.${part}.project.calls`);
+        roomPartStarts.set(part, snapshot());
+
+        return;
+    }
+
     const name = `room${part[0]!.toUpperCase()}${part.slice(1)}ProjectMs`;
 
     nativeTimings[name] = (nativeTimings[name] ?? 0) + ms;
+    const work = since(roomPartStarts.get(part) ?? {});
+
+    for (const metric of ["sql.statements", "sql.rows", "json.parse.calls", "json.parse.chars"]) {
+        add(`view.${part}.${metric}`, work[metric] ?? 0);
+    }
 });
 
 nativeStartChannel.subscribe((message) => {
