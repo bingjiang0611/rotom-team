@@ -981,7 +981,7 @@ export class RotomExecutions {
                         }
                     }
 
-                    const value = parseWithWork("native-readback", body);
+                    const value = parseWithWork("native-gate", body);
 
                     const active = gateState.active;
 
@@ -1740,7 +1740,7 @@ export class NativeTail {
                 throw new Error("Native session line exceeds the import bound");
             }
 
-            const entry = parseWithWork("native-readback", line) as KernelEntry;
+            const entry = parseWithWork("native-jsonl", line) as KernelEntry;
 
             if (!this.#header) {
                 if (

@@ -81,6 +81,9 @@ test("parse source counters partition calls/chars without changing JSON results"
         ["journal-thinking", "journalThinking"],
         ["journal-segments", "journalSegments"],
         ["native-readback", "nativeReadback"],
+        ["native-rpc", "nativeReadback"],
+        ["native-jsonl", "nativeReadback"],
+        ["native-gate", "nativeReadback"],
         ["http", "http"],
     ] as const;
 
@@ -91,14 +94,32 @@ test("parse source counters partition calls/chars without changing JSON results"
     assert.equal(JSON.parse("3"), 3);
     const counts = since(before);
 
-    assert.equal(counts["json.parse.calls"], 8);
-    assert.equal(counts["json.parse.chars"], 78);
+    assert.equal(counts["json.parse.calls"], 11);
+    assert.equal(counts["json.parse.chars"], 111);
+
+    const totals = new Map<string, number>();
 
     for (const [, source] of samples) {
+        totals.set(source, (totals.get(source) ?? 0) + 1);
+    }
+
+    for (const [source, count] of totals) {
+        assert.equal(counts[`json.parse.${source}.calls`], count);
+        assert.equal(counts[`json.parse.${source}.chars`], 11 * count);
+    }
+
+    for (const source of ["nativeRpc", "nativeJsonl", "nativeGate"]) {
         assert.equal(counts[`json.parse.${source}.calls`], 1);
         assert.equal(counts[`json.parse.${source}.chars`], 11);
     }
 
+    assert.equal(
+        counts["json.parse.nativeRpc.calls"]! +
+            counts["json.parse.nativeJsonl.calls"]! +
+            counts["json.parse.nativeGate.calls"]!,
+        counts["json.parse.nativeReadback.calls"]! - 1,
+        "the legacy coarse native scope remains deliberately unclassified",
+    );
     assert.equal(counts["json.parse.other.calls"], 1);
     assert.equal(counts["json.parse.other.chars"], 1);
 });

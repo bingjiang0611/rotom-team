@@ -58,6 +58,9 @@ const parseSource = () => {
         case "journal-segments":
             return "journalSegments";
         case "native-readback":
+        case "native-rpc":
+        case "native-jsonl":
+        case "native-gate":
             return "nativeReadback";
         case "http":
             return "http";
@@ -74,6 +77,21 @@ JSON.parse = function parse(text: string, reviver?: Parameters<typeof JSON.parse
     add("json.parse.chars", chars);
     add(`json.parse.${source}.calls`);
     add(`json.parse.${source}.chars`, chars);
+
+    const scope = currentParseWork();
+    const nativePart =
+        scope === "native-rpc"
+            ? "nativeRpc"
+            : scope === "native-jsonl"
+              ? "nativeJsonl"
+              : scope === "native-gate"
+                ? "nativeGate"
+                : undefined;
+
+    if (nativePart !== undefined) {
+        add(`json.parse.${nativePart}.calls`);
+        add(`json.parse.${nativePart}.chars`, chars);
+    }
 
     return raw.parse(text, reviver);
 } as typeof JSON.parse;

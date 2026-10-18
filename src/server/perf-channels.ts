@@ -45,6 +45,9 @@ export type ParseWork =
     | "journal-thinking"
     | "journal-segments"
     | "native-readback"
+    | "native-rpc"
+    | "native-jsonl"
+    | "native-gate"
     | "http";
 /** The benchmark subscribes only to enable bounded source attribution; no content is published. */
 export const parseWorkChannel = channel("rotom-team:parse-work");

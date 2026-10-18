@@ -7578,6 +7578,1266 @@
             "baselines": {
                 "darwin-arm64": 103190
             }
+        },
+        "startup.restart/json.parse.nativeRpc.calls": {
+            "scenario": "startup.restart",
+            "metric": "json.parse.nativeRpc.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; close the app and open it again",
+            "source": "JSON.parse in exclusive nativeRpc scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 2
+            }
+        },
+        "startup.restart/json.parse.nativeRpc.chars": {
+            "scenario": "startup.restart",
+            "metric": "json.parse.nativeRpc.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; close the app and open it again",
+            "source": "JSON.parse in exclusive nativeRpc scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 240
+            }
+        },
+        "startup.restart/json.parse.nativeJsonl.calls": {
+            "scenario": "startup.restart",
+            "metric": "json.parse.nativeJsonl.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; close the app and open it again",
+            "source": "JSON.parse in exclusive nativeJsonl scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "startup.restart/json.parse.nativeJsonl.chars": {
+            "scenario": "startup.restart",
+            "metric": "json.parse.nativeJsonl.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; close the app and open it again",
+            "source": "JSON.parse in exclusive nativeJsonl scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "startup.restart/json.parse.nativeGate.calls": {
+            "scenario": "startup.restart",
+            "metric": "json.parse.nativeGate.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; close the app and open it again",
+            "source": "JSON.parse in exclusive nativeGate scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "startup.restart/json.parse.nativeGate.chars": {
+            "scenario": "startup.restart",
+            "metric": "json.parse.nativeGate.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; close the app and open it again",
+            "source": "JSON.parse in exclusive nativeGate scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "sessions.list/json.parse.nativeRpc.calls": {
+            "scenario": "sessions.list",
+            "metric": "json.parse.nativeRpc.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; GET /api/sessions",
+            "source": "JSON.parse in exclusive nativeRpc scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "sessions.list/json.parse.nativeRpc.chars": {
+            "scenario": "sessions.list",
+            "metric": "json.parse.nativeRpc.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; GET /api/sessions",
+            "source": "JSON.parse in exclusive nativeRpc scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "sessions.list/json.parse.nativeJsonl.calls": {
+            "scenario": "sessions.list",
+            "metric": "json.parse.nativeJsonl.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; GET /api/sessions",
+            "source": "JSON.parse in exclusive nativeJsonl scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "sessions.list/json.parse.nativeJsonl.chars": {
+            "scenario": "sessions.list",
+            "metric": "json.parse.nativeJsonl.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; GET /api/sessions",
+            "source": "JSON.parse in exclusive nativeJsonl scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "sessions.list/json.parse.nativeGate.calls": {
+            "scenario": "sessions.list",
+            "metric": "json.parse.nativeGate.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; GET /api/sessions",
+            "source": "JSON.parse in exclusive nativeGate scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "sessions.list/json.parse.nativeGate.chars": {
+            "scenario": "sessions.list",
+            "metric": "json.parse.nativeGate.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; GET /api/sessions",
+            "source": "JSON.parse in exclusive nativeGate scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open/json.parse.nativeRpc.calls": {
+            "scenario": "session.open",
+            "metric": "json.parse.nativeRpc.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; a new event-stream tab on it, until its first full view",
+            "source": "JSON.parse in exclusive nativeRpc scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open/json.parse.nativeRpc.chars": {
+            "scenario": "session.open",
+            "metric": "json.parse.nativeRpc.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; a new event-stream tab on it, until its first full view",
+            "source": "JSON.parse in exclusive nativeRpc scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open/json.parse.nativeJsonl.calls": {
+            "scenario": "session.open",
+            "metric": "json.parse.nativeJsonl.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; a new event-stream tab on it, until its first full view",
+            "source": "JSON.parse in exclusive nativeJsonl scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open/json.parse.nativeJsonl.chars": {
+            "scenario": "session.open",
+            "metric": "json.parse.nativeJsonl.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; a new event-stream tab on it, until its first full view",
+            "source": "JSON.parse in exclusive nativeJsonl scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open/json.parse.nativeGate.calls": {
+            "scenario": "session.open",
+            "metric": "json.parse.nativeGate.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; a new event-stream tab on it, until its first full view",
+            "source": "JSON.parse in exclusive nativeGate scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open/json.parse.nativeGate.chars": {
+            "scenario": "session.open",
+            "metric": "json.parse.nativeGate.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; a new event-stream tab on it, until its first full view",
+            "source": "JSON.parse in exclusive nativeGate scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "turn.cold/json.parse.nativeRpc.calls": {
+            "scenario": "turn.cold",
+            "metric": "json.parse.nativeRpc.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; first prompt of a new session with one tab watching, until settled and quiet",
+            "source": "JSON.parse in exclusive nativeRpc scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 59
+            }
+        },
+        "turn.cold/json.parse.nativeRpc.chars": {
+            "scenario": "turn.cold",
+            "metric": "json.parse.nativeRpc.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; first prompt of a new session with one tab watching, until settled and quiet",
+            "source": "JSON.parse in exclusive nativeRpc scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 170678
+            }
+        },
+        "turn.cold/json.parse.nativeJsonl.calls": {
+            "scenario": "turn.cold",
+            "metric": "json.parse.nativeJsonl.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; first prompt of a new session with one tab watching, until settled and quiet",
+            "source": "JSON.parse in exclusive nativeJsonl scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 14
+            }
+        },
+        "turn.cold/json.parse.nativeJsonl.chars": {
+            "scenario": "turn.cold",
+            "metric": "json.parse.nativeJsonl.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; first prompt of a new session with one tab watching, until settled and quiet",
+            "source": "JSON.parse in exclusive nativeJsonl scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 93976
+            }
+        },
+        "turn.cold/json.parse.nativeGate.calls": {
+            "scenario": "turn.cold",
+            "metric": "json.parse.nativeGate.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; first prompt of a new session with one tab watching, until settled and quiet",
+            "source": "JSON.parse in exclusive nativeGate scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "turn.cold/json.parse.nativeGate.chars": {
+            "scenario": "turn.cold",
+            "metric": "json.parse.nativeGate.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; first prompt of a new session with one tab watching, until settled and quiet",
+            "source": "JSON.parse in exclusive nativeGate scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 60
+            }
+        },
+        "turn.warm/json.parse.nativeRpc.calls": {
+            "scenario": "turn.warm",
+            "metric": "json.parse.nativeRpc.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; second prompt of that session with one tab watching, until settled and quiet",
+            "source": "JSON.parse in exclusive nativeRpc scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 48
+            }
+        },
+        "turn.warm/json.parse.nativeRpc.chars": {
+            "scenario": "turn.warm",
+            "metric": "json.parse.nativeRpc.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; second prompt of that session with one tab watching, until settled and quiet",
+            "source": "JSON.parse in exclusive nativeRpc scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 6,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 49286
+            }
+        },
+        "turn.warm/json.parse.nativeJsonl.calls": {
+            "scenario": "turn.warm",
+            "metric": "json.parse.nativeJsonl.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; second prompt of that session with one tab watching, until settled and quiet",
+            "source": "JSON.parse in exclusive nativeJsonl scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 18
+            }
+        },
+        "turn.warm/json.parse.nativeJsonl.chars": {
+            "scenario": "turn.warm",
+            "metric": "json.parse.nativeJsonl.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; second prompt of that session with one tab watching, until settled and quiet",
+            "source": "JSON.parse in exclusive nativeJsonl scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 4,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 107366
+            }
+        },
+        "turn.warm/json.parse.nativeGate.calls": {
+            "scenario": "turn.warm",
+            "metric": "json.parse.nativeGate.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; second prompt of that session with one tab watching, until settled and quiet",
+            "source": "JSON.parse in exclusive nativeGate scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "turn.warm/json.parse.nativeGate.chars": {
+            "scenario": "turn.warm",
+            "metric": "json.parse.nativeGate.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; second prompt of that session with one tab watching, until settled and quiet",
+            "source": "JSON.parse in exclusive nativeGate scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 60
+            }
+        },
+        "turn.paced/json.parse.nativeRpc.calls": {
+            "scenario": "turn.paced",
+            "metric": "json.parse.nativeRpc.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; third prompt of that session, its answer paced 25 ms per chunk, one tab watching, until settled and quiet",
+            "source": "JSON.parse in exclusive nativeRpc scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 48
+            }
+        },
+        "turn.paced/json.parse.nativeRpc.chars": {
+            "scenario": "turn.paced",
+            "metric": "json.parse.nativeRpc.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; third prompt of that session, its answer paced 25 ms per chunk, one tab watching, until settled and quiet",
+            "source": "JSON.parse in exclusive nativeRpc scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 49307
+            }
+        },
+        "turn.paced/json.parse.nativeJsonl.calls": {
+            "scenario": "turn.paced",
+            "metric": "json.parse.nativeJsonl.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; third prompt of that session, its answer paced 25 ms per chunk, one tab watching, until settled and quiet",
+            "source": "JSON.parse in exclusive nativeJsonl scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 22
+            }
+        },
+        "turn.paced/json.parse.nativeJsonl.chars": {
+            "scenario": "turn.paced",
+            "metric": "json.parse.nativeJsonl.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; third prompt of that session, its answer paced 25 ms per chunk, one tab watching, until settled and quiet",
+            "source": "JSON.parse in exclusive nativeJsonl scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 4,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 120770
+            }
+        },
+        "turn.paced/json.parse.nativeGate.calls": {
+            "scenario": "turn.paced",
+            "metric": "json.parse.nativeGate.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; third prompt of that session, its answer paced 25 ms per chunk, one tab watching, until settled and quiet",
+            "source": "JSON.parse in exclusive nativeGate scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "turn.paced/json.parse.nativeGate.chars": {
+            "scenario": "turn.paced",
+            "metric": "json.parse.nativeGate.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; third prompt of that session, its answer paced 25 ms per chunk, one tab watching, until settled and quiet",
+            "source": "JSON.parse in exclusive nativeGate scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 60
+            }
+        },
+        "git.changes/json.parse.nativeRpc.calls": {
+            "scenario": "git.changes",
+            "metric": "json.parse.nativeRpc.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 20 changed files; GET changes",
+            "source": "JSON.parse in exclusive nativeRpc scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "git.changes/json.parse.nativeRpc.chars": {
+            "scenario": "git.changes",
+            "metric": "json.parse.nativeRpc.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 20 changed files; GET changes",
+            "source": "JSON.parse in exclusive nativeRpc scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "git.changes/json.parse.nativeJsonl.calls": {
+            "scenario": "git.changes",
+            "metric": "json.parse.nativeJsonl.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 20 changed files; GET changes",
+            "source": "JSON.parse in exclusive nativeJsonl scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "git.changes/json.parse.nativeJsonl.chars": {
+            "scenario": "git.changes",
+            "metric": "json.parse.nativeJsonl.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 20 changed files; GET changes",
+            "source": "JSON.parse in exclusive nativeJsonl scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "git.changes/json.parse.nativeGate.calls": {
+            "scenario": "git.changes",
+            "metric": "json.parse.nativeGate.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 20 changed files; GET changes",
+            "source": "JSON.parse in exclusive nativeGate scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "git.changes/json.parse.nativeGate.chars": {
+            "scenario": "git.changes",
+            "metric": "json.parse.nativeGate.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 20 changed files; GET changes",
+            "source": "JSON.parse in exclusive nativeGate scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "git.diff/json.parse.nativeRpc.calls": {
+            "scenario": "git.diff",
+            "metric": "json.parse.nativeRpc.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 20 changed files; GET changes/diff for tracked src/file-0.txt",
+            "source": "JSON.parse in exclusive nativeRpc scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "git.diff/json.parse.nativeRpc.chars": {
+            "scenario": "git.diff",
+            "metric": "json.parse.nativeRpc.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 20 changed files; GET changes/diff for tracked src/file-0.txt",
+            "source": "JSON.parse in exclusive nativeRpc scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "git.diff/json.parse.nativeJsonl.calls": {
+            "scenario": "git.diff",
+            "metric": "json.parse.nativeJsonl.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 20 changed files; GET changes/diff for tracked src/file-0.txt",
+            "source": "JSON.parse in exclusive nativeJsonl scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "git.diff/json.parse.nativeJsonl.chars": {
+            "scenario": "git.diff",
+            "metric": "json.parse.nativeJsonl.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 20 changed files; GET changes/diff for tracked src/file-0.txt",
+            "source": "JSON.parse in exclusive nativeJsonl scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "git.diff/json.parse.nativeGate.calls": {
+            "scenario": "git.diff",
+            "metric": "json.parse.nativeGate.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 20 changed files; GET changes/diff for tracked src/file-0.txt",
+            "source": "JSON.parse in exclusive nativeGate scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "git.diff/json.parse.nativeGate.chars": {
+            "scenario": "git.diff",
+            "metric": "json.parse.nativeGate.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 20 changed files; GET changes/diff for tracked src/file-0.txt",
+            "source": "JSON.parse in exclusive nativeGate scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "git.branches/json.parse.nativeRpc.calls": {
+            "scenario": "git.branches",
+            "metric": "json.parse.nativeRpc.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 2 branches; GET branches",
+            "source": "JSON.parse in exclusive nativeRpc scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "git.branches/json.parse.nativeRpc.chars": {
+            "scenario": "git.branches",
+            "metric": "json.parse.nativeRpc.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 2 branches; GET branches",
+            "source": "JSON.parse in exclusive nativeRpc scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "git.branches/json.parse.nativeJsonl.calls": {
+            "scenario": "git.branches",
+            "metric": "json.parse.nativeJsonl.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 2 branches; GET branches",
+            "source": "JSON.parse in exclusive nativeJsonl scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "git.branches/json.parse.nativeJsonl.chars": {
+            "scenario": "git.branches",
+            "metric": "json.parse.nativeJsonl.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 2 branches; GET branches",
+            "source": "JSON.parse in exclusive nativeJsonl scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "git.branches/json.parse.nativeGate.calls": {
+            "scenario": "git.branches",
+            "metric": "json.parse.nativeGate.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 2 branches; GET branches",
+            "source": "JSON.parse in exclusive nativeGate scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "git.branches/json.parse.nativeGate.chars": {
+            "scenario": "git.branches",
+            "metric": "json.parse.nativeGate.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 2 branches; GET branches",
+            "source": "JSON.parse in exclusive nativeGate scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "commands.list/json.parse.nativeRpc.calls": {
+            "scenario": "commands.list",
+            "metric": "json.parse.nativeRpc.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; GET the native slash-command list",
+            "source": "JSON.parse in exclusive nativeRpc scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "commands.list/json.parse.nativeRpc.chars": {
+            "scenario": "commands.list",
+            "metric": "json.parse.nativeRpc.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; GET the native slash-command list",
+            "source": "JSON.parse in exclusive nativeRpc scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "commands.list/json.parse.nativeJsonl.calls": {
+            "scenario": "commands.list",
+            "metric": "json.parse.nativeJsonl.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; GET the native slash-command list",
+            "source": "JSON.parse in exclusive nativeJsonl scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "commands.list/json.parse.nativeJsonl.chars": {
+            "scenario": "commands.list",
+            "metric": "json.parse.nativeJsonl.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; GET the native slash-command list",
+            "source": "JSON.parse in exclusive nativeJsonl scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "commands.list/json.parse.nativeGate.calls": {
+            "scenario": "commands.list",
+            "metric": "json.parse.nativeGate.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; GET the native slash-command list",
+            "source": "JSON.parse in exclusive nativeGate scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "commands.list/json.parse.nativeGate.chars": {
+            "scenario": "commands.list",
+            "metric": "json.parse.nativeGate.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; GET the native slash-command list",
+            "source": "JSON.parse in exclusive nativeGate scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "commands.discover.cold/json.parse.nativeRpc.calls": {
+            "scenario": "commands.discover.cold",
+            "metric": "json.parse.nativeRpc.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all existing scenarios, an additional new native session with one tab; first explicit POST prompts, with no model request",
+            "source": "JSON.parse in exclusive nativeRpc scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 12
+            }
+        },
+        "commands.discover.cold/json.parse.nativeRpc.chars": {
+            "scenario": "commands.discover.cold",
+            "metric": "json.parse.nativeRpc.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all existing scenarios, an additional new native session with one tab; first explicit POST prompts, with no model request",
+            "source": "JSON.parse in exclusive nativeRpc scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 11530
+            }
+        },
+        "commands.discover.cold/json.parse.nativeJsonl.calls": {
+            "scenario": "commands.discover.cold",
+            "metric": "json.parse.nativeJsonl.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all existing scenarios, an additional new native session with one tab; first explicit POST prompts, with no model request",
+            "source": "JSON.parse in exclusive nativeJsonl scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "commands.discover.cold/json.parse.nativeJsonl.chars": {
+            "scenario": "commands.discover.cold",
+            "metric": "json.parse.nativeJsonl.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all existing scenarios, an additional new native session with one tab; first explicit POST prompts, with no model request",
+            "source": "JSON.parse in exclusive nativeJsonl scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "commands.discover.cold/json.parse.nativeGate.calls": {
+            "scenario": "commands.discover.cold",
+            "metric": "json.parse.nativeGate.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all existing scenarios, an additional new native session with one tab; first explicit POST prompts, with no model request",
+            "source": "JSON.parse in exclusive nativeGate scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "commands.discover.cold/json.parse.nativeGate.chars": {
+            "scenario": "commands.discover.cold",
+            "metric": "json.parse.nativeGate.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all existing scenarios, an additional new native session with one tab; first explicit POST prompts, with no model request",
+            "source": "JSON.parse in exclusive nativeGate scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "commands.discover.warm/json.parse.nativeRpc.calls": {
+            "scenario": "commands.discover.warm",
+            "metric": "json.parse.nativeRpc.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; same additional session/tab after cold discovery; a second explicit POST prompts with a new request ID, with no model request",
+            "source": "JSON.parse in exclusive nativeRpc scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 5
+            }
+        },
+        "commands.discover.warm/json.parse.nativeRpc.chars": {
+            "scenario": "commands.discover.warm",
+            "metric": "json.parse.nativeRpc.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; same additional session/tab after cold discovery; a second explicit POST prompts with a new request ID, with no model request",
+            "source": "JSON.parse in exclusive nativeRpc scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 9136
+            }
+        },
+        "commands.discover.warm/json.parse.nativeJsonl.calls": {
+            "scenario": "commands.discover.warm",
+            "metric": "json.parse.nativeJsonl.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; same additional session/tab after cold discovery; a second explicit POST prompts with a new request ID, with no model request",
+            "source": "JSON.parse in exclusive nativeJsonl scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "commands.discover.warm/json.parse.nativeJsonl.chars": {
+            "scenario": "commands.discover.warm",
+            "metric": "json.parse.nativeJsonl.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; same additional session/tab after cold discovery; a second explicit POST prompts with a new request ID, with no model request",
+            "source": "JSON.parse in exclusive nativeJsonl scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "commands.discover.warm/json.parse.nativeGate.calls": {
+            "scenario": "commands.discover.warm",
+            "metric": "json.parse.nativeGate.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; same additional session/tab after cold discovery; a second explicit POST prompts with a new request ID, with no model request",
+            "source": "JSON.parse in exclusive nativeGate scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "commands.discover.warm/json.parse.nativeGate.chars": {
+            "scenario": "commands.discover.warm",
+            "metric": "json.parse.nativeGate.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; same additional session/tab after cold discovery; a second explicit POST prompts with a new request ID, with no model request",
+            "source": "JSON.parse in exclusive nativeGate scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "turn.prepared/json.parse.nativeRpc.calls": {
+            "scenario": "turn.prepared",
+            "metric": "json.parse.nativeRpc.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; same additional session/tab after both discoveries; first ordinary prompt, until settled and quiet",
+            "source": "JSON.parse in exclusive nativeRpc scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 52
+            }
+        },
+        "turn.prepared/json.parse.nativeRpc.chars": {
+            "scenario": "turn.prepared",
+            "metric": "json.parse.nativeRpc.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; same additional session/tab after both discoveries; first ordinary prompt, until settled and quiet",
+            "source": "JSON.parse in exclusive nativeRpc scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 168290
+            }
+        },
+        "turn.prepared/json.parse.nativeJsonl.calls": {
+            "scenario": "turn.prepared",
+            "metric": "json.parse.nativeJsonl.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; same additional session/tab after both discoveries; first ordinary prompt, until settled and quiet",
+            "source": "JSON.parse in exclusive nativeJsonl scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 14
+            }
+        },
+        "turn.prepared/json.parse.nativeJsonl.chars": {
+            "scenario": "turn.prepared",
+            "metric": "json.parse.nativeJsonl.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; same additional session/tab after both discoveries; first ordinary prompt, until settled and quiet",
+            "source": "JSON.parse in exclusive nativeJsonl scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 93982
+            }
+        },
+        "turn.prepared/json.parse.nativeGate.calls": {
+            "scenario": "turn.prepared",
+            "metric": "json.parse.nativeGate.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; same additional session/tab after both discoveries; first ordinary prompt, until settled and quiet",
+            "source": "JSON.parse in exclusive nativeGate scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "turn.prepared/json.parse.nativeGate.chars": {
+            "scenario": "turn.prepared",
+            "metric": "json.parse.nativeGate.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; same additional session/tab after both discoveries; first ordinary prompt, until settled and quiet",
+            "source": "JSON.parse in exclusive nativeGate scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 60
+            }
+        },
+        "projection.large.open/json.parse.nativeRpc.calls": {
+            "scenario": "projection.large.open",
+            "metric": "json.parse.nativeRpc.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "JSON.parse in exclusive nativeRpc scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "projection.large.open/json.parse.nativeRpc.chars": {
+            "scenario": "projection.large.open",
+            "metric": "json.parse.nativeRpc.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "JSON.parse in exclusive nativeRpc scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "projection.large.open/json.parse.nativeJsonl.calls": {
+            "scenario": "projection.large.open",
+            "metric": "json.parse.nativeJsonl.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "JSON.parse in exclusive nativeJsonl scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "projection.large.open/json.parse.nativeJsonl.chars": {
+            "scenario": "projection.large.open",
+            "metric": "json.parse.nativeJsonl.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "JSON.parse in exclusive nativeJsonl scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "projection.large.open/json.parse.nativeGate.calls": {
+            "scenario": "projection.large.open",
+            "metric": "json.parse.nativeGate.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "JSON.parse in exclusive nativeGate scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "projection.large.open/json.parse.nativeGate.chars": {
+            "scenario": "projection.large.open",
+            "metric": "json.parse.nativeGate.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "JSON.parse in exclusive nativeGate scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "projection.large.paced/json.parse.nativeRpc.calls": {
+            "scenario": "projection.large.paced",
+            "metric": "json.parse.nativeRpc.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "the same 64-turn session and 4 attached tabs; one 6000-char answer paced 25 ms per chunk, until settled and quiet",
+            "source": "JSON.parse in exclusive nativeRpc scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 48
+            }
+        },
+        "projection.large.paced/json.parse.nativeRpc.chars": {
+            "scenario": "projection.large.paced",
+            "metric": "json.parse.nativeRpc.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "the same 64-turn session and 4 attached tabs; one 6000-char answer paced 25 ms per chunk, until settled and quiet",
+            "source": "JSON.parse in exclusive nativeRpc scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 49332
+            }
+        },
+        "projection.large.paced/json.parse.nativeJsonl.calls": {
+            "scenario": "projection.large.paced",
+            "metric": "json.parse.nativeJsonl.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "the same 64-turn session and 4 attached tabs; one 6000-char answer paced 25 ms per chunk, until settled and quiet",
+            "source": "JSON.parse in exclusive nativeJsonl scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 270
+            }
+        },
+        "projection.large.paced/json.parse.nativeJsonl.chars": {
+            "scenario": "projection.large.paced",
+            "metric": "json.parse.nativeJsonl.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "the same 64-turn session and 4 attached tabs; one 6000-char answer paced 25 ms per chunk, until settled and quiet",
+            "source": "JSON.parse in exclusive nativeJsonl scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 26,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 201292
+            }
+        },
+        "projection.large.paced/json.parse.nativeGate.calls": {
+            "scenario": "projection.large.paced",
+            "metric": "json.parse.nativeGate.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "the same 64-turn session and 4 attached tabs; one 6000-char answer paced 25 ms per chunk, until settled and quiet",
+            "source": "JSON.parse in exclusive nativeGate scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "projection.large.paced/json.parse.nativeGate.chars": {
+            "scenario": "projection.large.paced",
+            "metric": "json.parse.nativeGate.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "the same 64-turn session and 4 attached tabs; one 6000-char answer paced 25 ms per chunk, until settled and quiet",
+            "source": "JSON.parse in exclusive nativeGate scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 60
+            }
         }
     }
 }

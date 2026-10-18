@@ -56,7 +56,8 @@ const parseSources = [
     "http",
     "other",
 ];
-const parseAttribution = parseSources.flatMap((source) => [
+const nativeReadbackSources = ["nativeRpc", "nativeJsonl", "nativeGate"];
+const parseAttribution = [...parseSources, ...nativeReadbackSources].flatMap((source) => [
     `json.parse.${source}.calls`,
     `json.parse.${source}.chars`,
 ]);
@@ -64,7 +65,7 @@ const parseAttribution = parseSources.flatMap((source) => [
 /** Every counter a scenario reports, and where it is counted. */
 const COUNTERS: Record<string, MetricSpec> = {
     ...Object.fromEntries(
-        parseSources.flatMap((source) =>
+        [...parseSources, ...nativeReadbackSources].flatMap((source) =>
             ["calls", "chars"].map((unit) => [
                 `json.parse.${source}.${unit}`,
                 {
