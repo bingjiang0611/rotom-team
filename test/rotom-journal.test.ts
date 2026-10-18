@@ -82,6 +82,124 @@ test("current thinking follows native ancestry without changing immutable receip
     }
 });
 
+test("optional head session is one fresh read and distinguishes absence from corruption", () => {
+    const f = setup();
+    let journal = new RotomJournal(f.data);
+    const originalGet = StatementSync.prototype.get;
+    let headReads = 0;
+    let sessionReads = 0;
+
+    const counted = <T>(read: () => T) => {
+        headReads = 0;
+        sessionReads = 0;
+
+        StatementSync.prototype.get = function (...args) {
+            if (/FROM kernel_heads/i.test(this.sourceSQL)) {
+                headReads++;
+            }
+
+            if (/FROM kernel_sessions/i.test(this.sourceSQL)) {
+                sessionReads++;
+            }
+
+            return Reflect.apply(originalGet, this, args);
+        };
+
+        try {
+            return read();
+        } finally {
+            StatementSync.prototype.get = originalGet;
+        }
+    };
+
+    try {
+        assert.equal(
+            counted(() => journal.sessionIfPresent("missing")),
+            undefined,
+        );
+        assert.equal(headReads, 1);
+        assert.equal(sessionReads, 0);
+        journal.bind("native", f.binding);
+        assert.deepEqual(
+            counted(() => journal.sessionIfPresent("native")),
+            journal.session("native"),
+        );
+        assert.equal(headReads, 1);
+        assert.equal(sessionReads, 0, "the joined read is classified once by its leading table");
+        const switched = journal.reserve("native", "switch", "/model model-2", "command", {
+            expectedHead: "native",
+            binding: { ...f.binding, model: "model-2", thinkingLevel: "high" },
+        });
+        const file = join(f.binding.home, "session.jsonl");
+
+        journal.attach(switched.id, file, "native-id");
+        const current = journal.sessionIfPresent("native")!;
+
+        assert.deepEqual(current, journal.session("native"));
+        assert.equal(current.binding.model, "model-2");
+        assert.equal(current.binding.thinkingLevel, "high");
+        assert.equal(current.sessionFile, file);
+        assert.equal(current.kernelSessionId, "native-id");
+        current.binding.model = "must-not-mutate-the-next-read";
+        assert.equal(journal.sessionIfPresent("native")?.binding.model, "model-2");
+        journal.fail(switched.id, "rejected");
+        const bobHome = join(f.data, "kernel-homes", "bob");
+
+        mkdirSync(bobHome, { mode: 0o700 });
+        const bobBinding = { ...f.binding, memberId: "bob", home: bobHome };
+        const handoff = journal.handoff("native", "handoff", "native", bobBinding);
+
+        assert.equal(
+            journal.sessionIfPresent("native")?.segmentId,
+            "native",
+            "uncommitted seed is not the head",
+        );
+        journal.finish(handoff.id, "settled", []);
+        assert.deepEqual(journal.sessionIfPresent("native"), journal.session("native"));
+        assert.equal(journal.sessionIfPresent("native")?.segmentId, handoff.segmentId);
+        assert.deepEqual(journal.sessionIfPresent("native")?.binding, bobBinding);
+        assert.equal(
+            journal.segment("native").binding.model,
+            "model-2",
+            "old segment stays readable",
+        );
+        journal.close();
+        journal = new RotomJournal(f.data);
+        assert.deepEqual(journal.sessionIfPresent("native"), journal.session("native"));
+        assert.deepEqual(journal.sessionIfPresent("native")?.binding, bobBinding);
+        journal.close();
+        let db = new DatabaseSync(join(f.data, "kernel.sqlite"));
+
+        db.prepare("UPDATE kernel_sessions SET binding=? WHERE id=?").run(
+            "invalid-json",
+            handoff.segmentId,
+        );
+        db.close();
+        journal = new RotomJournal(f.data);
+        assert.throws(() => journal.sessionIfPresent("native"), SyntaxError);
+        assert.throws(() => journal.session("native"), SyntaxError);
+        journal.close();
+        db = new DatabaseSync(join(f.data, "kernel.sqlite"));
+        db.exec("PRAGMA foreign_keys=OFF");
+        db.prepare("DELETE FROM kernel_sessions WHERE id=?").run(handoff.segmentId);
+        db.close();
+        journal = new RotomJournal(f.data);
+        assert.equal(journal.hasConversation("native"), true);
+        assert.throws(
+            () => journal.sessionIfPresent("native"),
+            /Unknown kernel session/,
+            "a dangling head is corruption, not an initializing conversation",
+        );
+        assert.throws(() => journal.session("native"), /Unknown kernel session/);
+        assert.equal(journal.sessionIfPresent("missing"), undefined);
+        assert.throws(() => journal.session("missing"), /Unknown kernel session/);
+    } finally {
+        StatementSync.prototype.get = originalGet;
+        journal.close();
+        rmSync(f.root, { recursive: true, force: true });
+    }
+});
+
 test("history suffix reads preserve ordering, bindings and restart without replaying the prefix", () => {
     const f = setup();
     let journal = new RotomJournal(f.data);

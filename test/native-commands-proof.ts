@@ -406,14 +406,14 @@ try {
         null,
     );
     const projectionJournal = app.kernel!.executions.journal;
-    const originalSession = projectionJournal.session;
+    const originalSessionIfPresent = projectionJournal.sessionIfPresent;
     let projectionReads = 0;
 
     try {
-        projectionJournal.session = function (sessionId) {
+        projectionJournal.sessionIfPresent = function (sessionId) {
             projectionReads++;
 
-            return originalSession.call(this, sessionId);
+            return originalSessionIfPresent.call(this, sessionId);
         };
 
         assert.notEqual(
@@ -421,10 +421,14 @@ try {
                 .commandsRevision,
             null,
         );
-        assert.equal(projectionReads, 1, "one roomState reuses exactly one fresh session read");
+        assert.equal(
+            projectionReads,
+            1,
+            "one roomState performs exactly one fresh head/session read",
+        );
 
-        projectionJournal.session = function (sessionId) {
-            const session = originalSession.call(this, sessionId);
+        projectionJournal.sessionIfPresent = function (sessionId) {
+            const session = originalSessionIfPresent.call(this, sessionId)!;
 
             return {
                 ...session,
@@ -439,7 +443,7 @@ try {
             "even the same member and segment need exact full binding equality",
         );
     } finally {
-        projectionJournal.session = originalSession;
+        projectionJournal.sessionIfPresent = originalSessionIfPresent;
     }
 
     const publicNames = new Set(registry.commands.map((command: { name: string }) => command.name));

@@ -403,6 +403,25 @@ export class RotomJournal {
         return this.segment(String(head.session_id));
     }
 
+    /** One fresh projection read: absence is expected during setup, but a dangling head remains corruption. */
+    sessionIfPresent(id: string) {
+        const row = this.#db
+            .prepare(
+                "SELECT h.session_id,s.binding,s.session_file,s.kernel_session_id,m.binding AS model_binding FROM kernel_heads h LEFT JOIN kernel_sessions s ON s.id=h.session_id LEFT JOIN kernel_segment_models m ON m.segment_id=s.id WHERE h.conversation_id=?",
+            )
+            .get(id);
+
+        if (!row) {
+            return undefined;
+        }
+
+        if (row.binding === null) {
+            throw new Error("Unknown kernel session");
+        }
+
+        return this.#segment(row, String(row.session_id));
+    }
+
     segment(id: string): {
         segmentId: string;
         binding: KernelBinding;
@@ -419,6 +438,18 @@ export class RotomJournal {
             throw new Error("Unknown kernel session");
         }
 
+        return this.#segment(row, id);
+    }
+
+    #segment(
+        row: Record<string, SQLOutputValue>,
+        id: string,
+    ): {
+        segmentId: string;
+        binding: KernelBinding;
+        sessionFile?: string;
+        kernelSessionId?: string;
+    } {
         return {
             segmentId: id,
             binding: JSON.parse(String(row.model_binding ?? row.binding)),

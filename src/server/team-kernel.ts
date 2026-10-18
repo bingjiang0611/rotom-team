@@ -2285,11 +2285,13 @@ export class TeamKernel {
     roomState(id: ConversationId, viewer: User) {
         const journal = this.executions.journal;
 
-        if (!journal.hasConversation(String(id))) {
+        const session = journal.sessionIfPresent(String(id));
+
+        if (!session) {
             return { initializing: true };
         }
 
-        const { binding, segmentId } = journal.session(String(id));
+        const { binding, segmentId } = session;
         const pending = journal.pendingConversation(String(id));
 
         return {
