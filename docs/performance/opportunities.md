@@ -202,6 +202,22 @@ browser/payload evidence.
 Final type/lint/format, 451 tests, synthetic kernel/native/browser proofs pass. L2 remains noise; L3, real accounts and
 physical devices are unverified. No production action. Stop after three experiments.
 
+## Ninth climb batch — 2026-10-18
+
+- **Targeted SQL Goal read rejected:** current full-history malformed-JSON errors and duplicate-key parsing differ
+  from selective ancestry/SQLite extraction. No schema/parser contract change. See
+  [probe](experiments/2026-10-18-targeted-goal-query-rejected.md).
+- **Same-call full-entry reuse retained as L1:** Goal and dormant thinking now share one complete parsed segment
+  during roomInfo, with exact segment IDs and no next-call cache. Dormant open parses 165→109, rows 177→121;
+  public agent sharing also reduces large open/paced SQL 163→118 and 647→512. Per-viewer kernel safety SQL and push
+  counts stay unchanged. See [experiment](experiments/2026-10-18-room-info-entry-reuse.md).
+
+Final type/lint/format, 452 tests, synthetic kernel and native command/Chromium proofs pass. Timing comparisons remain
+noise, no L3/production/real-account claim. Stop after three experiments. Next coding-agent action: finer source
+attribution within the 319 paced native-readback parses, separating RPC records, JSONL prefix/suffix and gate before
+optimizing again. The full-history corruption contract stays intact; long-history browser evidence still precedes
+pagination/protocol changes.
+
 ## Open
 
 - **A warm turn parses about 93 times its answer as JSON.** `turn.warm/json.parse.chars` 558 969 for a

@@ -172,6 +172,26 @@ pass. Only candidates tightened; no gate/tolerance/workload change. No real acco
 service restart, push or deployment. Existing user working-tree changes remain outside these commits. The eighth batch
 stops after three experiments; targeted Goal readback measurement is the next coding-agent-owned action.
 
+## Ninth implementation batch — 2026-10-18
+
+- [Targeted Goal query rejected](experiments/2026-10-18-targeted-goal-query-rejected.md): selected-ancestry reads
+  would hide malformed unrelated history that the full reader rejects. SQLite JSON extraction also differs from
+  `JSON.parse` duplicate-key semantics. No selective SQL or schema change retained.
+- [Cold-room duplication baseline](experiments/2026-10-18-cold-room-readback-baseline.md): dormant session open decodes
+  the same 28-entry segment independently for Goal and thinking on each of two pushes: 58 thinking-scope and 56 direct
+  segment calls, about 482.7k of 618k decoded characters.
+- [Complete-entry same-call reuse](experiments/2026-10-18-room-info-entry-reuse.md): roomInfo shares full decoded entries
+  by exact segment ID only until the synchronous call returns. Dormant open total parses 165→109 and SQL rows 177→121;
+  large open/paced parses 860→842 and 1,766→1,712. Every next call is fresh, different segments never share, all bodies
+  still parse, and per-viewer safety SQL/push counts remain unchanged.
+
+The retained change is L1 only; all duration comparisons are noise and no L3 release exists. Final type/lint/format,
+452 tests, synthetic kernel (82 requests), and native command/browser proof (28 synthetic inferences) pass. Candidates
+only tightened; no gate, tolerance or workload change. No real account, physical device, production data, service
+restart, push or deployment. Existing user working-tree changes remain outside the commits. This batch stops at three
+experiments. The next coding-agent task is to split the remaining 319 paced native-readback parses (RPC events, native
+JSONL prefix/suffix, gate) before selecting another change; do not weaken the full-history corruption contract.
+
 ## Evidence
 
 ### Fresh controlled baseline
