@@ -3208,7 +3208,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 248
+                "darwin-arm64": 49
             }
         },
         "web.paced/web.view.delta.entries": {

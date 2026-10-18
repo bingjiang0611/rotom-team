@@ -362,9 +362,11 @@ function applyView(data) {
             data.full || state.view.conversation?.id !== data.conversation.id
                 ? emptyView()
                 : state.view;
-        const entries = new Map(base.entries);
+        // Live/status-only updates do not change transcript entries. Keep their immutable Map instead of copying it.
+        const changesEntries = data.entries.length > 0 || data.order !== undefined;
+        const entries = changesEntries ? new Map(base.entries) : base.entries;
 
-        baseEntryCopies = base.entries.size;
+        baseEntryCopies = changesEntries ? base.entries.size : 0;
         deltaEntries = data.entries.length;
 
         for (const entry of data.entries) {
