@@ -134,6 +134,25 @@ Next authorised hypothesis: a fresh joined read for presence/head/session, with 
 corrupt-head errors and exact full binding; measure query-plan/parity before implementation. No cross-call cache or
 receipt-fence weakening. Pagination remains sequenced behind long-history browser/payload evidence.
 
+## Seventh implementation batch — 2026-10-18
+
+- [Fresh head/session baseline and indexed query plan](experiments/2026-10-18-head-session-query-plan.md): the
+  remaining presence/head/segment sequence uses three statements per room-state snapshot.
+- [Joined snapshot](experiments/2026-10-18-roomstate-head-session-join.md): one fresh LEFT JOIN removes two statement
+  crossings and one duplicate head lookup. Four-tab kernel SQL open 84→56, paced 248→176; all five runs agree.
+  Missing head, dangling head, malformed JSON, model override, payer handoff and restart preserve existing behavior.
+  Decodes, pending/latest/input fences, pushed counts and bytes are unchanged. Retained as L1, not L2/L3.
+- [Residual work](experiments/2026-10-18-roomstate-residual-work.md): kernel projection accounts for 1.4%/1.9% of
+  parent-process JSON calls after the fix. Do not skip its safety reads. Next measurement should attribute the remaining
+  parsing to native readback, journal mirror and Durable projection/storage before picking another optimization.
+
+Final type/lint/format, 449 tests, synthetic kernel (82 loopback requests), native commands (19 inferences), and
+Chromium open/stream readback pass. Only candidates were tightened; no gate promotion or tolerance increase. Cumulative
+common/worst kernel SQL is 140→56 and 424→176. All current timing comparisons are noise. No real account, physical-device,
+production data, service restart, push or deployment. Existing user changes remain outside these commits.
+The seventh batch stops at three experiments; source attribution is the next coding-agent-owned task, not a protocol
+or runtime-behavior change.
+
 ## Evidence
 
 ### Fresh controlled baseline

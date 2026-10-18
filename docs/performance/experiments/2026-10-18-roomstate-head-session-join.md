@@ -48,7 +48,8 @@ Total scenario SQL also falls 227→199 and 827→755. Full JSON decode calls, p
 bytes (112,462/190,016) are unchanged. There is no protocol or payload improvement claim.
 
 `perf:check`, `perf:propose --write` and ledger guard pass. Only candidates were tightened; no tolerance, gate or
-workload change. Final `npm run check`, `npm run lint`, `npm run format:check`, all **449 tests**, and
+workload change. One incidental Chromium style-recalculation candidate also tightened 158→157; that one-count
+variation is not credited to this SQL change. Final `npm run check`, `npm run lint`, `npm run format:check`, all **449 tests**, and
 `npm run test:kernel:app` pass. The synthetic kernel proof reports 82 loopback requests, including restart, permission,
 handoff, pending/unknown and clean-stop recovery. Its configuration-staging fixture exception is expected;
 final status is passed. Real Chromium benchmark open and streamed-final-answer paths are available and pass.

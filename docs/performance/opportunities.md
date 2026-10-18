@@ -171,6 +171,22 @@ Cumulative common/worst SQL reduction is 40% at open and about 42% at paced. No 
 account claim. Next authorised hypothesis: combine presence/head/session with a fresh joined query, after error/parity
 and query-plan verification. Current unknown/input fences must not be cached away.
 
+## Seventh climb batch — 2026-10-18
+
+- **Fresh head/session JOIN retained as L1:** open kernel SQL 84→56; paced 248→176, zero spread. Presence and
+  duplicate head/result crossings disappear; segment/model lookups remain indexed within the JOIN. Exact bindings,
+  missing-versus-corrupt behavior, fresh receipts/input fences and cutoff/recovery remain unchanged. See
+  [experiment](experiments/2026-10-18-roomstate-head-session-join.md).
+- **Change the next measurement focus:** kernel binding parsing is now 28/2,057 calls at open and 104/5,387 at paced.
+  The parent parser source is not yet attributed. The coding agent's next task is content-free scoped attribution for
+  native readback, journal mirror and Durable projection/storage; do not assume another room-state cache is the biggest
+  win. See [residual measurement](experiments/2026-10-18-roomstate-residual-work.md).
+
+Final type/lint/format, 449 tests, synthetic kernel and native-command proofs pass; real Chromium open/stream readback
+succeeds. Cumulative common/worst kernel SQL is 140→56 and 424→176. L2 remains noise; L3 and real-device/account paths
+are unverified. No production action. Stop this batch after three experiments; pagination remains gated by long-history
+browser/payload evidence.
+
 ## Open
 
 - **A warm turn parses about 93 times its answer as JSON.** `turn.warm/json.parse.chars` 558 969 for a
