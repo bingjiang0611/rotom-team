@@ -7,10 +7,15 @@ import {
     rmSync,
     existsSync,
     appendFileSync,
+    renameSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readNativeSnapshot, currentBranchGoalState } from "../src/server/rotom-executions.ts";
+import {
+    readNativeSnapshot,
+    currentBranchGoalState,
+    NativeTail,
+} from "../src/server/rotom-executions.ts";
 import { RotomRpc, RpcFailure } from "../src/server/rotom-rpc.ts";
 import type { KernelEntry } from "../src/server/rotom-journal.ts";
 
@@ -160,6 +165,125 @@ test("a partial append uses the last complete native entry as its delta anchor",
     );
 
     assert.deepEqual(result.entries, [first, second]);
+});
+
+test("run-owned tail reuses parsed prefix without consuming journal delivery or losing partial/native suffix", async (t) => {
+    const f = fixture();
+    const first = { type: "custom", id: "first", parentId: null };
+    const second = { type: "custom", id: "second", parentId: "first" };
+    const third = {
+        type: "custom",
+        id: "third",
+        parentId: "first",
+        customType: "goal-state",
+        data: { goal: { status: "paused" } },
+    };
+
+    t.after(() => f.close());
+    writeFileSync(
+        f.state.sessionFile,
+        [JSON.stringify(f.header), JSON.stringify(first)].join("\n") + "\n",
+    );
+    const tail = new NativeTail(f.state.sessionFile, f.state.sessionId, f.root);
+    const parse = JSON.parse;
+    let calls = 0;
+
+    const counted = <T>(read: () => T): T => {
+        JSON.parse = ((...args: Parameters<typeof JSON.parse>) => {
+            calls++;
+
+            return parse(...args);
+        }) as typeof JSON.parse;
+
+        try {
+            return read();
+        } finally {
+            JSON.parse = parse;
+        }
+    };
+
+    assert.deepEqual(
+        counted(() => tail.read()),
+        [f.header, first],
+    );
+    assert.equal(calls, 2);
+    const secondLine = JSON.stringify(second);
+
+    appendFileSync(f.state.sessionFile, secondLine.slice(0, 15));
+    assert.deepEqual(
+        counted(() => tail.snapshot()),
+        [f.header, first],
+    );
+    assert.equal(calls, 2, "prefix validation hashes bytes rather than decoding them twice");
+    assert.equal(tail.complete, false);
+    const snapshot = await readNativeSnapshot(
+        {
+            request: async (request) => {
+                assert.deepEqual(request, { type: "get_entries", since: "first" });
+
+                return { entries: [second, third], leafId: "third" };
+            },
+        },
+        f.state,
+        f.root,
+        tail,
+    );
+
+    assert.deepEqual(snapshot.entries, [first, second, third]);
+    assert.deepEqual(currentBranchGoalState(snapshot), { goal: { status: "paused" } });
+    appendFileSync(f.state.sessionFile, secondLine.slice(15) + "\n");
+    assert.deepEqual(
+        counted(() => tail.snapshot()),
+        [f.header, first, second],
+    );
+    assert.equal(calls, 3);
+    assert.deepEqual(tail.read(), [second], "snapshot refresh must not swallow journal entries");
+    assert.deepEqual(tail.read(), []);
+    assert.equal(tail.complete, true);
+    assert.throws(() => tail.snapshot(f.state.sessionFile, "foreign", f.root), /identity mismatch/);
+});
+
+test("reused tail falls back to full parsing for rewritten/truncated prefixes, preserving fresh errors", async (t) => {
+    const f = fixture();
+    const entry = { type: "custom", id: "entry", parentId: null };
+    const body = [JSON.stringify(f.header), JSON.stringify(entry)].join("\n") + "\n";
+
+    t.after(() => f.close());
+    writeFileSync(f.state.sessionFile, body);
+    const changed = new NativeTail(f.state.sessionFile, f.state.sessionId, f.root);
+
+    changed.read();
+    writeFileSync(f.state.sessionFile, body.replace('"custom"', '"broken"'));
+    assert.deepEqual(
+        changed.snapshot(),
+        [f.header, { ...entry, type: "broken" }],
+        "equal size and valid JSON must not reuse the old body",
+    );
+    writeFileSync(f.state.sessionFile, body.replace('{"type":"custom"', '!"type":"custom"'));
+    assert.throws(
+        () => changed.snapshot(),
+        SyntaxError,
+        "malformed cached prefix keeps the fresh parse error",
+    );
+    writeFileSync(f.state.sessionFile, body);
+    const replaced = new NativeTail(f.state.sessionFile, f.state.sessionId, f.root);
+
+    replaced.read();
+    writeFileSync(join(f.root, "replacement"), body);
+    renameSync(join(f.root, "replacement"), f.state.sessionFile);
+    assert.deepEqual(replaced.snapshot(), [f.header, entry]);
+    const malformed = new NativeTail(f.state.sessionFile, f.state.sessionId, f.root);
+
+    malformed.read();
+    appendFileSync(f.state.sessionFile, "malformed-json\n");
+    assert.throws(() => malformed.snapshot(), SyntaxError);
+    writeFileSync(f.state.sessionFile, body);
+    const truncated = new NativeTail(f.state.sessionFile, f.state.sessionId, f.root);
+
+    truncated.read();
+    writeFileSync(f.state.sessionFile, "");
+    assert.deepEqual(truncated.snapshot(), []);
+    assert.throws(() => truncated.read(), /replaced or truncated/);
 });
 
 test("a single oversized persisted entry is refused instead of bypassing the import bound", async (t) => {

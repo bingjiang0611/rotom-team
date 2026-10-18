@@ -14,7 +14,7 @@ import {
 } from "./rotom-resources.ts";
 import type { ImageContent } from "@earendil-works/pi-ai";
 import { once } from "node:events";
-import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import {
     constants,
     closeSync,
@@ -1150,7 +1150,7 @@ export class RotomExecutions {
 
             const tail = new NativeTail(state.sessionFile, state.sessionId, binding.workspace);
 
-            running.snapshot = () => readNativeSnapshot(kernel!, state!, binding.workspace);
+            running.snapshot = () => readNativeSnapshot(kernel!, state!, binding.workspace, tail);
 
             let progressFailure: unknown;
             let extensionError: RpcRecord | undefined;
@@ -1640,10 +1640,11 @@ export async function readNativeSnapshot(
     kernel: Pick<RotomRpc, "request">,
     state: { sessionFile: string; sessionId: string },
     workspace: string,
+    tail = new NativeTail(state.sessionFile, state.sessionId, workspace),
 ): Promise<{ entries: KernelEntry[]; leafId: string | null }> {
     const persisted = existsSync(state.sessionFile)
-        ? new NativeTail(state.sessionFile, state.sessionId, workspace)
-              .read()
+        ? tail
+              .snapshot(state.sessionFile, state.sessionId, workspace)
               .filter((entry) => entry.type !== "session")
         : [];
     const since = persisted.at(-1)?.id;
@@ -1676,6 +1677,9 @@ export class NativeTail {
     readonly #sessionId: string;
     readonly #workspace: string;
     readonly #ids = new Set<string>();
+    readonly #entries: KernelEntry[] = [];
+    readonly #prefixHash = createHash("sha256");
+    #delivered = 0;
     #offset = 0;
     #pending = Buffer.alloc(0);
     #header = false;
@@ -1690,7 +1694,72 @@ export class NativeTail {
         return this.#header && this.#pending.length === 0;
     }
 
+    /** Newly validated entries for journal ingestion. Snapshot reads do not consume this delivery cursor. */
     read(): KernelEntry[] {
+        this.#refresh();
+        const entries = this.#entries.slice(this.#delivered);
+
+        this.#delivered = this.#entries.length;
+
+        return entries;
+    }
+
+    /** Every validated complete entry, refreshing only the unread file suffix. */
+    snapshot(
+        path = this.#path,
+        sessionId = this.#sessionId,
+        workspace = this.#workspace,
+    ): KernelEntry[] {
+        if (path !== this.#path || sessionId !== this.#sessionId || workspace !== this.#workspace) {
+            throw new Error("Native tail snapshot identity mismatch");
+        }
+
+        const fresh = () => new NativeTail(this.#path, this.#sessionId, this.#workspace).read();
+
+        try {
+            this.#refresh();
+        } catch {
+            // A fresh snapshot is authoritative even after a rewrite or malformed append. Preserve its exact
+            // JSON/header/tree errors rather than replacing them with a cache-integrity error.
+            return fresh();
+        }
+
+        // Compare every byte, not size/mtime. If the append-only assumption fails, parse the entire file afresh,
+        // just as the old snapshot did, including valid rewrites and malformed non-current branches.
+        const fd = openSync(this.#path, constants.O_RDONLY | constants.O_NOFOLLOW);
+        const hash = createHash("sha256");
+        let offset = 0;
+
+        try {
+            const stat = fstatSync(fd);
+
+            if (stat.size < this.#offset) {
+                return fresh();
+            }
+
+            while (offset < this.#offset) {
+                const chunk = Buffer.alloc(Math.min(this.#offset - offset, 1024 * 1024));
+                const bytes = readSync(fd, chunk, 0, chunk.length, offset);
+
+                if (bytes === 0) {
+                    return fresh();
+                }
+
+                hash.update(chunk.subarray(0, bytes));
+                offset += bytes;
+            }
+        } finally {
+            closeSync(fd);
+        }
+
+        if (hash.digest("hex") !== this.#prefixHash.copy().digest("hex")) {
+            return fresh();
+        }
+
+        return [...this.#entries];
+    }
+
+    #refresh(): void {
         if (realpathSync(this.#path) !== this.#path) {
             throw new Error("Native session path changed");
         }
@@ -1713,6 +1782,7 @@ export class NativeTail {
                     break;
                 }
 
+                this.#prefixHash.update(chunk.subarray(0, read));
                 chunks.push(chunk.subarray(0, read));
                 this.#offset += read;
             }
@@ -1728,8 +1798,6 @@ export class NativeTail {
         if (this.#pending.length > NATIVE_LINE_LIMIT) {
             throw new Error("Native session line exceeds the import bound");
         }
-
-        const entries: KernelEntry[] = [];
 
         for (const line of buffer.subarray(0, end).toString("utf8").split("\n")) {
             if (line === "") {
@@ -1753,7 +1821,7 @@ export class NativeTail {
                 }
 
                 this.#header = true;
-                entries.push(entry);
+                this.#entries.push(entry);
                 continue;
             }
 
@@ -1768,9 +1836,7 @@ export class NativeTail {
             }
 
             this.#ids.add(entry.id);
-            entries.push(entry);
+            this.#entries.push(entry);
         }
-
-        return entries;
     }
 }

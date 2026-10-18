@@ -218,6 +218,22 @@ attribution within the 319 paced native-readback parses, separating RPC records,
 optimizing again. The full-history corruption contract stays intact; long-history browser evidence still precedes
 pagination/protocol changes.
 
+## Tenth climb batch — 2026-10-18
+
+- **Native readback attribution:** nested counters partition every native parse exactly into RPC, JSONL and gate.
+  Four-tab large paced is 48 RPC + 270 JSONL + 1 gate; history growth is the JSONL prefix, not the fresh 60-byte gate.
+  See [measurement](experiments/2026-10-18-native-readback-sources.md).
+- **Active tail entry reuse retained as L1:** snapshots reuse run-owned, already validated entry objects while still
+  re-reading and hashing every prefix byte. Large paced JSONL parses 270→135 and all native readback 319→184; warm
+  18→9 and 67→58. Parent read calls/bytes stay constant, malformed/rewritten prefixes fall back to the original full
+  parse, and journal delivery remains independent. See
+  [experiment](experiments/2026-10-18-native-tail-entry-reuse.md).
+
+Final type/lint/format, 454 tests, 82-request kernel proof and 28-inference native command/Chromium proof pass.
+Timing remains noise, so L1 only; no L3/production/real-account claim. Stop after three experiments. Remaining native
+readback is RPC 48 plus fresh JSONL 135 plus gate 1 in the large paced case; further progress needs a new batch and a
+new attribution inside the fresh half, not weaker prefix/error checking.
+
 ## Open
 
 - **A warm turn parses about 93 times its answer as JSON.** `turn.warm/json.parse.chars` 558 969 for a
