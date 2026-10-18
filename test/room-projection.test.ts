@@ -26,13 +26,14 @@ function measuredPush(
     room: Room,
     client: Client,
     full: boolean,
-): { entryVisits: number; statsEntryScans: number } {
-    const measured = { entryVisits: 0, statsEntryScans: 0 };
+): { entryVisits: number; clientEntryScans: number; statsEntryScans: number } {
+    const measured = { entryVisits: 0, clientEntryScans: 0, statsEntryScans: 0 };
 
     const listener = (message: unknown) => {
         const signal = message as ViewProjectionSignal;
 
         measured.entryVisits += signal.entryVisits ?? 0;
+        measured.clientEntryScans += signal.clientEntryScans ?? 0;
         measured.statsEntryScans += signal.statsEntryScans ?? 0;
     };
 
@@ -120,18 +121,30 @@ test("room entry sequence is shared across tabs but invalidates on append and he
         const source = room.value!.entries;
         const expected = visible(room);
 
-        assert.equal(push(room, first.client, true), source.length);
+        const firstFull = measuredPush(room, first.client, true);
+
+        assert.equal(firstFull.entryVisits, source.length);
+        assert.equal(firstFull.clientEntryScans, expected.length);
         assert.deepEqual(first.last("view")!.entries, expected);
         assert.deepEqual(
             first.last("view")!.order,
             expected.map((entry) => entry.id),
         );
-        assert.equal(push(room, second.client, true), 0, "another tab reuses the sequence");
+        const secondFull = measuredPush(room, second.client, true);
+
+        assert.equal(secondFull.entryVisits, 0, "another tab reuses the sequence");
+        assert.equal(secondFull.clientEntryScans, expected.length, "a full tab sends every entry");
         assert.deepEqual(second.last("view")!.entries, expected, "tabs have independent sent sets");
-        assert.equal(push(room, first.client, false), 0, "unchanged history is not traversed");
+        const unchanged = measuredPush(room, first.client, false);
+
+        assert.equal(unchanged.entryVisits, 0, "unchanged history is not traversed");
+        assert.equal(unchanged.clientEntryScans, 0, "unchanged clients do not scan the cache");
         assert.deepEqual(first.last("view")!.entries, []);
         assert.ok(!("order" in first.last("view")!));
-        assert.equal(push(room, first.client, true), 0, "full resend does not invalidate the room");
+        const resent = measuredPush(room, first.client, true);
+
+        assert.equal(resent.entryVisits, 0, "full resend does not invalidate the room");
+        assert.equal(resent.clientEntryScans, expected.length);
         assert.deepEqual(first.last("view")!.entries, expected);
 
         await recordCost(app, id, 3);
@@ -151,38 +164,118 @@ test("room entry sequence is shared across tabs but invalidates on append and he
             "append view",
         );
         assert.notEqual(room.value!.entries, source);
-        assert.equal(push(room, first.client, false), room.value!.entries.length);
+        const appended = measuredPush(room, first.client, false);
+
+        assert.equal(appended.entryVisits, room.value!.entries.length);
+        assert.equal(appended.clientEntryScans, 1, "append scans only the visible tail");
         assert.deepEqual(first.last("view")!.entries, [projectEntry(added)]);
         assert.deepEqual(
             first.last("view")!.order,
             visible(room).map((entry) => entry.id),
         );
-        assert.equal(push(room, second.client, false), 0);
+        const secondAppend = measuredPush(room, second.client, false);
+
+        assert.equal(secondAppend.entryVisits, 0);
+        assert.equal(secondAppend.clientEntryScans, 1);
         assert.deepEqual(second.last("view")!.entries, [projectEntry(added)]);
 
         const head = await app.harness.commit(
-            (tx) => tx.appendEntry(id, { kind: "pi.system", head: "self" }),
+            (tx) =>
+                tx.appendEntry(id, {
+                    kind: "pi.user",
+                    head: "self",
+                    model: [{ role: "user", content: "reset", timestamp: 1 }],
+                }),
             context,
         );
 
         await until(() => room.value!.entries[0]?.id === head.id, "head reset");
-        assert.equal(push(room, first.client, false), 1);
+        const reset = measuredPush(room, first.client, false);
+
+        assert.equal(reset.entryVisits, 1);
+        assert.equal(reset.clientEntryScans, 1, "reset falls back to the active sequence");
         assert.deepEqual(
             first.last("view")!.order,
-            [],
+            [Number(head.id)],
             "reset drops old entries from active order",
         );
-        assert.deepEqual(first.last("view")!.entries, []);
-        assert.equal(push(room, second.client, false), 0);
-        assert.deepEqual(second.last("view")!.order, []);
+        assert.deepEqual(first.last("view")!.entries, [projectEntry(head)]);
+        const secondReset = measuredPush(room, second.client, false);
+
+        assert.equal(secondReset.entryVisits, 0);
+        assert.equal(secondReset.clientEntryScans, 1);
+        assert.deepEqual(second.last("view")!.order, [Number(head.id)]);
         const afterHead = await append(app, id, "after head");
 
         await until(() => room.value!.entries.at(-1)?.id === afterHead.id, "post-reset append");
-        assert.equal(push(room, first.client, false), 2);
-        assert.deepEqual(first.last("view")!.order, [Number(afterHead.id)]);
+        const afterReset = measuredPush(room, first.client, false);
+
+        assert.equal(afterReset.entryVisits, 2);
+        assert.equal(afterReset.clientEntryScans, 1);
+        assert.deepEqual(first.last("view")!.order, [Number(head.id), Number(afterHead.id)]);
         assert.deepEqual(first.last("view")!.entries, [projectEntry(afterHead)]);
         assert.equal(push(room, second.client, true), 0);
         assert.deepEqual(second.last("view")!.entries, visible(room));
+    } finally {
+        await app.close();
+    }
+});
+
+test("client cursors skip hidden appends and rescan safely after missed sequence revisions", async () => {
+    const app = await openApp(scriptedModel(), join(root, "client-cursors"));
+
+    try {
+        const id = await newSession(app);
+
+        await append(app, id, "prefix");
+        const room = await app.room(id);
+        const first = fakeTab(id, owner(app));
+        const behind = fakeTab(id, owner(app));
+
+        measuredPush(room, first.client, true);
+        measuredPush(room, behind.client, true);
+        const hidden = await app.harness.commit(
+            (tx) => tx.appendEntry(id, { kind: "pi.system" }),
+            context,
+        );
+
+        await until(() => room.value!.entries.at(-1)?.id === hidden.id, "hidden append");
+        assert.equal(measuredPush(room, first.client, false).clientEntryScans, 0);
+        assert.deepEqual(first.last("view")!.entries, []);
+        assert.ok(!("order" in first.last("view")!));
+        const added = await append(app, id, "visible tail");
+
+        await until(() => room.value!.entries.at(-1)?.id === added.id, "visible append");
+        assert.equal(measuredPush(room, first.client, false).clientEntryScans, 1);
+        assert.deepEqual(first.last("view")!.entries, [projectEntry(added)]);
+        assert.equal(
+            measuredPush(room, behind.client, false).clientEntryScans,
+            visible(room).length,
+            "a lagging tab falls back to sent-ID filtering over the active sequence",
+        );
+        assert.deepEqual(behind.last("view")!.entries, [projectEntry(added)]);
+        const beforeReset = await append(app, id, "before suffix reset");
+
+        await until(() => room.value!.entries.at(-1)?.id === beforeReset.id, "suffix entry");
+        measuredPush(room, first.client, false);
+        const marker = await app.harness.commit(
+            (tx) => tx.appendEntry(id, { kind: "pi.system", head: added.id }),
+            context,
+        );
+
+        await until(() => room.value!.entries[0]?.id === marker.id, "suffix head reset");
+        assert.equal(
+            measuredPush(room, first.client, false).clientEntryScans,
+            visible(room).length,
+        );
+        assert.deepEqual(first.last("view")!.entries, [], "retained suffix is not retransmitted");
+        assert.deepEqual(first.last("view")!.order, [Number(added.id), Number(beforeReset.id)]);
+        assert.equal(
+            measuredPush(room, behind.client, false).clientEntryScans,
+            visible(room).length,
+        );
+        assert.deepEqual(behind.last("view")!.entries, [projectEntry(beforeReset)]);
+        assert.deepEqual(behind.last("view")!.order, [Number(added.id), Number(beforeReset.id)]);
     } finally {
         await app.close();
     }

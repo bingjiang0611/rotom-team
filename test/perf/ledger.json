@@ -1794,7 +1794,7 @@
             "tolerance": 3935,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 119751
+                "darwin-arm64": 119700
             }
         },
         "turn.prepared/subprocess.rotom": {
@@ -1836,7 +1836,7 @@
             "tolerance": 3314,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 13418
+                "darwin-arm64": 13367
             }
         },
         "turn.prepared/push.view.count": {
@@ -1864,7 +1864,7 @@
             "tolerance": 3314,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 8621
+                "darwin-arm64": 8570
             }
         },
         "commands.discover.cold/fs.write.calls": {
@@ -2298,7 +2298,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 48
+                "darwin-arm64": 24
             }
         },
         "session.open/view.stats.entry.scans": {
@@ -2326,7 +2326,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 4
+                "darwin-arm64": 2
             }
         },
         "turn.warm/view.stats.entry.scans": {
@@ -2354,7 +2354,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 46
+                "darwin-arm64": 2
             }
         },
         "turn.paced/view.stats.entry.scans": {
@@ -2410,7 +2410,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 1792
+                "darwin-arm64": 512
             }
         },
         "projection.large.open/view.stats.entry.scans": {
@@ -2438,7 +2438,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 4648
+                "darwin-arm64": 8
             }
         },
         "projection.large.paced/view.stats.entry.scans": {

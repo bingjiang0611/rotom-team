@@ -138,6 +138,15 @@ export type Person = {
     away?: boolean;
 };
 
+type ProjectedSequence = {
+    entries: ClientEntry[];
+    order: number[];
+    orderKey: string;
+    revision: object;
+    previousRevision?: object;
+    appendedFrom: number;
+};
+
 /** The view of one conversation, shared by every client attached to it. */
 export class Room {
     readonly id: ConversationId;
@@ -157,7 +166,8 @@ export class Room {
     #head = "";
     readonly #projected = new Map<number, ClientEntry | null>();
     #entrySource: ConversationView["entries"] | undefined;
-    #entrySequence: { entries: ClientEntry[]; order: number[]; orderKey: string } | undefined;
+    #entrySequence: ProjectedSequence | undefined;
+    readonly #clientSequences = new WeakMap<Client, object>();
     #statsEntrySource: ConversationView["entries"] | undefined;
     #statsUsage: UsageState | undefined;
     #stats: ClientStats | undefined;
@@ -379,8 +389,26 @@ export class Room {
             } satisfies ViewProjectionSignal);
         }
 
+        const previous = this.#entrySequence;
+        const previousSource = this.#entrySource;
+        const appended =
+            previous !== undefined &&
+            previousSource !== undefined &&
+            source.length >= previousSource.length &&
+            (previousSource.length === 0 ||
+                (source[0] === previousSource[0] &&
+                    source[previousSource.length - 1] ===
+                        previousSource[previousSource.length - 1]));
+
         this.#entrySource = source;
-        this.#entrySequence = { entries, order, orderKey: order.join(",") };
+        this.#entrySequence = {
+            entries,
+            order,
+            orderKey: order.join(","),
+            revision: {},
+            ...(appended ? { previousRevision: previous.revision } : {}),
+            appendedFrom: appended ? previous.entries.length : 0,
+        };
 
         return this.#entrySequence;
     }
@@ -422,20 +450,33 @@ export class Room {
         }
 
         const entries: ClientEntry[] = [];
-        const { entries: projectedEntries, order, orderKey } = this.#sequence(view.entries);
+        const sequence = this.#sequence(view.entries);
+        const { entries: projectedEntries, order, orderKey } = sequence;
+        const clientSequence = this.#clientSequences.get(client);
+        const from = full
+            ? 0
+            : clientSequence === sequence.revision
+              ? projectedEntries.length
+              : clientSequence !== undefined && sequence.previousRevision === clientSequence
+                ? sequence.appendedFrom
+                : 0;
 
         if (viewProjectionChannel.hasSubscribers) {
             viewProjectionChannel.publish({
-                clientEntryScans: projectedEntries.length,
+                clientEntryScans: projectedEntries.length - from,
             } satisfies ViewProjectionSignal);
         }
 
-        for (const projected of projectedEntries) {
+        for (let index = from; index < projectedEntries.length; index++) {
+            const projected = projectedEntries[index]!;
+
             if (!client.sentEntries.has(projected.id)) {
                 client.sentEntries.add(projected.id);
                 entries.push(projected);
             }
         }
+
+        this.#clientSequences.set(client, sequence.revision);
 
         const orderChanged = orderKey !== client.orderKey;
 
