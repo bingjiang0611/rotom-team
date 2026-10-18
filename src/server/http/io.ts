@@ -4,6 +4,7 @@ import type { ConversationId } from "@earendil-works/pi-durable";
 import type { PocketApp } from "../app.ts";
 import type { User } from "../config.ts";
 import { HttpError } from "../errors.ts";
+import { parseWithWork } from "../perf-channels.ts";
 
 const MAX_JSON = 1_000_000;
 
@@ -80,7 +81,7 @@ export async function readJson<T>(request: IncomingMessage, limit = MAX_JSON): P
     }
 
     try {
-        return JSON.parse(body.toString("utf8")) as T;
+        return parseWithWork("http", body.toString("utf8")) as T;
     } catch {
         throw new HttpError(400, "Invalid JSON");
     }

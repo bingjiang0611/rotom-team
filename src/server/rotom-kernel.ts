@@ -11,7 +11,7 @@ import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { RotomRpc } from "./rotom-rpc.ts";
-import { nativeStartChannel, type NativeStartSignal } from "./perf-channels.ts";
+import { nativeStartChannel, parseWithWork, type NativeStartSignal } from "./perf-channels.ts";
 import { prepareTeamResources, sharedContextPaths } from "./rotom-resources.ts";
 
 const runtime = fileURLToPath(new URL("../../runtime/rotom/", import.meta.url));
@@ -549,7 +549,7 @@ export async function startRotomKernel(options: {
                 let value;
 
                 try {
-                    value = JSON.parse(event.message);
+                    value = parseWithWork("native-readback", event.message);
                 } catch {
                     return;
                 }

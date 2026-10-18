@@ -15,6 +15,7 @@ import { TeamAccounts, type Runtime } from "./team-accounts.ts";
 import { TeamExecution, TeamRunDoc } from "./team-execution.ts";
 import { ConfigurationDoc, TeamProfiles, type ConfigurationSnapshot } from "./team-profiles.ts";
 import { TeamKernel } from "./team-kernel.ts";
+import { scopedParseObject } from "./perf-channels.ts";
 import { requireNoPendingKernel } from "./rotom-journal.ts";
 import { verifyRotomKernel } from "./rotom-kernel.ts";
 import { TeamUsageDoc, type TeamUsage } from "./team-usage.ts";
@@ -340,7 +341,10 @@ export class PocketApp {
 
         registry.install(this.execution.extension());
 
-        const storage = await openNodeSqliteStorage(join(this.dataDir, "pocket.sqlite"));
+        const storage = scopedParseObject(
+            "durable-storage",
+            await openNodeSqliteStorage(join(this.dataDir, "pocket.sqlite")),
+        );
 
         this.harness = await Harness.open(
             storage,

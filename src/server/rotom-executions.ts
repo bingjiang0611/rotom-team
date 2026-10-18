@@ -1,6 +1,11 @@
 /** Non-replayable team-owned execution journal around the real rotom loop. Not a model-provider adapter. */
 import { createServer } from "node:http";
-import { kernelRunChannel, type KernelRunSignal } from "./perf-channels.ts";
+import {
+    kernelRunChannel,
+    parseWithWork,
+    scopedParseObject,
+    type KernelRunSignal,
+} from "./perf-channels.ts";
 import { TeamResourcePolicyError, assertTeamResourceSources } from "./rotom-resource-policy.ts";
 import {
     memberConfigurationSnapshot,
@@ -271,7 +276,7 @@ export class RotomExecutions {
         ) => Promise<KernelRequestAuth | void>,
         prepare?: (binding: Readonly<KernelBinding>, sessionId: string) => KernelLaunchContext,
     ) {
-        this.journal = new RotomJournal(data);
+        this.journal = scopedParseObject("journal", new RotomJournal(data));
         this.#data = data;
         this.#authorize = authorize;
         this.#prepare = prepare;
@@ -976,7 +981,7 @@ export class RotomExecutions {
                         }
                     }
 
-                    const value = JSON.parse(body);
+                    const value = parseWithWork("native-readback", body);
 
                     const active = gateState.active;
 
@@ -1735,7 +1740,7 @@ export class NativeTail {
                 throw new Error("Native session line exceeds the import bound");
             }
 
-            const entry = JSON.parse(line) as KernelEntry;
+            const entry = parseWithWork("native-readback", line) as KernelEntry;
 
             if (!this.#header) {
                 if (

@@ -18,7 +18,9 @@ import { syncBuiltinESMExports } from "node:module";
 import { basename } from "node:path";
 import { DatabaseSync, StatementSync } from "node:sqlite";
 import {
+    currentParseWork,
     nativeStartChannel,
+    parseWorkChannel,
     pushChannel,
     roomPartChannel,
     viewProjectionChannel,
@@ -40,9 +42,38 @@ const add = (name: string, amount = 1) => {
 
 export const raw = { parse: JSON.parse, stringify: JSON.stringify };
 
+// Subscription enables AsyncLocalStorage scopes only in controlled benchmarks, never in the running product.
+parseWorkChannel.subscribe(() => undefined);
+
+const parseSource = () => {
+    switch (currentParseWork()) {
+        case "durable-storage":
+            return "durableStorage";
+        case "journal":
+            return "journal";
+        case "journal-history":
+            return "journalHistory";
+        case "journal-thinking":
+            return "journalThinking";
+        case "journal-segments":
+            return "journalSegments";
+        case "native-readback":
+            return "nativeReadback";
+        case "http":
+            return "http";
+        default:
+            return "other";
+    }
+};
+
 JSON.parse = function parse(text: string, reviver?: Parameters<typeof JSON.parse>[1]) {
+    const chars = typeof text === "string" ? text.length : 0;
+    const source = parseSource();
+
     add("json.parse.calls");
-    add("json.parse.chars", typeof text === "string" ? text.length : 0);
+    add("json.parse.chars", chars);
+    add(`json.parse.${source}.calls`);
+    add(`json.parse.${source}.chars`, chars);
 
     return raw.parse(text, reviver);
 } as typeof JSON.parse;

@@ -46,8 +46,35 @@ export type Unit = "count" | "bytes" | "chars";
 
 export type MetricSpec = { layer: Layer; unit: Unit; source: string };
 
+const parseSources = [
+    "durableStorage",
+    "journal",
+    "journalHistory",
+    "journalThinking",
+    "journalSegments",
+    "nativeReadback",
+    "http",
+    "other",
+];
+const parseAttribution = parseSources.flatMap((source) => [
+    `json.parse.${source}.calls`,
+    `json.parse.${source}.chars`,
+]);
+
 /** Every counter a scenario reports, and where it is counted. */
 const COUNTERS: Record<string, MetricSpec> = {
+    ...Object.fromEntries(
+        parseSources.flatMap((source) =>
+            ["calls", "chars"].map((unit) => [
+                `json.parse.${source}.${unit}`,
+                {
+                    layer: "cpu",
+                    unit: unit === "calls" ? "count" : "chars",
+                    source: `JSON.parse in exclusive ${source} scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)`,
+                },
+            ]),
+        ),
+    ),
     "sql.statements": {
         layer: "storage",
         unit: "count",
@@ -276,6 +303,7 @@ const common = [
     "subprocess.total",
     "json.parse.calls",
     "json.parse.chars",
+    ...parseAttribution,
     "json.stringify.chars",
 ];
 const pushes = ["push.events", "push.bytes", "push.view.count", "push.view.bytes"];
