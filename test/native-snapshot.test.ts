@@ -286,6 +286,62 @@ test("reused tail falls back to full parsing for rewritten/truncated prefixes, p
     assert.throws(() => truncated.read(), /replaced or truncated/);
 });
 
+test("run-owned tail stops retaining bodies above its bounded cache without losing snapshot or delivery", async (t) => {
+    const f = fixture();
+    const root = { type: "custom", id: "root", parentId: null, data: "A".repeat(600 * 1024) };
+    const second = { type: "custom", id: "second", parentId: "root", data: "B".repeat(600 * 1024) };
+
+    t.after(() => f.close());
+    writeFileSync(
+        f.state.sessionFile,
+        [JSON.stringify(f.header), JSON.stringify(root), JSON.stringify(second)].join("\n") + "\n",
+    );
+    const tail = new NativeTail(f.state.sessionFile, f.state.sessionId, f.root);
+    const parse = JSON.parse;
+    let calls = 0;
+
+    JSON.parse = ((...args: Parameters<typeof JSON.parse>) => {
+        calls++;
+
+        return parse(...args);
+    }) as typeof JSON.parse;
+
+    try {
+        assert.deepEqual(
+            tail.read().map((entry) => entry.id),
+            [f.state.sessionId, "root", "second"],
+        );
+        assert.equal(calls, 3);
+        const snapshot = tail.snapshot();
+
+        assert.deepEqual(
+            snapshot.map((entry) => entry.id),
+            [f.state.sessionId, "root", "second"],
+        );
+        assert.equal(
+            calls,
+            6,
+            "oversized prefix must use a fresh full parse instead of retained bodies",
+        );
+        appendFileSync(
+            f.state.sessionFile,
+            JSON.stringify({ type: "custom", id: "last", parentId: "root" }) + "\n",
+        );
+        assert.deepEqual(
+            tail.read().map((entry) => entry.id),
+            ["last"],
+        );
+        assert.deepEqual(tail.read(), []);
+        assert.deepEqual(
+            tail.snapshot().map((entry) => entry.id),
+            [f.state.sessionId, "root", "second", "last"],
+        );
+        assert.equal(calls, 11);
+    } finally {
+        JSON.parse = parse;
+    }
+});
+
 test("a single oversized persisted entry is refused instead of bypassing the import bound", async (t) => {
     const f = fixture();
 

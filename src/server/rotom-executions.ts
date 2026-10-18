@@ -135,6 +135,7 @@ export function nativePromptIdentity(text: string, images: ImageContent[] = []):
 
 /** A screenshot-bearing tool result can be large; a single record above this is refused, not truncated. */
 const NATIVE_LINE_LIMIT = 64 * 1024 * 1024;
+const NATIVE_TAIL_CACHE_LIMIT = 1024 * 1024;
 
 /** Observers of one prompt: none may change its outcome, and a failing observer cannot authorize work. */
 export type RunHooks = {
@@ -1640,12 +1641,13 @@ export async function readNativeSnapshot(
     kernel: Pick<RotomRpc, "request">,
     state: { sessionFile: string; sessionId: string },
     workspace: string,
-    tail = new NativeTail(state.sessionFile, state.sessionId, workspace),
+    tail?: NativeTail,
 ): Promise<{ entries: KernelEntry[]; leafId: string | null }> {
     const persisted = existsSync(state.sessionFile)
-        ? tail
-              .snapshot(state.sessionFile, state.sessionId, workspace)
-              .filter((entry) => entry.type !== "session")
+        ? (tail
+              ? tail.snapshot(state.sessionFile, state.sessionId, workspace)
+              : new NativeTail(state.sessionFile, state.sessionId, workspace).read()
+          ).filter((entry) => entry.type !== "session")
         : [];
     const since = persisted.at(-1)?.id;
     const delta = (await kernel.request({ type: "get_entries", ...(since ? { since } : {}) })) as {
@@ -1677,9 +1679,9 @@ export class NativeTail {
     readonly #sessionId: string;
     readonly #workspace: string;
     readonly #ids = new Set<string>();
-    readonly #entries: KernelEntry[] = [];
+    #cachedEntries: KernelEntry[] | undefined = [];
     readonly #prefixHash = createHash("sha256");
-    #delivered = 0;
+    #undelivered: KernelEntry[] = [];
     #offset = 0;
     #pending = Buffer.alloc(0);
     #header = false;
@@ -1697,9 +1699,9 @@ export class NativeTail {
     /** Newly validated entries for journal ingestion. Snapshot reads do not consume this delivery cursor. */
     read(): KernelEntry[] {
         this.#refresh();
-        const entries = this.#entries.slice(this.#delivered);
+        const entries = this.#undelivered;
 
-        this.#delivered = this.#entries.length;
+        this.#undelivered = [];
 
         return entries;
     }
@@ -1721,6 +1723,10 @@ export class NativeTail {
         } catch {
             // A fresh snapshot is authoritative even after a rewrite or malformed append. Preserve its exact
             // JSON/header/tree errors rather than replacing them with a cache-integrity error.
+            return fresh();
+        }
+
+        if (this.#cachedEntries === undefined) {
             return fresh();
         }
 
@@ -1756,7 +1762,7 @@ export class NativeTail {
             return fresh();
         }
 
-        return [...this.#entries];
+        return [...this.#cachedEntries];
     }
 
     #refresh(): void {
@@ -1821,7 +1827,8 @@ export class NativeTail {
                 }
 
                 this.#header = true;
-                this.#entries.push(entry);
+                this.#undelivered.push(entry);
+                this.#cachedEntries?.push(entry);
                 continue;
             }
 
@@ -1836,7 +1843,12 @@ export class NativeTail {
             }
 
             this.#ids.add(entry.id);
-            this.#entries.push(entry);
+            this.#undelivered.push(entry);
+            this.#cachedEntries?.push(entry);
+        }
+
+        if (this.#offset > NATIVE_TAIL_CACHE_LIMIT) {
+            this.#cachedEntries = undefined;
         }
     }
 }
