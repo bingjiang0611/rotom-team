@@ -44,6 +44,7 @@ import { SHELL_ENTRY } from "./entry-format.ts";
 import { agentInfo } from "./models.ts";
 import {
     type ClientEntry,
+    type ClientStats,
     PEEK_LINES,
     type PeekLine,
     peekLines,
@@ -157,6 +158,9 @@ export class Room {
     readonly #projected = new Map<number, ClientEntry | null>();
     #entrySource: ConversationView["entries"] | undefined;
     #entrySequence: { entries: ClientEntry[]; order: number[]; orderKey: string } | undefined;
+    #statsEntrySource: ConversationView["entries"] | undefined;
+    #statsUsage: UsageState | undefined;
+    #stats: ClientStats | undefined;
     authors: Record<string, string> = {};
     artifacts: Record<string, ArtifactMeta> = {};
     subagents: Record<string, SubagentRecord> = {};
@@ -381,6 +385,26 @@ export class Room {
         return this.#entrySequence;
     }
 
+    /** Stats are room-wide; Durable replaces either immutable input whenever its value changes. */
+    #projectStats(
+        usage: UsageState | undefined,
+        entries: ConversationView["entries"],
+    ): ClientStats {
+        if (
+            this.#stats !== undefined &&
+            this.#statsEntrySource === entries &&
+            this.#statsUsage === usage
+        ) {
+            return this.#stats;
+        }
+
+        this.#statsEntrySource = entries;
+        this.#statsUsage = usage;
+        this.#stats = projectStats(usage, entries);
+
+        return this.#stats;
+    }
+
     /** Send this client what changed since its last update, or everything with `full`. */
     push(client: Client, full: boolean): void {
         const view = this.#view?.value;
@@ -514,7 +538,10 @@ export class Room {
             ...(this.#native()
                 ? { kernel: this.#app.kernel!.roomState(this.id, client.user) }
                 : {}),
-            stats: projectStats(view.docs["pi.usage"] as UsageState | undefined, view.entries),
+            stats: this.#projectStats(
+                view.docs["pi.usage"] as UsageState | undefined,
+                view.entries,
+            ),
             clients: [...new Set([...this.clients].map((each) => each.id))].length,
             viewers: [...new Set([...this.clients].map((each) => each.user.name))],
             approvals: this.#app.approvals.forConversation(this.id),
@@ -736,5 +763,8 @@ export class Room {
         this.#projected.clear();
         this.#entrySource = undefined;
         this.#entrySequence = undefined;
+        this.#statsEntrySource = undefined;
+        this.#statsUsage = undefined;
+        this.#stats = undefined;
     }
 }

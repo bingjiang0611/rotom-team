@@ -22,11 +22,18 @@ import type { Client, Room } from "../src/server/room.ts";
 after(cleanUp);
 
 /** Count only this synchronous projection, not background timers or another room's work. */
-function push(room: Room, client: Client, full: boolean): number {
-    let visits = 0;
+function measuredPush(
+    room: Room,
+    client: Client,
+    full: boolean,
+): { entryVisits: number; statsEntryScans: number } {
+    const measured = { entryVisits: 0, statsEntryScans: 0 };
 
     const listener = (message: unknown) => {
-        visits += (message as ViewProjectionSignal).entryVisits ?? 0;
+        const signal = message as ViewProjectionSignal;
+
+        measured.entryVisits += signal.entryVisits ?? 0;
+        measured.statsEntryScans += signal.statsEntryScans ?? 0;
     };
 
     viewProjectionChannel.subscribe(listener);
@@ -34,11 +41,14 @@ function push(room: Room, client: Client, full: boolean): number {
     try {
         room.push(client, full);
 
-        return visits;
+        return measured;
     } finally {
         viewProjectionChannel.unsubscribe(listener);
     }
 }
+
+const push = (room: Room, client: Client, full: boolean) =>
+    measuredPush(room, client, full).entryVisits;
 
 const visible = (room: Room) => room.value!.entries.flatMap((entry) => projectEntry(entry) ?? []);
 
@@ -52,6 +62,44 @@ async function append(
             tx.appendEntry(id, {
                 kind: "pi.user",
                 model: [{ role: "user", content: text, timestamp: 1 }],
+            }),
+        context,
+    );
+}
+
+async function appendAnswer(
+    app: Awaited<ReturnType<typeof openApp>>,
+    id: ConversationId,
+    text: string,
+    usage: { input: number; output: number; cacheRead: number; cacheWrite: number },
+): Promise<EntryRecord> {
+    return app.harness.commit(
+        (tx) =>
+            tx.appendEntry(id, {
+                kind: "pi.assistant",
+                model: [
+                    {
+                        role: "assistant",
+                        api: "faux",
+                        provider: "faux",
+                        model: "faux-1",
+                        content: [{ type: "text", text }],
+                        usage: {
+                            ...usage,
+                            totalTokens:
+                                usage.input + usage.output + usage.cacheRead + usage.cacheWrite,
+                            cost: {
+                                input: 0,
+                                output: 0,
+                                cacheRead: 0,
+                                cacheWrite: 0,
+                                total: 0,
+                            },
+                        },
+                        stopReason: "stop",
+                        timestamp: 1,
+                    },
+                ],
             }),
         context,
     );
@@ -135,6 +183,65 @@ test("room entry sequence is shared across tabs but invalidates on append and he
         assert.deepEqual(first.last("view")!.entries, [projectEntry(afterHead)]);
         assert.equal(push(room, second.client, true), 0);
         assert.deepEqual(second.last("view")!.entries, visible(room));
+    } finally {
+        await app.close();
+    }
+});
+
+test("room stats are shared across tabs and invalidate on usage, append and head reset", async () => {
+    const app = await openApp(scriptedModel(), join(root, "stats"));
+
+    try {
+        const id = await newSession(app);
+
+        await append(app, id, "first");
+        const room = await app.room(id);
+        const first = fakeTab(id, owner(app));
+        const second = fakeTab(id, owner(app));
+
+        assert.equal(
+            measuredPush(room, first.client, true).statsEntryScans,
+            room.value!.entries.length,
+        );
+        assert.equal(
+            measuredPush(room, second.client, true).statsEntryScans,
+            0,
+            "another tab reuses stats",
+        );
+        const usage = room.value!.docs["pi.usage"];
+
+        await recordCost(app, id, 3);
+        await until(() => room.value!.docs["pi.usage"] !== usage, "usage revision");
+        assert.equal(
+            measuredPush(room, first.client, false).statsEntryScans,
+            room.value!.entries.length,
+        );
+        assert.equal((first.last("view")!.stats as { cost: number }).cost, 3);
+        assert.equal(measuredPush(room, second.client, false).statsEntryScans, 0);
+        assert.equal((second.last("view")!.stats as { cost: number }).cost, 3);
+        const answer = await appendAnswer(app, id, "answer", {
+            input: 10,
+            output: 4,
+            cacheRead: 6,
+            cacheWrite: 2,
+        });
+
+        await until(() => room.value!.entries.at(-1)?.id === answer.id, "answer append");
+        assert.equal(measuredPush(room, first.client, false).statsEntryScans, 1);
+        assert.deepEqual(first.last("view")!.stats, {
+            cost: 3,
+            contextTokens: 22,
+        });
+        assert.equal(measuredPush(room, first.client, true).statsEntryScans, 0);
+        const head = await app.harness.commit(
+            (tx) => tx.appendEntry(id, { kind: "pi.system", head: "self" }),
+            context,
+        );
+
+        await until(() => room.value!.entries[0]?.id === head.id, "stats head reset");
+        assert.equal(measuredPush(room, first.client, false).statsEntryScans, 1);
+        assert.deepEqual(first.last("view")!.stats, { cost: 3 });
+        assert.equal(measuredPush(room, second.client, true).statsEntryScans, 0);
     } finally {
         await app.close();
     }

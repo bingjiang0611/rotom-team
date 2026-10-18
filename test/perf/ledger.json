@@ -884,7 +884,7 @@
             "tolerance": 1,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 122459
+                "darwin-arm64": 122458
             }
         },
         "git.changes/json.stringify.chars": {
@@ -2032,7 +2032,7 @@
             "tolerance": 105,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 1462211
+                "darwin-arm64": 1462181
             }
         },
         "projection.large.open/json.stringify.chars": {
@@ -2186,7 +2186,7 @@
             "tolerance": 266,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 3921564
+                "darwin-arm64": 3921488
             }
         },
         "projection.large.paced/json.stringify.chars": {
@@ -2200,7 +2200,7 @@
             "tolerance": 41,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 476331
+                "darwin-arm64": 476330
             }
         },
         "projection.large.paced/subprocess.git": {
@@ -2312,7 +2312,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 56
+                "darwin-arm64": 28
             }
         },
         "turn.warm/view.client.entry.scans": {
@@ -2368,7 +2368,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 82
+                "darwin-arm64": 19
             }
         },
         "web.open/view.client.entry.scans": {
@@ -2396,7 +2396,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 28
+                "darwin-arm64": 0
             }
         },
         "projection.large.open/view.client.entry.scans": {
@@ -2424,7 +2424,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 1848
+                "darwin-arm64": 132
             }
         },
         "projection.large.paced/view.client.entry.scans": {
@@ -2452,7 +2452,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 4792
+                "darwin-arm64": 267
             }
         }
     }
