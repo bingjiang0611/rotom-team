@@ -153,6 +153,25 @@ production data, service restart, push or deployment. Existing user changes rema
 The seventh batch stops at three experiments; source attribution is the next coding-agent-owned task, not a protocol
 or runtime-behavior change.
 
+## Eighth implementation batch — 2026-10-18
+
+- [Exclusive parse-source attribution](experiments/2026-10-18-parse-source-attribution.md): subscriber-only scopes
+  partition every parent JSON call/character without content. Two five-run reports register candidates. Full segment
+  readback, not thinking, Durable or mirror parsing, is about 89% of large projection calls before optimization.
+- [Fresh Goal fanout reuse](experiments/2026-10-18-native-goal-fanout.md): one synchronous room fanout reads native
+  Goal once, while every viewer keeps a fresh roomState/safety projection. Four-tab total parse calls open 2,057→860
+  and paced 5,387→1,766; segment decodes 1,848→660 and 4,792→1,198. Push counts/bytes and kernel safety SQL are
+  unchanged. Next fanout, standalone/reconnect, live/clear/error and three-role privacy controls pass.
+- [Residual ranking](experiments/2026-10-18-goal-readback-residual.md): full segment decoding remains 67.8–76.7% of
+  parent calls, now one fresh read per fanout. Next hypothesis is targeted selected-ancestry Goal readback with parity
+  and query-plan evidence, not a cross-call cache.
+
+The retained change is L1 only; all duration comparisons are noise and no L3 release exists. Final type/lint/format,
+451 tests, synthetic kernel (82 requests), native command/browser proof (28 synthetic inferences) and Goal UI flows
+pass. Only candidates tightened; no gate/tolerance/workload change. No real account, physical device, production data,
+service restart, push or deployment. Existing user working-tree changes remain outside these commits. The eighth batch
+stops after three experiments; targeted Goal readback measurement is the next coding-agent-owned action.
+
 ## Evidence
 
 ### Fresh controlled baseline

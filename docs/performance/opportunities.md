@@ -187,6 +187,21 @@ succeeds. Cumulative common/worst kernel SQL is 140→56 and 424→176. L2 remai
 are unverified. No production action. Stop this batch after three experiments; pagination remains gated by long-history
 browser/payload evidence.
 
+## Eighth climb batch — 2026-10-18
+
+- **Source attribution registered:** all parent JSON calls/chars partition exactly. Before optimization, journal full
+  segment reads are about 89% of four-tab large-history decode calls; Durable is 139/14 calls and mirror 0/4.
+  See [measurement](experiments/2026-10-18-parse-source-attribution.md).
+- **Native Goal fanout reuse retained as L1:** share one fresh Goal snapshot only inside one synchronous fanout.
+  Open total parses 2,057→860; paced 5,387→1,766. Per-viewer safety SQL, push counts/bytes, Goal freshness/error/live
+  precedence and privacy remain unchanged. See [experiment](experiments/2026-10-18-native-goal-fanout.md).
+- **Next measurement:** test targeted current-branch Goal metadata/ancestry readback against full reducer parity. Full
+  segment parsing still contributes 660/1,198 calls; no cross-fanout cache or schema/protocol change is justified.
+  See [residual ranking](experiments/2026-10-18-goal-readback-residual.md).
+
+Final type/lint/format, 451 tests, synthetic kernel/native/browser proofs pass. L2 remains noise; L3, real accounts and
+physical devices are unverified. No production action. Stop after three experiments.
+
 ## Open
 
 - **A warm turn parses about 93 times its answer as JSON.** `turn.warm/json.parse.chars` 558 969 for a
