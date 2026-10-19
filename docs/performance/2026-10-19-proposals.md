@@ -6,16 +6,18 @@ previous climbs. The evidence is the journal snapshot `/tmp/rt-journal-20261019T
 [opportunities](opportunities.md)), code reading at `aaaba3e`, and a few local timings on a loaded machine (load
 average 1.4–3.8: hints, not L2). Nothing here is measured as faster yet.
 
-## Implementation status — first batch
+## Implementation status — second batch
 
-| Program                      | Status                                                                                                                                 | Next owner/action                                                                                                          |
-| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| 1. Bytes diet                | Partial: thumbnails/previews, bounded recoverable media cache, SSE/poll gzip, constrained-network measurement and browser verification | Coding agent: finish TLS/HTTP2, original-preserving paste resizing and original-file delivery evaluation in the next batch |
-| 2. Incremental everything    | Not started                                                                                                                            | Coding agent: start after Program 1                                                                                        |
-| 3. Main thread / native warm | Not started                                                                                                                            | Coding agent: start after Program 2; preserve the native trust and payer checks                                            |
+| Program                      | Status                                                                                                                                                                          | Next owner/action                                                                                                                                       |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Bytes diet                | Local features implemented: thumbnails, gzip, opt-in TLS/HTTP2 with journal coverage, single-copy paste resize, original cache/ETag/Range. Final performance acceptance pending | Coding agent: after concurrent native-pin upgrade, revalidate/quietly remeasure/register new counters; whole-file Range read remains a documented limit |
+| 2. Incremental everything    | Not started                                                                                                                                                                     | Coding agent: start after Program 1                                                                                                                     |
+| 3. Main thread / native warm | Not started                                                                                                                                                                     | Coding agent: start after Program 2; preserve the native trust and payer checks                                                                         |
 
-[First-batch evidence and costs](experiments/2026-10-19-thumbnails-and-stream-compression.md). This checkpoint is not
-completion of any whole program. No push, production restart, or deployment.
+[First-batch evidence and costs](experiments/2026-10-19-thumbnails-and-stream-compression.md) and
+[second-batch artifact, L1 results, costs and remaining acceptance](experiments/2026-10-20-bytes-remainder.md).
+The owner changed the paste choice: upload only the smaller representation, not a second retained original. This
+checkpoint does not complete Program 1 acceptance or Programs 2/3. No push, production restart, or deployment.
 
 ## What the deeper look found
 

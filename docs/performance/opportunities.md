@@ -8,6 +8,24 @@ Workload: `test/perf/workload.ts` as of 2026-10-16 (12 seeded turns of 6000-char
 `darwin-arm64` ledger baselines (worst of 10 runs from temporary checkouts) and benchmark medians, Apple M1, load below
 the core count.
 
+## Approved programs: second implementation batch — 2026-10-20
+
+Program 1's selected local features are implemented; performance acceptance remains pending. Added opt-in TLS/HTTP2
+(default HTTP listener unchanged), approved HTTP/2 journal coverage with unavailable wire bytes, single-copy browser
+paste resizing, and byte-identical original caching with ETag/Range/HEAD. Both real Chromium protocol paths and
+**510 tests** pass at runtime commit `0f411eb` / rotom 0.1.25; the synthetic kernel proof passes too.
+
+Alternating three-run comparison vs `19f2ad5`: upload 15,482,499→6,772,807 bytes, repeat-original SQL 4→0, conditional
+original response bodies 7,868,332→0 bytes. These are **L1**, not L2: `highLoad: true`, 8-core load 7.99→23.86. New
+counters remain unregistered pending an independent report; no threshold or journal retention is loosened. Timing
+observations on this loaded machine are not a speed claim. First calls add cache writes; Range still reads/hashes the
+whole cached file. See [second-batch experiment](experiments/2026-10-20-bytes-remainder.md) for costs and open items.
+
+Another task updated the native pin to 0.1.26 during the benchmark. Preserve those changes; this batch does not verify
+the combined new-pin tree. Coding-agent next action: after that upgrade completes, revalidate and quietly remeasure,
+register candidates from two reports, propose tightening and guard, then enter Program 2. Programs 2/3 remain not
+started. No push, live restart, real account or deployment.
+
 ## Approved programs: first implementation batch — 2026-10-19
 
 Program 1 is **partial**; Programs 2 and 3 have not started. Four transcript thumbnails send 7,868,332→422,503
