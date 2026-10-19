@@ -8,6 +8,47 @@ Workload: `test/perf/workload.ts` as of 2026-10-16 (12 seeded turns of 6000-char
 `darwin-arm64` ledger baselines (worst of 10 runs from temporary checkouts) and benchmark medians, Apple M1, load below
 the core count.
 
+## Journal refresh — 2026-10-19, 12:52 UTC
+
+Read-only snapshot `/tmp/rt-journal-20261019T125200Z`: 7,322 complete records, no cut-off lines,
+8 server sessions and 7 releases. The seven completed shutdown health reports report zero drops; the live
+session has not reported shutdown health. The last 24 hours contain 3,356 records across 4 server sessions,
+with 149.51 s summed HTTP duration. Overlapping requests are not unique user-wait seconds, and browser/native
+intervals must not be added to HTTP totals. This refresh does not establish an L1/L2 or L3 improvement.
+
+| Priority / lead               | Recent evidence                                                  | Next action and coverage                                                                                                                                                                                                                     |
+| ----------------------------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Stored-message images      | 53 requests; p50/p95 1,271/4,973 ms; 79.46 s, 53.1% of HTTP time | `image.single`/`image.concurrent` now exist, but their quiet loopback batches do not reproduce seconds. Ask the owner to select and authorize one slow real-access session for paired browser/server timing; do not add a speculative cache. |
+| 2. Changes listing            | 139 requests; p50/p95 181/293 ms; 26.75 s, 17.9%                 | Extend measurement beyond the existing 20-file `git.changes` fixture to representative workspace/history scale. Attribute transcript projection, Git and per-file stats before changing code.                                                |
+| 3. File-location search       | 15 requests; p50/p95 869/1,485 ms; 13.83 s, 9.2%; small sample   | No dedicated scenario. Add serial/concurrent searches with hidden/ignored folders, truncation and permission parity; test whether identical in-flight walks can be shared without retaining stale results.                                   |
+| 4. Command discovery / submit | POST discovery: 3 requests, 10.02 s; submit: 19 requests, 8.40 s | Existing `commands.discover.cold`/`.warm` and `turn.cold`/`.warm`/`.prepared` cover related paths. Split readiness from model wait; these small groups do not justify prewarming or changing trust checks.                                   |
+
+Code reading at `aaaba3e` confirms `Workspace.changes` reads all transcript entries, then `changesIn` obtains
+repository state, status, diff counts and bounded per-file stats. `Workspace.fileLocations` calls `locateFiles`,
+which performs a fresh bounded `walkFiles(..., true)` before suffix filtering. This includes hidden/ignored paths,
+unlike the cached mention-file list, so blindly reusing that list changes results. These are testable hypotheses,
+not measured root causes or proven reductions. Relevant runtime files are unchanged from the sampled `8dcd0a00`.
+
+Browser switching remains a separate UX lead: 69 visible stream samples across two server sessions,
+p50/p95 482/1,562 ms, 39.33 s total. Add repeated browser switching with representative history; `session.open`,
+`web.open` and `projection.large.open` are related but not an exact reproduction. Sending has only 8 visible
+samples (p50 2,476 ms), first reply 7 (p50 5,816 ms). Native cold dispatch is p50 3,651 ms versus reused 79 ms;
+these are different groups, not a measured potential saving. Completed native outcomes are 14 settled prompts
+(15,871 s total), 7 handled discoveries (14.28 s), 4 handled commands (1.27 s), and one settled handoff (0.81 s).
+Task duration includes model/tool work and is not infrastructure latency alone.
+
+Across 1,440 process samples, median minute p99 is 2.3 ms, worst minute p99 55.2 ms, longest stall 979 ms;
+median/worst busy share is 0.4%/11%. No sustained main-loop saturation is evident, but whole-machine/native-child
+load and stall causes are unmeasured. Stream view/session-list traffic is 646,321/458,602 bytes per active minute
+across tabs; long-poll events are unsized. Neither figure establishes a regression.
+
+The latest release `58fa3ce` now has 57 minutes and one server session, two submits, no completed prompt-phase
+records, and still no image or changes samples. The image, changes and file-search groups each come from one
+server session on `8dcd0a00`; they cannot establish an improvement across releases. No benchmark was rerun and
+no runtime code, journal collection, service, credentials or deployment was changed. Only this aggregate record
+is updated. Recommended next coding task without production access: a measurement-only file-location workload;
+image attribution instead needs the owner's authorization and selected slow session.
+
 ## Journal analysis — 2026-10-19
 
 Read-only snapshot at 12:08 UTC: 7,257 complete records from October 16 15:42 through October 19 12:08,
