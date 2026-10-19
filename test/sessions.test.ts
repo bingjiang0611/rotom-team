@@ -238,6 +238,21 @@ test("a fork keeps the history through the chosen message, then goes its own way
         "assistant",
     );
     assert.equal(await app.transcripts.fullEntry(grandchild, Number(secondAnswer!.id)), undefined);
+
+    // The owner-only check that image copies rely on agrees with the full lookup through every fork.
+    for (const [session, entry, entryOwner] of [
+        [fork, firstAnswer!, id],
+        [fork, secondAnswer!, id],
+        [grandchild, firstAnswer!, id],
+        [grandchild, forkAnswer, fork],
+        [grandchild, secondAnswer!, id],
+        [id, forkAnswer, fork],
+    ] as const) {
+        assert.equal(
+            await app.transcripts.entryVisible(session, Number(entry.id), Number(entryOwner)),
+            (await app.transcripts.fullEntry(session, Number(entry.id))) !== undefined,
+        );
+    }
 });
 
 test("a fork's people are the ones who took part up to where it forked", async () => {

@@ -86,6 +86,7 @@ import { Schedules } from "./schedules.ts";
 import { Shell } from "./shell.ts";
 import { Spend } from "./spend.ts";
 import { Transcripts } from "./transcripts.ts";
+import { MediaStore, type Resize } from "./media.ts";
 import { Workspace } from "./workspace.ts";
 
 const context = BACKGROUND_CONTEXT;
@@ -121,6 +122,8 @@ export interface OpenOptions {
     now?: () => number;
     /** The browser to run for the Browser panel and tool; null for none. Undefined finds one on this machine. */
     browser?: string | null;
+    /** How message images are made smaller; tests pass their own. Undefined: `sips` on macOS; null: none. */
+    resizeImages?: Resize | null;
 }
 
 export class PocketApp {
@@ -160,6 +163,8 @@ export class PocketApp {
     readonly workspace = new Workspace(this);
     /** The conversation's stored history, as people read it. */
     readonly transcripts = new Transcripts(this);
+    /** Thumbnails and previews of the images stored in messages (`<data>/media/`). */
+    readonly media: MediaStore;
     /** Each conversation's browser page, which Pi and the people in the conversation share. */
     readonly browsers: Browsers;
     readonly #clients = new Set<Client>();
@@ -191,6 +196,16 @@ export class PocketApp {
         this.#kernelEnabled = options.kernel === true;
         this.now = options.now ?? Date.now;
         this.dataDir = options.dataDir;
+        this.media = new MediaStore(
+            join(options.dataDir, "media"),
+            {
+                stored: (id, entryId, index) =>
+                    this.transcripts.storedImage(id as unknown as ConversationId, entryId, index),
+                visible: (id, entryId, owner) =>
+                    this.transcripts.entryVisible(id as unknown as ConversationId, entryId, owner),
+            },
+            options.resizeImages,
+        );
         this.defaultCwd = options.defaultCwd;
         this.supervised = options.supervised;
         this.config = new ConfigStore(options.dataDir);

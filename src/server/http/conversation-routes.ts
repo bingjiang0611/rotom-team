@@ -10,16 +10,9 @@ import { uploadedAttachments } from "../attachments.ts";
 import { teamCommandUsesAdapter } from "../team-command-policy.ts";
 import { serveDownload, serveImage, TYPES } from "./assets.ts";
 import { type ApiRequest, json, readJson, send } from "./io.ts";
+import { ENTRY_IMAGE_TYPES } from "../media.ts";
 
 const MAX_UPLOAD = 50 * 1024 * 1024;
-
-const ENTRY_IMAGE_TYPES = new Set([
-    "image/png",
-    "image/jpeg",
-    "image/gif",
-    "image/webp",
-    "image/bmp",
-]);
 
 function safeName(name: string): string {
     const base = basename(name)
@@ -540,7 +533,30 @@ export async function conversationRoutes(
     }
 
     if (third === "image" && fourth !== undefined && method === "GET") {
-        const image = await app.transcripts.entryImage(id, Number(fourth), Number(parts[4] ?? 0));
+        const entryId = Number(fourth);
+        const index = Number(parts[4] ?? 0);
+        const size = url.searchParams.get("size");
+
+        if (size !== null && size !== "thumb" && size !== "preview") {
+            throw new HttpError(400, "size is thumb or preview");
+        }
+
+        // Stored entries never change, and neither do their smaller copies.
+        if (size !== null) {
+            const smaller = await app.media.image(id as unknown as number, entryId, index, size);
+
+            if (smaller === undefined) {
+                throw new HttpError(404, "No such image");
+            }
+
+            if (smaller !== "original") {
+                return send(response, 200, smaller.data, smaller.mimeType, {
+                    "cache-control": "private, max-age=31536000, immutable",
+                });
+            }
+        }
+
+        const image = await app.transcripts.entryImage(id, entryId, index);
 
         if (image === undefined || !ENTRY_IMAGE_TYPES.has(image.mimeType)) {
             throw new HttpError(404, "No such image");

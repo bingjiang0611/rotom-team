@@ -12,6 +12,7 @@ import type { JsonValue } from "@earendil-works/chord";
 import { PocketApp } from "../src/server/app.ts";
 import { NATIVE_ENTRY } from "../src/server/entry-format.ts";
 import { createHandler } from "../src/server/http.ts";
+import { sniffImage } from "../src/server/http/assets.ts";
 import { imageFixture, probeImages } from "./perf/images.ts";
 
 after(cleanUp);
@@ -233,6 +234,77 @@ test("image probes measure actual concurrent lookup/decode/finish, preserve bina
         assert.equal(denied.status, 401);
         await denied.arrayBuffer();
         assert.throws(() => probe.report(1), /error response/);
+
+        // Smaller copies (`?size=`): a large image gets one; a small one is sent as it is; visibility still holds.
+        const large = imageFixture(1024, 640, 3);
+        const largeEntry = await app.harness.commit(
+            (tx) =>
+                tx.appendEntry(id, {
+                    kind: NATIVE_ENTRY,
+                    data: {
+                        entry: {
+                            type: "message",
+                            id: "large",
+                            parentId: "fixture",
+                            message: {
+                                role: "user",
+                                content: [
+                                    {
+                                        type: "image",
+                                        mimeType: "image/png",
+                                        data: large.toString("base64"),
+                                    },
+                                ],
+                                timestamp: 1,
+                            },
+                        },
+                    } as JsonValue,
+                }),
+            context,
+        );
+
+        for (const attempt of ["first", "kept"]) {
+            const thumb = await get(`${id}/image/${largeEntry.id}/0?size=thumb`);
+            const body = Buffer.from(await thumb.arrayBuffer());
+
+            assert.equal(thumb.status, 200, attempt);
+            assert.equal(thumb.headers.get("content-type"), sniffImage(body));
+            assert.equal(
+                thumb.headers.get("cache-control"),
+                "private, max-age=31536000, immutable",
+            );
+
+            if (process.platform === "darwin") {
+                assert.ok(body.length < large.length / 10, `${attempt}: ${body.length} bytes`);
+            } else {
+                assert.deepEqual(body, large);
+            }
+
+            const foreignThumb = await get(`${foreign.id}/image/${largeEntry.id}/0?size=thumb`);
+
+            assert.equal(foreignThumb.status, 404, attempt);
+            await foreignThumb.arrayBuffer();
+        }
+
+        const small = await get(`${id}/image/${entry.id}/0?size=preview`);
+
+        assert.equal(small.headers.get("content-type"), "image/png");
+        assert.deepEqual(Buffer.from(await small.arrayBuffer()), bytes[0]);
+
+        for (const [path, status] of [
+            [`${id}/image/${largeEntry.id}/0?size=huge`, 400],
+            [`${id}/image/${largeEntry.id}/1?size=thumb`, 404],
+        ] as const) {
+            const response = await get(path);
+
+            assert.equal(response.status, status, path);
+            await response.arrayBuffer();
+        }
+
+        const deniedThumb = await get(`${id}/image/${largeEntry.id}/0?size=thumb`, false);
+
+        assert.equal(deniedThumb.status, 401);
+        await deniedThumb.arrayBuffer();
 
         // Deterministic lifecycle control: an observed request with neither finish nor a valid body cannot become
         // a measured zero, including when close arrives before finish. No timeout or artificial timing delay.

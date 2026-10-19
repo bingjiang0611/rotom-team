@@ -177,7 +177,11 @@ function sheetBody(sheet) {
             body = html`<${ExtensionsSheet} />`;
             break;
         case "image":
-            body = html`<${ImageViewer} src=${sheet.src} alt=${sheet.alt} />`;
+            body = html`<${ImageViewer}
+                src=${sheet.src}
+                original=${sheet.original}
+                alt=${sheet.alt}
+            />`;
             break;
         case "invite":
             body = html`<${InviteSheet}

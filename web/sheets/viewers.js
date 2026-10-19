@@ -121,8 +121,11 @@ export function ArtifactViewer({ id, version }) {
     </div>`;
 }
 
-/** An image full screen. Tap anywhere to close; Open shows it in its own tab to zoom, save, or share. */
-export function ImageViewer({ src, alt }) {
+/**
+ * An image full screen. Tap anywhere to close; Open shows it (the `original`, when the screen shows a smaller copy) in
+ * its own tab to zoom, save, or share.
+ */
+export function ImageViewer({ src, original = src, alt }) {
     useEffect(() => {
         const onKey = (event) => event.key === "Escape" && closeSheet();
 
@@ -140,7 +143,7 @@ export function ImageViewer({ src, alt }) {
         <img src=${src} alt=${alt ?? ""} />
         <div class="lightbox-bar" onClick=${(event) => event.stopPropagation()}>
             <span class="lightbox-title">${alt ?? ""}</span>
-            <a class="button small" href=${src} target="_blank" rel="noopener">Open</a>
+            <a class="button small" href=${original} target="_blank" rel="noopener">Open</a>
             <button class="icon-button" onClick=${closeSheet} aria-label="Close">
                 <${Icon} name="close" />
             </button>

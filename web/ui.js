@@ -23,9 +23,12 @@ export const fileUrl = (path, conversationId = currentConversation()) =>
 export const downloadUrl = (path, conversationId = currentConversation()) =>
     `/api/c/${conversationId}/download?path=${encodeURIComponent(path)}`;
 
-/** The `index`th image stored in a message: a pasted image or one a tool returned. */
-export const entryImageUrl = (entryId, index, conversationId = currentConversation()) =>
-    `/api/c/${conversationId}/image/${entryId}/${index}`;
+/**
+ * The `index`th image stored in a message: a pasted image or one a tool returned. `size` is `thumb` (inline) or
+ * `preview` (full screen), smaller copies the server makes once; without it, the original.
+ */
+export const entryImageUrl = (entryId, index, conversationId = currentConversation(), size) =>
+    `/api/c/${conversationId}/image/${entryId}/${index}${size ? `?size=${size}` : ""}`;
 
 /** Where the browser loads `![alt](src)` from. Web and data URLs stay; paths and file:// URLs point at the server. */
 function imageSource(src, conversationId, basePath) {
@@ -73,8 +76,11 @@ function relativeFilePath(path, basePath) {
         : path;
 }
 
-/** A tappable image thumbnail that opens full screen, or a chip when the image cannot load. */
-export function Thumb({ src, alt = "image" }) {
+/**
+ * A tappable image thumbnail that opens full screen, or a chip when the image cannot load. `preview` is what the full
+ * screen shows and `original` what Open opens; both default to `src`.
+ */
+export function Thumb({ src, preview = src, original = preview, alt = "image" }) {
     const [broken, setBroken] = useState(false);
 
     if (broken) {
@@ -84,7 +90,7 @@ export function Thumb({ src, alt = "image" }) {
     return html`<button
         class="thumb"
         type="button"
-        onClick=${() => openSheet({ type: "image", src, alt })}
+        onClick=${() => openSheet({ type: "image", src: preview, original, alt })}
     >
         <img
             src=${src}

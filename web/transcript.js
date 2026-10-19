@@ -70,7 +70,9 @@ function EntryImages({ entryId, count, label }) {
         ${Array.from(
             { length: count },
             (_, index) => html`<${Thumb}
-                src=${entryImageUrl(entryId, index)}
+                src=${entryImageUrl(entryId, index, undefined, "thumb")}
+                preview=${entryImageUrl(entryId, index, undefined, "preview")}
+                original=${entryImageUrl(entryId, index)}
                 alt=${`${label} ${index + 1}`}
             />`,
         )}

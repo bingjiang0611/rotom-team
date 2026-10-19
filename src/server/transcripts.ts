@@ -19,6 +19,35 @@ import { type ClientEntry, nativeModel, projectEntry } from "./projection.ts";
 
 const context = BACKGROUND_CONTEXT;
 
+/**
+ * Whether an entry owned by `owner` is visible from `id`. Walk up the forks: each one inherits its parent's entries
+ * through `parent.at`, and no later ones.
+ */
+async function visibleFrom(
+    tx: { conversation(id: ConversationId): Promise<ConversationRecord | undefined> },
+    id: ConversationId,
+    entryId: number,
+    owner: ConversationId,
+): Promise<boolean> {
+    let conversation = id;
+    let through = Number.POSITIVE_INFINITY;
+
+    for (;;) {
+        if (owner === conversation) {
+            return entryId <= through;
+        }
+
+        const parent: ConversationRecord["parent"] = (await tx.conversation(conversation))?.parent;
+
+        if (parent === undefined) {
+            return false;
+        }
+
+        through = Math.min(through, parent.at as unknown as number);
+        conversation = parent.conversationId;
+    }
+}
+
 export class Transcripts {
     readonly #app: PocketApp;
 
@@ -32,6 +61,17 @@ export class Transcripts {
         entryId: number,
         index: number,
     ): Promise<{ mimeType: string; data: Buffer } | undefined> {
+        const image = await this.storedImage(id, entryId, index);
+
+        return image === undefined ? undefined : { mimeType: image.mimeType, data: image.data };
+    }
+
+    /** `entryImage`, with the session that owns the entry (for `MediaStore`'s record of it). */
+    async storedImage(
+        id: ConversationId,
+        entryId: number,
+        index: number,
+    ): Promise<{ mimeType: string; data: Buffer; owner: number } | undefined> {
         if (!Number.isInteger(entryId) || !Number.isInteger(index) || index < 0) {
             return undefined;
         }
@@ -57,7 +97,11 @@ export class Transcripts {
             return undefined;
         }
 
-        return { mimeType: part.mimeType, data: Buffer.from(part.data, "base64") };
+        return {
+            mimeType: part.mimeType,
+            data: Buffer.from(part.data, "base64"),
+            owner: entry.conversationId as unknown as number,
+        };
     }
 
     async fullEntry(id: ConversationId, entryId: number): Promise<ClientEntry | undefined> {
@@ -82,26 +126,23 @@ export class Transcripts {
                 return undefined;
             }
 
-            // Walk up the forks: each one inherits its parent's entries through `parent.at`, and no later ones.
-            let conversation = id;
-            let through = Number.POSITIVE_INFINITY;
-
-            for (;;) {
-                if (entry.conversationId === conversation) {
-                    return entryId <= through ? entry : undefined;
-                }
-
-                const parent: ConversationRecord["parent"] = (await tx.conversation(conversation))
-                    ?.parent;
-
-                if (parent === undefined) {
-                    return undefined;
-                }
-
-                through = Math.min(through, parent.at as unknown as number);
-                conversation = parent.conversationId;
-            }
+            return (await visibleFrom(tx, id, entryId, entry.conversationId)) ? entry : undefined;
         }, context);
+    }
+
+    /**
+     * Whether entry `entryId`, owned by session `owner`, is visible from `id`: `visibleEntry`'s check without reading
+     * the entry. Entries never move between sessions, so a remembered owner stays right.
+     */
+    async entryVisible(id: ConversationId, entryId: number, owner: number): Promise<boolean> {
+        if (!Number.isInteger(entryId)) {
+            return false;
+        }
+
+        return this.#app.harness.commit(
+            (tx) => visibleFrom(tx, id, entryId, owner as unknown as ConversationId),
+            context,
+        );
     }
 
     /** Entries before the active context: what compaction or a reset hid from the model. Oldest first. */
