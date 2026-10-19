@@ -45,6 +45,8 @@ export const SCENARIOS: Record<string, string> = {
     "projection.large.open": `a separate ${WORKLOAD.projectionTurns}-turn session with ${WORKLOAD.projectionAnswerChars}-char answers; open ${WORKLOAD.projectionTabs} event-stream tabs in sequence until each full view`,
     "projection.large.paced": `the same ${WORKLOAD.projectionTurns}-turn session and ${WORKLOAD.projectionTabs} attached tabs; one ${WORKLOAD.answerChars}-char answer paced ${WORKLOAD.pacedChunkMs} ms per chunk, until settled and quiet`,
     "image.single": `${imageHistory}; retrieve image 0 once, until full client body and quiet; recently written SQLite data, not an OS cold-cache test`,
+    "image.original.again": `${imageHistory}; after browser network scenarios, request original images 1 through ${WORKLOAD.imageParallel} again concurrently (first retrieved by image.concurrent), exact binary readback, until bodies and quiet`,
+    "image.original.validated": `${imageHistory}; after image.original.again, repeat those originals with If-None-Match containing each known content SHA256 tag; identical full body if unimplemented, otherwise validated 304 with matching ETag and zero body; until all responses and quiet`,
     "image.concurrent": `${imageHistory}; after image.single, retrieve images 1 through ${WORKLOAD.imageParallel} concurrently, until all client bodies and quiet; phase timings sum per-request intervals, not batch wall time`,
     "image.thumbs.first": `${imageHistory}; after image.concurrent, request images ${WORKLOAD.imageParallel + 1} through ${2 * WORKLOAD.imageParallel} concurrently as transcript thumbnails (?size=thumb), the first time this server sees them, until all client bodies and quiet`,
     "image.thumbs.again": `${imageHistory}; after image.thumbs.first, the same ${WORKLOAD.imageParallel} thumbnail requests again on the same server, without a browser cache, until all client bodies and quiet`,
@@ -449,6 +451,8 @@ export const REPORTED: Record<string, string[]> = {
         "http.body.bytes",
     ],
     "image.paste.network": ["http.upload.bytes", "http.requests", "sql.statements", "sql.rows"],
+    "image.original.again": [...common, "http.requests", "http.body.bytes"],
+    "image.original.validated": [...common, "http.requests", "http.body.bytes"],
     // JSON counts leave web.open out: the DevTools connection that drives Chromium parses and writes JSON too.
     "web.open": [
         "sql.statements",

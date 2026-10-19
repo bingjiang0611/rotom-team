@@ -18,6 +18,7 @@ import {
 import { cleanUp, owner, root, work } from "../helpers.ts";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { once } from "node:events";
 import { mkdirSync, realpathSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
@@ -659,6 +660,55 @@ results.push(
         ? { scenario: "image.paste.network", unavailable: pasteNetwork.unavailable }
         : { scenario: "image.paste.network", ms: pasteNetwork.ms, counts: pasteNetwork.counts },
 );
+
+const originalTags = images.map(
+    (image) => `"sha256-${createHash("sha256").update(image).digest("hex")}"`,
+);
+
+for (const name of ["image.original.again", "image.original.validated"]) {
+    await scenario(name, async () => {
+        const beforeInference = inferenceRequests;
+        const sizes = await Promise.all(
+            Array.from({ length: WORKLOAD.imageParallel }, async (_, offset) => {
+                const index = offset + 1;
+                const response = await fetch(
+                    `${base}/api/c/${imageSession}/image/${imageEntries[index]}/0`,
+                    {
+                        headers: {
+                            authorization: `Bearer ${token}`,
+                            ...(name.endsWith("validated")
+                                ? { "if-none-match": originalTags[index]! }
+                                : {}),
+                        },
+                    },
+                );
+                const bytes = Buffer.from(await response.arrayBuffer());
+
+                assert.ok(
+                    response.status === 200 ||
+                        (name.endsWith("validated") && response.status === 304),
+                );
+
+                if (response.status === 304) {
+                    assert.equal(response.headers.get("etag"), originalTags[index]);
+                    assert.equal(bytes.length, 0);
+                } else {
+                    assert.deepEqual(
+                        bytes,
+                        images[index],
+                        "repeated originals must still be byte-identical",
+                    );
+                }
+
+                return bytes.length;
+            }),
+        );
+
+        assert.equal(inferenceRequests, beforeInference);
+
+        return { "http.body.bytes": sizes.reduce((a, b) => a + b, 0) };
+    });
+}
 
 writeFileSync(out, raw.stringify({ workload: WORKLOAD, results }, null, 2));
 server.closeAllConnections();
