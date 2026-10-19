@@ -2,7 +2,8 @@
 import { cleanUp, context, owner, root, work } from "./helpers.ts";
 import assert from "node:assert/strict";
 import { once } from "node:events";
-import { realpathSync } from "node:fs";
+import { realpathSync, rmSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { createServer, IncomingMessage, ServerResponse } from "node:http";
 import { Socket } from "node:net";
 import { join } from "node:path";
@@ -98,13 +99,13 @@ test("image probes measure actual concurrent lookup/decode/finish, preserve bina
             }),
     });
     const originalFrom = Buffer.from;
-    const originalEntryImage = app.transcripts.entryImage;
+    const originalStoredImage = app.transcripts.storedImage;
     const originalVisibleEntry = app.transcripts.visibleEntry;
     let duplicateDecode = false;
 
     // A sensitivity control, enabled only after the normal assertions: unchanged response, twice the decode work.
-    app.transcripts.entryImage = async function (...args) {
-        const image = await originalEntryImage.apply(this, args);
+    app.transcripts.storedImage = async function (...args) {
+        const image = await originalStoredImage.apply(this, args);
 
         if (duplicateDecode && image) {
             Buffer.from(image.data.toString("base64"), "base64");
@@ -113,7 +114,7 @@ test("image probes measure actual concurrent lookup/decode/finish, preserve bina
         return image;
     };
 
-    const controlledEntryImage = app.transcripts.entryImage;
+    const controlledStoredImage = app.transcripts.storedImage;
     const probe = probeImages(app.transcripts);
     const handler = createHandler({
         app,
@@ -199,6 +200,16 @@ test("image probes measure actual concurrent lookup/decode/finish, preserve bina
 
         probe.reset();
         duplicateDecode = true;
+        // Force this sensitivity control through source decoding even when a later version caches originals.
+        rmSync(
+            join(
+                realpathSync(root),
+                "image-probe",
+                "media",
+                `${createHash("sha256").update(bytes[0]!).digest("hex")}-original.png`,
+            ),
+            { force: true },
+        );
         const injected = await get(`${id}/image/${entry.id}/0`);
 
         assert.deepEqual(Buffer.from(await injected.arrayBuffer()), bytes[0]);
@@ -323,9 +334,9 @@ test("image probes measure actual concurrent lookup/decode/finish, preserve bina
         server.close();
         probe.restore();
         assert.equal(Buffer.from, originalFrom);
-        assert.equal(app.transcripts.entryImage, controlledEntryImage);
+        assert.equal(app.transcripts.storedImage, controlledStoredImage);
         assert.equal(app.transcripts.visibleEntry, originalVisibleEntry);
-        app.transcripts.entryImage = originalEntryImage;
+        app.transcripts.storedImage = originalStoredImage;
         await app.close();
     }
 });

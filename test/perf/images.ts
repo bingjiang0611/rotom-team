@@ -59,11 +59,11 @@ type Sample = {
 type Scope = { sample: Sample; image?: boolean; lookup?: boolean };
 
 /** Install once, restore in finally. AsyncLocalStorage keeps overlapping image requests separate. */
-export function probeImages(transcripts: Pick<Transcripts, "visibleEntry" | "entryImage">) {
+export function probeImages(transcripts: Pick<Transcripts, "visibleEntry" | "storedImage">) {
     const scope = new AsyncLocalStorage<Scope>();
     const samples: Sample[] = [];
     const visibleEntry = transcripts.visibleEntry;
-    const entryImage = transcripts.entryImage;
+    const storedImage = transcripts.storedImage;
     const from = Buffer.from;
 
     transcripts.visibleEntry = async function (...args) {
@@ -87,12 +87,12 @@ export function probeImages(transcripts: Pick<Transcripts, "visibleEntry" | "ent
         }
     };
 
-    transcripts.entryImage = function (...args) {
+    transcripts.storedImage = function (...args) {
         const active = scope.getStore();
 
         return active
-            ? scope.run({ ...active, image: true }, () => entryImage.apply(this, args))
-            : entryImage.apply(this, args);
+            ? scope.run({ ...active, image: true }, () => storedImage.apply(this, args))
+            : storedImage.apply(this, args);
     };
 
     Buffer.from = function (...args: unknown[]) {
@@ -189,7 +189,7 @@ export function probeImages(transcripts: Pick<Transcripts, "visibleEntry" | "ent
         },
         restore() {
             transcripts.visibleEntry = visibleEntry;
-            transcripts.entryImage = entryImage;
+            transcripts.storedImage = storedImage;
             Buffer.from = from;
             scope.disable();
         },
