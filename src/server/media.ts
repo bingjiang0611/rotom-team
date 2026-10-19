@@ -8,7 +8,8 @@
  */
 import { execFile } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import { lstat, mkdir, opendir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
 
@@ -35,12 +36,30 @@ const KEEP_RECORDS = 4096;
 /** A resize that takes longer than this is abandoned, and the original is sent. */
 const RESIZE_TIMEOUT_MS = 20_000;
 
+/** Derived files only: originals stay in Durable. Evicted copies are rebuilt on demand. */
+export const MEDIA_LIMITS = { bytes: 256 * 1024 * 1024, files: 8192, pending: 16 };
+const READ_PRIVATE = { flag: constants.O_RDONLY | constants.O_NOFOLLOW };
+const BLOB = /^[0-9a-f]{64}-(thumb|preview)\.(jpg|png)$/;
+const RECORD = /^\d+\.\d+\.json$/;
+
 /** What a stored image is, once seen: who owns its entry, and what each size is (a file, or the original). */
 type ImageRecord = {
+    version: 1;
     owner: number;
     mimeType: string;
     sha256: string;
-    sizes: Partial<Record<ImageSize, "original" | { file: string; mimeType: string }>>;
+    sizes: Partial<
+        Record<
+            ImageSize,
+            | "original"
+            | {
+                  file: string;
+                  mimeType: string;
+                  bytes: number;
+                  digest: string;
+              }
+        >
+    >;
 };
 
 export type StoredImage = { owner: number; mimeType: string; data: Buffer };
@@ -85,7 +104,11 @@ export const sipsResize: Resize = async (data, mimeType, edge, dir) => {
         const width = Number(field("pixelWidth"));
         const height = Number(field("pixelHeight"));
 
-        if (!(width > 0 && height > 0) || Math.max(width, height) <= edge) {
+        if (
+            !(width > 0 && height > 0) ||
+            width * height > 64_000_000 ||
+            Math.max(width, height) <= edge
+        ) {
             return "original";
         }
 
@@ -129,13 +152,19 @@ export class MediaStore {
     #busy = 0;
     readonly #waiting: (() => void)[] = [];
     #ready: Promise<void> | undefined;
+    readonly #files = new Map<string, { bytes: number; at: number }>();
+    #bytes = 0;
+    #writes: Promise<void> = Promise.resolve();
+    readonly #limits: typeof MEDIA_LIMITS;
 
     constructor(
         dir: string,
         source: ImageSource,
         /** Undefined: `sips` on macOS. Null: no smaller copies; originals are sent. */
         resize?: Resize | null,
+        limits: Partial<typeof MEDIA_LIMITS> = {},
     ) {
+        this.#limits = { ...MEDIA_LIMITS, ...limits };
         this.#dir = dir;
         this.#source = source;
         this.#resize =
@@ -165,6 +194,12 @@ export class MediaStore {
             return "original";
         }
 
+        try {
+            await this.#prepare();
+        } catch {
+            return "original";
+        }
+
         const key = `${entryId}.${index}`;
         const known = this.#records.get(key) ?? (await this.#readRecord(key));
 
@@ -180,9 +215,15 @@ export class MediaStore {
             }
 
             if (kept !== undefined) {
-                const data = await readFile(join(this.#dir, kept.file)).catch(() => undefined);
+                const data = await readFile(join(this.#dir, kept.file), READ_PRIVATE).catch(
+                    () => undefined,
+                );
 
-                if (data !== undefined) {
+                if (
+                    data !== undefined &&
+                    data.length === kept.bytes &&
+                    createHash("sha256").update(data).digest("hex") === kept.digest
+                ) {
                     return { data, mimeType: kept.mimeType };
                 }
             }
@@ -196,9 +237,17 @@ export class MediaStore {
             return pending;
         }
 
-        const making = this.#make(id, entryId, index, size, key).finally(() =>
-            this.#making.delete(job),
-        );
+        if (this.#making.size >= this.#limits.pending) {
+            return "original";
+        }
+
+        // Acquire before reading the source: queued jobs must not retain a full base64 entry per request.
+        const making = this.#slot()
+            .then(() => this.#make(id, entryId, index, size, key))
+            .finally(() => {
+                this.#release();
+                this.#making.delete(job);
+            });
 
         this.#making.set(job, making);
 
@@ -225,20 +274,20 @@ export class MediaStore {
             return "original";
         }
 
-        await this.#prepare();
         let resized: Resized;
 
-        await this.#slot();
-
         try {
+            await this.#prepare();
             resized = await this.#resize!(image.data, image.mimeType, EDGE[size], this.#tmp);
         } catch (error) {
             console.error(`Could not resize an image (${size}):`, (error as Error).message);
             this.#failed.add(failure);
 
+            if (this.#failed.size > KEEP_RECORDS) {
+                this.#failed.delete(this.#failed.values().next().value!);
+            }
+
             return "original";
-        } finally {
-            this.#release();
         }
 
         let kept: ImageRecord["sizes"][ImageSize];
@@ -248,12 +297,19 @@ export class MediaStore {
         } else {
             const file = `${sha256}-${size}.${resized.mimeType === "image/png" ? "png" : "jpg"}`;
 
-            await this.#atomicWrite(join(this.#dir, file), resized.data);
-            kept = { file, mimeType: resized.mimeType };
+            // A full/read-only cache must not turn a readable original into an HTTP error.
+            await this.#writeFile(join(this.#dir, file), resized.data).catch(() => {});
+            kept = {
+                file,
+                mimeType: resized.mimeType,
+                bytes: resized.data.length,
+                digest: createHash("sha256").update(resized.data).digest("hex"),
+            };
         }
 
         // Another size of the same image may have finished meanwhile: add to its record.
         const record: ImageRecord = this.#records.get(key) ?? {
+            version: 1,
             owner: image.owner,
             mimeType: image.mimeType,
             sha256,
@@ -262,7 +318,9 @@ export class MediaStore {
 
         record.sizes[size] = kept;
         this.#remember(key, record);
-        await this.#atomicWrite(this.#recordPath(key), Buffer.from(JSON.stringify(record)));
+        await this.#writeFile(this.#recordPath(key), Buffer.from(JSON.stringify(record))).catch(
+            () => {},
+        );
 
         return resized;
     }
@@ -276,24 +334,90 @@ export class MediaStore {
     }
 
     async #prepare(): Promise<void> {
-        this.#ready ??= Promise.all([
-            mkdir(join(this.#dir, "entries"), { recursive: true, mode: 0o700 }),
-            mkdir(this.#tmp, { recursive: true, mode: 0o700 }),
-        ]).then(() => undefined);
+        this.#ready ??= this.#open();
 
         return this.#ready;
     }
 
+    async #open(): Promise<void> {
+        for (const dir of [this.#dir, join(this.#dir, "entries"), this.#tmp]) {
+            await mkdir(dir, { recursive: true, mode: 0o700 });
+            const info = await lstat(dir);
+
+            if (!info.isDirectory() || info.isSymbolicLink()) {
+                throw new Error("The media cache requires private regular directories");
+            }
+        }
+
+        // One streaming directory walk at first use, not a scan on each request. The retained file index is capped as
+        // it is populated, even if a previous version or crash left too much behind.
+        for (const [dir, pattern] of [
+            [this.#dir, BLOB],
+            [join(this.#dir, "entries"), RECORD],
+        ] as const) {
+            for await (const entry of await opendir(dir)) {
+                if (!entry.isFile() || !pattern.test(entry.name)) {
+                    continue;
+                }
+
+                const path = join(dir, entry.name);
+                const info = await lstat(path);
+
+                this.#track(path, info.size, info.mtimeMs);
+                await this.#trim();
+            }
+        }
+
+        for await (const entry of await opendir(this.#tmp)) {
+            if (entry.isFile()) {
+                await rm(join(this.#tmp, entry.name), { force: true });
+            }
+        }
+    }
+
     async #readRecord(key: string): Promise<ImageRecord | undefined> {
         try {
-            const record = JSON.parse(await readFile(this.#recordPath(key), "utf8")) as ImageRecord;
+            const bytes = await readFile(this.#recordPath(key), READ_PRIVATE);
+
+            if (bytes.length > 2048) {
+                return undefined;
+            }
+
+            const record = JSON.parse(bytes.toString("utf8")) as ImageRecord;
 
             if (
-                !Number.isInteger(record?.owner) ||
-                typeof record.sha256 !== "string" ||
+                record?.version !== 1 ||
+                !Number.isSafeInteger(record.owner) ||
+                record.owner <= 0 ||
+                !ENTRY_IMAGE_TYPES.has(record.mimeType) ||
+                !/^[0-9a-f]{64}$/.test(record.sha256) ||
+                record.sizes === null ||
                 typeof record.sizes !== "object"
             ) {
                 return undefined;
+            }
+
+            for (const [size, value] of Object.entries(record.sizes)) {
+                if (size !== "thumb" && size !== "preview") {
+                    return undefined;
+                }
+
+                if (value === "original") {
+                    continue;
+                }
+
+                if (
+                    value === null ||
+                    typeof value !== "object" ||
+                    !["image/png", "image/jpeg"].includes(value.mimeType) ||
+                    !Number.isSafeInteger(value.bytes) ||
+                    value.bytes <= 0 ||
+                    !/^[0-9a-f]{64}$/.test(value.digest) ||
+                    value.file !==
+                        `${record.sha256}-${size}.${value.mimeType === "image/png" ? "png" : "jpg"}`
+                ) {
+                    return undefined;
+                }
             }
 
             this.#remember(key, record);
@@ -317,11 +441,50 @@ export class MediaStore {
         }
     }
 
-    async #atomicWrite(path: string, data: Buffer): Promise<void> {
-        const temporary = join(this.#tmp, `${randomUUID()}.part`);
+    #writeFile(path: string, data: Buffer): Promise<void> {
+        const write = this.#writes.then(async () => {
+            const temporary = join(this.#tmp, `${randomUUID()}.part`);
 
-        await writeFile(temporary, data, { mode: 0o600 });
-        await rename(temporary, path);
+            try {
+                await writeFile(temporary, data, { mode: 0o600 });
+                await rename(temporary, path);
+                this.#track(path, data.length, Date.now());
+                await this.#trim();
+            } finally {
+                await rm(temporary, { force: true });
+            }
+        });
+
+        this.#writes = write.catch(() => {});
+
+        return write;
+    }
+
+    #track(path: string, bytes: number, at: number): void {
+        this.#bytes += bytes - (this.#files.get(path)?.bytes ?? 0);
+        this.#files.set(path, { bytes, at });
+    }
+
+    async #trim(): Promise<void> {
+        while (this.#bytes > this.#limits.bytes || this.#files.size > this.#limits.files) {
+            let oldest: string | undefined;
+            let at = Infinity;
+
+            for (const [path, info] of this.#files) {
+                if (info.at < at) {
+                    oldest = path;
+                    at = info.at;
+                }
+            }
+
+            if (oldest === undefined) {
+                break;
+            }
+
+            await rm(oldest, { force: true });
+            this.#bytes -= this.#files.get(oldest)!.bytes;
+            this.#files.delete(oldest);
+        }
     }
 
     async #slot(): Promise<void> {

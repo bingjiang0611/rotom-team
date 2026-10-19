@@ -1,6 +1,6 @@
 // Smaller copies of stored message images: made once, kept as files, visibility checked on every request.
 import assert from "node:assert/strict";
-import { mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
@@ -162,6 +162,135 @@ test("without a resizer, or for bad requests, nothing is made", async () => {
     assert.equal(await store.image(1, 10, -1, "thumb"), undefined);
     assert.equal(await store.image(1, 10.5, 0, "thumb"), undefined);
     assert.equal(calls.resize, 0);
+});
+
+test("empty, truncated and modified copies are rebuilt after restart", async () => {
+    for (const damage of [Buffer.alloc(0), Buffer.from("short"), Buffer.from("other copy")]) {
+        const dir = tempDir();
+        const { calls, source, resize } = fixture();
+        const store = new MediaStore(dir, source, resize);
+        const expected = await store.image(1, 10, 0, "thumb");
+        const file = readdirSync(dir).find((name) => name.endsWith(".jpg"))!;
+
+        writeFileSync(join(dir, file), damage);
+        const reopened = new MediaStore(dir, source, resize);
+
+        assert.deepEqual(await reopened.image(1, 10, 0, "thumb"), expected);
+        assert.equal(calls.resize, 2);
+    }
+});
+
+test("malformed records and path traversal are never used as authority or as a file path", async () => {
+    const dir = tempDir();
+    const { source, resize } = fixture();
+    const store = new MediaStore(dir, source, resize);
+    const expected = await store.image(1, 10, 0, "thumb");
+    const path = join(dir, "entries", "10.0.json");
+    const original = JSON.parse(readFileSync(path, "utf8"));
+
+    for (const record of [
+        { ...original, sizes: null },
+        { ...original, owner: 1.5 },
+        { ...original, sizes: { thumb: { ...original.sizes.thumb, file: "../outside" } } },
+        { ...original, sizes: { thumb: { ...original.sizes.thumb, mimeType: "text/html" } } },
+    ]) {
+        writeFileSync(path, JSON.stringify(record));
+        const reopened = new MediaStore(dir, source, resize);
+
+        assert.equal(await reopened.image(3, 10, 0, "thumb"), undefined);
+        assert.deepEqual(await reopened.image(1, 10, 0, "thumb"), expected);
+    }
+});
+
+test("cache startup and writes enforce file/byte limits, and evicted copies remain readable", async () => {
+    const dir = tempDir();
+    const { source, resize } = fixture();
+
+    mkdirSync(dir, { recursive: true });
+
+    for (let i = 0; i < 10; i++) {
+        writeFileSync(join(dir, `${i.toString(16).padStart(64, "0")}-thumb.jpg`), "old data");
+    }
+
+    const store = new MediaStore(dir, source, resize, { files: 2, bytes: 2048 });
+
+    await store.image(1, 10, 0, "thumb");
+    const files = () => [
+        ...readdirSync(dir).filter((name) => name.endsWith(".jpg")),
+        ...readdirSync(join(dir, "entries")),
+    ];
+
+    assert.ok(files().length <= 2);
+    const zeroRoom = new MediaStore(dir, source, resize, { files: 2, bytes: 1 });
+
+    assert.deepEqual(await zeroRoom.image(1, 10, 0, "thumb"), {
+        data: Buffer.from("small copy"),
+        mimeType: "image/jpeg",
+    });
+    assert.equal(files().length, 0);
+});
+
+test("a broken cache falls back to the original without swallowing source/permission failures", async () => {
+    const dir = tempDir();
+    const { source, resize } = fixture();
+
+    writeFileSync(join(dir, "not-a-directory"), "file");
+    const store = new MediaStore(join(dir, "not-a-directory"), source, resize);
+
+    assert.equal(await store.image(1, 10, 0, "thumb"), "original");
+    const brokenSource: ImageSource = {
+        ...source,
+        stored: async () => {
+            throw new Error("source corrupt");
+        },
+    };
+
+    await assert.rejects(
+        new MediaStore(tempDir(), brokenSource, resize).image(1, 10, 0, "thumb"),
+        /source corrupt/,
+    );
+});
+
+test("queued resizes retain at most two original images and overflow falls back to originals", async () => {
+    let release!: () => void;
+    let started!: () => void;
+    const holding = new Promise<void>((resolve) => {
+        release = resolve;
+    });
+    const both = new Promise<void>((resolve) => {
+        started = resolve;
+    });
+    let reads = 0;
+    const source: ImageSource = {
+        stored: async () => ({ owner: 1, mimeType: "image/png", data: Buffer.from("original") }),
+        visible: async () => true,
+    };
+
+    const resize: Resize = async () => {
+        reads++;
+
+        if (reads === 2) {
+            started();
+        }
+
+        await holding;
+
+        return { data: Buffer.from("small"), mimeType: "image/jpeg" };
+    };
+
+    const store = new MediaStore(tempDir(), source, resize, { pending: 4 });
+    const pending = Array.from({ length: 4 }, (_, i) => store.image(1, i + 10, 0, "thumb"));
+
+    try {
+        await both;
+        assert.equal(reads, 2);
+        assert.equal(await store.image(1, 99, 0, "thumb"), "original");
+    } finally {
+        release();
+        await Promise.all(pending);
+    }
+
+    assert.equal(reads, 4);
 });
 
 /** An RGBA PNG of noise with transparency, stored uncompressed so a smaller copy is worth making. */
