@@ -14,11 +14,16 @@ export const WORKLOAD = {
     projectionTurns: 64,
     projectionTabs: 4,
     projectionAnswerChars: 120,
+    imageEntries: 24,
+    imageWidth: 1024,
+    imageHeight: 640,
+    imageParallel: 4,
     /** The pause between chunks of a paced answer, as a real model streams. */
     pacedChunkMs: 25,
 } as const;
 
 const seeded = `kernel mode; a session of ${WORKLOAD.seededTurns} turns, ${WORKLOAD.answerChars}-char answers streamed in ${WORKLOAD.streamChunks} chunks`;
+const imageHistory = `kernel mode; separate Durable mirror of ${WORKLOAD.imageEntries} native user messages, each with ${WORKLOAD.answerChars} text chars and one distinct ${WORKLOAD.imageWidth}x${WORKLOAD.imageHeight} RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference`;
 
 /** What each scenario does, as the ledger records it. */
 export const SCENARIOS: Record<string, string> = {
@@ -39,6 +44,8 @@ export const SCENARIOS: Record<string, string> = {
     "turn.prepared": `${seeded}; same additional session/tab after both discoveries; first ordinary prompt, until settled and quiet`,
     "projection.large.open": `a separate ${WORKLOAD.projectionTurns}-turn session with ${WORKLOAD.projectionAnswerChars}-char answers; open ${WORKLOAD.projectionTabs} event-stream tabs in sequence until each full view`,
     "projection.large.paced": `the same ${WORKLOAD.projectionTurns}-turn session and ${WORKLOAD.projectionTabs} attached tabs; one ${WORKLOAD.answerChars}-char answer paced ${WORKLOAD.pacedChunkMs} ms per chunk, until settled and quiet`,
+    "image.single": `${imageHistory}; retrieve image 0 once, until full client body and quiet; recently written SQLite data, not an OS cold-cache test`,
+    "image.concurrent": `${imageHistory}; after image.single, retrieve images 1 through ${WORKLOAD.imageParallel} concurrently, until all client bodies and quiet; phase timings sum per-request intervals, not batch wall time`,
 };
 
 export type Layer = "storage" | "process" | "cpu" | "push" | "http" | "web";
@@ -75,6 +82,26 @@ const parseAttribution = [...parseSources, ...nativeReadbackSources].flatMap((so
 
 /** Every counter a scenario reports, and where it is counted. */
 const COUNTERS: Record<string, MetricSpec> = {
+    "image.lookup.calls": {
+        layer: "storage",
+        unit: "count",
+        source: "real Transcripts.visibleEntry invocations in request-local image scope (test/perf/images.ts)",
+    },
+    "image.decode.calls": {
+        layer: "cpu",
+        unit: "count",
+        source: "Buffer.from base64 calls in entryImage outside visibleEntry, request-local scope (test/perf/images.ts)",
+    },
+    "image.decode.chars": {
+        layer: "cpu",
+        unit: "chars",
+        source: "base64 characters decoded in scoped Buffer.from calls (test/perf/images.ts)",
+    },
+    "image.decode.bytes": {
+        layer: "cpu",
+        unit: "bytes",
+        source: "decoded bytes returned by scoped Buffer.from calls (test/perf/images.ts)",
+    },
     ...Object.fromEntries(
         [...parseSources, ...nativeReadbackSources].flatMap((source) =>
             ["calls", "chars"].map((unit) => [
@@ -357,6 +384,16 @@ const projection = [
     "view.kernel.json.parse.chars",
 ];
 
+const imageCounters = [
+    ...common,
+    "http.requests",
+    "http.body.bytes",
+    "image.lookup.calls",
+    "image.decode.calls",
+    "image.decode.chars",
+    "image.decode.bytes",
+];
+
 /** The counters each scenario reports. */
 export const REPORTED: Record<string, string[]> = {
     "startup.restart": [...common],
@@ -383,6 +420,8 @@ export const REPORTED: Record<string, string[]> = {
     "turn.prepared": [...common, "subprocess.rotom", ...pushes],
     "projection.large.open": [...common, ...projection, ...pushes],
     "projection.large.paced": [...common, "subprocess.git", ...projection, ...pushes],
+    "image.single": [...imageCounters],
+    "image.concurrent": [...imageCounters],
     // JSON counts leave web.open out: the DevTools connection that drives Chromium parses and writes JSON too.
     "web.open": [
         "sql.statements",

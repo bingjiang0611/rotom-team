@@ -42,18 +42,20 @@ Each run is the service's real path: kernel mode, real rotom child processes, th
 event-stream tab, and a loopback OpenAI-compatible model that streams a fixed answer. No real account or network is
 used. The workload is fixed in [test/perf/workload.ts](../test/perf/workload.ts):
 
-| Scenario          | What it does                                                                    |
-| ----------------- | ------------------------------------------------------------------------------- |
-| `startup.restart` | close the app on seeded data (13 sessions, one with 12 turns) and open it again |
-| `sessions.list`   | `GET /api/sessions`                                                             |
-| `session.open`    | a new event-stream tab on the 12-turn session, until its first full view        |
-| `turn.cold`       | first prompt of a new session (starts its rotom process), until settled + quiet |
-| `turn.warm`       | the next prompt of that session                                                 |
-| `turn.paced`      | a prompt whose answer streams 25 ms per chunk, as a real model does             |
-| `git.changes`     | `GET changes` in a Git workspace with 20 changed files                          |
-| `git.branches`    | `GET branches`                                                                  |
-| `commands.list`   | `GET` the native slash-command list                                             |
-| `web.open`        | headless Chromium opens `/s/<session>` until the last answer is in the page     |
+| Scenario           | What it does                                                                               |
+| ------------------ | ------------------------------------------------------------------------------------------ |
+| `startup.restart`  | close the app on seeded data (13 sessions, one with 12 turns) and open it again            |
+| `sessions.list`    | `GET /api/sessions`                                                                        |
+| `session.open`     | a new event-stream tab on the 12-turn session, until its first full view                   |
+| `turn.cold`        | first prompt of a new session (starts its rotom process), until settled + quiet            |
+| `turn.warm`        | the next prompt of that session                                                            |
+| `turn.paced`       | a prompt whose answer streams 25 ms per chunk, as a real model does                        |
+| `git.changes`      | `GET changes` in a Git workspace with 20 changed files                                     |
+| `git.branches`     | `GET branches`                                                                             |
+| `commands.list`    | `GET` the native slash-command list                                                        |
+| `web.open`         | headless Chromium opens `/s/<session>` until the last answer is in the page                |
+| `image.single`     | retrieve one stored image from a separate 24-image native-format Durable mirror            |
+| `image.concurrent` | retrieve four distinct images concurrently from that mirror, through exact binary readback |
 
 A scenario's window ends when the server is quiet (no push and no SQL for 400 ms), not when its request answered:
 pushes coalesce over 90 ms and native runs finish asynchronously. `web.open` is unavailable, not zero, where the
@@ -63,6 +65,12 @@ Counters are counted in the server process by [test/perf/counters.ts](../test/pe
 runs through the server's own diagnostics channels ([src/server/perf-channels.ts](../src/server/perf-channels.ts)),
 which cost one check while nobody listens. The benchmark's own JSON uses the unwrapped functions, so its bookkeeping is
 not counted as the server's work.
+
+Image scenarios install benchmark-local, request-scoped wrappers in [test/perf/images.ts](../test/perf/images.ts)
+only after the other workloads. Lookup includes queue waiting; decoding measures actual base64 conversion;
+`end` to server `finish` does not prove client receipt. Client-body timing is separate. Concurrent phase timings
+sum per-request intervals, not batch wall time. Failed or unfinished responses cannot become measured zeros.
+The fixtures are synthetic persisted mirrors, not uploads, cold OS caches, or production network replays.
 
 ## Ledger and ratchet
 

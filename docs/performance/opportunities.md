@@ -8,6 +8,81 @@ Workload: `test/perf/workload.ts` as of 2026-10-16 (12 seeded turns of 6000-char
 `darwin-arm64` ledger baselines (worst of 10 runs from temporary checkouts) and benchmark medians, Apple M1, load below
 the core count.
 
+## Journal analysis — 2026-10-19
+
+Read-only snapshot at 12:08 UTC: 7,257 complete records from October 16 15:42 through October 19 12:08,
+8 server sessions, 7 releases, no cut-off lines. All seven recorded shutdown health reports show zero drops;
+the running session has no shutdown health report yet. The primary window below is the last 24 hours:
+3,334 records, 1,502 HTTP requests, 4 server sessions, 3 releases, 147.76 s summed HTTP duration.
+This is journal evidence, not an L1/L2 experiment or a demonstrated L3 improvement. Concurrent HTTP durations
+are not unique user-wait seconds; HTTP, native runs, and browser timings overlap and must not be added.
+
+### Ranked HTTP leads
+
+| Lead                   | Count |        p50 / p95 |           Total | Coverage and next measurement                                                                               |
+| ---------------------- | ----: | ---------------: | --------------: | ----------------------------------------------------------------------------------------------------------- |
+| Stored-message images  |    53 | 1,271 / 4,973 ms | 79.46 s (53.8%) | No dedicated image scenario. Add representative image retrieval with concurrent requests before optimizing. |
+| Changes listing        |   139 |     181 / 293 ms | 26.75 s (18.1%) | `git.changes` exists; reproduce the workspace scale before choosing another reduction.                      |
+| File-location search   |    15 |   869 / 1,485 ms |  13.83 s (9.4%) | No dedicated scenario. Add bounded workspace-search coverage; small sample.                                 |
+| POST command discovery |     3 | 3,583 / 3,750 ms |  10.02 s (6.8%) | `commands.discover.cold` and `.warm` now exist; compare readiness phases, not just GET command listing.     |
+| Submit                 |    18 |    45 / 4,592 ms |   7.28 s (4.9%) | `turn.cold`, `.warm`, and `.prepared` cover related synthetic paths; 17 responses are 200 and one is 409.   |
+
+The first four groups all belong to one server session on `8dcd0a00`; even the larger counts do not meet the
+two-session requirement for an L3 improvement claim. All responses in those four groups were 200. Image requests
+occurred at 07:05–08:04 UTC and reported about 1.87 MB mean wire bytes. HTTP timing ends at server response finish:
+it does not separate history lookup, image decoding, response transmission, or browser rendering. Code reading
+shows `entryImage → visibleEntry → harness.commit` followed by base64 decoding; that identifies the path, not its
+bottleneck. Image, workspace, file-search, and conversation-route source files have no changes between `8dcd0a00`
+and the current checkout `58fa3ce`, but this alone cannot establish current runtime latency.
+
+### Browser, native execution, and server health
+
+- **Session switching is the strongest repeated browser signal:** stream transport has 69 visible samples across
+  two server sessions, p50 482 ms, p95 1,562 ms, max 2,330 ms, total 39.33 s. `session.open`, `web.open`, and
+  `projection.large.open` cover related work, but there is no dedicated repeated-browser-switch scenario.
+  Next measurement: repeated switching with representative history; the journal cannot attribute the delay to
+  network, projection, or painting.
+- **Sending and first output remain multi-second hints:** visible `send.shown` has 8 samples, p50 2,476 ms,
+  p95 4,369 ms; `reply.first` has 7, p50 5,816 ms, p95 10,095 ms. Native started-process dispatch has 5 samples,
+  p50 3,651 ms, versus 79 ms for 9 reused-process samples. First native output after dispatch is p50 6,664 ms
+  for started processes (one without output) and 5,041 ms for reused processes. These medians cannot be added
+  into a paired end-to-end estimate, and native output is not necessarily first visible text.
+- Native outcomes: 14 `prompt:settled` runs total 15,871 s, p50 414 s, max 5,077 s; 6 `discover:handled` total
+  14.02 s; 3 `command:handled` total 0.81 s; one `handoff:settled` is 0.81 s. Tool-active shares are 35% of
+  started-process run time and 17% of reused-process run time. Long tasks are not proof of infrastructure delay
+  or a slow model; the rest includes model time, setup, and finalization. Runs not yet finished are not represented.
+- Across 1,440 process samples, event-loop p99 median is 2.3 ms, worst minute p99 55.2 ms, longest stall 979 ms.
+  Event-loop busy share is 0.4% median and 11% worst; peak RSS is 599 MiB. No sustained main-loop saturation is
+  evident. Whole-machine/native-child load and the cause of stalls remain unmeasured; use a controlled reproduction
+  if stall attribution becomes the selected experiment.
+- Push volume per active minute: view 655,986 bytes, session list 465,269 bytes, presence 18,199 bytes, aggregated
+  across tabs. Long-poll events are counted but unsized. These figures do not establish a bandwidth regression:
+  workloads and transport mix differ. `turn.warm`, `turn.paced`, and projection scenarios cover related push work.
+
+### Current release and decision
+
+The latest release `58fa3ce` has only 14 minutes of observations (11:54–12:08 UTC), one server session, one submit
+(4,592 ms), and no completed prompt-phase record. Startup open is 1,524 ms (one sample); visible session opens
+have two poll samples, p95 2,676 ms. Its event-loop p99 median is 2.2 ms, longest stall 642 ms. There are no image
+or changes-list samples for this release. Do not infer a release speedup or regression from this sparse window.
+
+Recommended next experiment: the coding agent adds an image-retrieval scenario in a measurement-only branch/commit,
+then separates lookup/decode/response work on synthetic data before selecting an optimization. No production trace,
+collection change, service restart, real account, benchmark, or runtime change was performed in this analysis.
+Raw snapshots stay outside the repository; only aggregates are recorded here.
+
+### Follow-up: image retrieval baseline — 2026-10-19
+
+[Measurement](experiments/2026-10-19-image-retrieval-baseline.md) now adds `image.single` and
+`image.concurrent`: a real kernel-mode Durable mirror containing 24 distinct 1,967,083-byte PNGs, exact HTTP
+readback, and request-local lookup/decode/send-finish timings. Two five-run batches with `highLoad: false` give
+single-image scenario medians 37.2/38.5 ms and four-image concurrent batch medians 83.5/80.8 ms. Single-image
+lookup is 10.6/9.2 ms and decoding 1.2/1.0 ms. One image performs one SQL row lookup, one 2.63m-character JSON
+parse, and one decode; it does not scan every image. The loopback workload does **not** reproduce the journal's
+seconds. No runtime optimization or speedup claim; 102 new counters are candidates only, with prior ledger entries
+unchanged. Next: the coding agent asks the owner to authorize/select one slow real-access session for paired
+browser/server timing; neither a speculative cache nor broader production tracing is justified yet.
+
 ## Journal analysis — 2026-10-17
 
 L3 observations only, not a before/after speed claim. A read-only snapshot covers 2026-10-16 15:42 through

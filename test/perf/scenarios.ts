@@ -28,6 +28,11 @@ import type { Runtime } from "../../src/server/team-accounts.ts";
 import type { User } from "../../src/server/config.ts";
 import { measureWebOpen } from "./browser.ts";
 import { WORKLOAD } from "./workload.ts";
+import { imageFixture, probeImages } from "./images.ts";
+import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
+import type { ConversationId } from "@earendil-works/pi-durable";
+import type { JsonValue } from "@earendil-works/chord";
+import { NATIVE_ENTRY } from "../../src/server/entry-format.ts";
 
 export type ScenarioResult =
     | { scenario: string; ms: number; counts: Counts; extra?: Record<string, number> }
@@ -269,6 +274,7 @@ async function quiet(quietMs = 400, limitMs = 20_000): Promise<void> {
 async function scenario(
     name: string,
     action: () => Promise<Record<string, number> | void>,
+    phaseTimings?: () => Record<string, number>,
 ): Promise<void> {
     await quiet();
     const before = snapshot();
@@ -276,7 +282,7 @@ async function scenario(
     const started = performance.now();
     const extra = await action();
     const ms = performance.now() - started;
-    const native = nativeTimingSince(timingBefore);
+    const native = { ...nativeTimingSince(timingBefore), ...phaseTimings?.() };
 
     await quiet();
     results.push({
@@ -465,6 +471,126 @@ results.push(
               extra: webPaced.metrics,
           },
 );
+
+// Image retrieval reads the Durable mirror, not native RPC. Seed that exact persisted representation, after
+// every established workload. No upload/resizing/model cost is hidden inside these retrieval-only scenarios.
+const imageSession = (await call("sessions", "POST", { title: "Images", backend: "rotom" })).value
+    .id as unknown as ConversationId;
+const images = Array.from({ length: WORKLOAD.imageEntries }, (_, index) =>
+    imageFixture(WORKLOAD.imageWidth, WORKLOAD.imageHeight, index),
+);
+const imageEntries = await app.harness.commit(async (tx) => {
+    const ids: number[] = [];
+
+    for (const [index, bytes] of images.entries()) {
+        const record = await tx.appendEntry(imageSession, {
+            kind: NATIVE_ENTRY,
+            data: {
+                entry: {
+                    type: "message",
+                    id: `image-${index}`,
+                    parentId: index === 0 ? null : `image-${index - 1}`,
+                    message: {
+                        role: "user",
+                        timestamp: index,
+                        content: [
+                            {
+                                type: "text",
+                                text: `Image ${index}.`.padEnd(WORKLOAD.answerChars, "."),
+                            },
+                            {
+                                type: "image",
+                                mimeType: "image/png",
+                                data: bytes.toString("base64"),
+                            },
+                        ],
+                    },
+                },
+            } as JsonValue,
+        });
+
+        ids.push(record.id as unknown as number);
+    }
+
+    return ids;
+}, BACKGROUND_CONTEXT);
+const imageProbe = probeImages(app.transcripts);
+const unprobedHandler = handler;
+
+handler = (request, response) =>
+    imageProbe.run(request, response, () => unprobedHandler(request, response));
+
+try {
+    for (const [name, indices] of [
+        ["image.single", [0]],
+        [
+            "image.concurrent",
+            Array.from({ length: WORKLOAD.imageParallel }, (_, index) => index + 1),
+        ],
+    ] as const) {
+        imageProbe.reset();
+        let clientMs = 0;
+
+        await scenario(
+            name,
+            async () => {
+                const beforeInference = inferenceRequests;
+                const beforeWork = snapshot();
+                const sizes = await Promise.all(
+                    indices.map(async (index) => {
+                        const started = performance.now();
+                        const response = await fetch(
+                            `${base}/api/c/${imageSession}/image/${imageEntries[index]}/0`,
+                            {
+                                headers: { authorization: `Bearer ${token}` },
+                            },
+                        );
+                        const bytes = Buffer.from(await response.arrayBuffer());
+
+                        clientMs += performance.now() - started;
+                        assert.equal(response.status, 200);
+                        assert.equal(response.headers.get("content-type"), "image/png");
+                        assert.equal(
+                            response.headers.get("cache-control"),
+                            "private, max-age=31536000, immutable",
+                        );
+                        assert.deepEqual(
+                            bytes,
+                            images[index],
+                            "the actual HTTP body, not just its size or signature",
+                        );
+
+                        return bytes.length;
+                    }),
+                );
+                const measured = imageProbe.report(indices.length);
+
+                assert.equal(
+                    inferenceRequests,
+                    beforeInference,
+                    "retrieval must not call the model",
+                );
+                assert.equal(
+                    since(beforeWork)["subprocess.total"] ?? 0,
+                    0,
+                    "retrieval must not start a child",
+                );
+                assert.equal(measured.counts["image.lookup.calls"], indices.length);
+                assert.equal(measured.counts["image.decode.calls"], indices.length);
+                assert.equal(
+                    measured.counts["image.decode.bytes"],
+                    sizes.reduce((a, b) => a + b, 0),
+                );
+
+                return { ...measured.counts, "http.body.bytes": sizes.reduce((a, b) => a + b, 0) };
+            },
+            () => ({ ...imageProbe.report(indices.length).timings, imageClientMs: clientMs }),
+        );
+    }
+} finally {
+    handler = unprobedHandler;
+    imageProbe.restore();
+}
 
 writeFileSync(out, raw.stringify({ workload: WORKLOAD, results }, null, 2));
 server.closeAllConnections();
