@@ -3,18 +3,19 @@
  * Pi Pocket server. Run it through `bin/pi-pocket.js`, which restarts it when the app asks to (exit code 75).
  *
  *   node bin/pi-pocket.js [--host 127.0.0.1] [--port 8787] [--cwd DIR] [--data DIR] [--rotate-token]
+ *       [--tls-cert FILE --tls-key FILE]
  *
  * Under the launcher (PI_POCKET_LAUNCHER=1 with an IPC channel) the server reports `ready` instead of printing its
  * sign-in links, and takes `access` messages that say how other devices reach it (a tunnel's public URL).
  */
 import { chmodSync, mkdirSync, realpathSync } from "node:fs";
-import { createServer } from "node:http";
 import { networkInterfaces } from "node:os";
 import { join, resolve } from "node:path";
 // Only types from the app here: its modules load below, after the signal handlers (loading takes a moment).
 import type { AccessInfo, PocketApp } from "./app.ts";
 import { APP_ROOT, dataDir } from "./config.ts";
 import type { createHandler } from "./http.ts";
+import { createListener, readTls } from "./listener.ts";
 
 const RESTART_CODE = 75;
 /**
@@ -33,6 +34,8 @@ function parseArgs(argv: string[]) {
         rotateToken: false,
         // rotom runs every new session. `--no-rotom-kernel` keeps a server on Pi Durable only.
         kernel: true,
+        tlsCert: undefined as string | undefined,
+        tlsKey: undefined as string | undefined,
     };
 
     for (let index = 0; index < argv.length; index++) {
@@ -60,11 +63,15 @@ function parseArgs(argv: string[]) {
             options.kernel = true;
         } else if (arg === "--no-rotom-kernel") {
             options.kernel = false;
+        } else if (arg === "--tls-cert") {
+            options.tlsCert = resolve(value());
+        } else if (arg === "--tls-key") {
+            options.tlsKey = resolve(value());
         } else if (arg === "--rotate-token") {
             options.rotateToken = true;
         } else if (arg === "--help" || arg === "-h") {
             console.log(
-                "rotom-team [--host 127.0.0.1] [--port 8787] [--cwd DIR] [--data DIR] [--rotate-token] [--no-rotom-kernel]",
+                "rotom-team [--host 127.0.0.1] [--port 8787] [--cwd DIR] [--data DIR] [--rotate-token] [--no-rotom-kernel] [--tls-cert FILE --tls-key FILE]",
             );
             process.exit(0);
         } else {
@@ -80,6 +87,13 @@ function parseArgs(argv: string[]) {
 }
 
 const options = parseArgs(process.argv.slice(2));
+/** With a certificate: HTTPS, and HTTP/2 for browsers that offer it. */
+const tls = readTls(options.tlsCert, options.tlsKey);
+const scheme = tls === undefined ? "http" : "https";
+
+if (tls !== undefined && launcher) {
+    throw new Error("TLS flags are supported by bin/rotom-team.js, not the legacy tunnel launcher");
+}
 
 // The data folder holds the database, sign-in tokens, push keys, and uploads: only this user may open it, also when
 // --data named a folder that already existed.
@@ -118,7 +132,7 @@ const stop = async (code: number) => {
     stopping = true;
     stopWatching();
     server.close();
-    server.closeAllConnections();
+    closeAllConnections();
 
     try {
         // A tool or model stream that ignores its abort must not hold a restart (and the phone's only way in) forever.
@@ -155,7 +169,7 @@ if (launcher) {
 
 /** Answers requests once the app is open; until then, a short "starting". */
 let handle: ReturnType<typeof createHandler> | undefined;
-const server = createServer((request, response) => {
+const { server, closeAll: closeAllConnections } = createListener((request, response) => {
     if (handle !== undefined) {
         return void handle(request, response);
     }
@@ -166,12 +180,7 @@ const server = createServer((request, response) => {
         "cache-control": "no-store",
     });
     response.end("Pi Pocket is starting…");
-});
-
-// The whole request must arrive within this: long enough for a 50 MB upload on a slow phone connection. Event streams
-// and long polls are GET requests without a body, so their time on the connection does not count.
-server.requestTimeout = 15 * 60_000;
-server.headersTimeout = 60_000;
+}, tls);
 
 // Take the port before opening the database: opening resumes interrupted work, which must not start in a process
 // that then exits because it cannot serve.
@@ -294,7 +303,7 @@ if (launcher) {
     );
 
     for (const host of hosts) {
-        console.log(`    http://${host}:${options.port}/login?token=${token}`);
+        console.log(`    ${scheme}://${host}:${options.port}/login?token=${token}`);
     }
 
     console.log(

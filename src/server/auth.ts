@@ -44,14 +44,24 @@ function isHttps(request: IncomingMessage): boolean {
 }
 
 export function origin(request: IncomingMessage): string {
-    const host = String(request.headers["x-forwarded-host"] ?? request.headers.host ?? "localhost");
+    const host = String(
+        request.headers["x-forwarded-host"] ??
+            request.headers.host ??
+            request.headers[":authority"] ??
+            "localhost",
+    );
 
     return `${isHttps(request) ? "https" : "http"}://${host}`;
 }
 
 /** The Cloudflare quick tunnel host a request came through, such as `abc-def.trycloudflare.com`, if it did. */
 export function quickTunnelHost(request: IncomingMessage): string | undefined {
-    const host = String(request.headers["x-forwarded-host"] ?? request.headers.host ?? "")
+    const host = String(
+        request.headers["x-forwarded-host"] ??
+            request.headers.host ??
+            request.headers[":authority"] ??
+            "",
+    )
         .toLowerCase()
         .replace(/:\d+$/, "");
 
