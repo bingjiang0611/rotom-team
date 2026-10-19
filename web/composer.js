@@ -517,7 +517,8 @@ export function Composer() {
 
         const full = expandPastes(text, pastes);
 
-        if (parsed) {
+        // Skills and templates are model input: send their files and clear them like an ordinary prompt.
+        if (parsed && !["skill", "prompt"].includes(parsed.command.source)) {
             if (full.length <= REMEMBER_CHARS) {
                 remember(full);
             }

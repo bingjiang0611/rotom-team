@@ -199,7 +199,7 @@ const configureUserModels = (models: Runtime, user: User) => {
                 reasoning: true,
                 // Like Qoder's reasoning-only tiers: "off" clamps to "low".
                 ...(id === "model-c" ? { thinkingLevelMap: { off: null, minimal: null } } : {}),
-                input: ["text" as const],
+                input: ["text" as const, "image" as const],
                 contextWindow: 32000,
                 maxTokens: 1024,
                 cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
@@ -1272,6 +1272,17 @@ try {
             root: data,
             base: base.replace(/\/api\/$/, ""),
             modelCalls: () => calls.length,
+            lastImageCount: () => {
+                const content = calls
+                    .at(-1)
+                    ?.body.messages.findLast(
+                        (message: { role: string }) => message.role === "user",
+                    )?.content;
+
+                return Array.isArray(content)
+                    ? content.filter((block: { type: string }) => block.type === "image_url").length
+                    : 0;
+            },
             hold: () => {
                 hold = true;
             },

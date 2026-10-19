@@ -56,6 +56,7 @@ export async function nativeCommandUiProof(options: {
     root: string;
     base: string;
     modelCalls: () => number;
+    lastImageCount: () => number;
     hold: () => void;
     release: () => void;
     lastThinking: () => string | undefined;
@@ -80,6 +81,25 @@ export async function nativeCommandUiProof(options: {
             `const input = document.querySelector('.composer textarea'); input.value = ${JSON.stringify(value)}; input.dispatchEvent(new Event('input', {bubbles: true}));`,
         );
     const send = `document.querySelector('.composer [aria-label="Send"]')`;
+
+    const pasteImages = async () => {
+        await page.evaluate(`
+            const bytes = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='), c => c.charCodeAt(0));
+            const clipboardData = new DataTransfer();
+            for (let i = 0; i < 4; i++) {
+                clipboardData.items.add(new File([bytes], 'command-image-' + i + '.png', {type: 'image/png'}));
+            }
+            document.querySelector('.composer textarea').dispatchEvent(new ClipboardEvent('paste', {clipboardData, bubbles: true, cancelable: true}));
+        `);
+        await until(
+            async () =>
+                (await page.evaluate(
+                    `document.querySelectorAll('.composer .files .chip').length === 4 && !${send}.disabled`,
+                )) === "true",
+            "four command images uploaded and ready",
+            20_000,
+        );
+    };
 
     const execute = async (command: string) => {
         await type(command);
@@ -641,9 +661,30 @@ export async function nativeCommandUiProof(options: {
         assert.equal(options.modelCalls(), before);
 
         const kernel = options.app.kernel!;
-        const beforeSkill = options.modelCalls();
 
         await until(() => !kernel.isRunning(options.id), "thinking handoff completes", 20_000);
+        await type("/fixture-prompt");
+        await until(
+            async () => (await text(".commands")).includes("/fixture-prompt"),
+            "template is recognized before sending its images",
+            30_000,
+        );
+        const beforeTemplate = options.modelCalls();
+
+        await pasteImages();
+        await execute("/fixture-prompt TEMPLATE_IMAGE_DRAFT");
+        await until(
+            () => options.modelCalls() > beforeTemplate && !kernel.isRunning(options.id),
+            "template with images completes",
+            20_000,
+        );
+        assert.equal(options.lastImageCount(), 4, "the template sends actual images to inference");
+        assert.equal(
+            await page.evaluate("document.querySelectorAll('.composer .files .chip').length"),
+            "0",
+        );
+        const beforeSkill = options.modelCalls();
+
         await type("/");
         await until(
             async () => (await text(".commands")).includes("/skill:pi-subagents"),
@@ -651,6 +692,7 @@ export async function nativeCommandUiProof(options: {
             30_000,
         );
         await until(() => !kernel.isRunning(options.id), "new segment discovery completes", 20_000);
+        await pasteImages();
         options.hold();
         await execute("/skill:pi-subagents LIVE_SKILL_DRAFT");
         await until(
@@ -659,6 +701,12 @@ export async function nativeCommandUiProof(options: {
             20_000,
         );
         assert.equal(kernel.isRunning(options.id), true);
+        assert.equal(options.lastImageCount(), 4, "the skill sends actual images to inference");
+        assert.equal(
+            await page.evaluate("document.querySelectorAll('.composer .files .chip').length"),
+            "0",
+            "accepted skill images clear before inference finishes",
+        );
         await until(
             async () => (await text(".thinking-chip")).includes("high"),
             "visible current thinking",
@@ -1190,6 +1238,8 @@ export async function nativeCommandUiProof(options: {
             completionWithoutPrematureExecution: true,
             dedicatedThinkingPicker: true,
             skillDraftClearsDuringInference: true,
+            templateImagesSentAndCleared: true,
+            skillImagesSentAndClearedDuringInference: true,
             liveThinkingAndOffVisible: true,
             thinkingPreservesUnsentDraft: true,
             nextRequestUsesSelectedThinking: true,
