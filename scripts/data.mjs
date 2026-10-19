@@ -2,10 +2,15 @@
 /** Private backup/restore and read-only native inspection. Restore never resurrects rotated model refresh credentials. */
 import { createHash, randomUUID } from "node:crypto";
 import {
+    closeSync,
+    constants,
     existsSync,
+    fstatSync,
     lstatSync,
     mkdirSync,
+    openSync,
     readFileSync,
+    readSync,
     readdirSync,
     realpathSync,
     renameSync,
@@ -16,7 +21,84 @@ import { basename, dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 import { takeLock } from "../src/server/lock.ts";
-const digest = (bytes) => createHash("sha256").update(bytes).digest("hex");
+const COPY_CHUNK_BYTES = 1024 * 1024;
+
+/** Offline CLI only: bound payload memory independently of file size, including journal databases. */
+function transferFile(input, output, mode = 0o600, expected) {
+    const source = openSync(
+        input,
+        constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+    );
+    let target;
+
+    try {
+        const before = fstatSync(source);
+
+        if (!before.isFile() || !Number.isSafeInteger(before.size)) {
+            throw new Error(`Backup refuses non-regular or oversized path: ${input}`);
+        }
+
+        if (expected && before.size !== expected.size) {
+            throw new Error(`Backup digest mismatch: ${expected.path}`);
+        }
+
+        if (output !== undefined) {
+            target = openSync(output, "wx", mode);
+        }
+
+        const chunk = Buffer.alloc(COPY_CHUNK_BYTES),
+            hash = createHash("sha256");
+        let size = 0;
+
+        while (size < before.size) {
+            const length = readSync(
+                source,
+                chunk,
+                0,
+                Math.min(chunk.length, before.size - size),
+                size,
+            );
+
+            if (length === 0) {
+                throw new Error(`Source file changed during backup/restore: ${input}`);
+            }
+
+            const bytes = chunk.subarray(0, length);
+
+            hash.update(bytes);
+
+            if (target !== undefined) {
+                writeFileSync(target, bytes);
+            }
+
+            size += length;
+        }
+
+        const after = fstatSync(source),
+            sha256 = hash.digest("hex");
+
+        if (
+            before.size !== after.size ||
+            before.mtimeMs !== after.mtimeMs ||
+            before.ctimeMs !== after.ctimeMs
+        ) {
+            throw new Error(`Source file changed during backup/restore: ${input}`);
+        }
+
+        if (expected && sha256 !== expected.sha256) {
+            throw new Error(`Backup digest mismatch: ${expected.path}`);
+        }
+
+        return { size, sha256 };
+    } finally {
+        if (target !== undefined) {
+            closeSync(target);
+        }
+
+        closeSync(source);
+    }
+}
+
 const ignored = new Set(["harness.lock", "kernel.lock", "kernel-gates", "extensions/node_modules"]);
 const safe = (name) =>
     name &&
@@ -89,17 +171,10 @@ function copy(source, destination, records = [], prefix = "", excludedCaches = [
             continue;
         }
 
-        if (stat.size > 512 * 1024 * 1024) {
-            throw new Error(
-                "A backup file exceeds 512 MiB; use a reviewed streaming backup before proceeding.",
-            );
-        }
+        const mode = stat.mode & 0o111 ? 0o700 : 0o600;
+        const { size, sha256 } = transferFile(input, output, mode);
 
-        const content = readFileSync(input),
-            mode = stat.mode & 0o111 ? 0o700 : 0o600;
-
-        writeFileSync(output, content, { mode, flag: "wx" });
-        records.push({ path, size: content.length, sha256: digest(content), mode });
+        records.push({ path, size, sha256, mode });
     }
 
     return records;
@@ -293,16 +368,9 @@ export function restore(archive, destination) {
 
             if (
                 !stat.isFile() ||
-                stat.size > 512 * 1024 * 1024 ||
                 !realpathSync(file).startsWith(realpathSync(join(source, "data")) + sep)
             ) {
                 throw new Error("Backup contains a link or escaping path.");
-            }
-
-            const content = readFileSync(file);
-
-            if (content.length !== record.size || digest(content) !== record.sha256) {
-                throw new Error(`Backup digest mismatch: ${record.path}`);
             }
 
             // A snapshot is not refresh-token ownership. Independently sign in again after restore.
@@ -312,16 +380,14 @@ export function restore(archive, destination) {
                 record.path === "kernel.lock" ||
                 record.path.startsWith("kernel-gates/")
             ) {
+                transferFile(file, undefined, undefined, record);
                 continue;
             }
 
             const target = join(staging, record.path);
 
             mkdirSync(dirname(target), { recursive: true, mode: 0o700 });
-            writeFileSync(target, content, {
-                mode: record.mode === 0o700 ? 0o700 : 0o600,
-                flag: "wx",
-            });
+            transferFile(file, target, record.mode === 0o700 ? 0o700 : 0o600, record);
         }
 
         renameSync(staging, output);
