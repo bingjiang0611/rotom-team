@@ -59,6 +59,8 @@ const parseSource = () => {
             return "journalSegments";
         case "native-readback":
         case "native-rpc":
+        case "native-rpc-record":
+        case "native-rpc-notify":
         case "native-jsonl":
         case "native-jsonl-ingest":
         case "native-jsonl-snapshot":
@@ -84,22 +86,38 @@ JSON.parse = function parse(text: string, reviver?: Parameters<typeof JSON.parse
     const nativeParts =
         scope === "native-rpc"
             ? ["nativeRpc"]
-            : scope === "native-jsonl"
-              ? ["nativeJsonl"]
-              : scope === "native-jsonl-ingest"
-                ? ["nativeJsonl", "nativeJsonlIngest"]
-                : scope === "native-jsonl-snapshot"
-                  ? ["nativeJsonl", "nativeJsonlSnapshot"]
-                  : scope === "native-gate"
-                    ? ["nativeGate"]
-                    : [];
+            : scope === "native-rpc-record"
+              ? ["nativeRpc", "nativeRpcRecord"]
+              : scope === "native-rpc-notify"
+                ? ["nativeRpc", "nativeRpcNotify"]
+                : scope === "native-jsonl"
+                  ? ["nativeJsonl"]
+                  : scope === "native-jsonl-ingest"
+                    ? ["nativeJsonl", "nativeJsonlIngest"]
+                    : scope === "native-jsonl-snapshot"
+                      ? ["nativeJsonl", "nativeJsonlSnapshot"]
+                      : scope === "native-gate"
+                        ? ["nativeGate"]
+                        : [];
 
     for (const nativePart of nativeParts) {
         add(`json.parse.${nativePart}.calls`);
         add(`json.parse.${nativePart}.chars`, chars);
     }
 
-    return raw.parse(text, reviver);
+    const value = raw.parse(text, reviver);
+
+    // Content-free: counts transport notify records, the baseline that nested payload parses are compared with.
+    if (
+        scope === "native-rpc-record" &&
+        value?.type === "extension_ui_request" &&
+        value.method === "notify" &&
+        typeof value.message === "string"
+    ) {
+        add("native.rpc.notify.records");
+    }
+
+    return value;
 } as typeof JSON.parse;
 
 JSON.stringify = function stringify(...args: Parameters<typeof JSON.stringify>) {

@@ -58,6 +58,8 @@ const parseSources = [
 ];
 const nativeReadbackSources = [
     "nativeRpc",
+    "nativeRpcRecord",
+    "nativeRpcNotify",
     "nativeJsonl",
     "nativeJsonlIngest",
     "nativeJsonlSnapshot",
@@ -116,6 +118,11 @@ const COUNTERS: Record<string, MetricSpec> = {
         layer: "cpu",
         unit: "chars",
         source: "characters given to JSON.parse (test/perf/counters.ts)",
+    },
+    "native.rpc.notify.records": {
+        layer: "cpu",
+        unit: "count",
+        source: "transport RPC records that carry a notify string payload (test/perf/counters.ts)",
     },
     "fs.read.calls": {
         layer: "storage",
@@ -315,6 +322,7 @@ const COUNTERS: Record<string, MetricSpec> = {
 };
 
 const common = [
+    "native.rpc.notify.records",
     "fs.read.calls",
     "fs.read.bytes",
     "sql.statements",

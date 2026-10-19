@@ -174,7 +174,7 @@ export class RotomRpc {
             let value: RpcRecord;
 
             try {
-                value = parseWithWork("native-rpc", line);
+                value = parseWithWork("native-rpc-record", line);
             } catch {
                 this.#fail("invalid RPC JSONL");
 
@@ -521,7 +521,7 @@ export class RotomRpc {
             }
 
             try {
-                const value = parseWithWork("native-rpc", event.message) as {
+                const value = parseWithWork("native-rpc-notify", event.message) as {
                     kind?: unknown;
                     nonce?: unknown;
                     result?: unknown;
@@ -581,7 +581,7 @@ export class RotomRpc {
             let value;
 
             try {
-                value = parseWithWork("native-rpc", event.message);
+                value = parseWithWork("native-rpc-notify", event.message);
             } catch {
                 return;
             }
@@ -626,7 +626,7 @@ export class RotomRpc {
                 typeof event.message === "string"
             ) {
                 try {
-                    const marker = parseWithWork("native-rpc", event.message) as {
+                    const marker = parseWithWork("native-rpc-notify", event.message) as {
                         kind?: unknown;
                         nonce?: unknown;
                         ok?: unknown;
@@ -753,7 +753,8 @@ export function childrenReport(record: RpcRecord): number | undefined {
         return undefined;
     }
 
-    const pending = (parseWithWork("native-rpc", record.message) as { pending?: unknown }).pending;
+    const pending = (parseWithWork("native-rpc-notify", record.message) as { pending?: unknown })
+        .pending;
 
     return typeof pending === "number" ? pending : undefined;
 }

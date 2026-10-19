@@ -46,6 +46,8 @@ export type ParseWork =
     | "journal-segments"
     | "native-readback"
     | "native-rpc"
+    | "native-rpc-record"
+    | "native-rpc-notify"
     | "native-jsonl"
     | "native-jsonl-ingest"
     | "native-jsonl-snapshot"

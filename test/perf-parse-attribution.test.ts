@@ -82,6 +82,8 @@ test("parse source counters partition calls/chars without changing JSON results"
         ["journal-segments", "journalSegments"],
         ["native-readback", "nativeReadback"],
         ["native-rpc", "nativeReadback"],
+        ["native-rpc-record", "nativeReadback"],
+        ["native-rpc-notify", "nativeReadback"],
         ["native-jsonl", "nativeReadback"],
         ["native-jsonl-ingest", "nativeReadback"],
         ["native-jsonl-snapshot", "nativeReadback"],
@@ -96,8 +98,8 @@ test("parse source counters partition calls/chars without changing JSON results"
     assert.equal(JSON.parse("3"), 3);
     const counts = since(before);
 
-    assert.equal(counts["json.parse.calls"], 13);
-    assert.equal(counts["json.parse.chars"], 133);
+    assert.equal(counts["json.parse.calls"], 15);
+    assert.equal(counts["json.parse.chars"], 155);
 
     const totals = new Map<string, number>();
 
@@ -110,11 +112,19 @@ test("parse source counters partition calls/chars without changing JSON results"
         assert.equal(counts[`json.parse.${source}.chars`], 11 * count);
     }
 
-    for (const source of ["nativeRpc", "nativeJsonlIngest", "nativeJsonlSnapshot", "nativeGate"]) {
+    for (const source of [
+        "nativeRpcRecord",
+        "nativeRpcNotify",
+        "nativeJsonlIngest",
+        "nativeJsonlSnapshot",
+        "nativeGate",
+    ]) {
         assert.equal(counts[`json.parse.${source}.calls`], 1);
         assert.equal(counts[`json.parse.${source}.chars`], 11);
     }
 
+    assert.equal(counts["json.parse.nativeRpc.calls"], 3);
+    assert.equal(counts["json.parse.nativeRpc.chars"], 33);
     assert.equal(counts["json.parse.nativeJsonl.calls"], 3);
     assert.equal(counts["json.parse.nativeJsonl.chars"], 33);
 
@@ -127,4 +137,17 @@ test("parse source counters partition calls/chars without changing JSON results"
     );
     assert.equal(counts["json.parse.other.calls"], 1);
     assert.equal(counts["json.parse.other.chars"], 1);
+    assert.equal(counts["native.rpc.notify.records"], undefined);
+    const beforeRecords = snapshot();
+
+    parseWithWork(
+        "native-rpc-record",
+        '{"type":"extension_ui_request","method":"notify","message":"{}"}',
+    );
+    parseWithWork("native-rpc-record", '{"type":"extension_ui_request","method":"select"}');
+    parseWithWork(
+        "native-rpc-notify",
+        '{"type":"extension_ui_request","method":"notify","message":"{}"}',
+    );
+    assert.equal(since(beforeRecords)["native.rpc.notify.records"], 1);
 });

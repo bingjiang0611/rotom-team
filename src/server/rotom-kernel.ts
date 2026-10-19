@@ -549,7 +549,7 @@ export async function startRotomKernel(options: {
                 let value;
 
                 try {
-                    value = parseWithWork("native-rpc", event.message);
+                    value = parseWithWork("native-rpc-notify", event.message);
                 } catch {
                     return;
                 }

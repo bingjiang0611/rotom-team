@@ -10098,6 +10098,1056 @@
             "baselines": {
                 "darwin-arm64": 0
             }
+        },
+        "startup.restart/native.rpc.notify.records": {
+            "scenario": "startup.restart",
+            "metric": "native.rpc.notify.records",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; close the app and open it again",
+            "source": "transport RPC records that carry a notify string payload (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "startup.restart/json.parse.nativeRpcRecord.calls": {
+            "scenario": "startup.restart",
+            "metric": "json.parse.nativeRpcRecord.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; close the app and open it again",
+            "source": "JSON.parse in exclusive nativeRpcRecord scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 2
+            }
+        },
+        "startup.restart/json.parse.nativeRpcRecord.chars": {
+            "scenario": "startup.restart",
+            "metric": "json.parse.nativeRpcRecord.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; close the app and open it again",
+            "source": "JSON.parse in exclusive nativeRpcRecord scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 240
+            }
+        },
+        "startup.restart/json.parse.nativeRpcNotify.calls": {
+            "scenario": "startup.restart",
+            "metric": "json.parse.nativeRpcNotify.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; close the app and open it again",
+            "source": "JSON.parse in exclusive nativeRpcNotify scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "startup.restart/json.parse.nativeRpcNotify.chars": {
+            "scenario": "startup.restart",
+            "metric": "json.parse.nativeRpcNotify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; close the app and open it again",
+            "source": "JSON.parse in exclusive nativeRpcNotify scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "sessions.list/native.rpc.notify.records": {
+            "scenario": "sessions.list",
+            "metric": "native.rpc.notify.records",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; GET /api/sessions",
+            "source": "transport RPC records that carry a notify string payload (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "sessions.list/json.parse.nativeRpcRecord.calls": {
+            "scenario": "sessions.list",
+            "metric": "json.parse.nativeRpcRecord.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; GET /api/sessions",
+            "source": "JSON.parse in exclusive nativeRpcRecord scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "sessions.list/json.parse.nativeRpcRecord.chars": {
+            "scenario": "sessions.list",
+            "metric": "json.parse.nativeRpcRecord.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; GET /api/sessions",
+            "source": "JSON.parse in exclusive nativeRpcRecord scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "sessions.list/json.parse.nativeRpcNotify.calls": {
+            "scenario": "sessions.list",
+            "metric": "json.parse.nativeRpcNotify.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; GET /api/sessions",
+            "source": "JSON.parse in exclusive nativeRpcNotify scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "sessions.list/json.parse.nativeRpcNotify.chars": {
+            "scenario": "sessions.list",
+            "metric": "json.parse.nativeRpcNotify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; GET /api/sessions",
+            "source": "JSON.parse in exclusive nativeRpcNotify scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open/native.rpc.notify.records": {
+            "scenario": "session.open",
+            "metric": "native.rpc.notify.records",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; a new event-stream tab on it, until its first full view",
+            "source": "transport RPC records that carry a notify string payload (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open/json.parse.nativeRpcRecord.calls": {
+            "scenario": "session.open",
+            "metric": "json.parse.nativeRpcRecord.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; a new event-stream tab on it, until its first full view",
+            "source": "JSON.parse in exclusive nativeRpcRecord scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open/json.parse.nativeRpcRecord.chars": {
+            "scenario": "session.open",
+            "metric": "json.parse.nativeRpcRecord.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; a new event-stream tab on it, until its first full view",
+            "source": "JSON.parse in exclusive nativeRpcRecord scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open/json.parse.nativeRpcNotify.calls": {
+            "scenario": "session.open",
+            "metric": "json.parse.nativeRpcNotify.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; a new event-stream tab on it, until its first full view",
+            "source": "JSON.parse in exclusive nativeRpcNotify scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open/json.parse.nativeRpcNotify.chars": {
+            "scenario": "session.open",
+            "metric": "json.parse.nativeRpcNotify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; a new event-stream tab on it, until its first full view",
+            "source": "JSON.parse in exclusive nativeRpcNotify scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "turn.cold/native.rpc.notify.records": {
+            "scenario": "turn.cold",
+            "metric": "native.rpc.notify.records",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; first prompt of a new session with one tab watching, until settled and quiet",
+            "source": "transport RPC records that carry a notify string payload (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 2
+            }
+        },
+        "turn.cold/json.parse.nativeRpcRecord.calls": {
+            "scenario": "turn.cold",
+            "metric": "json.parse.nativeRpcRecord.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; first prompt of a new session with one tab watching, until settled and quiet",
+            "source": "JSON.parse in exclusive nativeRpcRecord scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 57
+            }
+        },
+        "turn.cold/json.parse.nativeRpcRecord.chars": {
+            "scenario": "turn.cold",
+            "metric": "json.parse.nativeRpcRecord.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; first prompt of a new session with one tab watching, until settled and quiet",
+            "source": "JSON.parse in exclusive nativeRpcRecord scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 170496
+            }
+        },
+        "turn.cold/json.parse.nativeRpcNotify.calls": {
+            "scenario": "turn.cold",
+            "metric": "json.parse.nativeRpcNotify.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; first prompt of a new session with one tab watching, until settled and quiet",
+            "source": "JSON.parse in exclusive nativeRpcNotify scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 2
+            }
+        },
+        "turn.cold/json.parse.nativeRpcNotify.chars": {
+            "scenario": "turn.cold",
+            "metric": "json.parse.nativeRpcNotify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; first prompt of a new session with one tab watching, until settled and quiet",
+            "source": "JSON.parse in exclusive nativeRpcNotify scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 182
+            }
+        },
+        "turn.warm/native.rpc.notify.records": {
+            "scenario": "turn.warm",
+            "metric": "native.rpc.notify.records",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; second prompt of that session with one tab watching, until settled and quiet",
+            "source": "transport RPC records that carry a notify string payload (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "turn.warm/json.parse.nativeRpcRecord.calls": {
+            "scenario": "turn.warm",
+            "metric": "json.parse.nativeRpcRecord.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; second prompt of that session with one tab watching, until settled and quiet",
+            "source": "JSON.parse in exclusive nativeRpcRecord scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 47
+            }
+        },
+        "turn.warm/json.parse.nativeRpcRecord.chars": {
+            "scenario": "turn.warm",
+            "metric": "json.parse.nativeRpcRecord.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; second prompt of that session with one tab watching, until settled and quiet",
+            "source": "JSON.parse in exclusive nativeRpcRecord scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 3,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 49193
+            }
+        },
+        "turn.warm/json.parse.nativeRpcNotify.calls": {
+            "scenario": "turn.warm",
+            "metric": "json.parse.nativeRpcNotify.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; second prompt of that session with one tab watching, until settled and quiet",
+            "source": "JSON.parse in exclusive nativeRpcNotify scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "turn.warm/json.parse.nativeRpcNotify.chars": {
+            "scenario": "turn.warm",
+            "metric": "json.parse.nativeRpcNotify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; second prompt of that session with one tab watching, until settled and quiet",
+            "source": "JSON.parse in exclusive nativeRpcNotify scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 90
+            }
+        },
+        "turn.paced/native.rpc.notify.records": {
+            "scenario": "turn.paced",
+            "metric": "native.rpc.notify.records",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; third prompt of that session, its answer paced 25 ms per chunk, one tab watching, until settled and quiet",
+            "source": "transport RPC records that carry a notify string payload (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "turn.paced/json.parse.nativeRpcRecord.calls": {
+            "scenario": "turn.paced",
+            "metric": "json.parse.nativeRpcRecord.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; third prompt of that session, its answer paced 25 ms per chunk, one tab watching, until settled and quiet",
+            "source": "JSON.parse in exclusive nativeRpcRecord scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 47
+            }
+        },
+        "turn.paced/json.parse.nativeRpcRecord.chars": {
+            "scenario": "turn.paced",
+            "metric": "json.parse.nativeRpcRecord.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; third prompt of that session, its answer paced 25 ms per chunk, one tab watching, until settled and quiet",
+            "source": "JSON.parse in exclusive nativeRpcRecord scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 49217
+            }
+        },
+        "turn.paced/json.parse.nativeRpcNotify.calls": {
+            "scenario": "turn.paced",
+            "metric": "json.parse.nativeRpcNotify.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; third prompt of that session, its answer paced 25 ms per chunk, one tab watching, until settled and quiet",
+            "source": "JSON.parse in exclusive nativeRpcNotify scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "turn.paced/json.parse.nativeRpcNotify.chars": {
+            "scenario": "turn.paced",
+            "metric": "json.parse.nativeRpcNotify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; third prompt of that session, its answer paced 25 ms per chunk, one tab watching, until settled and quiet",
+            "source": "JSON.parse in exclusive nativeRpcNotify scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 90
+            }
+        },
+        "git.changes/native.rpc.notify.records": {
+            "scenario": "git.changes",
+            "metric": "native.rpc.notify.records",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 20 changed files; GET changes",
+            "source": "transport RPC records that carry a notify string payload (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "git.changes/json.parse.nativeRpcRecord.calls": {
+            "scenario": "git.changes",
+            "metric": "json.parse.nativeRpcRecord.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 20 changed files; GET changes",
+            "source": "JSON.parse in exclusive nativeRpcRecord scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "git.changes/json.parse.nativeRpcRecord.chars": {
+            "scenario": "git.changes",
+            "metric": "json.parse.nativeRpcRecord.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 20 changed files; GET changes",
+            "source": "JSON.parse in exclusive nativeRpcRecord scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "git.changes/json.parse.nativeRpcNotify.calls": {
+            "scenario": "git.changes",
+            "metric": "json.parse.nativeRpcNotify.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 20 changed files; GET changes",
+            "source": "JSON.parse in exclusive nativeRpcNotify scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "git.changes/json.parse.nativeRpcNotify.chars": {
+            "scenario": "git.changes",
+            "metric": "json.parse.nativeRpcNotify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 20 changed files; GET changes",
+            "source": "JSON.parse in exclusive nativeRpcNotify scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "git.diff/native.rpc.notify.records": {
+            "scenario": "git.diff",
+            "metric": "native.rpc.notify.records",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 20 changed files; GET changes/diff for tracked src/file-0.txt",
+            "source": "transport RPC records that carry a notify string payload (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "git.diff/json.parse.nativeRpcRecord.calls": {
+            "scenario": "git.diff",
+            "metric": "json.parse.nativeRpcRecord.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 20 changed files; GET changes/diff for tracked src/file-0.txt",
+            "source": "JSON.parse in exclusive nativeRpcRecord scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "git.diff/json.parse.nativeRpcRecord.chars": {
+            "scenario": "git.diff",
+            "metric": "json.parse.nativeRpcRecord.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 20 changed files; GET changes/diff for tracked src/file-0.txt",
+            "source": "JSON.parse in exclusive nativeRpcRecord scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "git.diff/json.parse.nativeRpcNotify.calls": {
+            "scenario": "git.diff",
+            "metric": "json.parse.nativeRpcNotify.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 20 changed files; GET changes/diff for tracked src/file-0.txt",
+            "source": "JSON.parse in exclusive nativeRpcNotify scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "git.diff/json.parse.nativeRpcNotify.chars": {
+            "scenario": "git.diff",
+            "metric": "json.parse.nativeRpcNotify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 20 changed files; GET changes/diff for tracked src/file-0.txt",
+            "source": "JSON.parse in exclusive nativeRpcNotify scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "git.branches/native.rpc.notify.records": {
+            "scenario": "git.branches",
+            "metric": "native.rpc.notify.records",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 2 branches; GET branches",
+            "source": "transport RPC records that carry a notify string payload (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "git.branches/json.parse.nativeRpcRecord.calls": {
+            "scenario": "git.branches",
+            "metric": "json.parse.nativeRpcRecord.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 2 branches; GET branches",
+            "source": "JSON.parse in exclusive nativeRpcRecord scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "git.branches/json.parse.nativeRpcRecord.chars": {
+            "scenario": "git.branches",
+            "metric": "json.parse.nativeRpcRecord.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 2 branches; GET branches",
+            "source": "JSON.parse in exclusive nativeRpcRecord scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "git.branches/json.parse.nativeRpcNotify.calls": {
+            "scenario": "git.branches",
+            "metric": "json.parse.nativeRpcNotify.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 2 branches; GET branches",
+            "source": "JSON.parse in exclusive nativeRpcNotify scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "git.branches/json.parse.nativeRpcNotify.chars": {
+            "scenario": "git.branches",
+            "metric": "json.parse.nativeRpcNotify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 2 branches; GET branches",
+            "source": "JSON.parse in exclusive nativeRpcNotify scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "commands.list/native.rpc.notify.records": {
+            "scenario": "commands.list",
+            "metric": "native.rpc.notify.records",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; GET the native slash-command list",
+            "source": "transport RPC records that carry a notify string payload (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "commands.list/json.parse.nativeRpcRecord.calls": {
+            "scenario": "commands.list",
+            "metric": "json.parse.nativeRpcRecord.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; GET the native slash-command list",
+            "source": "JSON.parse in exclusive nativeRpcRecord scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "commands.list/json.parse.nativeRpcRecord.chars": {
+            "scenario": "commands.list",
+            "metric": "json.parse.nativeRpcRecord.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; GET the native slash-command list",
+            "source": "JSON.parse in exclusive nativeRpcRecord scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "commands.list/json.parse.nativeRpcNotify.calls": {
+            "scenario": "commands.list",
+            "metric": "json.parse.nativeRpcNotify.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; GET the native slash-command list",
+            "source": "JSON.parse in exclusive nativeRpcNotify scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "commands.list/json.parse.nativeRpcNotify.chars": {
+            "scenario": "commands.list",
+            "metric": "json.parse.nativeRpcNotify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; GET the native slash-command list",
+            "source": "JSON.parse in exclusive nativeRpcNotify scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "commands.discover.cold/native.rpc.notify.records": {
+            "scenario": "commands.discover.cold",
+            "metric": "native.rpc.notify.records",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all existing scenarios, an additional new native session with one tab; first explicit POST prompts, with no model request",
+            "source": "transport RPC records that carry a notify string payload (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 2
+            }
+        },
+        "commands.discover.cold/json.parse.nativeRpcRecord.calls": {
+            "scenario": "commands.discover.cold",
+            "metric": "json.parse.nativeRpcRecord.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all existing scenarios, an additional new native session with one tab; first explicit POST prompts, with no model request",
+            "source": "JSON.parse in exclusive nativeRpcRecord scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 10
+            }
+        },
+        "commands.discover.cold/json.parse.nativeRpcRecord.chars": {
+            "scenario": "commands.discover.cold",
+            "metric": "json.parse.nativeRpcRecord.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all existing scenarios, an additional new native session with one tab; first explicit POST prompts, with no model request",
+            "source": "JSON.parse in exclusive nativeRpcRecord scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 11348
+            }
+        },
+        "commands.discover.cold/json.parse.nativeRpcNotify.calls": {
+            "scenario": "commands.discover.cold",
+            "metric": "json.parse.nativeRpcNotify.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all existing scenarios, an additional new native session with one tab; first explicit POST prompts, with no model request",
+            "source": "JSON.parse in exclusive nativeRpcNotify scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 2
+            }
+        },
+        "commands.discover.cold/json.parse.nativeRpcNotify.chars": {
+            "scenario": "commands.discover.cold",
+            "metric": "json.parse.nativeRpcNotify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all existing scenarios, an additional new native session with one tab; first explicit POST prompts, with no model request",
+            "source": "JSON.parse in exclusive nativeRpcNotify scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 182
+            }
+        },
+        "commands.discover.warm/native.rpc.notify.records": {
+            "scenario": "commands.discover.warm",
+            "metric": "native.rpc.notify.records",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; same additional session/tab after cold discovery; a second explicit POST prompts with a new request ID, with no model request",
+            "source": "transport RPC records that carry a notify string payload (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "commands.discover.warm/json.parse.nativeRpcRecord.calls": {
+            "scenario": "commands.discover.warm",
+            "metric": "json.parse.nativeRpcRecord.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; same additional session/tab after cold discovery; a second explicit POST prompts with a new request ID, with no model request",
+            "source": "JSON.parse in exclusive nativeRpcRecord scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 4
+            }
+        },
+        "commands.discover.warm/json.parse.nativeRpcRecord.chars": {
+            "scenario": "commands.discover.warm",
+            "metric": "json.parse.nativeRpcRecord.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; same additional session/tab after cold discovery; a second explicit POST prompts with a new request ID, with no model request",
+            "source": "JSON.parse in exclusive nativeRpcRecord scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 9046
+            }
+        },
+        "commands.discover.warm/json.parse.nativeRpcNotify.calls": {
+            "scenario": "commands.discover.warm",
+            "metric": "json.parse.nativeRpcNotify.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; same additional session/tab after cold discovery; a second explicit POST prompts with a new request ID, with no model request",
+            "source": "JSON.parse in exclusive nativeRpcNotify scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "commands.discover.warm/json.parse.nativeRpcNotify.chars": {
+            "scenario": "commands.discover.warm",
+            "metric": "json.parse.nativeRpcNotify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; same additional session/tab after cold discovery; a second explicit POST prompts with a new request ID, with no model request",
+            "source": "JSON.parse in exclusive nativeRpcNotify scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 90
+            }
+        },
+        "turn.prepared/native.rpc.notify.records": {
+            "scenario": "turn.prepared",
+            "metric": "native.rpc.notify.records",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; same additional session/tab after both discoveries; first ordinary prompt, until settled and quiet",
+            "source": "transport RPC records that carry a notify string payload (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "turn.prepared/json.parse.nativeRpcRecord.calls": {
+            "scenario": "turn.prepared",
+            "metric": "json.parse.nativeRpcRecord.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; same additional session/tab after both discoveries; first ordinary prompt, until settled and quiet",
+            "source": "JSON.parse in exclusive nativeRpcRecord scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 51
+            }
+        },
+        "turn.prepared/json.parse.nativeRpcRecord.chars": {
+            "scenario": "turn.prepared",
+            "metric": "json.parse.nativeRpcRecord.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; same additional session/tab after both discoveries; first ordinary prompt, until settled and quiet",
+            "source": "JSON.parse in exclusive nativeRpcRecord scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 168200
+            }
+        },
+        "turn.prepared/json.parse.nativeRpcNotify.calls": {
+            "scenario": "turn.prepared",
+            "metric": "json.parse.nativeRpcNotify.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; same additional session/tab after both discoveries; first ordinary prompt, until settled and quiet",
+            "source": "JSON.parse in exclusive nativeRpcNotify scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "turn.prepared/json.parse.nativeRpcNotify.chars": {
+            "scenario": "turn.prepared",
+            "metric": "json.parse.nativeRpcNotify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; same additional session/tab after both discoveries; first ordinary prompt, until settled and quiet",
+            "source": "JSON.parse in exclusive nativeRpcNotify scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 90
+            }
+        },
+        "projection.large.open/native.rpc.notify.records": {
+            "scenario": "projection.large.open",
+            "metric": "native.rpc.notify.records",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "transport RPC records that carry a notify string payload (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "projection.large.open/json.parse.nativeRpcRecord.calls": {
+            "scenario": "projection.large.open",
+            "metric": "json.parse.nativeRpcRecord.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "JSON.parse in exclusive nativeRpcRecord scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "projection.large.open/json.parse.nativeRpcRecord.chars": {
+            "scenario": "projection.large.open",
+            "metric": "json.parse.nativeRpcRecord.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "JSON.parse in exclusive nativeRpcRecord scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "projection.large.open/json.parse.nativeRpcNotify.calls": {
+            "scenario": "projection.large.open",
+            "metric": "json.parse.nativeRpcNotify.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "JSON.parse in exclusive nativeRpcNotify scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "projection.large.open/json.parse.nativeRpcNotify.chars": {
+            "scenario": "projection.large.open",
+            "metric": "json.parse.nativeRpcNotify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "JSON.parse in exclusive nativeRpcNotify scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "projection.large.paced/native.rpc.notify.records": {
+            "scenario": "projection.large.paced",
+            "metric": "native.rpc.notify.records",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "the same 64-turn session and 4 attached tabs; one 6000-char answer paced 25 ms per chunk, until settled and quiet",
+            "source": "transport RPC records that carry a notify string payload (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "projection.large.paced/json.parse.nativeRpcRecord.calls": {
+            "scenario": "projection.large.paced",
+            "metric": "json.parse.nativeRpcRecord.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "the same 64-turn session and 4 attached tabs; one 6000-char answer paced 25 ms per chunk, until settled and quiet",
+            "source": "JSON.parse in exclusive nativeRpcRecord scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 47
+            }
+        },
+        "projection.large.paced/json.parse.nativeRpcRecord.chars": {
+            "scenario": "projection.large.paced",
+            "metric": "json.parse.nativeRpcRecord.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "the same 64-turn session and 4 attached tabs; one 6000-char answer paced 25 ms per chunk, until settled and quiet",
+            "source": "JSON.parse in exclusive nativeRpcRecord scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 49242
+            }
+        },
+        "projection.large.paced/json.parse.nativeRpcNotify.calls": {
+            "scenario": "projection.large.paced",
+            "metric": "json.parse.nativeRpcNotify.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "the same 64-turn session and 4 attached tabs; one 6000-char answer paced 25 ms per chunk, until settled and quiet",
+            "source": "JSON.parse in exclusive nativeRpcNotify scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "projection.large.paced/json.parse.nativeRpcNotify.chars": {
+            "scenario": "projection.large.paced",
+            "metric": "json.parse.nativeRpcNotify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "the same 64-turn session and 4 attached tabs; one 6000-char answer paced 25 ms per chunk, until settled and quiet",
+            "source": "JSON.parse in exclusive nativeRpcNotify scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 90
+            }
         }
     }
 }
