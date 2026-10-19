@@ -52,6 +52,9 @@ export type ParseWork =
     | "native-jsonl-ingest"
     | "native-jsonl-snapshot"
     | "native-gate"
+    | "native-pin"
+    | "native-resolver"
+    | "native-settings"
     | "http";
 /** The benchmark subscribes only to enable bounded source attribution; no content is published. */
 export const parseWorkChannel = channel("rotom-team:parse-work");

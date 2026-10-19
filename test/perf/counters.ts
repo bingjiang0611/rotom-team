@@ -66,6 +66,12 @@ const parseSource = () => {
         case "native-jsonl-snapshot":
         case "native-gate":
             return "nativeReadback";
+        case "native-pin":
+            return "nativePin";
+        case "native-resolver":
+            return "nativeResolver";
+        case "native-settings":
+            return "nativeSettings";
         case "http":
             return "http";
         default:

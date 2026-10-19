@@ -53,6 +53,9 @@ const parseSources = [
     "journalThinking",
     "journalSegments",
     "nativeReadback",
+    "nativePin",
+    "nativeResolver",
+    "nativeSettings",
     "http",
     "other",
 ];

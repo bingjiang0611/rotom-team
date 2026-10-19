@@ -22,6 +22,7 @@ import {
     TeamResourcePolicyError,
 } from "./rotom-resource-policy.ts";
 import { nativeConfigurationApi } from "./rotom-kernel.ts";
+import { parseWithWork } from "./perf-channels.ts";
 
 const resourceKeys = ["extensions", "skills", "prompts", "themes"] as const;
 const standardFiles = [
@@ -34,7 +35,7 @@ const standardFiles = [
 ];
 
 function json(file: string): Record<string, any> {
-    return existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : {};
+    return existsSync(file) ? parseWithWork("native-settings", readFileSync(file, "utf8")) : {};
 }
 
 function write(file: string, value: string | Buffer) {

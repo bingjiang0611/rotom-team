@@ -88,6 +88,9 @@ test("parse source counters partition calls/chars without changing JSON results"
         ["native-jsonl-ingest", "nativeReadback"],
         ["native-jsonl-snapshot", "nativeReadback"],
         ["native-gate", "nativeReadback"],
+        ["native-pin", "nativePin"],
+        ["native-resolver", "nativeResolver"],
+        ["native-settings", "nativeSettings"],
         ["http", "http"],
     ] as const;
 
@@ -98,8 +101,8 @@ test("parse source counters partition calls/chars without changing JSON results"
     assert.equal(JSON.parse("3"), 3);
     const counts = since(before);
 
-    assert.equal(counts["json.parse.calls"], 15);
-    assert.equal(counts["json.parse.chars"], 155);
+    assert.equal(counts["json.parse.calls"], 18);
+    assert.equal(counts["json.parse.chars"], 188);
 
     const totals = new Map<string, number>();
 

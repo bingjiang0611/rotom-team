@@ -254,7 +254,26 @@ remains noise, so L1 only; no L3/production/real-account claim. Stop after three
 stable 48 RPC parses into transport records and nested bridge payloads before choosing another optimization; the fresh
 one-call gate is not a lead.
 
-## Open
+## Twelfth climb batch — 2026-10-18
+
+- **RPC sources measured, no duplicate notify work:** warm/paced/large-paced 48 parses = 47 transport records + one
+  90-character notify payload; cold 59 = 57 + 2. All calls/chars partition exactly across ten runs. No event cache or
+  protocol optimization justified. See [measurement](experiments/2026-10-18-native-rpc-parse-sources.md).
+- **Formerly unclassified turn work explained:** 24 calls / 103,190 chars = pin 9/19,002 + pinned resolver 13/84,008
+    - resource settings 1/90 + event-control 1/90. This is reclassification, not a reduction. Resolver validates fork
+      identities, archive/source integrity and executable/export paths; do not cache verification across calls or edit the
+      fixed product to lower the number. See [measurement/decision](experiments/2026-10-18-native-identity-parse-sources.md).
+
+Both measurements have two separate five-run reports and passing global/nested partition checks. Final type/lint/format,
+456 tests, 82-request kernel proof and 28-inference native command/Chromium proof pass. Candidates only, no promotion or
+relaxation. No new L1 reduction or L2/L3 claim. Close after two measurements because the proposed shortcut crosses the
+trusted-native boundary. Next coding-agent action: add a distinct 60-session startup workload and measure restoration
+SQL/JSON growth before choosing an optimization. Production/real accounts remain out of scope.
+
+## Original leads (historical baselines)
+
+The values below predate the climb batches. Use the batch results above for current counters; they are not new
+regressions or unsolved attribution findings. Startup scaling remains the next measurement lead.
 
 - **A warm turn parses about 93 times its answer as JSON.** `turn.warm/json.parse.chars` 558 969 for a
   6 000-character answer; `turn.paced` 1 069 876; `turn.cold` 873 804. Next: find which reads parse (kernel journal

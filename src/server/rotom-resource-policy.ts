@@ -4,6 +4,7 @@ import { existsSync, readFileSync, readdirSync, lstatSync } from "node:fs";
 import { isAbsolute, join, relative } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { nativeConfigurationApi } from "./rotom-kernel.ts";
+import { parseWithWork } from "./perf-channels.ts";
 
 export class TeamResourcePolicyError extends Error {}
 
@@ -79,7 +80,7 @@ export function teamResourceSettings(settings: Record<string, any>) {
 }
 
 function json(file: string): Record<string, any> {
-    return existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : {};
+    return existsSync(file) ? parseWithWork("native-settings", readFileSync(file, "utf8")) : {};
 }
 
 function packageRoots(directory: string): string[] {

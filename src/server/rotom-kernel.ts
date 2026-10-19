@@ -11,7 +11,12 @@ import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { RotomRpc } from "./rotom-rpc.ts";
-import { nativeStartChannel, parseWithWork, type NativeStartSignal } from "./perf-channels.ts";
+import {
+    nativeStartChannel,
+    parseWithWork,
+    withParseWork,
+    type NativeStartSignal,
+} from "./perf-channels.ts";
 import { prepareTeamResources, sharedContextPaths } from "./rotom-resources.ts";
 
 const runtime = fileURLToPath(new URL("../../runtime/rotom/", import.meta.url));
@@ -55,7 +60,7 @@ export async function nativeBuiltinCommands(): Promise<
         pathToFileURL(join(product, "runtime/resolve-installed-pi.mjs")).href
     );
 
-    await resolveInstalledPi(product);
+    await withParseWork("native-resolver", () => resolveInstalledPi(product));
     const entry = canonical(
         join(
             product,
@@ -85,7 +90,7 @@ export async function nativeSessionManager() {
         pathToFileURL(join(product, "runtime/resolve-installed-pi.mjs")).href
     );
 
-    await resolveInstalledPi(product);
+    await withParseWork("native-resolver", () => resolveInstalledPi(product));
     const entry = canonical(
         join(
             product,
@@ -155,8 +160,10 @@ export async function nativeConfigurationApi() {
 
     return {
         bundledResourceRoot: product,
-        productVersion: JSON.parse(readFileSync(join(product, "package.json"), "utf8"))
-            .version as string,
+        productVersion: parseWithWork(
+            "native-settings",
+            readFileSync(join(product, "package.json"), "utf8"),
+        ).version as string,
         /** What the product launcher adds to every session, as `--extension`/`--skill` paths. */
         productResources: (
             productConfig.RESOURCE_DESCRIPTORS_V1 as {
@@ -193,9 +200,12 @@ export async function nativeConfigurationApi() {
 
 export function verifyRotomKernel(): { version: string; executable: string } {
     canonical(product, "directory");
-    const pin = JSON.parse(readFileSync(join(runtime, "pin.json"), "utf8"));
-    const pkg = JSON.parse(readFileSync(join(product, "package.json"), "utf8"));
-    const lock = JSON.parse(readFileSync(join(runtime, "package-lock.json"), "utf8"));
+    const pin = parseWithWork("native-pin", readFileSync(join(runtime, "pin.json"), "utf8"));
+    const pkg = parseWithWork("native-pin", readFileSync(join(product, "package.json"), "utf8"));
+    const lock = parseWithWork(
+        "native-pin",
+        readFileSync(join(runtime, "package-lock.json"), "utf8"),
+    );
     const locked = lock.packages["node_modules/@bingjiang0611/rotom"];
 
     if (locked.version !== pin.version || locked.integrity !== pin.integrity) {
