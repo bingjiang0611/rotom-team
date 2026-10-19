@@ -1,9 +1,21 @@
 # Three programs — 2026-10-19
 
-Proposals for the owner, not approved work. Each removes work instead of tuning it, and each is larger than the
+The owner approved local implementation in this order: Program 1, then 2, then 3. Deployment/restarting the live
+service remains separate approval. Each program removes work instead of tuning it, and each is larger than the
 previous climbs. The evidence is the journal snapshot `/tmp/rt-journal-20261019T125200Z` (see
 [opportunities](opportunities.md)), code reading at `aaaba3e`, and a few local timings on a loaded machine (load
 average 1.4–3.8: hints, not L2). Nothing here is measured as faster yet.
+
+## Implementation status — first batch
+
+| Program                      | Status                                                                                                                                 | Next owner/action                                                                                                          |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| 1. Bytes diet                | Partial: thumbnails/previews, bounded recoverable media cache, SSE/poll gzip, constrained-network measurement and browser verification | Coding agent: finish TLS/HTTP2, original-preserving paste resizing and original-file delivery evaluation in the next batch |
+| 2. Incremental everything    | Not started                                                                                                                            | Coding agent: start after Program 1                                                                                        |
+| 3. Main thread / native warm | Not started                                                                                                                            | Coding agent: start after Program 2; preserve the native trust and payer checks                                            |
+
+[First-batch evidence and costs](experiments/2026-10-19-thumbnails-and-stream-compression.md). This checkpoint is not
+completion of any whole program. No push, production restart, or deployment.
 
 ## What the deeper look found
 

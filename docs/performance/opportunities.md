@@ -8,6 +8,25 @@ Workload: `test/perf/workload.ts` as of 2026-10-16 (12 seeded turns of 6000-char
 `darwin-arm64` ledger baselines (worst of 10 runs from temporary checkouts) and benchmark medians, Apple M1, load below
 the core count.
 
+## Approved programs: first implementation batch — 2026-10-19
+
+Program 1 is **partial**; Programs 2 and 3 have not started. Four transcript thumbnails send 7,868,332→422,503
+bytes (94.6% less). Final alternating three-run comparison on a quiet-enough machine (`highLoad: false`) gives
+repeated loopback retrieval 53.1→9.3 ms, and previously unrequested thumbnails through Chromium's emulated
+4 Mbit/s / 40 ms link 15,808.2→989.1 ms, including generation (`faster` in both comparisons). First loopback
+retrieval instead slows 46.9→233.3 ms: eight probe/resize subprocesses and private cache-record writes are new work.
+This is L1 plus scenario-scoped L2, not L3 or universal first-image improvement.
+
+Derived files are bounded and verified on read; originals and permission/fork checks remain authoritative. SSE/large
+poll answers use gzip with q-aware negotiation, immediate event flush and bounded stream backlog. Full checks,
+503 tests, 82-request synthetic kernel proof and real Chromium thumbnail/preview/original selection pass. The final
+ratchet and ledger guard pass; new counters are candidates only. See
+[experiment, costs, limits and exact next actions](experiments/2026-10-19-thumbnails-and-stream-compression.md).
+
+Stop this batch after three experiments. Next coding-agent action, under the existing approval: finish Program 1's
+remaining TLS/HTTP2, original-preserving paste and original-file delivery work before starting Program 2. No service,
+account, native product, journal collection or deployment was changed.
+
 ## Journal refresh — 2026-10-19, 12:52 UTC
 
 Read-only snapshot `/tmp/rt-journal-20261019T125200Z`: 7,322 complete records, no cut-off lines,

@@ -319,6 +319,23 @@ revoke an old device from a signed-in member device before retrying.
 Do not roll back to a version without recovery support while recovery links remain live: cancel them or
 wait 15 minutes first. This feature does not diagnose or prevent browser Cookie deletion.
 
+## Stored image previews
+
+On macOS, the server uses the system `sips` tool to generate smaller copies of stored-message images: 480 px
+thumbnails in the transcript and 1600 px previews in the full-screen viewer. **Open** still opens the unmodified
+original. GIF animation and small images are preserved; unsupported platforms or resize failures use originals.
+Generation does not use a model account and does not change what the model originally received.
+
+Derived private files live under `<data>/media/`, capped at 256 MiB and 8192 files; they can be regenerated from the
+stored entries. Do not share that directory: it contains conversation images. The existing offline backup includes
+these files. Fork visibility and session permissions are checked on every HTTP request, including cache hits.
+Damaged/missing copies are rebuilt, and a read-only/full cache falls back to originals. No TLS/HTTP2 listener or
+browser-side paste resizing is enabled by this change.
+
+Live event streams and large long-poll responses negotiate gzip when accepted. Events flush immediately; an SSE
+client with more than 8 MiB of buffered data is disconnected so it can reconnect for a fresh view. Long-history
+pagination and changed-row session-list pushes are not implemented yet.
+
 ## Verification
 
 Use [VERIFICATION.md](VERIFICATION.md). The native/browser, resource, MCP, Goal and inventory scripts use temporary data
