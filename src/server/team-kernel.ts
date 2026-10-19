@@ -65,7 +65,12 @@ import {
 } from "./rotom-kernel.ts";
 import { McpSignIns } from "./mcp-sign-in.ts";
 import { nativeTreeNodes } from "./native-tree.ts";
-import { supportedTeamCommand, teamCommandCatalog } from "./team-command-policy.ts";
+import {
+    supportedTeamCommand,
+    teamCommandCatalog,
+    teamCommandInputError,
+    teamCommandWebInfo,
+} from "./team-command-policy.ts";
 import { touchSession } from "./titles.ts";
 
 export type NativeCreation = {
@@ -328,6 +333,11 @@ export class TeamKernel {
         // The complete personal alias includes the account generation; never parse/rekey a foreign credential.
         return { provider: binding.accountGeneration, modelId: binding.model };
     }
+    /** Current head models for list views in one read, including in-place changes; no native startup/cache. */
+    modelNames(): ReadonlyMap<string, string> {
+        return this.executions.journal.modelNames();
+    }
+
     configuration(id: ConversationId): ConfigurationSnapshot | undefined {
         return this.#snapshot(this.executions.journal.session(String(id)).binding, id);
     }
@@ -2188,9 +2198,15 @@ export class TeamKernel {
     }
 
     /** Recheck the live native registry: a cached template may now be shadowed by an extension. */
-    #admitNativeCommand(command: { name: string; source?: unknown }) {
+    #admitNativeCommand(command: { name: string; source?: unknown; args?: string }) {
         if (!supportedTeamCommand(command)) {
             throw new RpcFailure("rejected", `/${command.name} is not supported in Team.`);
+        }
+
+        const error = teamCommandInputError(command, command.args);
+
+        if (error) {
+            throw new RpcFailure("rejected", error);
         }
     }
 
@@ -2203,11 +2219,21 @@ export class TeamKernel {
     ) {
         const name = nativeCommandName(text);
 
-        if (!name || supportedTeamCommand({ name })) {
+        if (!name) {
             return;
         }
 
         const catalog = await this.nativeCommands(id, user);
+        const observed = catalog.commands.find((command) => command.name === name);
+        const error = observed && teamCommandInputError(observed, nativeCommandArgs(text));
+
+        if (error) {
+            throw new HttpError(400, error);
+        }
+
+        if (supportedTeamCommand({ name })) {
+            return;
+        }
 
         if (name.startsWith("skill:") && !catalog.dynamicReady) {
             await this.#requireDynamicAdapter(id, user, name, requestId);
@@ -2243,7 +2269,10 @@ export class TeamKernel {
         const dynamic = cached?.commands ?? [];
 
         return {
-            commands: teamCommandCatalog([...builtins, ...dynamic]),
+            commands: teamCommandCatalog([...builtins, ...dynamic]).map((command) => ({
+                ...command,
+                web: teamCommandWebInfo(command),
+            })),
             dynamicReady: Boolean(cached),
             discoveryBlocked:
                 this.executions.journal.pendingConversation(String(id))?.status === "unknown",
@@ -2448,7 +2477,13 @@ export class TeamKernel {
                 }
 
                 for (const row of rows.slice(doc.count - skip)) {
-                    if (row.entry.type === "session_info" && typeof row.entry.name === "string") {
+                    // Imported history describes the source, not the newly named copy/fork. Only live
+                    // prompt/command metadata may rename the destination; keep the audit entries intact.
+                    if (
+                        ["prompt", "command"].includes(row.operation) &&
+                        row.entry.type === "session_info" &&
+                        typeof row.entry.name === "string"
+                    ) {
                         const meta = (await tx.doc(SessionsDoc)).items[String(id)];
 
                         if (meta) {
@@ -2777,7 +2812,11 @@ export class TeamKernel {
             const meta = app.sessionMeta(id)!;
             const target = await app.commands.createSession(
                 current,
-                { backend: "rotom", cwd: meta.cwd, title: `${meta.title ?? "New session"} · Fork` },
+                {
+                    backend: "rotom",
+                    cwd: meta.cwd,
+                    title: `${meta.title ?? "New session"} · ${clone ? "Copy" : "Fork"}`,
+                },
                 {
                     sourceId: id,
                     requestId: key,

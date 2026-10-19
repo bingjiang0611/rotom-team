@@ -1335,6 +1335,7 @@ export class PocketApp {
 
     /** The session list, with who is in each session and its newest chat message. Scoped people see only theirs. */
     sessions(user?: User) {
+        const nativeModels = this.kernel?.modelNames();
         const waiting = new Set(
             this.approvals.all().map((approval) => String(this.rootOf(approval.conversationId))),
         );
@@ -1360,7 +1361,10 @@ export class PocketApp {
             )
             .map(([id, meta]) => {
                 const conversationId = Number(id) as unknown as ConversationId;
-                const model = this.#agents.get(conversationId)?.model;
+                const model =
+                    meta.backend === "rotom"
+                        ? nativeModels?.get(id)
+                        : this.#agents.get(conversationId)?.model?.modelId;
                 const busy = this.isBusy(conversationId);
                 const needsAnswer = this.kernel?.needsAnswer(conversationId, user) === true;
                 const here = [...(people.get(id) ?? new Map<string, string>())].map(
@@ -1382,7 +1386,7 @@ export class PocketApp {
                     ...(needsAnswer ? { needsAnswer: true } : {}),
                     ...(endedAt === undefined ? {} : { endedAt }),
                     ...(finishedUnread ? { finishedUnread: true } : {}),
-                    ...(model === undefined ? {} : { model: model.modelId }),
+                    ...(model === undefined ? {} : { model }),
                     ...(here.length === 0 ? {} : { people: here }),
                     ...(chat === undefined ? {} : { chatAt: chat.at, chatBy: chat.userId }),
                 };

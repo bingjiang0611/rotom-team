@@ -23,6 +23,7 @@ import {
 import type { User } from "../config.ts";
 import { HttpError } from "../errors.ts";
 import { desktopTheme, wallpaperFile } from "../omarchy.ts";
+import { parseWebTimings, webTimingChannel } from "../perf-channels.ts";
 import { runningNow } from "../running.ts";
 import { serveImage } from "./assets.ts";
 import { browserRoutes } from "./browser-routes.ts";
@@ -326,6 +327,23 @@ export function createApi(options: HttpOptions, auth: Auth) {
             app.setAccess(user, second, await readJson(request));
 
             return json(response, 200, app.people(user));
+        }
+
+        // A tab's content-free timings for the daily performance journal; dropped while nothing journals.
+        if (first === "perf" && method === "POST") {
+            const timings = parseWebTimings(await readJson(request));
+
+            if (timings === null) {
+                throw new HttpError(400, "Not a timing report");
+            }
+
+            if (webTimingChannel.hasSubscribers) {
+                for (const timing of timings) {
+                    webTimingChannel.publish(timing);
+                }
+            }
+
+            return json(response, 200, { ok: true });
         }
 
         if (first === "visibility" && method === "POST") {

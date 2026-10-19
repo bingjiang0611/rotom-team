@@ -153,10 +153,11 @@ function commands() {
 
     return cached.list.map((command) => ({
         name: command.name,
-        args: command.argumentHint ?? "",
+        args: command.web?.args ?? command.argumentHint ?? "",
         description: command.description ?? "",
         native: true,
         source: command.source,
+        web: command.web,
     }));
 }
 

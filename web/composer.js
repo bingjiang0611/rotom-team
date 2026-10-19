@@ -387,6 +387,12 @@ export function Composer() {
 
     /** Dispatch a native slash command through the same team journal as an ordinary prompt. */
     const runCommand = async ({ command, arg }, clearDraft = true) => {
+        if (command.web?.unavailable) {
+            notify("warning", command.web.hint);
+
+            return;
+        }
+
         const submittedDraft = drafts.get(conversationId);
 
         setSending(true);
@@ -1057,6 +1063,8 @@ export function Composer() {
                                 class=${`command ${command === chosen ? "on" : ""}`}
                                 role="option"
                                 aria-selected=${command === chosen}
+                                disabled=${Boolean(command.web?.unavailable)}
+                                title=${command.web?.hint}
                                 onMouseDown=${(event) => event.preventDefault()}
                                 onClick=${() => choose(command)}
                             >
@@ -1065,20 +1073,24 @@ export function Composer() {
                                     command.args &&
                                     html`<span class="command-args">${command.args}</span>`
                                 }
-                                <span class="command-description">${command.description}</span>
+                                <span class="command-description">${command.web && `${command.web.label} · `}${command.description}</span>
                             </button>`,
                         )}
                     </div>`
                 }
                 ${
+                    chosen?.web &&
+                    html`<div class="command-hint wraps" role="status">${chosen.web.label} · ${chosen.web.hint}</div>`
+                }
+                ${
                     suggestions.length === 0 &&
                     parsed &&
-                    html`<div class="command-hint">
+                    html`<div class=${`command-hint ${parsed.command.web ? "wraps" : ""}`}>
                         <span class="command-name">/${parsed.command.name}</span>
                         ${
                             parsed.command.args &&
                             html` <span class="command-args">${parsed.command.args}</span>`
-                        } <span class="muted">· ${parsed.command.description} · native command</span>
+                        } <span class="muted">· ${parsed.command.web ? `${parsed.command.web.label} · ${parsed.command.web.hint}` : `${parsed.command.description} · native command`}</span>
                     </div>`
                 }
                 <div

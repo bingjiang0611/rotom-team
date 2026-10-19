@@ -1,6 +1,6 @@
 /** Actual native-command browser interactions against the isolated HTTP proof fixture. */
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { Browsers } from "../src/server/browser.ts";
 import { findBrowser } from "../src/server/browser/discovery.ts";
@@ -157,6 +157,109 @@ export async function nativeCommandUiProof(options: {
         );
         assert.equal(options.modelCalls(), before);
         await screenshot("native-command-menu");
+        await type("/llama");
+        await until(
+            async () => (await text('.command-hint[role="status"]')).includes("local terminal"),
+            "terminal-only command explanation",
+            20_000,
+        );
+        assert.equal(
+            await page.evaluate("document.querySelector('.commands .command').disabled"),
+            "true",
+        );
+        await page.evaluate(`${send}.click()`);
+        assert.equal(options.modelCalls(), before);
+        assert.equal(
+            await page.evaluate(
+                "globalThis.commandTrace.filter(each=>each.text.startsWith('/llama')).length",
+            ),
+            "0",
+        );
+        assert.equal(
+            await page.evaluate("document.querySelector('.composer textarea').value"),
+            "/llama",
+            "unavailable command retains draft",
+        );
+        await type("/subagents-stop");
+        await until(
+            async () => (await text(".commands")).includes("<run-id>"),
+            "run-control argument guidance",
+            20_000,
+        );
+        await type("");
+
+        // This is a synthetic public-projection rendering fixture, not a claim that a model wrote these files.
+        // File opening still goes through the real authorized HTTP view/download endpoints.
+        const outputsDir = join(options.app.cwdOf(options.id), "ux-outputs");
+
+        mkdirSync(outputsDir, { recursive: true });
+        writeFileSync(
+            join(outputsDir, "hello.html"),
+            "<!doctype html><h1>Outputs preview fixture</h1><button>Count</button>",
+        );
+        writeFileSync(
+            join(outputsDir, "证据 空格.md"),
+            "# Outputs evidence\nSynthetic fixture, no inference.\n",
+        );
+        await page.evaluate(`
+            const {store} = await import('/store.js');
+            store.set({notices:[]});
+            globalThis.outputOriginalProjection = {entries:store.state.view.entries,order:store.state.view.order};
+            const extra = [{
+                id: 999001, kind: 'assistant', blocks: [
+                    {type:'toolCall', id:'output-html', name:'Write', args:{file_path:'ux-outputs/hello.html'}},
+                    {type:'toolCall', id:'output-md', name:'write', args:{path:'ux-outputs/证据 空格.md'}},
+                    {type:'toolCall', id:'output-failed', name:'write', args:{path:'ux-outputs/failed.md'}}
+                ]
+            },
+            {id:999002,kind:'toolResult',callId:'output-html',name:'Write',text:'written',isError:false},
+            {id:999003,kind:'toolResult',callId:'output-md',name:'write',text:'written',isError:false},
+            {id:999004,kind:'toolResult',callId:'output-failed',name:'write',text:'failed',isError:true}];
+            const entries = new Map(store.state.view.entries);
+            for (const entry of extra) entries.set(entry.id,entry);
+            store.set({view:{...store.state.view,entries,order:[...store.state.view.order,...extra.map(entry=>entry.id)]}});
+        `);
+        await page.evaluate("document.querySelector('[aria-label=Outputs]').click()");
+        await until(
+            async () => (await text(".sheet")).includes("证据 空格.md"),
+            "generated file history in Outputs",
+            20_000,
+        );
+        assert.match(await text(".sheet"), /same folder|share.*folder/);
+        assert.ok(!(await text(".sheet")).includes("failed.md"));
+        assert.equal(await page.evaluate("document.querySelectorAll('.output-file').length"), "2");
+        await screenshot("outputs-desktop");
+        await page.evaluate(
+            "const theme = await import('/theme.js'); globalThis.outputOriginalTheme = theme.prefs().theme; theme.setPrefs({theme:'catppuccin-latte'})",
+        );
+        await screenshot("outputs-light");
+        await page.evaluate(
+            "(await import('/theme.js')).setPrefs({theme:globalThis.outputOriginalTheme}); delete globalThis.outputOriginalTheme",
+        );
+        await page.setViewport(VIEWPORTS.mobile);
+        assert.equal(
+            await page.evaluate("document.documentElement.scrollWidth <= innerWidth"),
+            "true",
+        );
+        await screenshot("outputs-mobile");
+        await page.setViewport(VIEWPORTS.desktop);
+        await page.evaluate("document.querySelectorAll('.output-file')[1].click()");
+        await until(
+            async () =>
+                (await text(".sheet")).includes("hello.html") &&
+                (await text(".sheet")).includes("Preview"),
+            "Output opens existing file viewer",
+            20_000,
+        );
+        assert.match(await text(".sheet"), /Preview/);
+        await screenshot("outputs-file-viewer");
+        await page.evaluate(`
+            const {store,closeSheet} = await import('/store.js');
+            closeSheet();
+            store.set({view:{...store.state.view,...globalThis.outputOriginalProjection}});
+            delete globalThis.outputOriginalProjection;
+        `);
+        assert.equal(options.modelCalls(), before);
         await type("/cont");
         await until(
             async () => (await text(".commands")).includes("/context"),
@@ -431,6 +534,11 @@ export async function nativeCommandUiProof(options: {
             20_000,
         );
 
+        await until(
+            async () => (await text(".session-row.active")).includes("model-a"),
+            "sidebar model-a arrives through session subscription",
+            20_000,
+        );
         await execute("/thinking");
         await until(
             async () => (await text(".sheet")).includes("Thinking Level"),
@@ -485,6 +593,11 @@ export async function nativeCommandUiProof(options: {
                     `(await import('/store.js')).store.state.view.kernel.model`,
                 )) === "model-b",
             "scoped cycle applies through Team",
+            20_000,
+        );
+        await until(
+            async () => (await text(".session-row.active")).includes("model-b"),
+            "sidebar model-b arrives without reloading the page",
             20_000,
         );
         await page.evaluate(`(await import('/store.js')).closeSheet()`);
@@ -1063,6 +1176,10 @@ export async function nativeCommandUiProof(options: {
         assert.equal(options.modelCalls(), beforeFork + 1);
 
         return {
+            outputsSyntheticProjectionAndRealFileOpening: true,
+            outputsMobileContainment: true,
+            sidebarModelsUpdatedWithoutReload: true,
+            terminalOnlyCommandRetainsDraftWithoutInference: true,
             keyedStatusWidgetReplaceClear: true,
             earlierUserForkDraft: true,
             nativeTreeSummaryDraft: true,

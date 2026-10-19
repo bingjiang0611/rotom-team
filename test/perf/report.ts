@@ -5,8 +5,9 @@
  *   node test/perf/report.ts report <dir> [--since ISO] [--release COMMIT] [--json]
  *
  * Work from a snapshot: the running service keeps appending and archiving. The report ranks routes by total time
- * spent (count × duration: what people waited for altogether), and gives native runs, the event loop, memory, and
- * pushed bytes. A group with fewer than 30 samples is marked: too few to call a change.
+ * spent (count × duration: what people waited for altogether), and gives native runs (and the phases of prompt
+ * runs), browser waits, the event loop, memory, and pushed bytes. A group with fewer than 30 samples is marked: too
+ * few to call a change.
  */
 import { copyFileSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -126,6 +127,40 @@ export function analyse(records: PerformanceRecord[]) {
     const runs = [...group(of("kernel-run"), (each) => each.outcome)]
         .map(([outcome, items]) => ({ outcome, ...stats(items.map((each) => each.ms)) }))
         .sort((a, b) => b.totalMs - a.totalMs);
+    // Prompt runs split into phases, apart for a new native process and the session's running one.
+    const prompts = [
+        ...group(
+            of("kernel-run").filter((each) => each.prompt !== undefined),
+            (each) => each.prompt!.process,
+        ),
+    ].map(([process, items]) => {
+        const phases = items.map((each) => each.prompt!);
+        const totalMs = items.reduce((sum, each) => sum + each.ms, 0);
+
+        return {
+            process,
+            runs: items.length,
+            dispatch: stats(phases.map((each) => each.dispatchMs)),
+            firstOutput: stats(phases.flatMap((each) => each.firstOutputMs ?? [])),
+            noOutput: phases.filter((each) => each.firstOutputMs === null).length,
+            // Share of these runs' time with a tool running; the rest is setup, the model, and finalization.
+            toolShare:
+                totalMs === 0
+                    ? null
+                    : Math.round(
+                          (phases.reduce((sum, each) => sum + each.toolMs, 0) / totalMs) * 100,
+                      ) / 100,
+            tools: phases.reduce((sum, each) => sum + each.tools, 0),
+        };
+    });
+    const webTimings = of("web");
+    const web = [...group(webTimings, (each) => `${each.name} ${each.transport}`)]
+        .map(([wait, items]) => ({
+            wait,
+            ...stats(items.flatMap((each) => ("ms" in each ? [each.ms] : []))),
+            hidden: items.filter((each) => "unavailable" in each).length,
+        }))
+        .sort((a, b) => a.wait.localeCompare(b.wait));
     const samples = of("process");
     const pushes = new Map<string, { count: number; bytes: number; sized: number }>();
     let pushMs = 0;
@@ -153,6 +188,8 @@ export function analyse(records: PerformanceRecord[]) {
         startups: stats(of("startup").map((each) => each.openMs)),
         routes,
         runs,
+        prompts,
+        web,
         eventLoop: {
             samples: samples.length,
             p99Median: quantile(
@@ -212,6 +249,18 @@ export function format(result: ReturnType<typeof analyse>, truncated: number): s
         ...result.runs.map(
             (each) =>
                 `  ${each.outcome.padEnd(28)}${String(each.count).padStart(6)} runs · p50 ${ms(each.p50)} · p95 ${ms(each.p95)} · max ${ms(each.max)} ms${few(each)}`,
+        ),
+        "",
+        "Native prompt runs, by phase (dispatch: admission to prompt; first output: prompt to the model's first output):",
+        ...result.prompts.map(
+            (each) =>
+                `  ${`${each.process} process`.padEnd(18)}${String(each.runs).padStart(6)} runs · dispatch p50 ${ms(each.dispatch.p50)} p95 ${ms(each.dispatch.p95)} · first output p50 ${ms(each.firstOutput.p50)} p95 ${ms(each.firstOutput.p95)}${each.noOutput > 0 ? ` (${each.noOutput} without)` : ""} · tools ${each.tools}, ${each.toolShare === null ? "-" : `${Math.round(each.toolShare * 100)}%`} of run time${few(each.dispatch)}`,
+        ),
+        "",
+        "Browser waits, action to the paint that shows it (by transport):",
+        ...result.web.map(
+            (each) =>
+                `  ${each.wait.padEnd(26)}${String(each.count).padStart(6)} · p50 ${ms(each.p50)} · p95 ${ms(each.p95)} · max ${ms(each.max)} ms${each.hidden > 0 ? ` · ${each.hidden} hidden, unmeasured` : ""}${few(each)}`,
         ),
         "",
         `Event loop over ${result.eventLoop.samples} minute samples: delay p99 median ${result.eventLoop.p99Median ?? "-"} ms, worst ${result.eventLoop.p99Worst ?? "-"} ms, longest stall ${result.eventLoop.maxWorst ?? "-"} ms; busy median ${result.eventLoop.utilizationMedian ?? "-"}, worst ${result.eventLoop.utilizationWorst ?? "-"}; RSS worst ${result.eventLoop.rssWorstBytes === null ? "-" : `${Math.round(result.eventLoop.rssWorstBytes / 1048576)} MiB`}`,

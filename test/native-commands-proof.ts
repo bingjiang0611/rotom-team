@@ -598,6 +598,87 @@ try {
     assert.equal(calls.length, noInference, "context readback never requests inference");
     report.context = { usage: true, injections: true, noInference: true, idempotentReadback: true };
 
+    const shippedExtensions = [
+        "llama",
+        "mcp",
+        "browser",
+        "computer-use",
+        "goal",
+        "context",
+        "trace",
+        "qoder-models",
+        "qoder-credits",
+        "subagent-cost",
+        "subagents-doctor",
+        "subagents-guide",
+        "subagents-detach",
+        "subagents-stop",
+        "subagents-models",
+    ];
+
+    for (const name of shippedExtensions) {
+        const command = registry.commands.find((each: { name: string }) => each.name === name);
+
+        assert.equal(command?.source, "extension", name);
+        assert.ok(command.web?.label, name);
+        assert.notEqual(command.web.label, "Unverified extension", name);
+    }
+
+    assert.equal(
+        registry.commands.find((each: { name: string }) => each.name === "fixture-echo").web.label,
+        "Unverified extension",
+    );
+    const beforeRejected = app.kernel!.executions.journal.receipts(String(id)).length;
+    const startsBeforeRejected = readFileSync(startsFile, "utf8");
+    const bindingBeforeRejected = app.kernel!.executions.journal.session(String(id)).binding;
+
+    for (const text of [
+        "/llama",
+        "/llama download fixture",
+        "/subagents-stop",
+        "/mcp enable fixture",
+        "/mcp reconnect fixture extra",
+    ]) {
+        const rejected = await submit(alice, text);
+
+        assert.equal(rejected.status, 400, await rejected.text());
+    }
+
+    assert.equal(app.kernel!.executions.journal.receipts(String(id)).length, beforeRejected);
+    assert.equal(readFileSync(startsFile, "utf8"), startsBeforeRejected);
+    assert.deepEqual(
+        app.kernel!.executions.journal.session(String(id)).binding,
+        bindingBeforeRejected,
+    );
+
+    for (const text of [
+        "/trace",
+        "/computer-use",
+        "/subagent-cost",
+        "/subagents-doctor",
+        "/subagents-guide overview",
+        "/subagents-models",
+        "/subagents-detach",
+        "/browser status",
+    ]) {
+        const response = await json(await submit(alice, text));
+
+        assert.equal(
+            response.status,
+            "handled",
+            `${text}: recognized/read-only handler, not business success`,
+        );
+        assert.equal(calls.length, noInference, text);
+    }
+
+    report.dynamicCommands = {
+        shipped: shippedExtensions.length,
+        metadata: true,
+        rejectedWithoutEffects: true,
+        readOnlyHandlers: 8,
+        noInference: true,
+    };
+
     const beforeQoder = qoderCalls.length;
 
     const personalModels = await json(await submit(alice, "/qoder-models"));
@@ -737,6 +818,15 @@ try {
     );
     assert.equal(calls.length, noInference, "model selection does not infer");
     assert.equal(app.kernel!.executions.journal.session(String(id)).binding.model, "model-b");
+
+    for (const viewer of [alice, bob]) {
+        assert.equal(
+            app.sessions(viewer).find((session) => session.id === Number(id))?.model,
+            "model-b",
+            "sidebar uses the same current native model for every authorized viewer",
+        );
+    }
+
     const beforeThinking = app.kernel!.executions.journal.session(String(id));
     const thinking = await json(await submit(alice, "/thinking high"));
 
@@ -820,7 +910,22 @@ try {
     assert.equal(html.status, 200, await html.clone().text());
     assert.match(await html.text(), /<!doctype html>/i);
     assert.equal(calls.length, beforeExport);
-    const clone = await json(await submit(alice, "/clone"));
+    // Reproduce a Team-only rename immediately before copying, without a prompt to synchronize native metadata.
+    await json(await request(alice, `sessions/${id}`, { title: "Human readable source" }));
+    const sourceBeforeCopy = readFileSync(named.sessionFile!, "utf8");
+    const callsBeforeCopy = calls.length;
+    const clone = await json(await submit(alice, "/clone", { requestId: "named-copy" }));
+    const copyTitle = "Human readable source · Copy";
+
+    await app.kernel!.mirror(clone.conversationId);
+    assert.equal(app.sessionMeta(clone.conversationId)?.title, copyTitle);
+    assert.equal(app.sessionMeta(id)?.title, "Human readable source");
+    assert.equal(readFileSync(named.sessionFile!, "utf8"), sourceBeforeCopy);
+    assert.equal(calls.length, callsBeforeCopy, "copying and naming do not infer");
+    const replayedCopy = await json(await submit(alice, "/clone", { requestId: "named-copy" }));
+
+    assert.equal(replayedCopy.conversationId, clone.conversationId);
+    assert.equal(app.sessionMeta(clone.conversationId)?.title, copyTitle);
     const cloneSegment = app.kernel!.executions.journal.session(String(clone.conversationId));
 
     assert.equal(clone.receipt.status, "settled");
@@ -847,7 +952,10 @@ try {
         ),
         "cross-member clone projects the private-bearing owner history before persistence",
     );
+    assert.equal(app.sessionMeta(foreignClone.conversationId)?.title, copyTitle);
     await json(await submit(bob, "BOB_CLONE_CONTINUE", {}, foreignClone.conversationId));
+    assert.equal(app.sessionMeta(foreignClone.conversationId)?.title, copyTitle);
+    await json(await request(alice, `sessions/${id}`, { title: "Synchronized Native Name" }));
     assert.equal(calls.at(-1)!.payer, bob.id);
     assert.ok(JSON.stringify(calls.at(-1)!.body).includes("THIRD_USER_MARKER"));
     assert.ok(!JSON.stringify(calls.at(-1)!.body).includes(`PRIVATE_REASONING_${alice.id}`));
@@ -859,6 +967,7 @@ try {
     )!;
     const fork = await json(await submit(bob, `/fork ${selected.id}`));
 
+    assert.equal(app.sessionMeta(fork.conversationId)?.title, "Synchronized Native Name · Fork");
     assert.equal(fork.editorText, "SECOND_USER_MARKER");
     const forkMessages = app.kernel!.snapshot(fork.conversationId, bob).messages;
 
@@ -1068,6 +1177,11 @@ try {
     );
     await app.kernel!.mirror(id);
     assert.equal(calls.length, callsBeforeMirror, "mirror catch-up does not invoke a model");
+    assert.equal(
+        app.sessions(alice).find((session) => session.id === Number(id))?.model,
+        "model-b",
+    );
+    assert.equal(app.sessionMeta(clone.conversationId)?.title, copyTitle);
     await json(await submit(alice, "THINKING_AFTER_RESTART"));
     assert.equal(calls.at(-1)!.body.reasoning_effort, "high");
     const startsAfterRestart = readFileSync(startsFile, "utf8");

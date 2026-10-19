@@ -24,6 +24,8 @@ import {
     type KernelRunSignal,
     pushChannel,
     type PushSignal,
+    webTimingChannel,
+    type WebTimingSignal,
 } from "./perf-channels.ts";
 
 export type PerformanceObservation =
@@ -37,7 +39,8 @@ export type PerformanceObservation =
           /** Bytes the socket wrote for this answer, headers included; null when the socket was gone. */
           wireBytes: number | null;
       }
-    | { kind: "kernel-run"; ms: number; outcome: string }
+    | ({ kind: "kernel-run" } & KernelRunSignal)
+    | ({ kind: "web" } & WebTimingSignal)
     | {
           kind: "push";
           intervalMs: number;
@@ -363,8 +366,11 @@ export function routeShape(url: string): string {
     return "/asset";
 }
 
-/** Requests held open for live events: their duration is how long a tab stayed, not how slow the server was. */
-const HELD = new Set(["/api/events", "/api/poll"]);
+/**
+ * Requests held open for live events: their duration is how long a tab stayed, not how slow the server was. A tab's
+ * timing report is recorded as the `web` waits it carries instead.
+ */
+const HELD = new Set(["/api/events", "/api/poll", "/api/perf"]);
 
 type RequestStart = {
     request: IncomingMessage;
@@ -443,15 +449,36 @@ export async function startPerformanceJournal(options: {
     };
 
     const onRun = (message: unknown) => {
-        const { ms, outcome } = message as KernelRunSignal;
+        const { ms, outcome, prompt } = message as KernelRunSignal;
 
-        journal.record({ kind: "kernel-run", ms: round(ms), outcome });
+        journal.record({
+            kind: "kernel-run",
+            ms: round(ms),
+            outcome,
+            ...(prompt
+                ? {
+                      prompt: {
+                          process: prompt.process,
+                          dispatchMs: round(prompt.dispatchMs),
+                          firstOutputMs:
+                              prompt.firstOutputMs === null ? null : round(prompt.firstOutputMs),
+                          toolMs: round(prompt.toolMs),
+                          tools: prompt.tools,
+                      },
+                  }
+                : {}),
+        });
     };
+
+    // Already checked against its closed set where the tab's report arrived (`parseWebTimings`).
+    const onWeb = (message: unknown) =>
+        journal.record({ kind: "web", ...(message as WebTimingSignal) });
 
     subscribe("http.server.request.start", onStart);
     subscribe("http.server.response.finish", onFinish);
     pushChannel.subscribe(onPush);
     kernelRunChannel.subscribe(onRun);
+    webTimingChannel.subscribe(onWeb);
 
     // The histogram records the time between its timer's ticks, so every sample includes the sampling interval: an idle
     // loop reads about 20 ms. The journal records the delay beyond it.
@@ -511,6 +538,7 @@ export async function startPerformanceJournal(options: {
             unsubscribe("http.server.response.finish", onFinish);
             pushChannel.unsubscribe(onPush);
             kernelRunChannel.unsubscribe(onRun);
+            webTimingChannel.unsubscribe(onWeb);
             await journal.close();
         },
     };

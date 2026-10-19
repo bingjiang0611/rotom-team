@@ -3660,6 +3660,17 @@ button.chip:hover {
     gap: 0.45rem;
 }
 
+.output-file > span:first-child {
+    flex-direction: column;
+    align-items: flex-start;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.output-file > svg {
+    flex-shrink: 0;
+}
+
 .list-item.active {
     border-color: var(--accent);
     background: var(--accent-soft);

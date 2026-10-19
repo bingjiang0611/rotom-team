@@ -5,6 +5,8 @@ import {
     supportedTeamCommand,
     teamCommandCatalog,
     teamCommandUsesAdapter,
+    teamCommandWebInfo,
+    teamCommandInputError,
 } from "../src/server/team-command-policy.ts";
 
 const adapters = ["settings", "model", "thinking", "tree", "fork", "clone", "compact", "reload"];
@@ -72,6 +74,96 @@ test("native name precedence is resolved before protection or execution", () => 
             { name: "review", source: "prompt" },
         ],
     );
+});
+
+test("every shipped dynamic command has Web guidance without replacing native admission", () => {
+    const names = [
+        "llama",
+        "mcp",
+        "browser",
+        "computer-use",
+        "goal",
+        "context",
+        "trace",
+        "qoder-models",
+        "qoder-credits",
+        "subagent-cost",
+        "subagents-doctor",
+        "subagents-guide",
+        "subagents-detach",
+        "subagents-stop",
+        "subagents-models",
+    ];
+
+    for (const name of names) {
+        const command = { name, source: "extension" };
+
+        assert.ok(teamCommandWebInfo(command)?.label, name);
+        assert.notEqual(teamCommandWebInfo(command)?.label, "Unverified extension", name);
+        assert.equal(
+            supportedTeamCommand(command),
+            true,
+            "capability is distinct from native name discovery",
+        );
+    }
+
+    for (const name of ["future.点", "constructor", "__proto__"]) {
+        assert.equal(
+            teamCommandWebInfo({ name, source: "extension" })?.label,
+            "Unverified extension",
+        );
+        assert.equal(teamCommandInputError({ name, source: "extension" }, "anything"), undefined);
+    }
+
+    assert.equal(teamCommandWebInfo({ name: "llama", source: "prompt" })?.label, "Runs your model");
+    assert.equal(teamCommandInputError({ name: "llama", source: "prompt" }), undefined);
+    assert.equal(
+        teamCommandWebInfo({ name: "skill:test", source: "skill" })?.label,
+        "Runs your model",
+    );
+});
+
+test("known unsupported and argument-dependent paths reject without native no-op success", () => {
+    for (const args of ["", "download model", "load model"]) {
+        assert.match(
+            teamCommandInputError({ name: "llama", source: "extension" }, args)!,
+            /local terminal/,
+        );
+    }
+
+    assert.match(
+        teamCommandInputError({ name: "subagents-stop", source: "extension" })!,
+        /explicit|run-id/,
+    );
+    assert.equal(
+        teamCommandInputError({ name: "subagents-stop", source: "extension" }, "owned-id"),
+        undefined,
+    );
+
+    for (const args of [
+        "list",
+        "enable x",
+        "disable x",
+        "add x",
+        "login x extra",
+        "reconnect x extra",
+    ]) {
+        assert.match(
+            teamCommandInputError({ name: "mcp", source: "extension" }, args)!,
+            /owner-managed/,
+        );
+    }
+
+    for (const args of [
+        "",
+        "login",
+        "login fixture",
+        "logout fixture",
+        "reconnect",
+        "reconnect fixture",
+    ]) {
+        assert.equal(teamCommandInputError({ name: "mcp", source: "extension" }, args), undefined);
+    }
 });
 
 test("busy Web-adapter commands do not enter steer/follow-up dispatch", () => {

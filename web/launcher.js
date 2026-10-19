@@ -140,7 +140,8 @@ function actionItems() {
                 run: toggleBrowser,
             },
         conversation && {
-            label: "Artifacts",
+            label: "Outputs",
+            detail: "written files and published artifacts",
             icon: "artifact",
             run: () => openSheet({ type: "artifacts" }),
         },

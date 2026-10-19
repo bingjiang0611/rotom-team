@@ -1267,6 +1267,52 @@ test("invites carry a role and a session over HTTP, and viewers get 403 on steer
     }
 });
 
+test("sign-in, invite, recovery and expired-link pages use the rotom team identity", async () => {
+    const { createServer } = await import("node:http");
+    const { createHandler } = await import("../src/server/http.ts");
+    const { Auth } = await import("../src/server/auth.ts");
+    const auth = new Auth(app.config);
+    const member = app.config.addUser("Brand check", "guest");
+    const invites = [
+        auth.createInvite(owner(), { role: "guest" }),
+        auth.createInvite(owner(), { role: "viewer" }),
+        auth.createInvite(owner(), { role: "owner" }),
+        auth.createInvite(owner(), { role: "recovery", memberId: member.user.id }),
+    ];
+    const server = createServer(
+        createHandler({ app, listen: { host: "127.0.0.1", port: 0 }, restart: () => {} }),
+    );
+
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+
+    try {
+        for (const path of [
+            ...invites.map(({ code }) => `/join/${code}`),
+            "/join/expired-brand-check",
+            "/login?token=expired-brand-check",
+            `/login?token=${encodeURIComponent(member.token)}`,
+        ]) {
+            const response = await fetch(`${base}${path}`, {
+                headers: { cookie: `pocket_auth=${app.config.ownerToken}` },
+                redirect: "manual",
+            });
+            const html = await response.text();
+
+            assert.match(html, /<title>[^<]*rotom team<\/title>/, path);
+            assert.doesNotMatch(html, /Pi Pocket/, path);
+        }
+    } finally {
+        for (const { code } of invites) {
+            auth.cancelInvite(code, owner());
+        }
+
+        app.config.removeUser(member.user.id);
+        server.closeAllConnections();
+        server.close();
+    }
+});
+
 test("the owner signs another device in as the owner: owner only, once, no one new, and a new owner token signs it out", async () => {
     const { createServer } = await import("node:http");
     const { createHandler } = await import("../src/server/http.ts");
@@ -1331,7 +1377,7 @@ test("the owner signs another device in as the owner: owner only, once, no one n
 
         assert.match(
             page,
-            /This device will sign in as you, the owner\. It gets full control of Pi Pocket and of this machine\./,
+            /This device will sign in as you, the owner\. It gets full control of rotom team and of this machine\./,
         );
         assert.match(page, /signed in as Gwen\. It will change to the owner/);
         assert.match(page, />Sign in as owner<\/button>/);

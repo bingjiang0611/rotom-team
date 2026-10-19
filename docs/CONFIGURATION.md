@@ -188,7 +188,11 @@ terminal-only builtins are `scoped-models, export, import, share, bug, changelog
 resume, quit`. Resolving native name precedence before protection prevents a same-name template from bypassing a
 protected builtin. The actual native registry is checked again immediately before idle or queued dispatch, including
 when a retained process reloads resources or registers a new command. Separate Team APIs and internal lifecycle/recovery
-operations are unchanged.
+operations are unchanged. Catalog entries also carry Web guidance, not another registry. `/llama` remains visible as
+Terminal only but cannot execute in Web. MCP supports the personal sign-in manager and login/logout/reconnect syntax;
+owner server-definition/enable/exposure commands and extra positional arguments are rejected. Bare `/subagents-stop`
+requires an explicit run id. Unknown trusted extensions are labeled unverified; skills/templates explicitly warn about
+inference and service-machine prerequisites. See the complete dynamic-command audit in the compatibility document.
 
 `/context` and `/context usage` open a Web context-usage sheet; `/context injections` groups current request injections
 by native/extension source. Both reuse pinned `pi-context-view` capture and measurement code, never make a paid/silent
@@ -216,7 +220,9 @@ its intent and the segment's current model commit together, the idle process ret
 session file with the new model, then records `model_change` and reapplies the selected thinking level. The segment's
 original binding stays the immutable identity anchor; each attempt keeps its own binding for response validation and
 usage. A known rejection restores the previous model; an unknown outcome keeps the new one and stays fenced. A payer
-or kernel change still uses the existing handoff path.
+or kernel change still uses the existing handoff path. Session-list model labels read the current native journal binding,
+not the legacy Durable agent's stale preference. A single batch read joins current conversation heads and model overrides,
+without a per-row native session lookup or a second model-state cache. Model switches and server restarts do not change historical receipt bindings.
 
 Browser/computer-use refer to the service host, not the viewer's device. Quota results remain member-private account
 snapshots. See [NATIVE-COMMAND-COMPATIBILITY.md](NATIVE-COMMAND-COMPATIBILITY.md) for every supported interaction and limit.
@@ -240,6 +246,24 @@ receipt means the handler completed, not that a requested navigation occurred: i
 Side-effectful slash handlers use `command` receipts and are not automatically continued after unknown outcomes.
 Only native-discovered prompt templates/skills become ordinary recoverable `prompt` operations. Existing stored
 receipts stay readable and are not rewritten. Goal Stop may remain unknown; it does not certify external effects.
+
+## Outputs and conversation copies
+
+The **Outputs** entry groups successful `write`/`edit` records and separately published artifacts. It uses the already
+public transcript projection, not a scan of the server filesystem, raw native history, parsed shell commands or script
+source. Successful codemode child-call metadata is included, even if a later script step failed. Failed/pending writes
+and clipped direct path arguments do not create links. Only child metadata with an already-public path is indexed;
+native nested-call records without public paths are not mined for arguments and remain accessible via Browse project
+files. Existing file-view/download authorization remains authoritative.
+The button count and sheet share this history-based definition. Browse project files finds shell-created and other
+unindexed outputs without enabling the legacy artifact extension.
+
+This is an audit-history shortcut, **not** a manifest of the active native branch, an existence check, a saved file
+version or a new filesystem permission. Inherited/discarded history may refer to files that have changed or disappeared;
+opening resolves the current path through the existing authorized endpoint. Clones/forks share the project folder.
+The UI states these limits instead of implying independent file copies. Native `/clone` keeps the visible source title
+plus `· Copy`; an earlier-message fork uses `· Fork`. Imported source `session_info` remains in audit history but cannot
+rename the destination. Subsequent explicit live naming still works.
 
 ## MCP credentials
 

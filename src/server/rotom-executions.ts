@@ -142,7 +142,11 @@ export type RunHooks = {
     /** The intent is durably committed: the request can no longer be lost, only end unknown. */
     onReserved?: (receipt: KernelReceipt) => void | Promise<void>;
     /** A dynamic slash passed live registry validation; the consumer may still refuse before dispatch. */
-    onCommandAdmitted?: (command: { name: string; source?: unknown }) => void | Promise<void>;
+    onCommandAdmitted?: (command: {
+        name: string;
+        source?: unknown;
+        args?: string;
+    }) => void | Promise<void>;
     /** Every kernel event, for provisional display only. */
     onEvent?: (event: RpcRecord) => void;
     /** The registry captured from this authorized kernel process. */
@@ -167,7 +171,68 @@ type Running = {
     closureUnknown?: boolean;
     /** Its prompt was dispatched: messages may join it. */
     prompting?: boolean;
+    /** Where a prompt run's time goes; kept only while the performance journal listens (`perf-channels.ts`). */
+    timing?: PromptTiming;
 };
+
+type PromptTiming = {
+    process?: "started" | "reused";
+    dispatchedAt?: number;
+    firstOutputAt?: number;
+    /** Tools running now, since when, and the time so far with at least one running. */
+    toolsRunning: number;
+    toolsSince: number;
+    toolMs: number;
+    tools: number;
+    detach?: () => void;
+};
+
+/** Fold one native event into a prompt run's timing. Only events after the prompt's dispatch count. */
+function timePromptEvent(timing: PromptTiming, event: RpcRecord): void {
+    if (timing.dispatchedAt === undefined) {
+        return;
+    }
+
+    const now = performance.now();
+
+    if (event.type === "message_update") {
+        timing.firstOutputAt ??= now;
+    } else if (event.type === "tool_execution_start") {
+        timing.tools++;
+
+        if (timing.toolsRunning++ === 0) {
+            timing.toolsSince = now;
+        }
+    } else if (event.type === "tool_execution_end" && timing.toolsRunning > 0) {
+        if (--timing.toolsRunning === 0) {
+            timing.toolMs += now - timing.toolsSince;
+        }
+    }
+}
+
+function promptPhases(
+    timing: PromptTiming | undefined,
+    startedAt: number,
+    endedAt: number,
+): Pick<KernelRunSignal, "prompt"> {
+    if (timing?.process === undefined || timing.dispatchedAt === undefined) {
+        return {};
+    }
+
+    return {
+        prompt: {
+            process: timing.process,
+            dispatchMs: timing.dispatchedAt - startedAt,
+            firstOutputMs:
+                timing.firstOutputAt === undefined
+                    ? null
+                    : timing.firstOutputAt - timing.dispatchedAt,
+            // A run that ended with a tool still running (an error, a stop) counts it to the end.
+            toolMs: timing.toolMs + (timing.toolsRunning > 0 ? endedAt - timing.toolsSince : 0),
+            tools: timing.tools,
+        },
+    };
+}
 
 type ActiveAttempt = {
     receipt: KernelReceipt;
@@ -417,7 +482,7 @@ export class RotomExecutions {
 
                     const source = dynamic.find((command) => command.name === name)?.source;
 
-                    await admitCommand?.({ name: name!, source });
+                    await admitCommand?.({ name: name!, source, args: nativeCommandArgs(text) });
 
                     if (source === "prompt" || source === "skill") {
                         await queueInput();
@@ -493,7 +558,12 @@ export class RotomExecutions {
         sessionId: string,
         action: (running: Running) => Promise<KernelReceipt>,
     ): Promise<KernelReceipt> {
-        const running: Running = { aborted: false };
+        const running: Running = {
+            aborted: false,
+            ...(kernelRunChannel.hasSubscribers
+                ? { timing: { toolsRunning: 0, toolsSince: 0, toolMs: 0, tools: 0 } }
+                : {}),
+        };
         const runs = this.#running.get(sessionId) ?? new Set<Running>();
 
         runs.add(running);
@@ -509,10 +579,15 @@ export class RotomExecutions {
 
             return receipt;
         } finally {
+            running.timing?.detach?.();
+
             if (kernelRunChannel.hasSubscribers) {
+                const ended = performance.now();
+
                 kernelRunChannel.publish({
-                    ms: performance.now() - started,
+                    ms: ended - started,
                     outcome,
+                    ...promptPhases(running.timing, started, ended),
                 } satisfies KernelRunSignal);
             }
 
@@ -935,6 +1010,11 @@ export class RotomExecutions {
 
         const revision = teamResourceRevision(join(this.#data, "team-agent"), binding.workspace);
         let persistent = this.#kernels.get(admitted.segmentId);
+
+        if (running.timing) {
+            running.timing.process = persistent ? "reused" : "started";
+        }
+
         let kernel: RotomRpc | undefined = persistent?.kernel;
         let gate: ReturnType<typeof createServer> | undefined = persistent?.gate;
         let gateFile: string | undefined = persistent?.gateFile;
@@ -1161,6 +1241,13 @@ export class RotomExecutions {
                 }
             });
 
+            const timing = running.timing;
+
+            if (timing) {
+                // Detached when the run ends (`#track`), even when it throws: the process may serve the next run.
+                timing.detach = kernel.onEvent((event) => timePromptEvent(timing, event));
+            }
+
             let detachHook: (() => void) | undefined;
 
             if (hooks.onEvent) {
@@ -1235,7 +1322,11 @@ export class RotomExecutions {
                         activeAttempt.operation = operation;
                     }
 
-                    await hooks.onCommandAdmitted?.({ name: name!, source });
+                    await hooks.onCommandAdmitted?.({
+                        name: name!,
+                        source,
+                        args: nativeCommandArgs(prompt),
+                    });
                 }
             }
 
@@ -1355,6 +1446,11 @@ export class RotomExecutions {
                 );
             } else {
                 running.prompting = true;
+
+                if (running.timing) {
+                    running.timing.dispatchedAt = performance.now();
+                }
+
                 disposition = await kernel.prompt(prompt, undefined, images);
             }
 

@@ -1,6 +1,8 @@
 // The menu: what can be done in this session. What is app-wide is in Settings (sheets/settings.js).
 import { browserAvailable, displayUrl, setBrowserOpen } from "../browser.js";
 import { chatUnread } from "../chat.js";
+import { writtenFiles } from "../calls.js";
+import { useMemo } from "preact/hooks";
 import { schedulesAvailable } from "../commands.js";
 import { filesAvailable, setFilesOpen } from "../files-panel.js";
 import { peeksOn, togglePeeks } from "../peeks.js";
@@ -29,6 +31,12 @@ import { copyText, html, Icon, item, Sheet, shortPath } from "../ui.js";
 function Places() {
     const { view, browser, browserOpen, server } = store.state;
     const conversation = view.conversation;
+    const outputs = useMemo(
+        () =>
+            view.artifacts.length +
+            writtenFiles(view.order.map((id) => view.entries.get(id)).filter(Boolean)).length,
+        [view.artifacts, view.order],
+    );
 
     if (!conversation) {
         return null;
@@ -64,8 +72,8 @@ function Places() {
         {
             id: "artifacts",
             icon: "artifact",
-            label: "Artifacts",
-            count: view.artifacts.length,
+            label: "Outputs",
+            count: outputs,
             run: () => openSheet({ type: "artifacts" }),
         },
         collab() && {

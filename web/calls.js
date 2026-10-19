@@ -87,3 +87,57 @@ export function describeCall(call) {
             };
     }
 }
+
+/** Successful file writes in the shared audit history, not a disk index or saved file versions. */
+export function writtenFiles(entries) {
+    const calls = new Map();
+    const files = new Map();
+
+    const add = (name, path, entryId) => {
+        const action = String(name).toLowerCase();
+
+        if (
+            !["write", "edit"].includes(action) ||
+            typeof path !== "string" ||
+            !path.trim() ||
+            /[\u0000\r\n]/.test(path)
+        ) {
+            return;
+        }
+
+        files.delete(path);
+        files.set(path, { path, action, entryId });
+    };
+
+    for (const entry of entries) {
+        if (entry.kind === "assistant") {
+            for (const block of entry.blocks ?? []) {
+                if (block.type === "toolCall") {
+                    calls.set(block.id, block);
+                }
+            }
+        } else if (entry.kind === "toolResult") {
+            const call = calls.get(entry.callId);
+
+            if (!call) {
+                continue;
+            }
+
+            const pathKey = typeof call.args?.path === "string" ? "path" : "file_path";
+
+            if (!entry.isError && !call.clipped?.[pathKey]) {
+                add(call.name, call.args?.[pathKey], entry.id);
+            }
+
+            if (call.name === "codemode" && Array.isArray(entry.details?.calls)) {
+                for (const child of entry.details.calls) {
+                    if (child.status === "ok") {
+                        add(child.name, child.path, entry.id);
+                    }
+                }
+            }
+        }
+    }
+
+    return [...files.values()].reverse();
+}

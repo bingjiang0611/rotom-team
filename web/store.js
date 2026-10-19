@@ -1,5 +1,6 @@
 // App state, the server connection, and API calls. Components read `store.state` and re-render on `store.subscribe`.
 import { onRoute, pushRoute } from "./back.js";
+import { observe, opened, sending, sendFailed, setTransport, switched } from "./perf.js";
 
 /** A random id. crypto.randomUUID only exists on https and localhost pages; plain-http network addresses lack it. */
 export function uid() {
@@ -120,6 +121,10 @@ export const store = {
         return () => this.listeners.delete(listener);
     },
 };
+
+// Content-free timings of what people wait for here, for the server's performance journal (perf.js).
+store.subscribe(observe);
+opened(store.state.conversationId);
 
 function routeConversation() {
     const match = /^\/s\/(\d+)/.exec(location.pathname);
@@ -545,7 +550,10 @@ export function connect() {
     const id = store.state.conversationId;
     const query = `tab=${encodeURIComponent(TAB)}${id === null ? "" : `&c=${id}`}`;
 
-    source = pollHere() && !local ? pollEvents(query) : streamEvents(query);
+    const polling = pollHere() && !local;
+
+    setTransport(polling ? "poll" : "stream");
+    source = polling ? pollEvents(query) : streamEvents(query);
 }
 
 // A page kept for Back and Forward stays alive, frozen, and so would its stream: each holds one of the few connections a
@@ -796,6 +804,7 @@ export function navigate(conversationId, { replace = false, sheet = null } = {})
         return;
     }
 
+    switched(conversationId);
     store.set((state) => ({
         conversationId,
         view: emptyView(),
@@ -815,6 +824,7 @@ onRoute(() => {
     const id = routeConversation();
 
     if (id !== store.state.conversationId) {
+        switched(id);
         store.set({
             conversationId: id,
             view: emptyView(),
@@ -858,8 +868,14 @@ const current = () => store.state.conversationId;
 
 export const actions = {
     /** `inlineFiles`: the files the message mentions with @ go along with it. */
-    submit: (text, attachments, mode, inlineFiles = false, wait) =>
-        api(`c/${current()}/submit`, {
+    submit: (text, attachments, mode, inlineFiles = false, wait) => {
+        const view = store.state.view;
+        // Only a message to an idle session is timed: a queued one waits for the run, and a command has no reply.
+        const timed =
+            view.conversation && !view.live?.busy && !text.trimStart().startsWith("/")
+                ? sending(view)
+                : undefined;
+        const request = api(`c/${current()}/submit`, {
             text,
             attachments,
             mode,
@@ -867,7 +883,14 @@ export const actions = {
             ...(inlineFiles ? { inlineFiles } : {}),
             // Ordinary rotom prompts answer once intent is recorded; native commands wait for handler rejection.
             ...(store.state.view.kernel ? { wait: wait ?? false } : {}),
-        }),
+        });
+
+        if (timed !== undefined) {
+            request.catch(() => sendFailed(timed));
+        }
+
+        return request;
+    },
     nativeSettings: (patch) => api(`c/${current()}/native-settings`, patch),
     /** A rotom session operation on the head this browser last saw. A lost answer is never resent. */
     kernel: (operation, extra = {}) =>

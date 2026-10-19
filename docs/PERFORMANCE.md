@@ -116,6 +116,8 @@ The running server writes [src/server/perf-journal.ts](../src/server/perf-journa
 | `startup`    | once per start          | how long opening the app took                                         |
 | `http`       | each answered request   | method, route shape, status, duration, bytes written                  |
 | `kernel-run` | each native run         | duration from admission to receipt, `<operation>:<status>` or `error` |
+|              | (a run that prompted)   | phases: `prompt.process`, `dispatchMs`, `firstOutputMs`, `toolMs`     |
+| `web`        | each wait in a tab      | wait name, transport, ms (or `unavailable: hidden`)                   |
 | `push`       | each minute with pushes | per event name: count, and bytes where the transport sizes them       |
 | `process`    | each minute             | event-loop delay p50/p99/max, event-loop busy share, CPU, RSS, heap   |
 | `health`     | at shutdown             | records dropped from a full queue                                     |
@@ -124,6 +126,26 @@ Content stays out by construction: a route shape keeps only lowercase route word
 is `/api/c/:n/changes/diff`; ids, names, file paths, tokens, and queries are dropped), and nothing else carries text.
 Event streams and long polls are left out of `http`: their duration is how long a tab stayed. A run answered from an
 existing receipt (a resent request) is recorded too, and is fast.
+
+A run that sent a prompt to the native process says where its time went: `process` is `started` (it launched a new
+native process) or `reused` (the session's running one); `dispatchMs` runs from admission to the prompt's dispatch
+(authorization, process start, resource reload, command catalog); `firstOutputMs` from dispatch to the model's first
+streamed output, null when none came; `toolMs` is the time with at least one tool running (parallel tools count once)
+over `tools` executions. The rest of the run is the model and finalization.
+
+Browser tabs time what people wait for, from their action to the first paint that shows its result
+([web/perf.js](../web/perf.js)), and report in batches to `POST /api/perf` (not itself an `http` record):
+
+| Wait                        | From                        | To, on screen                               |
+| --------------------------- | --------------------------- | ------------------------------------------- |
+| `open.home`, `open.session` | the page's navigation start | the session list, or the session            |
+| `switch`                    | picking another session     | its view                                    |
+| `send.shown`                | sending to an idle session  | the message (in the transcript or queued)   |
+| `reply.first`               | the same send               | the first of the answer (streamed or saved) |
+
+A wait the tab was hidden for did not paint, so it is `unavailable: hidden`, never a duration. The server accepts only
+these names, `stream`/`poll`, and durations up to 10 minutes; a report with anything else is refused whole. A lost
+report is a gap in the journal: the tab never retries it.
 
 A full file (5 MiB) is renamed to `performance-<UTC stamp>-<id>.jsonl` and gzip-compressed off the write path;
 compressed archives are capped at 64 MiB, oldest first. Writing fails open: a broken disk stops the journal with one
@@ -136,8 +158,9 @@ npm run perf:report -- snapshot ~/rotom-team-deployment/data /tmp/journal-snapsh
 npm run perf:report -- report /tmp/journal-snapshot [--since 2026-10-20] [--release <commit>] [--json]
 ```
 
-The report ranks routes by total time (count × duration), and gives native runs by outcome, the event loop, memory,
-and pushed bytes per active minute. A group with fewer than 30 samples is marked as too few to call a change.
+The report ranks routes by total time (count × duration), and gives native runs by outcome, prompt runs by phase
+(new and reused process apart), browser waits by name and transport, the event loop, memory, and pushed bytes per
+active minute. A group with fewer than 30 samples is marked as too few to call a change.
 
 ## Rules
 

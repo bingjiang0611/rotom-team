@@ -27,3 +27,15 @@ Always pass `--data` (never use `~/.pi-pocket`). The server binds `127.0.0.1` un
     5. Point `ProgramArguments` item 1 at the new `bin/rotom-team.js`. `plutil -replace ProgramArguments.1` inserts into the array instead of replacing: follow it with `plutil -remove ProgramArguments.2`, then `plutil -lint` and diff against the copy (only the release path may differ).
     6. `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.rotom.team.plist`; check `launchctl print gui/$(id -u)/dev.rotom.team` shows `running`, `data/service-error.log` has nothing new, and the served `web/` files are the new ones.
 - Roll back: bootout, copy the saved plist back, bootstrap. Restore data only with `scripts/data.mjs restore` (see DEPLOYMENT.md).
+
+## Performance
+
+People wait on sending, streaming, opening a session, the changes view, and opening the web app. Write new code so these stay fast; where it cannot, say why in a comment or the commit message. The loop and its rules are in [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
+
+- Request handlers and push paths start no synchronous child process (there are none today). Synchronous file I/O there is for small, bounded files only.
+- Within one refresh, run each git, SQL, or file query once. Join concurrent identical requests into one in flight.
+- Page or cap lists, history, pushed payloads, and memory caches. Push only what changed, as the room already does for fields that did not.
+- Prefer events. A poll backs off, pauses while the tab is hidden, and has one request in flight.
+- A cache key holds every input that changes the result, and the cache can be invalidated.
+- After changing a path people wait on, run `npm run perf:ci -- origin/main` and explain every counter that got worse: necessary new work, or a regression to fix first.
+- Unmeasured is `unavailable`, never zero. Ceilings and baselines move down only (`perf:propose`); loosening either needs the owner's approval, and a higher ceiling also a `raise` record. Keep measurement code and optimisations in separate commits.
