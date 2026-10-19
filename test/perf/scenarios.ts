@@ -35,6 +35,7 @@ import type { JsonValue } from "@earendil-works/chord";
 import { NATIVE_ENTRY } from "../../src/server/entry-format.ts";
 import { sniffImage } from "../../src/server/http/assets.ts";
 import { measureImageNetwork } from "./image-network.ts";
+import { measurePasteNetwork } from "./paste-network.ts";
 
 export type ScenarioResult =
     | { scenario: string; ms: number; counts: Counts; extra?: Record<string, number> }
@@ -641,6 +642,22 @@ results.push(
     "unavailable" in imageNetwork
         ? { scenario: "image.thumbs.network", unavailable: imageNetwork.unavailable }
         : { scenario: "image.thumbs.network", ms: imageNetwork.ms, counts: imageNetwork.counts },
+);
+
+const beforePasteInference = inferenceRequests;
+const pasteNetwork = await measurePasteNetwork({
+    base,
+    token,
+    conversation: imageSession,
+    profile: join(root, "perf-paste-network"),
+    quiet,
+});
+
+assert.equal(inferenceRequests, beforePasteInference, "pasting/uploading must not call the model");
+results.push(
+    "unavailable" in pasteNetwork
+        ? { scenario: "image.paste.network", unavailable: pasteNetwork.unavailable }
+        : { scenario: "image.paste.network", ms: pasteNetwork.ms, counts: pasteNetwork.counts },
 );
 
 writeFileSync(out, raw.stringify({ workload: WORKLOAD, results }, null, 2));
