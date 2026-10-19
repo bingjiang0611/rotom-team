@@ -156,9 +156,17 @@ test("image probes measure actual concurrent lookup/decode/finish, preserve bina
         server.listen(0, "127.0.0.1");
         await once(server, "listening");
         const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
-        const get = (path: string, authenticated = true) =>
+        const get = (
+            path: string,
+            authenticated = true,
+            init: { method?: string; headers?: Record<string, string> } = {},
+        ) =>
             fetch(`${base}/api/c/${path}`, {
-                headers: authenticated ? { authorization: `Bearer ${token}` } : {},
+                ...init,
+                headers: {
+                    ...(authenticated ? { authorization: `Bearer ${token}` } : {}),
+                    ...init.headers,
+                },
             });
         const indices = [0, 1, 0];
 
@@ -178,14 +186,19 @@ test("image probes measure actual concurrent lookup/decode/finish, preserve bina
         Buffer.from("dW5yZWxhdGVk", "base64");
         const measured = probe.report(3);
 
+        const uniqueIndices = [...new Set(indices)];
+
         assert.deepEqual(measured.counts, {
-            "image.lookup.calls": 3,
-            "image.decode.calls": 3,
-            "image.decode.chars": indices.reduce(
+            "image.lookup.calls": 2,
+            "image.decode.calls": 2,
+            "image.decode.chars": uniqueIndices.reduce(
                 (sum, index) => sum + bytes[index]!.toString("base64").length,
                 0,
             ),
-            "image.decode.bytes": indices.reduce((sum, index) => sum + bytes[index]!.length, 0),
+            "image.decode.bytes": uniqueIndices.reduce(
+                (sum, index) => sum + bytes[index]!.length,
+                0,
+            ),
         });
         assert.ok(
             Object.values(measured.timings).every((value) => Number.isFinite(value) && value >= 0),
@@ -223,6 +236,84 @@ test("image probes measure actual concurrent lookup/decode/finish, preserve bina
             assert.AssertionError,
         );
         duplicateDecode = false;
+        const path = `${id}/image/${entry.id}/0`;
+        const full = await get(path);
+        const etag = `"sha256-${createHash("sha256").update(bytes[0]!).digest("hex")}"`;
+
+        assert.equal(full.headers.get("etag"), etag);
+        assert.deepEqual(Buffer.from(await full.arrayBuffer()), bytes[0]);
+
+        for (const value of [etag, `W/${etag}`, `"stale", W/${etag}`, "*"]) {
+            const validated = await get(path, true, {
+                headers: { "if-none-match": value, range: "bytes=0-7" },
+            });
+
+            assert.equal(validated.status, 304);
+            assert.equal((await validated.arrayBuffer()).byteLength, 0);
+        }
+
+        for (const [range, start, end] of [
+            ["bytes=0-7", 0, 8],
+            ["bytes=8-", 8, bytes[0]!.length],
+            ["bytes=-8", bytes[0]!.length - 8, bytes[0]!.length],
+            ["bytes=0-9999999999", 0, bytes[0]!.length],
+        ] as const) {
+            const partial = await get(path, true, { headers: { range, "if-range": etag } });
+
+            assert.equal(partial.status, 206);
+            assert.equal(
+                partial.headers.get("content-range"),
+                `bytes ${start}-${end - 1}/${bytes[0]!.length}`,
+            );
+            assert.deepEqual(
+                Buffer.from(await partial.arrayBuffer()),
+                bytes[0]!.subarray(start, end),
+            );
+        }
+
+        for (const range of ["bytes=999999-", "bytes=-0", "bytes=8-3"]) {
+            const unsatisfied = await get(path, true, { headers: { range } });
+
+            assert.equal(unsatisfied.status, 416);
+            assert.equal(unsatisfied.headers.get("content-range"), `bytes */${bytes[0]!.length}`);
+            assert.equal((await unsatisfied.arrayBuffer()).byteLength, 0);
+        }
+
+        for (const headers of [
+            { range: "bytes=0-3", "if-range": '"stale"' },
+            { range: "bytes=0-3,8-9" },
+            { range: "items=0-3" },
+        ] as Record<string, string>[]) {
+            const ignored = await get(path, true, { headers });
+
+            assert.equal(ignored.status, 200);
+            assert.deepEqual(Buffer.from(await ignored.arrayBuffer()), bytes[0]);
+        }
+
+        const head = await get(path, true, { method: "HEAD", headers: { range: "bytes=0-7" } });
+
+        assert.equal(head.status, 200);
+        assert.equal(head.headers.get("content-length"), String(bytes[0]!.length));
+        assert.equal((await head.arrayBuffer()).byteLength, 0);
+
+        for (const [target, authenticated, status] of [
+            [`${foreign.id}/image/${entry.id}/0`, true, 404],
+            [path, false, 401],
+        ] as const) {
+            for (const method of ["GET", "HEAD"]) {
+                const denied = await get(target, authenticated, {
+                    method,
+                    headers: { "if-none-match": etag, range: "bytes=0-7" },
+                });
+
+                assert.equal(
+                    denied.status,
+                    status,
+                    "authorization precedes both validators and range",
+                );
+                await denied.arrayBuffer();
+            }
+        }
 
         for (const path of [
             `${id}/image/${entry.id}/-1`,

@@ -130,13 +130,22 @@ for (const protocol of ["http", "https"]) {
                     flatten: true,
                 });
                 let loaded: (() => void) | undefined;
+                const imageProtocols = new Set<string>();
 
-                cdp.listen(sessionId, (method) => {
+                cdp.listen(sessionId, (method, params) => {
+                    if (
+                        method === "Network.responseReceived" &&
+                        String(params.response.url).includes("/image/")
+                    ) {
+                        imageProtocols.add(params.response.protocol);
+                    }
+
                     if (method === "Page.loadEventFired") {
                         loaded?.();
                     }
                 });
                 await cdp.send("Page.enable", {}, sessionId);
+                await cdp.send("Network.enable", {}, sessionId);
 
                 const navigate = async (url: string) => {
                     const load = new Promise<void>((resolve) => {
@@ -210,6 +219,7 @@ for (const protocol of ["http", "https"]) {
                 assert.equal(paste.uploads, 1);
                 assert.equal(paste.uploadPath.split("?")[0], `/api/c/${id}/upload`);
                 assert.ok(paste.bytes < paste.originalBytes);
+                assert.deepEqual([...imageProtocols], [protocol === "https" ? "h2" : "http/1.1"]);
             } finally {
                 chromium?.kill();
 

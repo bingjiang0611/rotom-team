@@ -24,10 +24,10 @@ export const ENTRY_IMAGE_TYPES = new Set([
     "image/bmp",
 ]);
 
-export type ImageSize = "thumb" | "preview";
+export type ImageSize = "thumb" | "preview" | "original";
 
-/** The longest edge of each size, in pixels. */
-export const EDGE: Record<ImageSize, number> = { thumb: 480, preview: 1600 };
+/** The longest edge of each derived size, in pixels. Originals are never re-encoded. */
+export const EDGE = { thumb: 480, preview: 1600 };
 
 /** At most this many resizes at a time: a long history opened at once must not start a child per image. */
 const SLOTS = 2;
@@ -36,10 +36,11 @@ const KEEP_RECORDS = 4096;
 /** A resize that takes longer than this is abandoned, and the original is sent. */
 const RESIZE_TIMEOUT_MS = 20_000;
 
-/** Derived files only: originals stay in Durable. Evicted copies are rebuilt on demand. */
+/** Rebuildable copies only: Durable is still authoritative, including for originals. */
 export const MEDIA_LIMITS = { bytes: 256 * 1024 * 1024, files: 8192, pending: 16 };
 const READ_PRIVATE = { flag: constants.O_RDONLY | constants.O_NOFOLLOW };
-const BLOB = /^[0-9a-f]{64}-(thumb|preview)\.(jpg|png)$/;
+const BLOB = /^[0-9a-f]{64}-((thumb|preview)\.(jpg|png)|original\.(jpg|png|gif|webp|bmp))$/;
+const extension = (mimeType: string) => (mimeType === "image/jpeg" ? "jpg" : mimeType.slice(6));
 const RECORD = /^\d+\.\d+\.json$/;
 
 /** What a stored image is, once seen: who owns its entry, and what each size is (a file, or the original). */
@@ -65,7 +66,7 @@ type ImageRecord = {
 export type StoredImage = { owner: number; mimeType: string; data: Buffer };
 
 /** A resized copy, or `original` when no smaller copy is worth sending (already small, animated, or no resizer). */
-export type Resized = "original" | { data: Buffer; mimeType: string };
+export type Resized = "original" | { data: Buffer; mimeType: string; etag?: string };
 
 export type Resize = (
     data: Buffer,
@@ -190,7 +191,7 @@ export class MediaStore {
             return undefined;
         }
 
-        if (this.#resize === undefined) {
+        if (size !== "original" && this.#resize === undefined) {
             return "original";
         }
 
@@ -227,7 +228,11 @@ export class MediaStore {
                     data.length === kept.bytes &&
                     createHash("sha256").update(data).digest("hex") === kept.digest
                 ) {
-                    return { data, mimeType: kept.mimeType };
+                    return {
+                        data,
+                        mimeType: kept.mimeType,
+                        ...(size === "original" ? { etag: `"sha256-${kept.digest}"` } : {}),
+                    };
                 }
             }
         }
@@ -281,7 +286,10 @@ export class MediaStore {
 
         try {
             await this.#prepare();
-            resized = await this.#resize!(image.data, image.mimeType, EDGE[size], this.#tmp);
+            resized =
+                size === "original"
+                    ? { data: image.data, mimeType: image.mimeType, etag: `"sha256-${sha256}"` }
+                    : await this.#resize!(image.data, image.mimeType, EDGE[size], this.#tmp);
         } catch (error) {
             console.error(`Could not resize an image (${size}):`, (error as Error).message);
             this.#failed.add(failure);
@@ -298,7 +306,12 @@ export class MediaStore {
         if (resized === "original") {
             kept = "original";
         } else {
-            const file = `${sha256}-${size}.${resized.mimeType === "image/png" ? "png" : "jpg"}`;
+            // Do not write a single original larger than the whole cache, only to immediately evict it.
+            if (resized.data.length > this.#limits.bytes) {
+                return resized;
+            }
+
+            const file = `${sha256}-${size}.${extension(resized.mimeType)}`;
 
             // A full/read-only cache must not turn a readable original into an HTTP error.
             await this.#writeFile(join(this.#dir, file), resized.data).catch(() => {});
@@ -306,7 +319,10 @@ export class MediaStore {
                 file,
                 mimeType: resized.mimeType,
                 bytes: resized.data.length,
-                digest: createHash("sha256").update(resized.data).digest("hex"),
+                digest:
+                    size === "original"
+                        ? sha256
+                        : createHash("sha256").update(resized.data).digest("hex"),
             };
         }
 
@@ -403,7 +419,7 @@ export class MediaStore {
             }
 
             for (const [size, value] of Object.entries(record.sizes)) {
-                if (size !== "thumb" && size !== "preview") {
+                if (size !== "thumb" && size !== "preview" && size !== "original") {
                     return undefined;
                 }
 
@@ -414,13 +430,16 @@ export class MediaStore {
                 if (
                     value === null ||
                     typeof value !== "object" ||
-                    !["image/png", "image/jpeg"].includes(value.mimeType) ||
+                    !(size === "original"
+                        ? ENTRY_IMAGE_TYPES.has(value.mimeType)
+                        : ["image/png", "image/jpeg"].includes(value.mimeType)) ||
                     !Number.isSafeInteger(value.bytes) ||
                     value.bytes <= 0 ||
                     value.bytes > this.#limits.bytes ||
                     !/^[0-9a-f]{64}$/.test(value.digest) ||
-                    value.file !==
-                        `${record.sha256}-${size}.${value.mimeType === "image/png" ? "png" : "jpg"}`
+                    (size === "original" &&
+                        (value.mimeType !== record.mimeType || value.digest !== record.sha256)) ||
+                    value.file !== `${record.sha256}-${size}.${extension(value.mimeType)}`
                 ) {
                     return undefined;
                 }

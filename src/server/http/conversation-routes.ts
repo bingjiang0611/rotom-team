@@ -11,6 +11,7 @@ import { teamCommandUsesAdapter } from "../team-command-policy.ts";
 import { serveDownload, serveImage, TYPES } from "./assets.ts";
 import { type ApiRequest, json, readJson, send } from "./io.ts";
 import { ENTRY_IMAGE_TYPES } from "../media.ts";
+import { sendStoredImage } from "./stored-image.ts";
 
 const MAX_UPLOAD = 50 * 1024 * 1024;
 
@@ -242,6 +243,7 @@ export async function conversationRoutes(
 
         // Reading, people's chat, and the folder do not run Pi: they work as in any session.
         const shared =
+            (method === "HEAD" && third === "image") ||
             (method === "GET" &&
                 [
                     "image",
@@ -532,28 +534,29 @@ export async function conversationRoutes(
         return json(response, 200, { ok: true });
     }
 
-    if (third === "image" && fourth !== undefined && method === "GET") {
+    if (third === "image" && fourth !== undefined && (method === "GET" || method === "HEAD")) {
         const entryId = Number(fourth);
         const index = Number(parts[4] ?? 0);
         const size = url.searchParams.get("size");
 
-        if (size !== null && size !== "thumb" && size !== "preview") {
-            throw new HttpError(400, "size is thumb or preview");
+        if (size !== null && size !== "thumb" && size !== "preview" && size !== "original") {
+            throw new HttpError(400, "size is thumb, preview or original");
         }
 
-        // Stored entries never change, and neither do their smaller copies.
-        if (size !== null) {
-            const smaller = await app.media.image(id as unknown as number, entryId, index, size);
+        // Authorization is deliberately before validators/Range: even a 304 or HEAD must not reveal a foreign image.
+        const cached = await app.media.image(
+            id as unknown as number,
+            entryId,
+            index,
+            size ?? "original",
+        );
 
-            if (smaller === undefined) {
-                throw new HttpError(404, "No such image");
-            }
+        if (cached === undefined) {
+            throw new HttpError(404, "No such image");
+        }
 
-            if (smaller !== "original") {
-                return send(response, 200, smaller.data, smaller.mimeType, {
-                    "cache-control": "private, max-age=31536000, immutable",
-                });
-            }
+        if (cached !== "original") {
+            return sendStoredImage(request, response, cached);
         }
 
         const image = await app.transcripts.entryImage(id, entryId, index);
@@ -562,10 +565,7 @@ export async function conversationRoutes(
             throw new HttpError(404, "No such image");
         }
 
-        // Stored entries never change.
-        return send(response, 200, image.data, image.mimeType, {
-            "cache-control": "private, max-age=31536000, immutable",
-        });
+        return sendStoredImage(request, response, image);
     }
 
     if (third === "file" && method === "GET") {

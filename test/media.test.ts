@@ -94,6 +94,69 @@ test("a copy is made once, then served from its file after only a visibility che
     assert.deepEqual(readdirSync(join(dir, "tmp")), [], "no temporary files are left");
 });
 
+test("originals are cached without a resizer, stay byte-identical, and retain fork visibility after restart", async () => {
+    const dir = tempDir();
+    const first = fixture();
+    const store = new MediaStore(dir, first.source, null);
+    const original = await store.image(1, 10, 0, "original");
+
+    assert.ok(original && original !== "original");
+    assert.deepEqual(original.data, imageFixture(64, 40, 7));
+    assert.equal(original.mimeType, "image/png");
+    assert.match(original.etag!, /^"sha256-[0-9a-f]{64}"$/);
+    assert.deepEqual(await store.image(2, 10, 0, "original"), original);
+    assert.equal(await store.image(3, 10, 0, "original"), undefined);
+    assert.deepEqual(first.calls, { stored: 1, visible: 2, resize: 0 });
+    const second = fixture();
+    const reopened = new MediaStore(dir, second.source, null);
+
+    assert.deepEqual(await reopened.image(2, 10, 0, "original"), original);
+    assert.equal(await reopened.image(3, 10, 0, "original"), undefined);
+    assert.deepEqual(second.calls, { stored: 0, visible: 2, resize: 0 });
+});
+
+test("damaged original files and malformed original records are rebuilt, not served immutably", async () => {
+    const dir = tempDir();
+    const { source, calls } = fixture();
+    const store = new MediaStore(dir, source, null);
+    const original = await store.image(1, 10, 0, "original");
+    const path = join(
+        dir,
+        readdirSync(dir).find((name) => name.endsWith("-original.png"))!,
+    );
+
+    writeFileSync(path, Buffer.alloc(0));
+    assert.deepEqual(await store.image(1, 10, 0, "original"), original);
+    assert.equal(calls.stored, 2);
+    const damaged = readFileSync(path);
+
+    damaged[20] = damaged[20]! ^ 1;
+    writeFileSync(path, damaged);
+    assert.deepEqual(await store.image(1, 10, 0, "original"), original);
+    assert.equal(calls.stored, 3);
+    const recordPath = join(dir, "entries", "10.0.json");
+    const record = JSON.parse(readFileSync(recordPath, "utf8"));
+
+    record.sizes.original.file = "../../not-an-image";
+    writeFileSync(recordPath, JSON.stringify(record));
+    assert.deepEqual(await new MediaStore(dir, source, null).image(1, 10, 0, "original"), original);
+    assert.equal(calls.stored, 4);
+});
+
+test("an original larger than the cache is readable but is never written only to be immediately evicted", async () => {
+    const dir = tempDir();
+    const { source, calls } = fixture();
+    const store = new MediaStore(dir, source, null, { bytes: 32 });
+    const image = await store.image(1, 10, 0, "original");
+
+    assert.ok(image && image !== "original");
+    assert.deepEqual(image.data, imageFixture(64, 40, 7));
+    assert.deepEqual(readdirSync(dir).sort(), ["entries", "tmp"]);
+    assert.deepEqual(await store.image(1, 10, 0, "original"), image);
+    assert.equal(calls.stored, 2);
+    assert.equal(calls.resize, 0);
+});
+
 test("each size is its own copy, and an image with no smaller copy sends the original", async () => {
     const { calls, source, resize, answer } = fixture();
     const store = new MediaStore(tempDir(), source, resize);

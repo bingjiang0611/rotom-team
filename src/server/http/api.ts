@@ -190,11 +190,15 @@ export function createApi(options: HttpOptions, auth: Auth) {
 
         noteTunnel(request, user);
 
-        if (method !== "GET" && request.headers["x-pocket"] !== "1") {
+        const [first, second, third, fourth] = parts;
+        // Only stored images implement read-only HEAD. Do not exempt unrelated methods/routes from the write guard.
+        const imageHead =
+            method === "HEAD" && first === "c" && third === "image" && fourth !== undefined;
+
+        if (method !== "GET" && !imageHead && request.headers["x-pocket"] !== "1") {
             throw new HttpError(403, "Missing X-Pocket header");
         }
 
-        const [first, second, third, fourth] = parts;
         const route: ApiRequest = { app, request, response, url, user };
 
         if (first === "events" && method === "GET") {
