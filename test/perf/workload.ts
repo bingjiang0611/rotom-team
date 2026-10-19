@@ -46,6 +46,8 @@ export const SCENARIOS: Record<string, string> = {
     "projection.large.paced": `the same ${WORKLOAD.projectionTurns}-turn session and ${WORKLOAD.projectionTabs} attached tabs; one ${WORKLOAD.answerChars}-char answer paced ${WORKLOAD.pacedChunkMs} ms per chunk, until settled and quiet`,
     "image.single": `${imageHistory}; retrieve image 0 once, until full client body and quiet; recently written SQLite data, not an OS cold-cache test`,
     "image.concurrent": `${imageHistory}; after image.single, retrieve images 1 through ${WORKLOAD.imageParallel} concurrently, until all client bodies and quiet; phase timings sum per-request intervals, not batch wall time`,
+    "image.thumbs.first": `${imageHistory}; after image.concurrent, request images ${WORKLOAD.imageParallel + 1} through ${2 * WORKLOAD.imageParallel} concurrently as transcript thumbnails (?size=thumb), the first time this server sees them, until all client bodies and quiet`,
+    "image.thumbs.again": `${imageHistory}; after image.thumbs.first, the same ${WORKLOAD.imageParallel} thumbnail requests again on the same server, without a browser cache, until all client bodies and quiet`,
 };
 
 export type Layer = "storage" | "process" | "cpu" | "push" | "http" | "web";
@@ -138,6 +140,11 @@ const COUNTERS: Record<string, MetricSpec> = {
         layer: "process",
         unit: "count",
         source: "child processes whose program is rotom (test/perf/counters.ts)",
+    },
+    "subprocess.sips": {
+        layer: "process",
+        unit: "count",
+        source: "child processes whose program is sips, macOS image resizing (test/perf/counters.ts)",
     },
     "json.parse.calls": {
         layer: "cpu",
@@ -422,6 +429,8 @@ export const REPORTED: Record<string, string[]> = {
     "projection.large.paced": [...common, "subprocess.git", ...projection, ...pushes],
     "image.single": [...imageCounters],
     "image.concurrent": [...imageCounters],
+    "image.thumbs.first": [...common, "subprocess.sips", "http.requests", "http.body.bytes"],
+    "image.thumbs.again": [...common, "subprocess.sips", "http.requests", "http.body.bytes"],
     // JSON counts leave web.open out: the DevTools connection that drives Chromium parses and writes JSON too.
     "web.open": [
         "sql.statements",

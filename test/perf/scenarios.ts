@@ -33,6 +33,7 @@ import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { ConversationId } from "@earendil-works/pi-durable";
 import type { JsonValue } from "@earendil-works/chord";
 import { NATIVE_ENTRY } from "../../src/server/entry-format.ts";
+import { sniffImage } from "../../src/server/http/assets.ts";
 
 export type ScenarioResult =
     | { scenario: string; ms: number; counts: Counts; extra?: Record<string, number> }
@@ -590,6 +591,37 @@ try {
 } finally {
     handler = unprobedHandler;
     imageProbe.restore();
+}
+
+// Transcript thumbnails: what the browser asks for to show a stored image inline. The body must be a real image of
+// the type it claims; its size is whatever the server chooses to send for a thumbnail.
+for (const name of ["image.thumbs.first", "image.thumbs.again"]) {
+    await scenario(name, async () => {
+        const beforeInference = inferenceRequests;
+        const sizes = await Promise.all(
+            Array.from({ length: WORKLOAD.imageParallel }, async (_, offset) => {
+                const index = WORKLOAD.imageParallel + 1 + offset;
+                const response = await fetch(
+                    `${base}/api/c/${imageSession}/image/${imageEntries[index]}/0?size=thumb`,
+                    { headers: { authorization: `Bearer ${token}` } },
+                );
+                const bytes = Buffer.from(await response.arrayBuffer());
+
+                assert.equal(response.status, 200);
+                assert.equal(response.headers.get("content-type"), sniffImage(bytes));
+                assert.equal(
+                    response.headers.get("cache-control"),
+                    "private, max-age=31536000, immutable",
+                );
+
+                return bytes.length;
+            }),
+        );
+
+        assert.equal(inferenceRequests, beforeInference, "thumbnails must not call the model");
+
+        return { "http.body.bytes": sizes.reduce((a, b) => a + b, 0) };
+    });
 }
 
 writeFileSync(out, raw.stringify({ workload: WORKLOAD, results }, null, 2));
