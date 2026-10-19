@@ -34,6 +34,7 @@ import type { ConversationId } from "@earendil-works/pi-durable";
 import type { JsonValue } from "@earendil-works/chord";
 import { NATIVE_ENTRY } from "../../src/server/entry-format.ts";
 import { sniffImage } from "../../src/server/http/assets.ts";
+import { measureImageNetwork } from "./image-network.ts";
 
 export type ScenarioResult =
     | { scenario: string; ms: number; counts: Counts; extra?: Record<string, number> }
@@ -623,6 +624,24 @@ for (const name of ["image.thumbs.first", "image.thumbs.again"]) {
         return { "http.body.bytes": sizes.reduce((a, b) => a + b, 0) };
     });
 }
+
+const imageNetwork = await measureImageNetwork({
+    base,
+    token,
+    paths: Array.from({ length: WORKLOAD.imageParallel }, (_, offset) => {
+        const index = 2 * WORKLOAD.imageParallel + 1 + offset;
+
+        return `/api/c/${imageSession}/image/${imageEntries[index]}/0?size=thumb`;
+    }),
+    profile: join(root, "perf-image-network"),
+    quiet,
+});
+
+results.push(
+    "unavailable" in imageNetwork
+        ? { scenario: "image.thumbs.network", unavailable: imageNetwork.unavailable }
+        : { scenario: "image.thumbs.network", ms: imageNetwork.ms, counts: imageNetwork.counts },
+);
 
 writeFileSync(out, raw.stringify({ workload: WORKLOAD, results }, null, 2));
 server.closeAllConnections();

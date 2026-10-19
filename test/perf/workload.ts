@@ -48,6 +48,7 @@ export const SCENARIOS: Record<string, string> = {
     "image.concurrent": `${imageHistory}; after image.single, retrieve images 1 through ${WORKLOAD.imageParallel} concurrently, until all client bodies and quiet; phase timings sum per-request intervals, not batch wall time`,
     "image.thumbs.first": `${imageHistory}; after image.concurrent, request images ${WORKLOAD.imageParallel + 1} through ${2 * WORKLOAD.imageParallel} concurrently as transcript thumbnails (?size=thumb), the first time this server sees them, until all client bodies and quiet`,
     "image.thumbs.again": `${imageHistory}; after image.thumbs.first, the same ${WORKLOAD.imageParallel} thumbnail requests again on the same server, without a browser cache, until all client bodies and quiet`,
+    "image.thumbs.network": `${imageHistory}; after all loopback scenarios, Chromium downloads and decodes ${WORKLOAD.imageParallel} previously unrequested images (indices ${2 * WORKLOAD.imageParallel + 1} through ${3 * WORKLOAD.imageParallel}) as thumbnails, cache disabled, CDP-emulated 4 Mbit/s throughput and 40 ms latency; includes first server resize cost; synthetic link, not production network`,
 };
 
 export type Layer = "storage" | "process" | "cpu" | "push" | "http" | "web";
@@ -431,6 +432,15 @@ export const REPORTED: Record<string, string[]> = {
     "image.concurrent": [...imageCounters],
     "image.thumbs.first": [...common, "subprocess.sips", "http.requests", "http.body.bytes"],
     "image.thumbs.again": [...common, "subprocess.sips", "http.requests", "http.body.bytes"],
+    // DevTools itself parses JSON in the server process: leave JSON counters out, as with web.open.
+    "image.thumbs.network": [
+        "sql.statements",
+        "sql.rows",
+        "subprocess.total",
+        "subprocess.sips",
+        "http.requests",
+        "http.body.bytes",
+    ],
     // JSON counts leave web.open out: the DevTools connection that drives Chromium parses and writes JSON too.
     "web.open": [
         "sql.statements",
