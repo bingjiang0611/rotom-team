@@ -215,9 +215,12 @@ export class MediaStore {
             }
 
             if (kept !== undefined) {
-                const data = await readFile(join(this.#dir, kept.file), READ_PRIVATE).catch(
-                    () => undefined,
-                );
+                const path = join(this.#dir, kept.file);
+                const info = await lstat(path).catch(() => undefined);
+                const data =
+                    info?.isFile() && info.size === kept.bytes
+                        ? await readFile(path, READ_PRIVATE).catch(() => undefined)
+                        : undefined;
 
                 if (
                     data !== undefined &&
@@ -377,12 +380,14 @@ export class MediaStore {
 
     async #readRecord(key: string): Promise<ImageRecord | undefined> {
         try {
-            const bytes = await readFile(this.#recordPath(key), READ_PRIVATE);
+            const path = this.#recordPath(key);
+            const info = await lstat(path);
 
-            if (bytes.length > 2048) {
+            if (!info.isFile() || info.size > 2048) {
                 return undefined;
             }
 
+            const bytes = await readFile(path, READ_PRIVATE);
             const record = JSON.parse(bytes.toString("utf8")) as ImageRecord;
 
             if (
@@ -412,6 +417,7 @@ export class MediaStore {
                     !["image/png", "image/jpeg"].includes(value.mimeType) ||
                     !Number.isSafeInteger(value.bytes) ||
                     value.bytes <= 0 ||
+                    value.bytes > this.#limits.bytes ||
                     !/^[0-9a-f]{64}$/.test(value.digest) ||
                     value.file !==
                         `${record.sha256}-${size}.${value.mimeType === "image/png" ? "png" : "jpg"}`
