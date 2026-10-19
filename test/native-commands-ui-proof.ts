@@ -171,6 +171,14 @@ export async function nativeCommandUiProof(options: {
         );
         assert.ok((await text(".native-context")).includes("System Prompt"));
         assert.ok(!(await text(".native-context")).includes("TUI mode only"));
+        assert.equal(
+            await page.evaluate("document.querySelectorAll('.native-context-cell').length"),
+            "256",
+            "usage renders the native 16 by 16 context map",
+        );
+        assert.ok((await text(".native-context-legend")).includes("Window %"));
+        assert.ok((await text(".native-context-legend")).includes("Auto-Compact Buffer"));
+        assert.ok((await text(".native-context-legend")).includes("Free Space"));
         assert.equal(options.modelCalls(), before, "context before first prompt runs no probe");
         await screenshot("native-context-usage");
         await page.evaluate("document.querySelector('.native-context details > summary').click()");
@@ -205,6 +213,160 @@ export async function nativeCommandUiProof(options: {
         assert.ok((await text(".native-context")).includes("sources"));
         assert.equal(options.modelCalls(), before, "injections performs no inference");
         await screenshot("native-context-injections");
+        await page.evaluate("(await import('/store.js')).closeSheet()");
+
+        // Content pressure from the terminal reference. This renders the production component,
+        // not a separate mock page; no provider request or persisted context is changed.
+        const categories = [
+            { id: "system-prompt", label: "System Prompt", tokens: 4500 },
+            { id: "context-files", label: "Instruction Files", tokens: 1400 },
+            { id: "skills", label: "Skills", tokens: 503 },
+            { id: "built-in-tools", label: "Built-in Tools", tokens: 420 },
+            { id: "custom-tools", label: "Custom Tools", tokens: 5700 },
+            { id: "user-messages", label: "User Messages", tokens: 69 },
+            { id: "assistant-messages", label: "Assistant Messages", tokens: 1100 },
+            { id: "assistant-thinking", label: "Assistant Thinking", tokens: 24900 },
+            { id: "tool-calls", label: "Tool Calls", tokens: 42100 },
+            {
+                id: "tool-output",
+                label: "Tool Output",
+                tokens: 178600,
+                children: [
+                    { id: "read", label: "read", tokens: 85500 },
+                    { id: "bash", label: "bash", tokens: 58100 },
+                    { id: "codemode", label: "codemode", tokens: 28700 },
+                    { id: "edit", label: "edit", tokens: 6000 },
+                    { id: "write", label: "write", tokens: 273 },
+                    { id: "obs_recall", label: "obs_recall", tokens: 27 },
+                ],
+            },
+        ];
+        const context = {
+            type: "native-context",
+            title: "Context usage",
+            view: "usage",
+            captured: true,
+            model: "context-ui-fixture",
+            reported: { contextWindow: 272000, tokens: 259292 },
+            estimatedTokens: categories.reduce((sum, row) => sum + row.tokens, 0),
+            autoCompactReserveTokens: 16384,
+            categories,
+        };
+
+        const showContext = async (value: unknown) => {
+            await until(
+                async () =>
+                    (await page.evaluate("Boolean(document.querySelector('.sheet'))")) === "false",
+                "previous sheet closes before replacing the context snapshot",
+            );
+            await page.evaluate(
+                `(await import('/store.js')).openSheet({type: 'native-info', result: {context: ${JSON.stringify(value)}}})`,
+            );
+            await until(
+                async () => (await text(".native-context-model")) === "context-ui-fixture",
+                "fixture context opens",
+            );
+        };
+
+        await showContext(context);
+        assert.equal(
+            await page.evaluate("document.querySelector('.native-context-category').open"),
+            "true",
+            "Tool Output breakdown is visible by default like the terminal",
+        );
+        assert.ok((await text(".native-context-legend")).includes("85.5k"));
+        assert.ok((await text(".native-context-legend")).includes("66%"));
+        assert.equal(
+            await page.evaluate(
+                "new Set(Array.from(document.querySelectorAll('.native-context-cell.full')).map(cell => getComputedStyle(cell).backgroundColor)).size > 3",
+            ),
+            "true",
+            "category map has distinct theme colors, not accent-opacity stripes",
+        );
+        assert.equal(
+            await page.evaluate(
+                "document.querySelector('.native-context-map').getBoundingClientRect().right < document.querySelector('.native-context-legend').getBoundingClientRect().left",
+            ),
+            "true",
+            "desktop map and legend sit side by side",
+        );
+        await screenshot("native-context-terminal-parity");
+        await page.evaluate("document.querySelector('.native-context-category > summary').focus()");
+        await page.input([{ type: "key", key: "Enter" }]);
+        assert.equal(
+            await page.evaluate("document.querySelector('.native-context-category').open"),
+            "false",
+            "keyboard Enter collapses the tool breakdown",
+        );
+        await page.input([{ type: "key", key: " " }]);
+        assert.equal(
+            await page.evaluate("document.querySelector('.native-context-category').open"),
+            "true",
+            "keyboard Space expands the tool breakdown",
+        );
+        await page.setViewport(VIEWPORTS.mobile);
+        assert.equal(
+            await page.evaluate(
+                "document.documentElement.scrollWidth <= innerWidth && document.querySelector('.sheet').scrollWidth <= document.querySelector('.sheet').clientWidth && document.querySelector('.native-context-legend').scrollWidth <= document.querySelector('.native-context-legend').clientWidth",
+            ),
+            "true",
+            "full terminal breakdown and numeric columns fit mobile",
+        );
+        assert.equal(
+            await page.evaluate(
+                "document.querySelector('.native-context-map-panel').getBoundingClientRect().bottom <= document.querySelector('.native-context-legend').getBoundingClientRect().top",
+            ),
+            "true",
+            "mobile map sits above the legend",
+        );
+        await screenshot("native-context-terminal-mobile");
+        await page.setViewport({ width: 320, height: 740, scale: 1, mobile: true });
+        assert.equal(
+            await page.evaluate(
+                "document.querySelector('.sheet').scrollWidth <= document.querySelector('.sheet').clientWidth",
+            ),
+            "true",
+            "context also fits a 320px narrow phone",
+        );
+        await page.setViewport(VIEWPORTS.desktop);
+        await page.evaluate(
+            "const theme = await import('/theme.js'); globalThis.contextOriginalTheme = theme.prefs().theme; theme.setPrefs({theme: 'catppuccin-latte'})",
+        );
+        assert.equal(await page.evaluate("document.documentElement.dataset.mode"), "light");
+        await screenshot("native-context-terminal-light");
+        await page.evaluate(
+            "(await import('/theme.js')).setPrefs({theme: globalThis.contextOriginalTheme})",
+        );
+        await page.evaluate("(await import('/store.js')).closeSheet()");
+        await showContext({ ...context, reported: undefined });
+        assert.equal(
+            await page.evaluate("document.querySelectorAll('.native-context-cell').length"),
+            "0",
+        );
+        assert.ok((await text(".native-context")).includes("Context window unknown"));
+        assert.ok((await text(".native-context-legend")).includes("unknown"));
+        assert.equal(
+            await page.evaluate(
+                "document.querySelector('.native-context-map-panel').getBoundingClientRect().bottom <= document.querySelector('.native-context-legend').getBoundingClientRect().top",
+            ),
+            "true",
+            "unknown context window removes the empty map column",
+        );
+        await screenshot("native-context-unknown-window");
+        await page.evaluate("(await import('/store.js')).closeSheet()");
+        await showContext({
+            ...context,
+            estimatedTokens: 0,
+            categories: [],
+            autoCompactReserveTokens: 0,
+        });
+        assert.equal(
+            await page.evaluate("document.querySelectorAll('.native-context-cell.free').length"),
+            "256",
+            "known empty window shows real free space",
+        );
+        assert.ok((await text(".native-context-legend")).includes("272k"));
+        assert.equal(options.modelCalls(), before, "context UI interactions run no inference");
         await page.evaluate("(await import('/store.js')).closeSheet()");
 
         for (const key of ["Tab", "Enter"]) {
@@ -928,6 +1090,11 @@ export async function nativeCommandUiProof(options: {
             contextBeforePromptNoInference: true,
             contextMobileContainment: true,
             contextExpandableBreakdown: true,
+            contextTerminalMapAndPercentages: true,
+            contextDefaultToolBreakdown: true,
+            contextKeyboardBreakdown: true,
+            contextUnknownAndEmptyWindows: true,
+            contextNarrowPhoneContainment: true,
             screenshots,
         };
     } catch (error) {

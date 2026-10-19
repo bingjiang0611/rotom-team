@@ -194,7 +194,11 @@ operations are unchanged.
 by native/extension source. Both reuse pinned `pi-context-view` capture and measurement code, never make a paid/silent
 probe, and return only labels/counts—not raw prompt, message or tool text. `/context config` is refused because plugin
 configuration belongs to the owner-managed shared profile. Context commands are read-only receipts, idempotent by
-request ID, and busy-gated rather than queued into a running prompt.
+request ID, and busy-gated rather than queued into a running prompt. The usage sheet follows the pinned terminal's
+16×16 proportional map, category colors, token precision and window percentages. Tool Output opens its measured
+per-tool breakdown by default. Auto-Compact Buffer is capped at remaining window space, and Free Space excludes it;
+an unknown window stays unknown. Desktop map/legend columns stack on phones. Browser colors use the active Team
+theme; terminal custom color/map-size overrides, Fit zoom and raw-content previews are not ported.
 
 Tab and partial-name Enter fill the draft without executing. Complete-name Enter runs the command. Thinking and fork
 have dedicated keyboard selectors; settings writes remain owner-only and busy-gated. Bare Goal opens a Web manager,

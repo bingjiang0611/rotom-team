@@ -8275,35 +8275,228 @@ textarea.notes {
     font-size: 0.75rem;
 }
 
-.native-context-meter {
-    display: flex;
-    height: 1.2rem;
-    overflow: hidden;
-    background: var(--o-selection);
+/* /context usage follows the terminal's colored map and aligned category legend.
+ * Injections keep their source-group breakdown; no raw prompt text is added here. */
+.sheet.wide.native-context-sheet {
+    max-width: 960px;
 }
 
-.native-context-meter i {
-    flex-shrink: 0;
-    background: var(--accent);
+.native-context-dashboard {
+    display: grid;
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.25fr);
+    align-items: start;
+    gap: 1.5rem;
 }
 
-.native-context-meter .c1,
-.native-context-meter .c5 {
-    opacity: 0.8;
+.native-context-dashboard.no-map {
+    grid-template-columns: minmax(0, 1fr);
 }
 
-.native-context-meter .c2,
-.native-context-meter .c6 {
-    opacity: 0.6;
+.native-context-map-panel,
+.native-context-legend {
+    min-width: 0;
 }
 
-.native-context-meter .c3,
-.native-context-meter .c7 {
-    opacity: 0.4;
+.native-context-dashboard.no-map .native-context-map-panel {
+    width: auto;
+    justify-self: stretch;
 }
 
-.native-context-meter .native-context-buffer {
+.native-context-map {
+    display: grid;
+    grid-template-columns: repeat(16, minmax(0, 1fr));
+    gap: 0.65rem;
+    padding: 0.5rem 0;
+}
+
+.native-context-cell,
+.native-context-swatch {
+    display: block;
+    background: var(--context-color, var(--body));
+    aspect-ratio: 1;
+}
+
+.native-context-cell {
+    width: 100%;
+}
+
+.native-context-cell.partial,
+.native-context-swatch.partial {
+    border: 1px solid var(--context-color, var(--body));
+    background: linear-gradient(90deg, var(--context-color, var(--body)) 50%, transparent 50%);
+}
+
+.native-context-cell.buffer,
+.native-context-swatch.buffer {
+    border: 1px solid var(--muted);
     background: repeating-linear-gradient(135deg, var(--muted) 0 1px, transparent 1px 4px);
+}
+
+.native-context-cell.free,
+.native-context-swatch.free {
+    border: 1px dashed var(--muted);
+    background: none;
+}
+
+.native-context-map-key {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1rem;
+    margin-top: 0.75rem;
+    color: var(--muted);
+    font-size: 0.7rem;
+}
+
+.native-context-map-key > span {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.native-context-map-key > span:last-child {
+    flex-basis: 100%;
+}
+
+.native-context-usage-row,
+.native-context-legend-head {
+    display: grid;
+    grid-template-columns: minmax(0, auto) minmax(0.5rem, 1fr) 4.2rem 4.4rem;
+    align-items: center;
+    column-gap: 0.5rem;
+    min-height: 1.9rem;
+    font-size: 0.8rem;
+}
+
+.native-context-legend-head {
+    margin-bottom: 0.3rem;
+    color: var(--muted);
+    font-size: 0.7rem;
+}
+
+.native-context-legend-head > :first-child {
+    grid-column: span 2;
+    color: var(--warn);
+}
+
+.native-context-legend-head > :not(:first-child),
+.native-context-usage-row strong,
+.native-context-percent {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.native-context-usage-row strong {
+    font-weight: 400;
+    color: var(--body);
+}
+
+.native-context-percent {
+    color: var(--muted);
+}
+
+.native-context-label {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    min-width: 0;
+    padding-left: calc(0.9rem + var(--context-depth, 0) * 0.9rem);
+    position: relative;
+}
+
+.native-context-label > span {
+    overflow-wrap: anywhere;
+}
+
+.native-context-swatch {
+    flex: 0 0 0.6rem;
+    width: 0.6rem;
+    height: 0.6rem;
+}
+
+.native-context-swatch.breakdown {
+    flex-basis: 0.25rem;
+    width: 0.25rem;
+    height: 0.25rem;
+    margin-inline: 0.175rem;
+    border-radius: 50%;
+}
+
+.native-context-leader {
+    border-bottom: 1px dotted var(--faint);
+    align-self: center;
+    margin-top: 0.5rem;
+}
+
+.native-context-category > summary {
+    cursor: pointer;
+    list-style: none;
+}
+
+.native-context-category > summary::-webkit-details-marker {
+    display: none;
+}
+
+.native-context-category > summary .native-context-label::before {
+    content: "›";
+    position: absolute;
+    left: calc(var(--context-depth, 0) * 0.9rem);
+    color: var(--accent);
+}
+
+.native-context-category[open] > summary .native-context-label::before {
+    content: "⌄";
+}
+
+.native-context-category > summary:hover,
+.native-context-category > summary:focus-visible {
+    background: var(--hover);
+}
+
+.native-context-category > summary:focus-visible {
+    outline: 1px solid var(--accent);
+    outline-offset: 1px;
+}
+
+.native-context-space-rows {
+    border-top: 1px solid var(--line);
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+}
+
+.native-context-space {
+    color: var(--muted);
+}
+
+.native-context-footnote {
+    border-top: 1px solid var(--line);
+    padding-top: 0.75rem;
+}
+
+.native-context-meta > span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.native-context-model {
+    color: var(--text);
+}
+
+@media (max-width: 850px) {
+    .native-context-dashboard {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 1rem;
+    }
+
+    .native-context-map-panel {
+        width: min(100%, 20rem);
+        justify-self: center;
+    }
+}
+
+@media (pointer: coarse) {
+    .native-context-usage-row {
+        min-height: 44px;
+    }
 }
 
 .native-context-meta {
