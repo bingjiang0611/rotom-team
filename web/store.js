@@ -967,7 +967,8 @@ export const actions = {
             ...(backend === "rotom" ? { backend } : {}),
         }),
     updateSession: (id, patch) => api(`sessions/${id}`, patch),
-    upload: (file) => api(`c/${current()}/upload?name=${encodeURIComponent(file.name)}`, file),
+    upload: (file, id = current()) =>
+        api(`c/${id}/upload?name=${encodeURIComponent(file.name)}`, file),
     markRunSeen: (id, finishedAt) =>
         api(`c/${id}/seen`, { finishedAt }).then(() => {
             store.set((state) => ({

@@ -2,6 +2,7 @@
 // what was sent before (↑, Ctrl+R), fold long pastes, pick the model, stop.
 import { useEffect, useRef, useState } from "preact/hooks";
 import { Avatar } from "./avatar.js";
+import { preparePastedImage } from "./pasted-image.js";
 import { chatUnread, TypingLine } from "./chat.js";
 import {
     loadTemplates,
@@ -774,7 +775,7 @@ export function Composer() {
         }
     };
 
-    const addFiles = (list) => {
+    const addFiles = (list, pasted = false) => {
         for (const file of list) {
             const key = uid();
             const preview = file.type.startsWith("image/") ? URL.createObjectURL(file) : null;
@@ -783,23 +784,36 @@ export function Composer() {
                 ...current,
                 { key, name: file.name, size: file.size, state: "uploading", preview },
             ]);
-            actions.upload(file).then(
-                (attachment) =>
-                    setFiles((current) =>
-                        current.map((each) =>
-                            each.key === key ? { ...each, state: "done", attachment } : each,
+            const ready = pasted ? preparePastedImage(file) : Promise.resolve(file);
+
+            // Capture the destination before asynchronous image decoding: switching tabs must not retarget an upload.
+            ready
+                .then((prepared) => actions.upload(prepared, conversationId))
+                .then(
+                    (attachment) =>
+                        setFiles((current) =>
+                            current.map((each) =>
+                                each.key === key
+                                    ? {
+                                          ...each,
+                                          name: attachment.name,
+                                          size: attachment.size,
+                                          state: "done",
+                                          attachment,
+                                      }
+                                    : each,
+                            ),
                         ),
-                    ),
-                (error) => {
-                    notify("error", `Upload failed: ${error.message}`);
+                    (error) => {
+                        notify("error", `Upload failed: ${error.message}`);
 
-                    if (preview) {
-                        URL.revokeObjectURL(preview);
-                    }
+                        if (preview) {
+                            URL.revokeObjectURL(preview);
+                        }
 
-                    setFiles((current) => current.filter((each) => each.key !== key));
-                },
-            );
+                        setFiles((current) => current.filter((each) => each.key !== key));
+                    },
+                );
         }
     };
 
@@ -808,7 +822,7 @@ export function Composer() {
 
         if (pastedFiles.length > 0) {
             event.preventDefault();
-            addFiles(pastedFiles);
+            addFiles(pastedFiles, true);
 
             return;
         }
