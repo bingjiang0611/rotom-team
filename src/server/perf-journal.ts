@@ -12,6 +12,7 @@ import { subscribe, unsubscribe } from "node:diagnostics_channel";
 import { createReadStream, createWriteStream, readFileSync } from "node:fs";
 import { appendFile, mkdir, open, readdir, rename, rm, stat } from "node:fs/promises";
 import type { IncomingMessage, Server, ServerResponse } from "node:http";
+import type { Http2SecureServer, IncomingHttpHeaders, ServerHttp2Stream } from "node:http2";
 import type { Socket } from "node:net";
 import { cpus, release } from "node:os";
 import { basename, join } from "node:path";
@@ -385,7 +386,7 @@ type RequestStart = {
  */
 export async function startPerformanceJournal(options: {
     directory: string;
-    server: Server;
+    server: Server | Http2SecureServer;
     openMs: number;
     kernel: boolean;
     log: (line: string) => void;
@@ -434,6 +435,51 @@ export async function startPerformanceJournal(options: {
         });
     };
 
+    // HTTP/2 has separate diagnostics. Connection byte deltas cannot be assigned to an individual multiplexed
+    // stream: leave them unavailable, never zero or the connection's unrelated traffic. Keep the same record schema.
+    const h2Started = new WeakMap<
+        ServerHttp2Stream,
+        { at: number; route: string; method: string }
+    >();
+
+    const onH2Start = (message: unknown) => {
+        const { stream, headers } = message as {
+            stream: ServerHttp2Stream;
+            headers: IncomingHttpHeaders;
+        };
+        const socket = stream.session?.socket as (Socket & { server?: unknown }) | undefined;
+
+        if (socket?.server === options.server) {
+            const route = routeShape(String(headers[":path"] ?? "/"));
+
+            if (!HELD.has(route)) {
+                h2Started.set(stream, {
+                    at: performance.now(),
+                    route,
+                    method: String(headers[":method"] ?? "GET"),
+                });
+            }
+        }
+    };
+
+    const onH2Finish = (message: unknown) => {
+        const { stream } = message as { stream: ServerHttp2Stream };
+        const start = h2Started.get(stream);
+        const status = stream.sentHeaders?.[":status"];
+
+        if (start !== undefined && typeof status === "number") {
+            h2Started.delete(stream);
+            journal.record({
+                kind: "http",
+                method: start.method,
+                route: start.route,
+                status,
+                ms: round(performance.now() - start.at),
+                wireBytes: null,
+            });
+        }
+    };
+
     let pushes: Record<string, { count: number; sized: number; bytes: number }> = {};
 
     const onPush = (message: unknown) => {
@@ -476,6 +522,8 @@ export async function startPerformanceJournal(options: {
 
     subscribe("http.server.request.start", onStart);
     subscribe("http.server.response.finish", onFinish);
+    subscribe("http2.server.stream.start", onH2Start);
+    subscribe("http2.server.stream.finish", onH2Finish);
     pushChannel.subscribe(onPush);
     kernelRunChannel.subscribe(onRun);
     webTimingChannel.subscribe(onWeb);
@@ -536,6 +584,8 @@ export async function startPerformanceJournal(options: {
             delay.disable();
             unsubscribe("http.server.request.start", onStart);
             unsubscribe("http.server.response.finish", onFinish);
+            unsubscribe("http2.server.stream.start", onH2Start);
+            unsubscribe("http2.server.stream.finish", onH2Finish);
             pushChannel.unsubscribe(onPush);
             kernelRunChannel.unsubscribe(onRun);
             webTimingChannel.unsubscribe(onWeb);
