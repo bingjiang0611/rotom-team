@@ -128,3 +128,44 @@ The existing metadata reader does bounded files only; multipart ranges are inten
 
 Owned test servers/Chromium instances are closed. Reports/logs remain in `/tmp/rt-p1b-ci`, `/tmp/p1b-*` and the
 transport diagnostic under `/tmp/h2-diagnostic`. No push, install into the live service, restart or deployment.
+
+## Acceptance on the combined rotom 0.1.26 tree
+
+Another task committed the native pin upgrade as `28d410e` (rotom 0.1.26). The combined tree `39edcda` was revalidated
+with `npm run install:kernel` (0.1.26 identity verified), `format:check`, `check`, `lint`, `npm test` (**510 pass,
+0 fail, 0 skipped**) and `npm run test:kernel:app` (`status: passed`, `realProvider: false`).
+
+To isolate this batch from the pin upgrade, the base was a temporary local branch: first-batch end `19f2ad5` plus only
+the cherry-picked pin commit (`ffe763a`). Both checkouts installed rotom 0.1.26. The first attempt started at load
+16.86 (`highLoad: true`, discarded as timing evidence). After the machine settled, the repeat
+`timing-run.mjs p1c-ci2 -- npm run perf:ci -- perf-tmp-pinbase --runs 3` ran at load 1.72→2.39, **highLoad: false**.
+Work checks and the ledger guard passed.
+
+| Scenario                                                   |             Base median |             Head median | Comparison     | Level                                               |
+| ---------------------------------------------------------- | ----------------------: | ----------------------: | -------------- | --------------------------------------------------- |
+| `image.paste.network` (prepare + 4 Mbit/s upload + decode) |             31,365.3 ms |             13,836.8 ms | `faster`, −56% | **L2** (with L1: 15,482,499→6,772,807 upload bytes) |
+| `image.original.validated` (four conditional originals)    |                 55.4 ms |                 18.4 ms | `faster`, −67% | **L2** (with L1: SQL 4→0, body 7,868,332→0 bytes)   |
+| `image.original.again` (four repeated full originals)      |                 64.8 ms |                 58.2 ms | noise          | L1 only (SQL 4→0; parsed chars ~10.5 M→114)         |
+| `image.thumbs.network`, `.first`, `.again`                 | 968.4 / 245.9 / 12.0 ms | 954.4 / 263.2 / 11.0 ms | noise          | unchanged by this batch                             |
+
+An independent five-run head report taken later (`timing-run.mjs p1c-repeat`, load 1.90→2.19, `highLoad: false`)
+agrees: paste 13,800.8–13,889.8 ms, conditional originals 13.6–18.3 ms, repeated originals 48.8–72.7 ms.
+These two reports registered the 98 new counters as **candidates** (none gating) and `perf:propose --write`
+tightened three existing candidate baselines. Guard passed; nothing was raised, widened or promoted. No L3 claim:
+nothing is deployed.
+
+Counters that grew, besides the first-write cache costs already listed above:
+
+- `turn.warm`: one of three head runs (538.6 ms) had a second coalesced view flush. That run did 158 instead of
+  143 SQL statements, +50,226 parsed characters and +5,715 pushed bytes. The other two head runs equal base exactly.
+  Across every saved report so far, 2 of 23 head runs and 0 of 15 base runs show this extra flush. The five-run
+  repeat had none. `turn.warm` does not touch the changed image/listener/paste paths, and its timing classifier says
+  noise; the cause is **unexplained**, not proven noise. It is not counted against or for this batch. Owner: the
+  coding agent will watch `turn.warm/push.view.count` in Program 2's measurements, which work on that projection
+  path.
+- `commands.discover.warm/json.stringify.chars` +34 in every head run and `web.open/cdp.Nodes` +24 in two of three
+  runs. Small, not attributed, not optimised away, and within candidate tolerance.
+
+Program 1 is now complete locally, with the limits stated above: whole-file reads for Range/304, macOS-only
+thumbnails, static PNG/JPEG paste resizing only, and TLS left opt-in and not deployed. The temporary base branch was
+deleted after measurement. Next: Program 2, starting with a measurement commit.

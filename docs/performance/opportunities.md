@@ -8,6 +8,14 @@ Workload: `test/perf/workload.ts` as of 2026-10-16 (12 seeded turns of 6000-char
 `darwin-arm64` ledger baselines (worst of 10 runs from temporary checkouts) and benchmark medians, Apple M1, load below
 the core count.
 
+## Program 1 accepted — 2026-10-20
+
+On the combined rotom 0.1.26 tree, against a base of the first batch plus only the pin commit, a quiet alternating
+three-run comparison (`highLoad: false`) gives **L2**: pasted-screenshot prepare+upload 31,365→13,837 ms (−56%) and
+conditional originals 55.4→18.4 ms (−67%); repeated full originals are L1 only. 510 tests and the synthetic kernel
+proof pass. 98 new counters registered as candidates from two reports. One unexplained `turn.warm` extra-flush
+run (2 of 23 head runs, 0 of 15 base) stays open for Program 2. Details: [experiment](experiments/2026-10-20-bytes-remainder.md#acceptance-on-the-combined-rotom-0126-tree).
+
 ## Approved programs: second implementation batch — 2026-10-20
 
 Program 1's selected local features are implemented; performance acceptance remains pending. Added opt-in TLS/HTTP2
