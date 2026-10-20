@@ -48,6 +48,8 @@ export const SCENARIOS: Record<string, string> = {
     "session.open.long": `after all other scenarios, a separate native history of ${WORKLOAD.longTurns} user/assistant turns (${WORKLOAD.longAnswerChars}-char answers) seeded directly; a new event-stream tab asking for the newest ${WORKLOAD.longTail} entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view`,
     "session.history.earlier": `after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request`,
     "web.open.long": `after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page`,
+    "native.warm": `after all other scenarios, a new native session with one tab watching; its member asks to warm it (as focusing the message box does) until the answer; servers without warming refuse at once`,
+    "turn.prewarmed": `after native.warm, the first prompt of that session, until settled and quiet`,
     "web.reopen": `${seeded}; after session.reclaim, headless Chromium opens /s/<session> in one tab until shown (and saved where the page keeps copies), closes it, then a fresh tab of the same profile opens it until the last answer shows without a saved-copy check marker`,
     "web.paced": `${seeded}; after all established scenarios, a new headless Chromium tab opens that history unmeasured, then submits one ${WORKLOAD.answerChars}-char answer paced ${WORKLOAD.pacedChunkMs} ms per chunk until it appears`,
     "commands.discover.cold": `${seeded}; after all existing scenarios, an additional new native session with one tab; first explicit POST prompts, with no model request`,
@@ -433,6 +435,8 @@ export const REPORTED: Record<string, string[]> = {
     "session.open.long": [...common, ...projection, ...pushes],
     "session.history.earlier": [...common, "http.requests", "http.body.bytes"],
     "turn.cold": [...common, "subprocess.git", ...pushes],
+    "native.warm": [...common, "subprocess.rotom"],
+    "turn.prewarmed": [...common, "subprocess.git", "subprocess.rotom", ...pushes],
     "turn.warm": [...common, "subprocess.git", ...projection, ...pushes],
     // Paced chunks race the 90 ms push coalescing, so its push counts depend on timing: candidates until proven stable.
     "turn.paced": [...common, "subprocess.git", ...projection, ...pushes],

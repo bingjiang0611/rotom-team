@@ -946,6 +946,33 @@ results.push(
           },
 );
 
+// A member focuses the message box of a new session of theirs: its native process may start before they send.
+const ready = (await call("sessions", "POST", { title: "Warm", backend: "rotom" })).value
+    .id as number;
+const readyTab = tab(ready);
+
+await readyTab.fullView;
+await scenario("native.warm", async () => {
+    const response = await fetch(`${base}/api/c/${ready}/warm`, {
+        method: "POST",
+        headers: {
+            authorization: `Bearer ${token}`,
+            "x-pocket": "1",
+            "content-type": "application/json",
+        },
+        body: "{}",
+    });
+    const text = await response.text();
+
+    // A server that does not warm refuses the route for a native session (409, no Durable fallback); a refusal is no
+    // work. A warm start shows as one rotom process (`subprocess.rotom`).
+    assert.ok([200, 409].includes(response.status), `warm: ${response.status} ${text}`);
+});
+await scenario("turn.prewarmed", async () => {
+    assert.equal((await submit(ready, 1)).value.status, "settled");
+});
+await readyTab.close();
+
 writeFileSync(out, raw.stringify({ workload: WORKLOAD, results }, null, 2));
 server.closeAllConnections();
 server.close();
