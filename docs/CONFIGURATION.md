@@ -343,6 +343,18 @@ Live event streams and large long-poll responses negotiate gzip when accepted. E
 client with more than 8 MiB of buffered data is disconnected so it can reconnect for a fresh view. Long-history
 pagination and changed-row session-list pushes are not implemented yet.
 
+## Changes view freshness
+
+While a tab has a session open, the server watches that session's Git repository (on macOS and Windows, where the
+system watches a folder tree cheaply; elsewhere nothing is watched). A tab that may read Changes gets a small
+`changes` event saying only that something moved; it then reads Changes with its own permissions, as before. An
+open Changes tab therefore shows a person's or a tool's file edits within about a second, and no longer re-reads after
+every entry. It still re-reads after write/edit/codemode results, when shown, after a reconnect, and every 30 s while
+the tab is visible, because watches can miss events (for example on network file systems). Without watching, the old
+re-read after entries remains. The server keeps each recently used session's Pi-edit list in memory (at most 32
+sessions) and reads only new entries per listing; concurrent listings of one folder share a Git run that started
+after they asked.
+
 ## Optional TLS and HTTP/2
 
 The default listener is still plain HTTP/1.1 on loopback. For a private, explicitly selected HTTPS route, pass both

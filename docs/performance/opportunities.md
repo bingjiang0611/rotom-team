@@ -8,6 +8,14 @@ Workload: `test/perf/workload.ts` as of 2026-10-16 (12 seeded turns of 6000-char
 `darwin-arm64` ledger baselines (worst of 10 runs from temporary checkouts) and benchmark medians, Apple M1, load below
 the core count.
 
+## Program 2, step 2 — 2026-10-20
+
+Open Changes tabs are told when the repository moves (macOS/Windows watch) instead of re-reading after every entry.
+Chromium: a person's new file shows in ~0.5 s (was not within 8 s); six non-edit entries cause 0 reads (was 1, and
+one per 4-8 s while Pi works). Cost: one small event per attach, one read per 30 s per visible open panel. L1, not
+measured on a model turn. Next, as the owner chose: session-list deltas, browser view cache, paged history.
+[Experiment](experiments/2026-10-20-changes-watch.md).
+
 ## Program 2, step 1 — 2026-10-20
 
 Changes no longer folds a session's whole history per listing: each session's Pi-edit log is kept and caught up

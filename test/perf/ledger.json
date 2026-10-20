@@ -226,7 +226,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 48
+                "darwin-arm64": 45
             }
         },
         "session.open/sql.rows": {
@@ -240,7 +240,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 112
+                "darwin-arm64": 94
             }
         },
         "session.open/subprocess.total": {
@@ -268,7 +268,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 103
+                "darwin-arm64": 75
             }
         },
         "session.open/json.parse.chars": {
@@ -282,7 +282,7 @@
             "tolerance": 3,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 373917
+                "darwin-arm64": 253516
             }
         },
         "session.open/json.stringify.chars": {
@@ -2466,7 +2466,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 24
+                "darwin-arm64": 12
             }
         },
         "session.open/view.fields.stringify.chars": {
@@ -2480,7 +2480,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 1200
+                "darwin-arm64": 600
             }
         },
         "turn.warm/view.fields.stringify.calls": {
@@ -2634,7 +2634,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 2
+                "darwin-arm64": 1
             }
         },
         "session.open/view.inbox.project.calls": {
@@ -2648,7 +2648,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 2
+                "darwin-arm64": 1
             }
         },
         "session.open/view.kernel.project.calls": {
@@ -2662,7 +2662,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 2
+                "darwin-arm64": 1
             }
         },
         "turn.warm/view.live.project.calls": {
@@ -3348,7 +3348,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 8
+                "darwin-arm64": 4
             }
         },
         "session.open/view.kernel.sql.rows": {
@@ -3362,7 +3362,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 4
+                "darwin-arm64": 2
             }
         },
         "session.open/view.kernel.json.parse.calls": {
@@ -3376,7 +3376,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 4
+                "darwin-arm64": 2
             }
         },
         "session.open/view.kernel.json.parse.chars": {
@@ -3390,7 +3390,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 2164
+                "darwin-arm64": 1082
             }
         },
         "turn.warm/view.kernel.sql.statements": {
@@ -3740,7 +3740,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 2
+                "darwin-arm64": 1
             }
         },
         "session.open/view.kernel.sql.sessions": {
@@ -3768,7 +3768,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 4
+                "darwin-arm64": 2
             }
         },
         "session.open/view.kernel.sql.command_inputs": {
@@ -3782,7 +3782,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 2
+                "darwin-arm64": 1
             }
         },
         "session.open/view.kernel.sql.resume": {
@@ -4706,7 +4706,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 10
+                "darwin-arm64": 5
             }
         },
         "session.open/json.parse.journal.chars": {
@@ -4720,7 +4720,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 5410
+                "darwin-arm64": 2705
             }
         },
         "session.open/json.parse.journalHistory.calls": {
@@ -4762,7 +4762,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 2
+                "darwin-arm64": 1
             }
         },
         "session.open/json.parse.journalThinking.chars": {
@@ -4776,7 +4776,7 @@
             "tolerance": 2,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 1082
+                "darwin-arm64": 541
             }
         },
         "session.open/json.parse.journalSegments.calls": {
@@ -4790,7 +4790,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 56
+                "darwin-arm64": 28
             }
         },
         "session.open/json.parse.journalSegments.chars": {
@@ -4804,7 +4804,7 @@
             "tolerance": 2,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 240796
+                "darwin-arm64": 120398
             }
         },
         "session.open/json.parse.nativeReadback.calls": {
@@ -17264,7 +17264,7 @@
             "tolerance": 26,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 20322
+                "darwin-arm64": 20312
             }
         },
         "changes.poll.images/subprocess.git": {
