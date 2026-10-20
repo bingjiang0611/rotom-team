@@ -326,15 +326,35 @@ thumbnails in the transcript and 1600 px previews in the full-screen viewer. **O
 original. GIF animation and small images are preserved; unsupported platforms or resize failures use originals.
 Generation does not use a model account and does not change what the model originally received.
 
-Derived private files live under `<data>/media/`, capped at 256 MiB and 8192 files; they can be regenerated from the
-stored entries. Do not share that directory: it contains conversation images. The existing offline backup includes
-these files. Fork visibility and session permissions are checked on every HTTP request, including cache hits.
-Damaged/missing copies are rebuilt, and a read-only/full cache falls back to originals. No TLS/HTTP2 listener or
-browser-side paste resizing is enabled by this change.
+Private cached copies, now including byte-identical originals, live under `<data>/media/`, sharing a cap of 256 MiB
+and 8192 files. They can be regenerated from stored entries; Durable remains authoritative. Do not share that
+directory: it contains conversation images. The existing offline backup includes these files. Fork visibility and
+session permissions are checked on every request, including conditional GET/HEAD. Damaged/missing copies are rebuilt,
+and cache failure falls back to the source. Images support content ETag, single byte Range and HEAD; invalid/multipart
+range units or stale If-Range fall back to full responses. Unsatisfiable byte ranges return 416. Range/304 still read
+and verify the entire cached file, rather than providing zero-copy disk streaming.
+
+Large static PNG/JPEG clipboard images are bounded to 2000 px before upload, preserving aspect ratio/transparency.
+Only a smaller PNG is substituted; the original is **not** separately uploaded/retained. Ordinary file selection,
+small/animated/unknown images, unsupported browsers and failed/unhelpful conversions are unchanged. This does not
+raise the 5 MiB per-model-image limit: a noisy PNG may still be too large to send.
 
 Live event streams and large long-poll responses negotiate gzip when accepted. Events flush immediately; an SSE
 client with more than 8 MiB of buffered data is disconnected so it can reconnect for a fresh view. Long-history
 pagination and changed-row session-list pushes are not implemented yet.
+
+## Optional TLS and HTTP/2
+
+The default listener is still plain HTTP/1.1 on loopback. For a private, explicitly selected HTTPS route, pass both
+`--tls-cert /absolute/certificate-chain.pem` and `--tls-key /absolute/private-key.pem` to `node bin/rotom-team.js`,
+alongside the usual explicit `--data`, `--cwd` and non-production test port. Use a certificate trusted by the client
+and valid for the hostname; protect the key. Do **not** use the repository's self-signed test fixture for deployment.
+TLS enables HTTP/2 multiplexing with HTTP/1.1 fallback on the same port. Certificate changes require a normal server
+restart. The legacy tunnel launcher does not support these flags and fails explicitly rather than printing HTTP URLs.
+Nothing automatically changes the running listener, binds another address or obtains a certificate.
+
+HTTP/2 requests use the same redacted journal schema, excluding held streams/polls. Their `wireBytes` is `null`
+(unavailable): streams share a connection, so a socket byte delta cannot be attributed to one request.
 
 ## Verification
 
