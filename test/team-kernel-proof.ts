@@ -144,6 +144,14 @@ const modelServer = createServer(async (req, res) => {
             return;
         }
 
+        if (lastBody.includes("KERNEL_UPGRADE_CONTINUES")) {
+            emit({ content: "KERNEL_UPGRADE_CONTINUED" });
+            emit({}, "stop");
+            res.end("data: [DONE]\n\n");
+
+            return;
+        }
+
         if (JSON.stringify(input.messages).includes("Use newly activated profile.")) {
             assert.ok(JSON.stringify(input.messages).includes("ACTIVATED_PROFILE_CONTEXT"));
             assert.ok(!JSON.stringify(input.messages).includes("UNACTIVATED_PROFILE_CONTEXT"));
@@ -1702,7 +1710,7 @@ try {
     assert.equal(calls, 12);
     report.submitTakesOverWithSendersAccount = true;
 
-    // A kernel pin upgrade starts a new segment recording the new version instead of rejecting old sessions.
+    // A kernel pin upgrade keeps the payer's own segment and records the new version in place.
     const oldPin = { ...planned, kernelVersion: "0.0.0-previous-pin" };
     const upgraded = await app.harness.createConversation(
         {
@@ -1724,6 +1732,8 @@ try {
     );
 
     await app.kernel!.ensureBound(upgraded.id);
+    const upgradeJournal = app.kernel!.executions.journal;
+    const pinnedSegment = upgradeJournal.session(String(upgraded.id)).segmentId;
     const upgradeRun = await request(aliceToken, `c/${upgraded.id}/submit`, "POST", {
         text: "Write the proof file.",
         requestId: "after-upgrade",
@@ -1731,12 +1741,32 @@ try {
 
     assert.equal(upgradeRun.status, 200, await upgradeRun.clone().text());
     assert.equal(((await upgradeRun.json()) as { status: string }).status, "settled");
-    assert.equal(
-        app.kernel!.executions.journal.session(String(upgraded.id)).binding.kernelVersion,
-        verifyRotomKernel().version,
-    );
+    const materialized = upgradeJournal.session(String(upgraded.id));
+
+    assert.equal(materialized.segmentId, pinnedSegment);
+    assert.equal(materialized.binding.kernelVersion, verifyRotomKernel().version);
     assert.equal(calls, 14);
-    report.kernelUpgradeStartsNewSegment = true;
+
+    // A session that already ran on the previous pin reopens its own native file on the new one.
+    upgradeJournal.upgradeKernel(String(upgraded.id), pinnedSegment, oldPin.kernelVersion);
+    const upgradedRun = await request(aliceToken, `c/${upgraded.id}/submit`, "POST", {
+        text: "KERNEL_UPGRADE_CONTINUES the same session.",
+        requestId: "after-materialized-upgrade",
+    });
+
+    assert.equal(upgradedRun.status, 200, await upgradedRun.clone().text());
+    assert.equal(((await upgradedRun.json()) as { status: string }).status, "settled");
+    const reopened = upgradeJournal.session(String(upgraded.id));
+
+    assert.equal(reopened.segmentId, pinnedSegment);
+    assert.equal(reopened.kernelSessionId, materialized.kernelSessionId);
+    assert.equal(reopened.sessionFile, materialized.sessionFile);
+    assert.equal(reopened.binding.kernelVersion, verifyRotomKernel().version);
+    assert.ok(lastBody.includes("KERNEL_UPGRADE_CONTINUES"));
+    assert.ok(lastBody.includes("Write the proof file."), "the model sees the full prior history");
+    assert.ok(!lastBody.includes("Prior conversation summary"), "no handoff seed");
+    assert.equal(calls, 15);
+    report.kernelUpgradeKeepsNativeSession = true;
 
     // One transcript: the run answers at reservation, streams into the room live, and lands as mirrored entries.
     const streamed = await request(aliceToken, `c/${shared2.id}/submit`, "POST", {
@@ -1807,7 +1837,7 @@ try {
         [a.id, dana.user.id, a.id],
         "suffix readback preserves authors across handoffs",
     );
-    assert.equal(calls, 15, "mirror readback never makes another model request");
+    assert.equal(calls, 16, "mirror readback never makes another model request");
     report.unifiedTranscriptLiveAndMirrored = true;
 
     // An extension's question reaches the paying member, and only their answer goes back to the run.
@@ -1860,7 +1890,7 @@ try {
 
     assert.ok(answered.at(-1)!.includes("ANSWER_WAS") && answered.at(-1)!.includes("Green"));
     assert.equal(dialogsOf().length, 0);
-    assert.equal(calls, 17);
+    assert.equal(calls, 18);
     report.extensionDialogsReachThePayer = true;
 
     // A message sent while Pi works joins that run, for the member who pays for it only.
@@ -1920,7 +1950,7 @@ try {
         "settled",
     );
     // The host answer, then the follow-up's own write-and-finish turn.
-    assert.equal(calls, 20);
+    assert.equal(calls, 21);
     report.messagesJoinTheRunningPrompt = true;
 
     for (const skill of [".agents/skills/member-agents", ".pi/agent/skills/member-pi"]) {

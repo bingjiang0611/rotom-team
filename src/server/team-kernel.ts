@@ -1053,15 +1053,15 @@ export class TeamKernel {
         }
 
         // Whoever sends pays: take over with the sender's own account, on the pinned kernel, before running.
-        if (
-            source.binding.memberId !== user.id ||
-            source.binding.kernelVersion !== verifyRotomKernel().version
-        ) {
+        // The payer's own segment keeps its native session across a kernel upgrade instead.
+        const current = await this.#upgradeKernel(id, user, source);
+
+        if (current.binding.memberId !== user.id) {
             const takeover = await this.#handoff(
                 id,
                 user,
                 `${requestId}:takeover`,
-                source.segmentId,
+                current.segmentId,
             );
 
             if (takeover.status !== "settled") {
@@ -1324,13 +1324,13 @@ export class TeamKernel {
                 ) as ModelThinkingLevel,
             ),
         };
-        const { binding, segmentId } = this.executions.journal.session(String(id));
+        const observed = this.executions.journal.session(String(id));
 
         if (
             requestId === undefined &&
-            binding.memberId === user.id &&
-            binding.accountGeneration === chosen.model?.provider &&
-            binding.model === chosen.model.modelId &&
+            observed.binding.memberId === user.id &&
+            observed.binding.accountGeneration === chosen.model?.provider &&
+            observed.binding.model === chosen.model.modelId &&
             this.executions.thinkingLevel(String(id)) === (chosen.thinkingLevel ?? "off")
         ) {
             this.#app.accounts.choose(user, { ...ref, thinkingLevel: chosen.thinkingLevel });
@@ -1342,13 +1342,14 @@ export class TeamKernel {
             throw new HttpError(409, "Pi is working. Stop it or wait before switching the model.");
         }
 
+        const { binding, segmentId } = await this.#upgradeKernel(id, user, observed);
+
         // Thinking alone is mutable native session state: keep the session (and its identity seen
         // by project hooks) and its retained process instead of seeding a new one.
         if (
             request.model === undefined &&
             binding.memberId === user.id &&
-            binding.accountGeneration === ref.provider &&
-            binding.kernelVersion === verifyRotomKernel().version
+            binding.accountGeneration === ref.provider
         ) {
             const thinking = await this.#track(
                 id,
@@ -1373,8 +1374,8 @@ export class TeamKernel {
         }
 
         // The paying member's model lives in its own HOME's native session: switch there, keeping the
-        // session id. Another member or kernel version still takes over through a handoff.
-        if (binding.memberId === user.id && binding.kernelVersion === verifyRotomKernel().version) {
+        // session id. Another member still takes over through a handoff.
+        if (binding.memberId === user.id) {
             const next: KernelBinding = {
                 ...binding,
                 accountGeneration: ref.provider,
@@ -2103,12 +2104,9 @@ export class TeamKernel {
                 );
             }
 
-            const source = this.executions.journal.session(String(id));
+            const source = await this.#upgradeKernel(id, user);
 
-            if (
-                source.binding.memberId !== user.id ||
-                source.binding.kernelVersion !== verifyRotomKernel().version
-            ) {
+            if (source.binding.memberId !== user.id) {
                 const takeover = await this.#handoff(
                     id,
                     user,
@@ -2696,7 +2694,12 @@ export class TeamKernel {
             const snapshot =
                 this.#configurations.get(id)?.snapshots[captured.digest] ??
                 (initial?.digest === captured.digest ? initial : captured);
-            const binding = { ...source.binding, configurationDigest: snapshot.digest };
+            // Activation seeds a new segment, so it starts on the pinned kernel like any handoff.
+            const binding = {
+                ...source.binding,
+                kernelVersion: verifyRotomKernel().version,
+                configurationDigest: snapshot.digest,
+            };
 
             await this.#check(binding, id, snapshot);
             await app.harness.commit(async (tx) => {
@@ -2733,7 +2736,7 @@ export class TeamKernel {
             return this.#receipt(previous);
         }
 
-        const binding = this.executions.journal.session(String(id)).binding;
+        const binding = (await this.#upgradeKernel(id, user)).binding;
 
         if (binding.memberId !== user.id) {
             throw new HttpError(403, "Take over with your own account before compacting.");
@@ -2847,6 +2850,45 @@ export class TeamKernel {
 
             return { id: target.id, receipt };
         });
+    }
+
+    /**
+     * The paying member's own segment reopens its native session on the pinned kernel after an upgrade, keeping
+     * its session id and full history. Another member still takes over through a handoff. Afterwards a head that
+     * is the member's own is on the pinned kernel, so callers need not read the pin again.
+     */
+    async #upgradeKernel(
+        id: ConversationId,
+        user: User,
+        source = this.executions.journal.session(String(id)),
+    ) {
+        const journal = this.executions.journal;
+        const version = verifyRotomKernel().version;
+
+        if (source.binding.memberId !== user.id || source.binding.kernelVersion === version) {
+            return source;
+        }
+
+        if (this.isRunning(id)) {
+            throw new HttpError(409, "Pi is working. Wait for it to finish or Stop it first.");
+        }
+
+        const binding = { ...source.binding, kernelVersion: version };
+
+        // Only a dispatch this member may make moves the segment; the move itself spends nothing.
+        await this.#check(binding, id);
+
+        try {
+            journal.upgradeKernel(String(id), source.segmentId, version);
+        } catch (error) {
+            if (error instanceof KernelRequestConflict) {
+                throw new HttpError(409, `${error.message}.`);
+            }
+
+            throw error;
+        }
+
+        return journal.session(String(id));
     }
 
     async #handoff(

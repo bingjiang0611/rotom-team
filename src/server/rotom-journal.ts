@@ -678,6 +678,46 @@ export class RotomJournal {
         }
     }
 
+    /**
+     * The paying member's own head segment moves to a newly pinned kernel in place, so the same native session file
+     * reopens on it and its session id stays. Only the kernel version changes, and nothing may be running or
+     * unknown. Its original binding remains the identity anchor; earlier attempts keep their own binding snapshots.
+     */
+    upgradeKernel(sessionId: string, expectedHead: string, kernelVersion: string): void {
+        this.#db.exec("BEGIN IMMEDIATE");
+
+        try {
+            const head = this.session(sessionId);
+
+            if (head.segmentId !== expectedHead) {
+                throw new KernelRequestConflict(
+                    "Conversation head changed; refresh before upgrading the kernel",
+                );
+            }
+
+            if (head.binding.kernelVersion !== kernelVersion) {
+                this.#unblocked(sessionId);
+                const next = JSON.stringify(this.#binding({ ...head.binding, kernelVersion }));
+
+                // A binding equal to the anchor needs no override row, as after a restored model change.
+                this.#db
+                    .prepare("DELETE FROM kernel_segment_models WHERE segment_id=?")
+                    .run(expectedHead);
+                this.#db
+                    .prepare(
+                        "INSERT INTO kernel_segment_models SELECT id,? FROM kernel_sessions WHERE id=? AND binding<>?",
+                    )
+                    .run(next, expectedHead, next);
+            }
+
+            this.#db.exec("COMMIT");
+        } catch (error) {
+            this.#db.exec("ROLLBACK");
+
+            throw error;
+        }
+    }
+
     /** Only authoritative native prompt/skill discovery may make a reserved slash eligible for prompt recovery. */
     classifyPromptExpansion(id: string): void {
         const result = this.#db
