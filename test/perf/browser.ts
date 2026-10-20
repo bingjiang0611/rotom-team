@@ -19,6 +19,11 @@ export async function measureWebOpen(options: {
     quiet: () => Promise<void>;
     profile: string;
     afterOpen?: { action: () => Promise<void>; marker: string };
+    /**
+     * Open the session once in another tab first (closed again before the measured load), as someone coming back
+     * to a session they had open. `ms` is then until the page shows the server's own view, not a saved copy.
+     */
+    reopen?: boolean;
 }): Promise<{ ms: number; counts: Counts; metrics: Metrics } | { unavailable: string }> {
     const executable = findBrowser();
 
@@ -48,6 +53,7 @@ export async function measureWebOpen(options: {
             await cdp.send("Page.enable", {}, sessionId);
 
             return {
+                targetId,
                 sessionId,
                 navigate: async (url: string) => {
                     const load = new Promise<void>((resolve) => (loaded = resolve));
@@ -66,14 +72,10 @@ export async function measureWebOpen(options: {
         );
         await options.quiet();
 
-        const tab = await page();
-
-        await cdp.send("Performance.enable", {}, tab.sessionId);
         // Watch from the document's start, reading text only: innerText would lay the page out and count as work.
-        await cdp.send(
-            "Page.addScriptToEvaluateOnNewDocument",
-            {
-                source: `window.__rotomPerf = {
+        // For a reopen, "confirmed" also needs no element saying the transcript is a saved copy still being checked; a
+        // page that never shows saved copies is confirmed as soon as it is shown. A first open watches as before.
+        const watch = `window.__rotomPerf = {
                     eventParseCalls: 0, eventParseChars: 0, eventParseMs: 0,
                     viewApplyCalls: 0, viewApplyMs: 0, viewBaseEntryCopies: 0,
                     viewDeltaEntries: 0, viewPruneChecks: 0, viewOrderIds: 0
@@ -89,10 +91,75 @@ export async function measureWebOpen(options: {
                     });
 
                     observer.observe(document, { subtree: true, childList: true, characterData: true });
-                });`,
-            },
-            tab.sessionId,
-        );
+                });${
+                    options.reopen
+                        ? `
+                window.__perfConfirmed = new Promise((resolve) => {
+                    const confirmed = () =>
+                        document.documentElement?.textContent.includes(${raw.stringify(options.marker)}) &&
+                        !document.querySelector("[data-view-checking]");
+                    const observer = new MutationObserver(() => {
+                        if (confirmed()) {
+                            observer.disconnect();
+                            requestAnimationFrame(() => resolve(performance.now()));
+                        }
+                    });
+
+                    observer.observe(document, {
+                        subtree: true, childList: true, characterData: true, attributes: true
+                    });
+                });`
+                        : ""
+                }`;
+
+        if (options.reopen) {
+            const earlier = await page();
+
+            await cdp.send(
+                "Page.addScriptToEvaluateOnNewDocument",
+                { source: watch },
+                earlier.sessionId,
+            );
+            await earlier.navigate(`${options.base}/s/${options.sessionId}`);
+            await cdp.send(
+                "Runtime.evaluate",
+                { expression: "window.__perfConfirmed", awaitPromise: true },
+                earlier.sessionId,
+                30_000,
+            );
+            // A page that keeps saved copies says so; wait until it saved this one (setup, outside the window).
+            await cdp.send(
+                "Runtime.evaluate",
+                {
+                    expression: `new Promise((resolve, reject) => {
+                        const started = performance.now();
+                        const check = () => {
+                            const perf = window.__rotomPerf;
+
+                            if (!perf.viewCache || perf.viewCacheSaves > 0) {
+                                resolve(true);
+                            } else if (performance.now() - started > 10000) {
+                                reject(new Error("the saved copy was not written"));
+                            } else {
+                                setTimeout(check, 50);
+                            }
+                        };
+
+                        check();
+                    })`,
+                    awaitPromise: true,
+                },
+                earlier.sessionId,
+                15_000,
+            );
+            await cdp.send("Target.closeTarget", { targetId: earlier.targetId });
+            await options.quiet();
+        }
+
+        const tab = await page();
+
+        await cdp.send("Performance.enable", {}, tab.sessionId);
+        await cdp.send("Page.addScriptToEvaluateOnNewDocument", { source: watch }, tab.sessionId);
         const metrics = async () =>
             Object.fromEntries(
                 (
@@ -107,10 +174,29 @@ export async function measureWebOpen(options: {
         await tab.navigate(`${options.base}/s/${options.sessionId}`);
         let shown = await cdp.send(
             "Runtime.evaluate",
-            { expression: "window.__perfShown", awaitPromise: true, returnByValue: true },
+            {
+                expression: options.reopen ? "window.__perfConfirmed" : "window.__perfShown",
+                awaitPromise: true,
+                returnByValue: true,
+            },
             tab.sessionId,
             30_000,
         );
+        const firstShown = options.reopen
+            ? Number(
+                  (
+                      await cdp.send(
+                          "Runtime.evaluate",
+                          {
+                              expression: "window.__perfShown",
+                              awaitPromise: true,
+                              returnByValue: true,
+                          },
+                          tab.sessionId,
+                      )
+                  ).result.value,
+              )
+            : undefined;
         let after = await metrics();
 
         await options.quiet();
@@ -178,6 +264,8 @@ export async function measureWebOpen(options: {
                 heapUsedBytes: after.JSHeapUsedSize ?? 0,
                 eventParseMs: client.eventParseMs!,
                 viewApplyMs: client.viewApplyMs!,
+                // Any copy shown before it is confirmed: the same as ms where the page shows none.
+                ...(firstShown === undefined ? {} : { firstShownMs: firstShown }),
             },
         };
     } finally {

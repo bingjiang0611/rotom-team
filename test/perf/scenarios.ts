@@ -38,6 +38,8 @@ import { sniffImage } from "../../src/server/http/assets.ts";
 import { measureImageNetwork } from "./image-network.ts";
 import { measurePasteNetwork } from "./paste-network.ts";
 import { sessionListTab } from "./session-list.ts";
+import { claimFor } from "./view-claim.ts";
+import { viewTab } from "./view-tab.ts";
 
 export type ScenarioResult =
     | { scenario: string; ms: number; counts: Counts; extra?: Record<string, number> }
@@ -764,6 +766,47 @@ try {
 } finally {
     await Promise.all(listTabs.map((tab) => tab.close()));
 }
+
+// A tab that held the 12-turn session's transcript connects again (a network blip, or a reload with a saved copy) and
+// says which entries it holds. A server that ignores the claim sends them all again; either way the rebuilt
+// transcript must equal the one the tab had, entry for entry.
+const build = ((await call("me")).value as { server: { startedAt: number } }).server.startedAt;
+const holder = viewTab(base, token, raw, history);
+const held = await holder.full;
+
+await holder.close();
+await quiet();
+await scenario("session.reclaim", async () => {
+    const again = viewTab(base, token, raw, history, {
+        have: claimFor(build, held.order),
+        entries: held.entries,
+    });
+    const view = await again.full;
+
+    await again.close();
+    assert.deepEqual(view.order, held.order);
+
+    for (const id of view.order) {
+        assert.deepEqual(view.entries.get(id), held.entries.get(id), `entry ${id}`);
+    }
+});
+
+// Coming back to a session opened before in this browser: until the page shows the server's own view.
+const reopen = await measureWebOpen({
+    base,
+    ownerToken: app.config.ownerToken,
+    sessionId: history,
+    marker: `END-OF-ANSWER-${WORKLOAD.seededTurns}`,
+    quiet,
+    profile: join(root, "perf-browser-reopen"),
+    reopen: true,
+});
+
+results.push(
+    "unavailable" in reopen
+        ? { scenario: "web.reopen", unavailable: reopen.unavailable }
+        : { scenario: "web.reopen", ms: reopen.ms, counts: reopen.counts, extra: reopen.metrics },
+);
 
 writeFileSync(out, raw.stringify({ workload: WORKLOAD, results }, null, 2));
 server.closeAllConnections();
