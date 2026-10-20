@@ -1,5 +1,5 @@
 // Synthetic kernel-mode history in real Chromium: thumbnail -> full-screen preview -> original URL.
-import { cleanUp, context, owner, root, work } from "./helpers.ts";
+import { cleanUp, context, noInferenceModels, owner, root, work } from "./helpers.ts";
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import { readFileSync, realpathSync } from "node:fs";
@@ -32,40 +32,7 @@ for (const protocol of ["http", "https"]) {
                 kernel: true,
                 browser: null,
                 log: () => {},
-                configureUserModels: (models) =>
-                    models.registerNativeProvider({
-                        id: "openai",
-                        name: "No-inference image fixture",
-                        auth: {
-                            apiKey: {
-                                name: "Synthetic",
-                                resolve: async () => ({
-                                    auth: { apiKey: "fixture" },
-                                    source: "test",
-                                }),
-                            },
-                        },
-                        getModels: () => [
-                            {
-                                id: "image-fixture",
-                                name: "image-fixture",
-                                provider: "openai",
-                                api: "openai-completions",
-                                baseUrl: "http://127.0.0.1:1/v1",
-                                reasoning: false,
-                                input: ["text"],
-                                contextWindow: 32000,
-                                maxTokens: 1024,
-                                cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-                            },
-                        ],
-                        stream: () => {
-                            throw new Error("No inference permitted");
-                        },
-                        streamSimple: () => {
-                            throw new Error("No inference permitted");
-                        },
-                    }),
+                configureUserModels: noInferenceModels,
             });
             const handler = createHandler({
                 app,

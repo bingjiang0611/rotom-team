@@ -44,6 +44,7 @@ import { CodingTools } from "@earendil-works/pi-durable/tools";
 import { Alerts } from "./alerts.ts";
 import { Attribution, type Missing } from "./attribution.ts";
 import { Browsers } from "./browser.ts";
+import { ChangeWatches } from "./change-watch.ts";
 import type { BrowserState } from "./browser/page.ts";
 import { Collab, REACTIONS } from "./collab.ts";
 import { Commands } from "./commands.ts";
@@ -163,6 +164,8 @@ export class PocketApp {
     readonly workspace = new Workspace(this);
     /** The conversation's stored history, as people read it. */
     readonly transcripts = new Transcripts(this);
+    /** Each open session's repository, watched so tabs read Changes again when something in it moved. */
+    readonly changeWatches = new ChangeWatches();
     /** Thumbnails and previews of the images stored in messages (`<data>/media/`). */
     readonly media: MediaStore;
     /** Each conversation's browser page, which Pi and the people in the conversation share. */
@@ -806,6 +809,7 @@ export class PocketApp {
             room.keepOpen();
             room.clients.add(client);
             room.pushAll(client);
+            room.sendChanges(client, room.watchChanges(this.cwdOf(id)), false);
             client.send("chat", { conversationId: room.id, full: true, messages: room.chat });
             client.send("notes", { conversationId: room.id, ...room.notes });
             // Also while the browser is off: turned on later, the panel has its state at once.
@@ -1972,6 +1976,7 @@ export class PocketApp {
             clearTimeout(this.#sessionsTimer);
             this.alerts.close();
             this.spend.close();
+            this.changeWatches.close();
             this.#unsubscribeCommits?.();
             this.#unsubscribeApprovals?.();
             this.#unsubscribeBrowsers?.();

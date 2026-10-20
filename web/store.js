@@ -495,6 +495,22 @@ const handlers = {
         store.set({ notes: { text: data.text, rev: data.rev, by: data.by, at: data.at } }),
     browser: (data) =>
         data.conversationId === store.state.conversationId && store.set({ browser: data }),
+    // Whether the server watches this session's repository, and a count of the times something there may have moved
+    // (`diff.js` reads Changes again on each): each change, and each reconnect, which may have missed some.
+    changes: (data) =>
+        data.conversationId === store.state.conversationId &&
+        store.set((state) => {
+            const known = state.changesSignal?.conversationId === data.conversationId;
+            const moves = known ? state.changesSignal.moves + 1 : 0;
+
+            return {
+                changesSignal: {
+                    conversationId: data.conversationId,
+                    watching: data.watching,
+                    moves,
+                },
+            };
+        }),
     // Another session as its peek tile shows it (`peeks.js`): kept after it scrolls away, as the tile's last look.
     peek: (data) =>
         store.set((state) => ({ peeks: { ...state.peeks, [data.conversationId]: data } })),

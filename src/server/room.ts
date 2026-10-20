@@ -14,6 +14,7 @@ import type {
     LiveState,
     UsageState,
 } from "@earendil-works/pi-durable";
+import type { ChangeWatch } from "./change-watch.ts";
 import type { PocketApp } from "./app.ts";
 import type { TeamKernel } from "./team-kernel.ts";
 import type { Head } from "./branches.ts";
@@ -207,6 +208,8 @@ export class Room {
     readonly #typing = new Map<string, { where: TypingPlace; timer: NodeJS.Timeout }>();
     parent: { id: ConversationId; title: string } | undefined;
     subagentName: string | undefined;
+    /** The watch on this session's repository while a tab is attached (`watchChanges`). */
+    #changes: { cwd: string; watch: ChangeWatch } | undefined;
 
     constructor(app: PocketApp, id: ConversationId) {
         this.#app = app;
@@ -836,6 +839,33 @@ export class Room {
         this.pushPresence();
     }
 
+    /**
+     * Watch this session's folder for changes, or keep watching it; whether a change there is told. Every attached tab
+     * that may read Changes is then sent `changes`, which says only that something moved.
+     */
+    watchChanges(cwd: string): boolean {
+        if (this.#changes?.cwd !== cwd) {
+            this.#changes?.watch.close();
+            this.#changes = {
+                cwd,
+                watch: this.#app.changeWatches.watch(cwd, (watching) => {
+                    for (const client of this.clients) {
+                        this.sendChanges(client, watching, true);
+                    }
+                }),
+            };
+        }
+
+        return this.#changes.watch.watching;
+    }
+
+    /** Tell a tab whether changes are watched, and (`moved`) that something changed; viewers never read Changes. */
+    sendChanges(client: Client, watching: boolean, moved: boolean): void {
+        if (client.user.role !== "viewer") {
+            client.send("changes", { conversationId: this.id, watching, moved });
+        }
+    }
+
     keepOpen(): void {
         clearTimeout(this.#closeTimer);
         this.#closeTimer = undefined;
@@ -866,6 +896,8 @@ export class Room {
         }
 
         this.#typing.clear();
+        this.#changes?.watch.close();
+        this.#changes = undefined;
         this.#unsubscribe?.();
         this.#view?.dispose();
         this.#view = undefined;

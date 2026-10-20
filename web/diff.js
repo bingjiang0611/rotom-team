@@ -792,6 +792,28 @@ const QUIET_WAIT = 1200;
 const BUSY_WAIT = 4000;
 /** While Pi works, the longest the changes go without being read again. */
 const BUSY_MAX = 8000;
+/**
+ * The slow look, whether or not the server watches the folder: a watch can miss events, and a file Pi wrote outside
+ * the repository is no file event there. Not while the tab is hidden.
+ */
+const SLOW_LOOK = 30_000;
+/** Tools whose results can name files Pi edited (`src/server/changes.ts`). */
+const EDIT_TOOLS = new Set(["write", "edit", "codemode"]);
+
+/** Whether an entry among the newest of `order`, back to `since`, is a tool result that may have edited files. */
+function editedSince(view, since) {
+    const order = view.order ?? [];
+
+    for (let at = order.length - 1; at >= 0 && order[at] !== since; at--) {
+        const entry = view.entries.get(order[at]);
+
+        if (entry?.kind === "toolResult" && EDIT_TOOLS.has(entry.name)) {
+            return true;
+        }
+    }
+
+    return false;
+}
 
 /** What changed, per conversation: the last answer, and the request on its way, shared by everything that shows it. */
 const changesCache = new Map();
@@ -805,7 +827,14 @@ export function reloadChanges(id = store.state.conversationId) {
     }
 
     known.pending = actions.changes(id).then(
-        (data) => Object.assign(known, { data, error: null, pending: null, at: Date.now() }),
+        (data) =>
+            Object.assign(known, {
+                data,
+                error: null,
+                pending: null,
+                stale: false,
+                at: Date.now(),
+            }),
         (failure) => Object.assign(known, { error: failure.message, pending: null }),
     );
     changesCache.set(id, known);
@@ -815,32 +844,85 @@ export function reloadChanges(id = store.state.conversationId) {
 }
 
 /**
- * What changed in this conversation's folder, `{ changes, error }`, fetched when first wanted and again a moment after
- * the conversation moves on (Pi's edits show up on their own) while `live`.
+ * What changed in this conversation's folder, `{ changes, error }`, fetched when first wanted and read again while
+ * `live`: when the server says something in the folder moved (`changes` events), a moment after Pi's edits, and
+ * slowly on a timer. Where the server does not watch the folder, a moment after each entry, as Pi works.
  */
 export function useChanges(live = true) {
     const id = store.state.conversationId;
     const known = changesCache.get(id);
-    const lastEntry = store.state.view.order?.at(-1);
-    const busy = store.state.view.live?.busy;
+    const view = store.state.view;
+    const lastEntry = view.order?.at(-1);
+    const busy = view.live?.busy;
+    const signal = store.state.changesSignal;
+    const ours = signal?.conversationId === id;
+    const watching = ours && signal.watching;
+    const moves = ours ? signal.moves : 0;
+    // What each effect below last saw. Not live at first: a panel shown again reads again, as when it first opened.
+    const seenMoves = useRef({ id, moves });
+    const seenEntries = useRef({ id, lastEntry, live: false });
 
     useEffect(() => {
-        if (!changesCache.get(id)?.data) {
+        const cached = changesCache.get(id);
+
+        if (!cached?.data || (live && cached.stale)) {
             reloadChanges(id);
         }
-    }, [id]);
+    }, [id, live]);
+    // Something in the folder moved: read again now, or when next shown.
+    useEffect(() => {
+        const before = seenMoves.current;
+
+        seenMoves.current = { id, moves };
+
+        if (before.id !== id || moves === before.moves) {
+            return;
+        }
+
+        if (live) {
+            reloadChanges(id);
+        } else if (changesCache.has(id)) {
+            changesCache.get(id).stale = true;
+        }
+    }, [moves, id, live]);
+    useEffect(() => {
+        const before = seenEntries.current;
+
+        seenEntries.current = { id, lastEntry, live };
+
+        if (!live) {
+            return;
+        }
+
+        // Watched: file changes come as events; besides a panel just shown or another session, only an edit's result
+        // (which may name a file outside the folder) is read for. Not watched: entries come quickly while Pi works, so
+        // look less often then, but every few seconds.
+        const shown = before.id !== id || !before.live;
+
+        if (watching && !shown && !editedSince(view, before.lastEntry)) {
+            return;
+        }
+
+        const since = Date.now() - (changesCache.get(id)?.at ?? 0);
+        const wait =
+            busy && !watching ? Math.max(0, Math.min(BUSY_WAIT, BUSY_MAX - since)) : QUIET_WAIT;
+        const timer = setTimeout(() => reloadChanges(id), wait);
+
+        return () => clearTimeout(timer);
+    }, [lastEntry, busy, live, id, watching]);
     useEffect(() => {
         if (!live) {
             return;
         }
 
-        // While Pi works, entries come quickly: look less often then, but at least every few seconds.
-        const since = Date.now() - (changesCache.get(id)?.at ?? 0);
-        const wait = busy ? Math.max(0, Math.min(BUSY_WAIT, BUSY_MAX - since)) : QUIET_WAIT;
-        const timer = setTimeout(() => reloadChanges(id), wait);
+        const timer = setInterval(() => {
+            if (document.visibilityState === "visible") {
+                reloadChanges(id);
+            }
+        }, SLOW_LOOK);
 
-        return () => clearTimeout(timer);
-    }, [lastEntry, busy, live, id]);
+        return () => clearInterval(timer);
+    }, [live, id]);
 
     return { changes: known?.data ?? null, error: known?.error ?? null };
 }

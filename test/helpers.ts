@@ -12,6 +12,7 @@ import type { Attachment } from "../src/server/commands.ts";
 import type { User } from "../src/server/config.ts";
 import type { ExtensionLoader } from "../src/server/reload.ts";
 import type { Client } from "../src/server/room.ts";
+import type { Runtime as ModelRuntime } from "../src/server/team-accounts.ts";
 
 export const context = BACKGROUND_CONTEXT;
 
@@ -184,3 +185,39 @@ export function fakeTab(id: ConversationId | undefined, user: User) {
 export function cleanUp(): void {
     rmSync(root, { recursive: true, force: true });
 }
+
+/** A user model account that may not run anything: kernel sessions can be made, and any inference fails. */
+export const noInferenceModels = (models: ModelRuntime) =>
+    models.registerNativeProvider({
+        id: "openai",
+        name: "No-inference image fixture",
+        auth: {
+            apiKey: {
+                name: "Synthetic",
+                resolve: async () => ({
+                    auth: { apiKey: "fixture" },
+                    source: "test",
+                }),
+            },
+        },
+        getModels: () => [
+            {
+                id: "image-fixture",
+                name: "image-fixture",
+                provider: "openai",
+                api: "openai-completions",
+                baseUrl: "http://127.0.0.1:1/v1",
+                reasoning: false,
+                input: ["text"],
+                contextWindow: 32000,
+                maxTokens: 1024,
+                cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+            },
+        ],
+        stream: () => {
+            throw new Error("No inference permitted");
+        },
+        streamSimple: () => {
+            throw new Error("No inference permitted");
+        },
+    });
