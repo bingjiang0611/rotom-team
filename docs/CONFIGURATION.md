@@ -352,8 +352,25 @@ filtered full list. Reconnects start a new version namespace. Old clients and `G
 
 The server still scans the member's visible catalogue to compare rows; server-side catalogue pagination is not
 implemented. Per-connection comparison baselines are capped at 2048 rows and 2,097,152 JSON characters; larger lists
-fall back to full snapshots without retaining that baseline. This change does not store transcript content in the
-browser. Browser-cached views and transcript pagination are separate pending work.
+fall back to full snapshots without retaining that baseline.
+
+## Saved session copies
+
+The web app keeps a copy of the 10 sessions this browser opened most recently, in IndexedDB (`rotom-views`). Each
+copy holds the newest 400 transcript entries, the session's title information and message authors. It does not hold
+live state, approvals, queued messages or rotom payer/segment state. Coming back to a session shows its copy at once,
+marked "saved copy · checking for changes…", with no message box. The server's own view then replaces it.
+
+When a tab connects, it names the run of entries it holds, and the server sends only the rest. This also applies to
+ordinary reconnects without a saved copy. The claim names the server's run, so after a restart everything is sent
+again. It can only reduce what that tab receives; access checks are unchanged. A tab that turns out to lack part of
+the named run reconnects for the full view.
+
+Copies belong to one person and one level of access. Signing out (Settings or an expired sign-in) clears all of them.
+So does a change of the signed-in person, role or session grants. A session the server says is missing loses its copy,
+and copies of sessions no longer in the person's list are dropped. Anyone using the same browser profile before
+sign-out could read the copies. Where IndexedDB is unavailable, nothing is saved. Transcript pagination is separate
+pending work.
 
 ## Changes view freshness
 

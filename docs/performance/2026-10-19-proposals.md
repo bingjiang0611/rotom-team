@@ -9,17 +9,18 @@ implementation results are listed below.
 
 ## Implementation status
 
-| Program                      | Status                                                                                                                                                                                              | Next owner/action                                                                              |
-| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| 1. Bytes diet                | Complete locally: thumbnails, gzip, opt-in TLS/HTTP2 with journal coverage, single-copy paste resize, original cache/ETag/Range. L2 on paste upload and conditional originals (quiet, rotom 0.1.26) | None for Program 1; deploying TLS needs the owner's certificate/address and approval           |
-| 2. Incremental everything    | Steps 1-3 done: edit log/shared Git (L2); Changes push (L1); versioned session-list deltas (L1, pushed bytes −90%)                                                                                  | Coding agent: browser view cache (cleared on sign-out), then paged history, as the owner chose |
-| 3. Main thread / native warm | Not started                                                                                                                                                                                         | Coding agent: start after Program 2; preserve the native trust and payer checks                |
+| Program                      | Status                                                                                                                                                                                              | Next owner/action                                                                    |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| 1. Bytes diet                | Complete locally: thumbnails, gzip, opt-in TLS/HTTP2 with journal coverage, single-copy paste resize, original cache/ETag/Range. L2 on paste upload and conditional originals (quiet, rotom 0.1.26) | None for Program 1; deploying TLS needs the owner's certificate/address and approval |
+| 2. Incremental everything    | Steps 1-4 done: edit log/shared Git (L2); Changes push (L1); session-list deltas (L1, −90% bytes); saved session copies + reconnect claims (L1, −89% reopen bytes, no time claim)                   | Coding agent: paged history, as the owner chose                                      |
+| 3. Main thread / native warm | Not started                                                                                                                                                                                         | Coding agent: start after Program 2; preserve the native trust and payer checks      |
 
 [First-batch evidence and costs](experiments/2026-10-19-thumbnails-and-stream-compression.md) and
 [second-batch artifact, L1 results, costs and remaining acceptance](experiments/2026-10-20-bytes-remainder.md).
 The owner changed the paste choice: upload only the smaller representation, not a second retained original. This
 checkpoint now includes Program 1 acceptance on rotom 0.1.26. Programs 2/3 remain incomplete. No push, production
-restart, or deployment. [Session-list delta evidence and limits](experiments/2026-10-20-session-list-deltas.md).
+restart, or deployment. [Session-list delta evidence and limits](experiments/2026-10-20-session-list-deltas.md);
+[saved copies and reconnect claims](experiments/2026-10-20-saved-views.md).
 
 ## What the deeper look found
 

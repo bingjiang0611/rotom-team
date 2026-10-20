@@ -8,6 +8,15 @@ Workload: `test/perf/workload.ts` as of 2026-10-16 (12 seeded turns of 6000-char
 `darwin-arm64` ledger baselines (worst of 10 runs from temporary checkouts) and benchmark medians, Apple M1, load below
 the core count.
 
+## Program 2, step 4 — 2026-10-20
+
+The browser keeps a per-person copy of the 10 most recent sessions and shows it marked "checking" until the server
+confirms it. Every connecting tab claims the entries it holds, so the server sends only the rest. Reopen and reconnect
+push bytes: 90,581 → 10,297 and 95,597 → 9,808 (−89%). **L1 only**: the confirmed open on loopback did not get faster
+(136 → 142 ms, load 5–7); the copy shows about 15 ms sooner. Copies clear on sign-out, a change of person or access,
+`missing`, or a session leaving the list. 530 tests pass in a clean worktree. Slow-link benefit is unmeasured. Next:
+paged history. [Experiment](experiments/2026-10-20-saved-views.md).
+
 ## Program 2, step 3 — 2026-10-20
 
 Session-list refreshes now send versioned changed/removed rows to opted-in tabs, with a full snapshot on first
