@@ -105,38 +105,46 @@ function piEditPath(cwd: string, path: string, canonicalize: boolean): string {
     return realpathWithMissingTail(absolute);
 }
 
-/**
- * The files Pi wrote or edited, by absolute path, with the newest of its replies that did: its own calls, and the
- * ones its codemode scripts made, which their results list.
- */
-function piEdits(
-    entries: readonly ClientEntry[],
-    cwd: string,
-    canonicalize = false,
-): Map<string, number> {
-    const edits = new Map<string, number>();
-    /** The reply that made each tool call, by call id. */
-    const callers = new Map<string, number>();
+/** One recorded path's occurrences in a log: its first and last edit, in order, and the reply that made the last. */
+type PathEdits = { first: number; last: number; entryId: number };
 
-    for (const entry of entries) {
+/**
+ * The files Pi wrote or edited, folded from a session's history one entry at a time, oldest first: its own calls, and
+ * the ones its codemode scripts made, which their results list. History is append-only, so a log kept per session
+ * takes only new entries instead of reading every entry again on each request (`Workspace.changes`).
+ *
+ * Paths are kept as recorded and resolved per request, as before: a symlink may change between requests.
+ */
+export class PiEditLog {
+    /** The reply that made each tool call, by call id. */
+    readonly #callers = new Map<string, number>();
+    readonly #paths = new Map<string, PathEdits>();
+    #order = 0;
+
+    /** How much the log holds, to bound the memory of kept logs. */
+    get size(): number {
+        return this.#callers.size + this.#paths.size;
+    }
+
+    add(entry: ClientEntry): void {
         if (entry.kind === "assistant") {
             for (const block of entry.blocks) {
                 if (block.type !== "toolCall") {
                     continue;
                 }
 
-                callers.set(block.id, entry.id);
+                this.#callers.set(block.id, entry.id);
                 const path = block.args.path;
 
                 if (EDITORS.has(block.name) && typeof path === "string" && path !== "") {
-                    edits.set(piEditPath(cwd, path, canonicalize), entry.id);
+                    this.#edit(path, entry.id);
                 }
             }
         } else if (entry.kind === "toolResult" && entry.name === CODEMODE) {
             const calls = (entry.details as { calls?: unknown } | undefined)?.calls;
 
             if (!Array.isArray(calls)) {
-                continue;
+                return;
             }
 
             for (const call of calls as { name?: unknown; status?: unknown; path?: unknown }[]) {
@@ -150,15 +158,66 @@ function piEdits(
                     continue;
                 }
 
-                edits.set(
-                    piEditPath(cwd, call.path, canonicalize),
-                    callers.get(entry.callId) ?? entry.id,
-                );
+                this.#edit(call.path, this.#callers.get(entry.callId) ?? entry.id);
             }
         }
     }
 
-    return edits;
+    #edit(path: string, entryId: number): void {
+        const order = this.#order++;
+        const known = this.#paths.get(path);
+
+        if (known === undefined) {
+            this.#paths.set(path, { first: order, last: order, entryId });
+        } else {
+            known.last = order;
+            known.entryId = entryId;
+        }
+    }
+
+    /**
+     * The edited files by absolute path, with the newest reply that edited each: what setting every edit in order on
+     * a map gives. Recorded paths that resolve to one file keep that file's first place and its last edit.
+     */
+    edits(cwd: string, canonicalize = false): Map<string, number> {
+        const files = new Map<string, PathEdits>();
+
+        for (const [path, edits] of this.#paths) {
+            const file = piEditPath(cwd, path, canonicalize);
+            const known = files.get(file);
+
+            if (known === undefined) {
+                files.set(file, { ...edits });
+            } else {
+                known.first = Math.min(known.first, edits.first);
+
+                if (edits.last > known.last) {
+                    known.last = edits.last;
+                    known.entryId = edits.entryId;
+                }
+            }
+        }
+
+        return new Map(
+            [...files]
+                .sort(([, a], [, b]) => a.first - b.first)
+                .map(([file, { entryId }]) => [file, entryId]),
+        );
+    }
+}
+
+function logOf(entries: readonly ClientEntry[] | PiEditLog): PiEditLog {
+    if (entries instanceof PiEditLog) {
+        return entries;
+    }
+
+    const log = new PiEditLog();
+
+    for (const entry of entries) {
+        log.add(entry);
+    }
+
+    return log;
 }
 
 function kindOf(code: string): ChangeKind {
@@ -286,31 +345,29 @@ async function repositoryState(cwd: string): Promise<{
     return { root, branch, head };
 }
 
+/** What git says changed in a folder's repository, before Pi's edits are matched to it (`changesIn`). */
+export type RepositoryChanges =
+    | { repo: undefined }
+    | {
+          repo: { root: string; branch?: string; head?: string };
+          files: Omit<ChangedFile, "byPi">[];
+          more: number;
+      };
+
 /**
- * The changes in a folder's repository, with the files Pi edited according to `entries`. `onlyHere` leaves out the
- * changes outside the folder: someone invited to one session sees its files only.
+ * The uncommitted changes of the repository `cwd` is in, without Pi's edits: the same for everyone who may see the
+ * folder (`onlyHere` aside), so concurrent requests can share one run (`Workspace.changes`).
  */
-export async function changesIn(
-    cwd: string,
-    entries: readonly ClientEntry[],
-    onlyHere = false,
-): Promise<Changes> {
+export async function repositoryChanges(cwd: string, onlyHere = false): Promise<RepositoryChanges> {
     let repository: Awaited<ReturnType<typeof repositoryState>>;
 
     try {
         repository = await repositoryState(cwd);
     } catch {
-        const edits = piEdits(entries, cwd);
-
-        return {
-            files: [],
-            more: 0,
-            piOnly: [...edits].map(([path, entryId]) => ({ path, entryId })),
-        };
+        return { repo: undefined };
     }
 
     const { root, branch, head } = repository;
-    const edits = piEdits(entries, cwd, true);
     const prefix = onlyHere ? await prefixOf(cwd) : "";
     const changed = parseStatus(
         await git(root, ["status", "--porcelain=v1", "-z", "--untracked-files=all"]),
@@ -322,21 +379,6 @@ export async function changesIn(
             ? new Map()
             : parseNumstat(await git(root, ["diff", "HEAD", "--numstat", "-z", ...DIFF_FLAGS]));
     const versions = await Promise.all(status.map(({ path }) => versionOf(join(root, path))));
-    const files = status.map(({ code, path }, index): ChangedFile => {
-        const version = versions[index];
-
-        return {
-            path,
-            kind: kindOf(code),
-            ...counts.get(path),
-            byPi: edits.has(join(root, path)),
-            ...(version === undefined ? {} : { version }),
-        };
-    });
-    const shown = new Set(files.map((file) => join(root, file.path)));
-    const piOnly = [...edits]
-        .filter(([path]) => !shown.has(path))
-        .map(([path, entryId]) => ({ path: relative(root, path), entryId }));
 
     return {
         repo: {
@@ -344,10 +386,64 @@ export async function changesIn(
             ...(branch === undefined ? {} : { branch }),
             ...(head === undefined ? {} : { head }),
         },
-        files,
+        files: status.map(({ code, path }, index) => {
+            const version = versions[index];
+
+            return {
+                path,
+                kind: kindOf(code),
+                ...counts.get(path),
+                ...(version === undefined ? {} : { version }),
+            };
+        }),
         more: changed.length - status.length,
-        piOnly,
     };
+}
+
+/** The changes git found (`repositoryChanges`), with the files Pi edited according to `entries`. */
+export function withPiEdits(
+    cwd: string,
+    repository: RepositoryChanges,
+    entries: readonly ClientEntry[] | PiEditLog,
+): Changes {
+    const log = logOf(entries);
+
+    if (repository.repo === undefined) {
+        return {
+            files: [],
+            more: 0,
+            piOnly: [...log.edits(cwd)].map(([path, entryId]) => ({ path, entryId })),
+        };
+    }
+
+    const { root } = repository.repo;
+    const edits = log.edits(cwd, true);
+    const files = repository.files.map(({ path, kind, added, removed, version }): ChangedFile => ({
+        path,
+        kind,
+        ...(added === undefined ? {} : { added }),
+        ...(removed === undefined ? {} : { removed }),
+        byPi: edits.has(join(root, path)),
+        ...(version === undefined ? {} : { version }),
+    }));
+    const shown = new Set(files.map((file) => join(root, file.path)));
+    const piOnly = [...edits]
+        .filter(([path]) => !shown.has(path))
+        .map(([path, entryId]) => ({ path: relative(root, path), entryId }));
+
+    return { repo: { ...repository.repo }, files, more: repository.more, piOnly };
+}
+
+/**
+ * The changes in a folder's repository, with the files Pi edited according to `entries`. `onlyHere` leaves out the
+ * changes outside the folder: someone invited to one session sees its files only.
+ */
+export async function changesIn(
+    cwd: string,
+    entries: readonly ClientEntry[] | PiEditLog,
+    onlyHere = false,
+): Promise<Changes> {
+    return withPiEdits(cwd, await repositoryChanges(cwd, onlyHere), entries);
 }
 
 /**

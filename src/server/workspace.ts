@@ -20,11 +20,24 @@ import {
     switchBranch,
     validBranchName,
 } from "./branches.ts";
-import { type Changes, changesIn, diffOf, revertFile } from "./changes.ts";
+import {
+    type Changes,
+    diffOf,
+    PiEditLog,
+    type RepositoryChanges,
+    repositoryChanges,
+    revertFile,
+    withPiEdits,
+} from "./changes.ts";
 import type { User } from "./config.ts";
 import { describe, HttpError } from "./errors.ts";
+import { FreshRuns } from "./fresh-runs.ts";
 import { FileLists, type FileListing, type FileView, locateFiles, viewFile } from "./files.ts";
 import { displayPath, expandHome } from "./paths.ts";
+
+/** Sessions whose Pi edits are kept between Changes requests, and the most calls and paths one may hold. */
+const MAX_EDIT_LOGS = 32;
+const MAX_EDIT_LOG_SIZE = 100_000;
 
 export class Workspace {
     readonly #app: PocketApp;
@@ -35,6 +48,15 @@ export class Workspace {
 
     /** The files in each folder, for `@` mentions. */
     readonly #files = new FileLists();
+
+    /**
+     * Each recent session's Pi edits, folded from its history and caught up with new entries per request (`changes`),
+     * so a poll reads only what was appended since: most recently used last, at most `MAX_EDIT_LOGS`.
+     */
+    readonly #editLogs = new Map<ConversationId, { log: PiEditLog; last: number | undefined }>();
+    readonly #editCatchUps = new FreshRuns<PiEditLog>();
+    /** Git's view of each folder, shared by the requests that arrive while one is being read. */
+    readonly #repositoryRuns = new FreshRuns<RepositoryChanges>();
 
     /**
      * Where each folder's repository keeps its files, for a minute: views ask on every update. A folder in none is
@@ -488,11 +510,50 @@ export class Workspace {
         this.#app.requireSteer(user);
 
         // Someone invited to this session only sees the files in its folder, here as in `conversationFile`.
-        return changesIn(
-            this.#app.cwdOf(id),
-            await this.#app.transcripts.allEntries(id, false),
-            user.sessions !== undefined,
-        );
+        const cwd = this.#app.cwdOf(id);
+        const onlyHere = user.sessions !== undefined;
+        const [repository, log] = await Promise.all([
+            this.#repositoryRuns.run(`${onlyHere ? "here" : "all"}:${cwd}`, () =>
+                repositoryChanges(cwd, onlyHere),
+            ),
+            this.#editLog(id),
+        ]);
+
+        return withPiEdits(cwd, repository, log);
+    }
+
+    /** A session's Pi edits up to at least the entries committed when this is called. */
+    #editLog(id: ConversationId): Promise<PiEditLog> {
+        return this.#editCatchUps.run(String(id), async () => {
+            const kept = this.#editLogs.get(id) ?? { log: new PiEditLog(), last: undefined };
+            const { entries, last } = await this.#app.transcripts.entriesAfter(
+                id,
+                kept.last,
+                false,
+            );
+
+            for (const entry of entries) {
+                kept.log.add(entry);
+            }
+
+            kept.last = last;
+            this.#editLogs.delete(id);
+
+            // A history with very many tool calls is folded again per request rather than kept.
+            if (kept.log.size <= MAX_EDIT_LOG_SIZE) {
+                this.#editLogs.set(id, kept);
+
+                for (const oldest of this.#editLogs.keys()) {
+                    if (this.#editLogs.size <= MAX_EDIT_LOGS) {
+                        break;
+                    }
+
+                    this.#editLogs.delete(oldest);
+                }
+            }
+
+            return kept.log;
+        });
     }
 
     /** The diff of one changed file in a session's repository. */

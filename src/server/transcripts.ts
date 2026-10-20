@@ -174,15 +174,33 @@ export class Transcripts {
     }
 
     /** A conversation's whole history, oldest first, as browsers get it (`full`: nothing clipped). */
-    async allEntries(id: ConversationId, full: boolean): Promise<ClientEntry[]> {
+    allEntries(id: ConversationId, full: boolean): Promise<ClientEntry[]> {
+        return this.entriesAfter(id, undefined, full).then(({ entries }) => entries);
+    }
+
+    /**
+     * A conversation's entries newer than `after` (all of them without it), oldest first, and the newest entry id seen
+     * (`after` when there is none). Entry ids grow in commit order: Durable mints them inside its serialized commits,
+     * and a commit is visible whole or not at all, so nothing older than a seen entry can appear later.
+     */
+    async entriesAfter(
+        id: ConversationId,
+        after: number | undefined,
+        full: boolean,
+    ): Promise<{ entries: ClientEntry[]; last: number | undefined }> {
         const conversation = await this.#app.conversation(id);
         const entries: ClientEntry[] = [];
+        const query = after === undefined ? {} : { minEntryId: (after + 1) as EntryId };
+        let last = after;
         let cursor: Cursor | undefined;
 
         do {
-            const page = await conversation.entries({}, 256, cursor, context);
+            const page = await conversation.entries(query, 256, cursor, context);
 
             for (const entry of page.items) {
+                const entryId = entry.id as unknown as number;
+
+                last = last === undefined ? entryId : Math.max(last, entryId);
                 const projected = projectEntry(entry, full);
 
                 if (projected !== undefined) {
@@ -193,7 +211,7 @@ export class Transcripts {
             cursor = page.next;
         } while (cursor !== undefined);
 
-        return entries.reverse();
+        return { entries: entries.reverse(), last };
     }
 
     /** A session as a Markdown file: its whole history, with who wrote what. */
