@@ -39,22 +39,23 @@ request; concurrent requests of one folder share at most two runs (the one going
 Alternating three-run `perf:ci -- 95c3836` (`timing-run.mjs p2-ci`, load 1.96→3.42, **highLoad: false**), ledger
 guard passed; plus an independent three-run head report (`p2-repeat`, load 2.68→3.22, `highLoad: false`).
 
-| Measure                                              |        Base |                          Head | Level                                                                                                                            |
-| ---------------------------------------------------- | ----------: | ----------------------------: | -------------------------------------------------------------------------------------------------------------------------------- |
-| `changes.poll.images` parsed characters              | 504,775,744 |           63,097,108 (−87.5%) | L1                                                                                                                               |
-| `changes.poll.images` Durable SQL rows / parse calls |   208 / 208 |                       40 / 40 | L1                                                                                                                               |
-| `changes.poll.images` Git processes (8 listings)     |          24 |                            12 | L1                                                                                                                               |
-| `changes.poll.images` time, median                   |    633.6 ms |     388.2 ms (`faster`, −39%) | **L2**                                                                                                                           |
-| repeat head report                                   |           — | 367.4–407.1 ms, same counters | agrees                                                                                                                           |
-| `git.changes` (one listing, small history)           |    132.9 ms |                      212.2 ms | noise (head runs 221.1 / 212.2 / 135.6; same counters except +563 stringify chars from the guard test file's harness, see below) |
+| Measure                                              |        Base |                          Head | Level                                                                |
+| ---------------------------------------------------- | ----------: | ----------------------------: | -------------------------------------------------------------------- |
+| `changes.poll.images` parsed characters              | 504,775,744 |           63,097,108 (−87.5%) | L1                                                                   |
+| `changes.poll.images` Durable SQL rows / parse calls |   208 / 208 |                       40 / 40 | L1                                                                   |
+| `changes.poll.images` Git processes (8 listings)     |          24 |                            12 | L1                                                                   |
+| `changes.poll.images` time, median                   |    633.6 ms |     388.2 ms (`faster`, −39%) | **L2**                                                               |
+| repeat head report                                   |           — | 367.4–407.1 ms, same counters | agrees                                                               |
+| `git.changes` (one listing, small history)           |    132.9 ms |                      212.2 ms | noise (head runs 221.1 / 212.2 / 135.6); same Git and parse counters |
 
 Other counters that rose between base and head:
 
 - `session.open` second view flush (+16 SQL, +123,642 parsed chars in the median). Pre-existing and bimodal: base
   runs of this and earlier comparisons show 1 or 2 view pushes too (e.g. `ffe763a` base `[1,1,2]`, `58fa3ce` base
   `[2,2,2]`). This change does not touch the session-open path. Not attributed to it; still not explained.
-- `git.changes/json.stringify.chars` 2,542→3,105 median, varying by run; `commands.discover.warm` +34,
-  `web.open/cdp.Nodes` +24: same small, unattributed drifts as in Program 1's acceptance.
+- `git.changes/json.stringify.chars` median 2,542→3,105: bimodal in both builds (base runs 2,537 / 3,105 / 2,536,
+  head 3,104 / 3,105 / 2,538, repeat 2,536-2,539), so the median moved, not the work. `commands.discover.warm` +34
+  and `web.open/cdp.Nodes` +24 are the same small, unattributed drifts as in Program 1's acceptance.
 
 ## Tests and controls
 
