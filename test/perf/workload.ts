@@ -29,6 +29,7 @@ const imageHistory = `kernel mode; separate Durable mirror of ${WORKLOAD.imageEn
 export const SCENARIOS: Record<string, string> = {
     "startup.restart": `${seeded}, ${WORKLOAD.extraSessions} more empty sessions; close the app and open it again`,
     "sessions.list": `${seeded}, ${WORKLOAD.extraSessions} more empty sessions; GET /api/sessions`,
+    "sessions.rename.tabs": `after all established scenarios, ${WORKLOAD.projectionTabs} authenticated SSE tabs without a selected conversation opt into session deltas and load the full catalogue unmeasured; rename the History session twice through HTTP, waiting for each title in every tab; all reconstructed lists must equal the server list; count through quiet`,
     "session.open": `${seeded}; a new event-stream tab on it, until its first full view`,
     "turn.cold": `${seeded}; first prompt of a new session with one tab watching, until settled and quiet`,
     "turn.warm": `${seeded}; second prompt of that session with one tab watching, until settled and quiet`,
@@ -416,6 +417,7 @@ const imageCounters = [
 export const REPORTED: Record<string, string[]> = {
     "startup.restart": [...common],
     "sessions.list": [...common, "http.body.bytes"],
+    "sessions.rename.tabs": [...common, ...pushes, "http.requests"],
     "session.open": [...common, ...projection, ...pushes],
     "turn.cold": [...common, "subprocess.git", ...pushes],
     "turn.warm": [...common, "subprocess.git", ...projection, ...pushes],

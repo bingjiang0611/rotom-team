@@ -37,6 +37,7 @@ import { NATIVE_ENTRY } from "../../src/server/entry-format.ts";
 import { sniffImage } from "../../src/server/http/assets.ts";
 import { measureImageNetwork } from "./image-network.ts";
 import { measurePasteNetwork } from "./paste-network.ts";
+import { sessionListTab } from "./session-list.ts";
 
 export type ScenarioResult =
     | { scenario: string; ms: number; counts: Counts; extra?: Record<string, number> }
@@ -733,6 +734,36 @@ await scenario("changes.poll.images", async () => {
 
     return { "http.body.bytes": bytes };
 });
+
+// Four tabs with the full catalogue already loaded: two renames change one row at a time. Setup and first snapshots
+// are outside this window; the renames, resulting pushes, and correctness readback are all inside it.
+const listTabs = Array.from({ length: WORKLOAD.projectionTabs }, () =>
+    sessionListTab(base, token, raw),
+);
+
+try {
+    await Promise.all(listTabs.map((tab) => tab.until(() => true)));
+    await scenario("sessions.rename.tabs", async () => {
+        for (const title of ["Catalogue rename one", "Catalogue rename two"]) {
+            await call(`sessions/${history}`, "POST", { title });
+            await Promise.all(
+                listTabs.map((tab) =>
+                    tab.until((rows) =>
+                        rows.some((row) => row.id === history && row.title === title),
+                    ),
+                ),
+            );
+        }
+
+        const expected = raw.stringify(app.sessions(owner(app)));
+
+        for (const tab of listTabs) {
+            assert.equal(raw.stringify(tab.rows), expected, "each tab reconstructs the full list");
+        }
+    });
+} finally {
+    await Promise.all(listTabs.map((tab) => tab.close()));
+}
 
 writeFileSync(out, raw.stringify({ workload: WORKLOAD, results }, null, 2));
 server.closeAllConnections();
