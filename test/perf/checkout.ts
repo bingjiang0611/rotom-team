@@ -15,7 +15,10 @@ import { fileURLToPath } from "node:url";
 export const REPO = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 const git = (cwd: string, ...args: string[]) =>
-    execFileSync("git", ["-C", cwd, ...args], { encoding: "utf8" }).trim();
+    execFileSync("git", ["-C", cwd, ...args], {
+        encoding: "utf8",
+        maxBuffer: 256 * 1024 * 1024,
+    }).trim();
 const lines = (text: string) => text.split("\0").filter((each) => each !== "");
 
 /**

@@ -44,8 +44,12 @@ if (baseRef === undefined || baseRef.startsWith("--") || !Number.isInteger(count
     throw new Error("Usage: npm run perf:ci -- <base-ref> [--runs N] [--out DIR]");
 }
 
+// The ledger is over a megabyte, Node's default output limit: a smaller limit would read as "no ledger" below.
 const git = (...gitArgs: string[]) =>
-    execFileSync("git", ["-C", REPO, ...gitArgs], { encoding: "utf8" }).trim();
+    execFileSync("git", ["-C", REPO, ...gitArgs], {
+        encoding: "utf8",
+        maxBuffer: 256 * 1024 * 1024,
+    }).trim();
 
 const summary = (text: string) => {
     console.log(text);
@@ -63,7 +67,16 @@ let baseLedger: Ledger | undefined;
 
 try {
     baseLedger = JSON.parse(git("show", `${baseCommit}:test/perf/ledger.json`)) as Ledger;
-} catch {
+} catch (error) {
+    // Only a base without a ledger predates the benchmark; any other failure is a failure.
+    if (
+        !/does not exist in|exists on disk, but not in/.test(
+            String((error as { stderr?: unknown }).stderr),
+        )
+    ) {
+        throw error;
+    }
+
     baseLedger = undefined;
 }
 
