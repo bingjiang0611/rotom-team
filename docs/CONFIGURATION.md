@@ -95,6 +95,15 @@ idle. Failures/unknown outcomes retire the process, and handoff retires the old 
 transport. Server shutdown awaits closure of retained processes before releasing its journal lock. No idle eviction or
 cross-restart in-memory restoration is claimed; reopening after restart uses the persisted native session.
 
+Focusing the message box of an idle native session that runs on one's own account asks the server to start its process
+before the first send (`POST /api/c/:id/warm`, at most once per session every four minutes per tab). The server starts
+it only for that member, if they may see, steer and drive the session, on the pinned kernel, after the send's admission
+checks. The process's gate has nothing active, so it can spend nothing until a send is admitted; every inference is
+still authorized there. Each member keeps at most one unused warm process (warming another session retires the first),
+three in all; an unused one retires after five minutes, when its member's account changes, or when they may no longer
+drive the session. A send during a warm start waits for it instead of starting a second process. Each warm process
+costs memory (about 330 MiB RSS measured) while it waits.
+
 Tracked shared settings/resource metadata and project configuration changes trigger a native reload on the next
 authorized receipt. This preserves settings-sheet updates without restarting the process. The freshness hint does not
 recursively hash dependency/resource trees; use `/reload` for deeper file changes. Reload may reset extension memory

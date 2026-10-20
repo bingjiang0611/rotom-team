@@ -8,6 +8,16 @@ Workload: `test/perf/workload.ts` as of 2026-10-16 (12 seeded turns of 6000-char
 `darwin-arm64` ledger baselines (worst of 10 runs from temporary checkouts) and benchmark medians, Apple M1, load below
 the core count.
 
+## Program 3, step 1 — 2026-10-21
+
+Focusing the message box of one's own idle native session starts its native process before the send, with a gate that
+admits nothing until the send is admitted. The first prompt after a warm start: 2,063 → 123.1 ms (−94%, **L2**,
+`highLoad: false`). The start moved, not vanished: `native.warm` takes 2,095 ms and one rotom process when the box is
+focused. One warm process is about 327 MiB RSS; at most one unused per member, three in all, retired after five
+minutes, on account change or loss of driving rights. Open: a timing-dependent second view push in `session.reclaim`
+(seen in 2 of 3 head runs, within its registered tolerance), cause unknown. 541 tests pass in a clean worktree.
+[Experiment](experiments/2026-10-21-native-warm.md).
+
 ## Program 2, step 5 — 2026-10-20
 
 A session's view now sends its newest 240 entries and the whole order; the browser reads earlier entries 200 at a time
