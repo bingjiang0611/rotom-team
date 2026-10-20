@@ -8,6 +8,15 @@ Workload: `test/perf/workload.ts` as of 2026-10-16 (12 seeded turns of 6000-char
 `darwin-arm64` ledger baselines (worst of 10 runs from temporary checkouts) and benchmark medians, Apple M1, load below
 the core count.
 
+## Program 2, step 1 — 2026-10-20
+
+Changes no longer folds a session's whole history per listing: each session's Pi-edit log is kept and caught up
+from the last entry id, and concurrent listings share a Git run that started after they arrived. On
+`changes.poll.images` (four tabs, two rounds, 24 image entries) parsed characters fall 504.8 M → 63.1 M, Git
+processes 24 → 12, and time 633.6 → 388.2 ms (`faster`, `highLoad: false`): **L2**. Remaining leads here: the first
+fold after a restart (Durable parses whole image records), and the client-protocol items, which wait for the
+owner. [Experiment](experiments/2026-10-20-changes-edit-index.md).
+
 ## Program 1 accepted — 2026-10-20
 
 On the combined rotom 0.1.26 tree, against a base of the first batch plus only the pin commit, a quiet alternating
