@@ -59,10 +59,14 @@ type Sample = {
 type Scope = { sample: Sample; image?: boolean; lookup?: boolean };
 
 /** Install once, restore in finally. AsyncLocalStorage keeps overlapping image requests separate. */
-export function probeImages(transcripts: Pick<Transcripts, "visibleEntry" | "storedImage">) {
+export function probeImages(
+    transcripts: Pick<Transcripts, "visibleEntry" | "entryImage"> &
+        Partial<Pick<Transcripts, "storedImage">>,
+) {
     const scope = new AsyncLocalStorage<Scope>();
     const samples: Sample[] = [];
     const visibleEntry = transcripts.visibleEntry;
+    const entryImage = transcripts.entryImage;
     const storedImage = transcripts.storedImage;
     const from = Buffer.from;
 
@@ -87,13 +91,26 @@ export function probeImages(transcripts: Pick<Transcripts, "visibleEntry" | "sto
         }
     };
 
-    transcripts.storedImage = function (...args) {
+    // Older baselines decode inside entryImage; newer code shares storedImage with the media cache. Scope both
+    // entry points without counting either call: only actual Buffer.from(base64) work inside the scope is counted,
+    // so entryImage delegating to storedImage is not counted twice.
+    transcripts.entryImage = function (...args) {
         const active = scope.getStore();
 
         return active
-            ? scope.run({ ...active, image: true }, () => storedImage.apply(this, args))
-            : storedImage.apply(this, args);
+            ? scope.run({ ...active, image: true }, () => entryImage.apply(this, args))
+            : entryImage.apply(this, args);
     };
+
+    if (storedImage !== undefined) {
+        transcripts.storedImage = function (...args) {
+            const active = scope.getStore();
+
+            return active
+                ? scope.run({ ...active, image: true }, () => storedImage.apply(this, args))
+                : storedImage.apply(this, args);
+        };
+    }
 
     Buffer.from = function (...args: unknown[]) {
         const active = scope.getStore();
@@ -189,7 +206,12 @@ export function probeImages(transcripts: Pick<Transcripts, "visibleEntry" | "sto
         },
         restore() {
             transcripts.visibleEntry = visibleEntry;
-            transcripts.storedImage = storedImage;
+            transcripts.entryImage = entryImage;
+
+            if (storedImage !== undefined) {
+                transcripts.storedImage = storedImage;
+            }
+
             Buffer.from = from;
             scope.disable();
         },
