@@ -5,7 +5,6 @@ import { canGoBack, goBack, goHome, replaceAddress, startHistory, useBack } from
 import { BrowserButton, BrowserPanel } from "./browser-panel.js";
 import { browserAvailable, toggleBrowser } from "./browser.js";
 import { PeopleButton, PeoplePanel } from "./chat.js";
-import { writtenFiles } from "./calls.js";
 import { Composer } from "./composer.js";
 import {
     FilesButton,
@@ -43,6 +42,7 @@ import {
     navigate,
     notify,
     openSheet,
+    outputsBadge,
     panelsBeside,
     peopleDocked,
     scoped,
@@ -62,13 +62,9 @@ const toSessions = () => goHome(() => navigate(null, { replace: true }));
 function Topbar() {
     const { view, server } = store.state;
     const conversation = view.conversation;
-    const artifacts = useMemo(
-        () =>
-            view.artifacts.length +
-            writtenFiles(view.order.map((id) => view.entries.get(id)).filter(Boolean)).length,
-        // Persisted transcript entries are immutable; live token updates keep the same order reference.
-        [view.artifacts, view.order],
-    );
+    // Persisted transcript entries are immutable; live token updates keep the same order and entries.
+    const outputs = useMemo(() => outputsBadge(view), [view.artifacts, view.order, view.entries]);
+    const artifacts = outputs.count;
     const subtitle =
         conversation?.kind === "subagent"
             ? `subagent of ${conversation.parent?.title ?? "?"}`
@@ -123,7 +119,7 @@ function Topbar() {
             onClick=${() => openSheet({ type: "artifacts" })}
         >
             <${Icon} name="artifact" />
-            ${artifacts > 0 && html`<span class="badge">${artifacts}</span>`}
+            ${artifacts > 0 && html`<span class="badge">${outputs.label}</span>`}
         </button>
         <button class="icon-button" aria-label="Menu" onClick=${() => openSheet({ type: "menu" })}>
             <${Icon} name="more" />

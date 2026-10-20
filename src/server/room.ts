@@ -147,6 +147,11 @@ export interface Client {
     readonly sessionDeltas?: boolean;
     /** Entries the tab says it holds from an earlier connection; checked and used up by its first full view. */
     viewClaim?: ViewClaim;
+    /**
+     * The newest entries of the order this tab wants pushed; it reads older ones when it needs them (`Room.earlier`).
+     * Unset: every entry, as before.
+     */
+    readonly viewTail?: number;
     /** Other sessions this tab shows as peek tiles on screen now; each gets `peek` events (`PocketApp.setPeeks`). */
     peeks?: Set<ConversationId>;
     /** The number of the last peek list taken, so one that arrives late does not undo a newer one. */
@@ -360,6 +365,23 @@ export class Room {
         );
     }
 
+    /**
+     * Up to `limit` entries just before `before` in this view's order, oldest first, exactly as a view sends them; none
+     * when `before` is not in the order now (the tab's order is out of date, and a view on its way corrects it).
+     */
+    earlier(before: number, limit: number): ClientEntry[] {
+        const view = this.#view?.value;
+
+        if (view === undefined) {
+            return [];
+        }
+
+        const { entries, order } = this.#sequence(view.entries);
+        const at = order.indexOf(before);
+
+        return at <= 0 ? [] : entries.slice(Math.max(0, at - limit), at);
+    }
+
     get value(): ConversationView | undefined {
         return this.#view?.value;
     }
@@ -531,7 +553,14 @@ export class Room {
             } satisfies ViewProjectionSignal);
         }
 
-        for (let index = from; index < projectedEntries.length; index++) {
+        // A tab that asked for only the newest entries gets those; the order still names every entry, and the tab reads
+        // the others page by page as it needs them. Entries it already holds are never sent again.
+        const floor =
+            client.viewTail === undefined
+                ? 0
+                : Math.max(0, projectedEntries.length - client.viewTail);
+
+        for (let index = Math.max(from, floor); index < projectedEntries.length; index++) {
             const projected = projectedEntries[index]!;
 
             if (!client.sentEntries.has(projected.id)) {
@@ -627,6 +656,8 @@ export class Room {
             entries,
             ...(kept === undefined ? {} : { kept: { first: kept[0], count: kept.length } }),
             ...(orderChanged || full ? { order } : {}),
+            // The first position of the order this view sent entries from: the tab holds every entry from there on.
+            ...(full && floor > 0 ? { start: floor } : {}),
             live: roomPart("live", () =>
                 this.#native() ? this.#app.kernel!.clientLive(this.id) : projectLive(live),
             ),

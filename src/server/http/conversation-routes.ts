@@ -14,6 +14,8 @@ import { ENTRY_IMAGE_TYPES } from "../media.ts";
 import { sendStoredImage } from "./stored-image.ts";
 
 const MAX_UPLOAD = 50 * 1024 * 1024;
+/** The most entries one page of a view's earlier entries holds (`GET /api/c/:id/entries`). */
+const EARLIER_PAGE = 200;
 
 function safeName(name: string): string {
     const base = basename(name)
@@ -248,6 +250,7 @@ export async function conversationRoutes(
                 [
                     "image",
                     "entry",
+                    "entries",
                     "export",
                     "file",
                     "download",
@@ -697,6 +700,27 @@ export async function conversationRoutes(
         await app.shell.stop(id, user, Number(fourth));
 
         return json(response, 200, { ok: true });
+    }
+
+    if (third === "entries" && method === "GET" && fourth === undefined) {
+        const before = Number(url.searchParams.get("before"));
+        const limit = Number(url.searchParams.get("limit") ?? EARLIER_PAGE);
+
+        if (!Number.isSafeInteger(before) || before < 1) {
+            throw new HttpError(400, "before must be an entry id.");
+        }
+
+        if (!Number.isSafeInteger(limit) || limit < 1 || limit > EARLIER_PAGE) {
+            throw new HttpError(400, `limit must be 1 to ${EARLIER_PAGE}.`);
+        }
+
+        const room = await app.room(id);
+
+        try {
+            return json(response, 200, { entries: room.earlier(before, limit) });
+        } finally {
+            app.releaseRoom(room);
+        }
     }
 
     if (third === "history" && method === "GET") {

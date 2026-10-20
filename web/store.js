@@ -2,6 +2,7 @@
 import { onRoute, pushRoute } from "./back.js";
 import { sessionDelta, sessionSnapshot } from "./session-list.js";
 import { observe, opened, sending, sendFailed, setTransport, switched } from "./perf.js";
+import { writtenFiles } from "./calls.js";
 import { claimOf, keptEntries } from "./view-claim.js";
 import {
     accessOf,
@@ -30,6 +31,11 @@ export function uid() {
 
 /** How many transcript rows a session shows when opened; "Show earlier messages" adds this many more. */
 export const TRANSCRIPT_ROWS = 60;
+/**
+ * The newest entries a session's view sends when it opens; the tab reads older ones a page at a time as the reader
+ * scrolls up to them (`loadEarlier`), and in full where a feature needs every entry (`loadAllEntries`).
+ */
+export const TRANSCRIPT_TAIL = 240;
 
 const TAB_KEY = "pocket.tab";
 
@@ -544,10 +550,13 @@ function applyView(data) {
     });
 
     // The server keeps what the claim named; should the tab not hold all of it after all, connect again for everything.
+    // Entries before `start` were not sent: the tab reads them when it needs them.
     if (
         data.full &&
         data.kept &&
-        store.state.view.order.some((id) => !store.state.view.entries.has(id))
+        store.state.view.order
+            .slice(data.start ?? 0)
+            .some((id) => !store.state.view.entries.has(id))
     ) {
         unclaimed = true;
         connect();
@@ -747,9 +756,9 @@ export function connect() {
     const claim = id === null || unclaimed ? null : claimOf(store.state.view, id);
 
     unclaimed = false;
-    const query = `tab=${encodeURIComponent(TAB)}&sessions=delta${id === null ? "" : `&c=${id}`}${
-        claim === null ? "" : `&have=${encodeURIComponent(claim)}`
-    }`;
+    const query = `tab=${encodeURIComponent(TAB)}&sessions=delta${
+        id === null ? "" : `&c=${id}&tail=${TRANSCRIPT_TAIL}`
+    }${claim === null ? "" : `&have=${encodeURIComponent(claim)}`}`;
 
     const polling = pollHere() && !local;
 
@@ -1225,6 +1234,95 @@ export const actions = {
     fullEntry: (entryId) => api(`c/${current()}/entry/${entryId}`),
     history: (before) => api(`c/${current()}/history?before=${before}`),
 };
+
+/**
+ * Where the entries this tab holds without a gap begin in `view`'s order: 0 when it holds every entry. Those before
+ * it, the view did not send (`TRANSCRIPT_TAIL`).
+ */
+export function heldFrom(view) {
+    for (let index = view.order.length - 1; index >= 0; index--) {
+        if (!view.entries.has(view.order[index])) {
+            return index + 1;
+        }
+    }
+
+    return 0;
+}
+
+/** The earlier page on its way, per conversation: a second ask waits for it. */
+const earlierPages = new Map();
+
+/**
+ * Read the page of entries just before those this tab holds without a gap, into the view. Resolves to how many it
+ * added: 0 when the tab holds every entry already, or the server's order moved on (a view on its way says how).
+ */
+export function loadEarlier() {
+    const { view } = store.state;
+    const id = view.conversation?.id;
+    const at = heldFrom(view);
+
+    if (id === undefined || at === 0) {
+        return Promise.resolve(0);
+    }
+
+    const key = `${id}:${view.order[at]}`;
+    let pending = earlierPages.get(key);
+
+    if (pending === undefined) {
+        pending = api(`c/${id}/entries?before=${view.order[at]}`)
+            .then(({ entries: page }) => {
+                let added = 0;
+
+                store.set((state) => {
+                    if (state.view.conversation?.id !== id) {
+                        return {};
+                    }
+
+                    const known = new Set(state.view.order);
+                    const entries = new Map(state.view.entries);
+
+                    for (const entry of page) {
+                        if (known.has(entry.id) && !entries.has(entry.id)) {
+                            entries.set(entry.id, entry);
+                            added++;
+                        }
+                    }
+
+                    return added === 0 ? {} : { view: { ...state.view, entries } };
+                });
+
+                return added;
+            })
+            .finally(() => earlierPages.delete(key));
+        earlierPages.set(key, pending);
+    }
+
+    return pending;
+}
+
+/**
+ * Read every entry of the view this tab lacks, for what needs the whole history (find, written files). Stops when a
+ * page adds nothing, and after `pages` pages.
+ */
+export async function loadAllEntries(pages = 100) {
+    for (let page = 0; page < pages && heldFrom(store.state.view) > 0; page++) {
+        if ((await loadEarlier()) === 0) {
+            return;
+        }
+    }
+}
+
+/**
+ * The badge of a session's outputs: artifacts and written files, and `+` while earlier entries are not read yet, so
+ * there may be more.
+ */
+export function outputsBadge(view) {
+    const count =
+        view.artifacts.length +
+        writtenFiles(view.order.map((id) => view.entries.get(id)).filter(Boolean)).length;
+
+    return { count, label: `${count}${heldFrom(view) > 0 ? "+" : ""}` };
+}
 
 /** Entries that show as transcript rows. Tool results show inside their call's card instead. */
 export const isRow = (entry) =>

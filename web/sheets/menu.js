@@ -1,7 +1,6 @@
 // The menu: what can be done in this session. What is app-wide is in Settings (sheets/settings.js).
 import { browserAvailable, displayUrl, setBrowserOpen } from "../browser.js";
 import { chatUnread } from "../chat.js";
-import { writtenFiles } from "../calls.js";
 import { useMemo } from "preact/hooks";
 import { schedulesAvailable } from "../commands.js";
 import { filesAvailable, setFilesOpen } from "../files-panel.js";
@@ -17,6 +16,7 @@ import {
     notify,
     openSheet,
     scoped,
+    outputsBadge,
     store,
 } from "../store.js";
 import { isPinned, togglePin } from "../theme.js";
@@ -31,12 +31,7 @@ import { copyText, html, Icon, item, Sheet, shortPath } from "../ui.js";
 function Places() {
     const { view, browser, browserOpen, server } = store.state;
     const conversation = view.conversation;
-    const outputs = useMemo(
-        () =>
-            view.artifacts.length +
-            writtenFiles(view.order.map((id) => view.entries.get(id)).filter(Boolean)).length,
-        [view.artifacts, view.order],
-    );
+    const outputs = useMemo(() => outputsBadge(view), [view.artifacts, view.order, view.entries]);
 
     if (!conversation) {
         return null;
@@ -73,7 +68,8 @@ function Places() {
             id: "artifacts",
             icon: "artifact",
             label: "Outputs",
-            count: outputs,
+            count: outputs.count,
+            badge: outputs.label,
             run: () => openSheet({ type: "artifacts" }),
         },
         collab() && {
@@ -116,7 +112,7 @@ function Places() {
             >
                 <span class="place-icon badge-host">
                     <${Icon} name=${place.icon} size=${22} />
-                    ${place.count > 0 && html`<span class="badge">${place.count}</span>`}
+                    ${place.count > 0 && html`<span class="badge">${place.badge ?? place.count}</span>`}
                     ${place.dot && html`<span class="browser-dot" aria-hidden="true"></span>`}
                 </span>
                 <span class="place-label">${place.label}</span>

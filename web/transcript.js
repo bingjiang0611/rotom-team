@@ -12,8 +12,11 @@ import {
     canSteer,
     collab,
     discuss,
+    heldFrom,
     isRow,
+    loadEarlier,
     navigate,
+    notify,
     openSheet,
     store,
     TRANSCRIPT_ROWS,
@@ -1049,10 +1052,14 @@ export function Transcript() {
     const keep = useRef(null);
     const counted = useRef(0);
     const [showJump, setShowJump] = useState(false);
+    const lastTop = useRef(0);
+    const earlierBusy = useRef(false);
 
     const entries = view.order.map((id) => view.entries.get(id)).filter(Boolean);
     const rows = entries.filter(isRow);
     const start = windowStart(rows, transcriptFrom);
+    // Rows above the first shown: loaded and hidden, or not sent by the view yet.
+    const earlierLeft = start > 0 || heldFrom(view) > 0;
 
     useLayoutEffect(() => {
         const element = scroller.current;
@@ -1139,6 +1146,14 @@ export function Transcript() {
     const onScroll = () => {
         const element = scroller.current;
         const atBottom = element.scrollHeight - element.scrollTop - element.clientHeight < 60;
+        const up = element.scrollTop < lastTop.current;
+
+        lastTop.current = element.scrollTop;
+
+        // Scrolling up near the top shows earlier rows, reading those the view did not send.
+        if (up && element.scrollTop < element.clientHeight && earlierLeft) {
+            showEarlier();
+        }
 
         stick.current = atBottom;
 
@@ -1187,9 +1202,44 @@ export function Transcript() {
         stick.current = false;
     };
 
-    const showEarlier = () => {
-        keepPlace();
-        store.set({ transcriptFrom: rows[Math.max(0, start - TRANSCRIPT_ROWS)].id });
+    // Earlier rows the view did not send are read first (`TRANSCRIPT_TAIL`); the rows shown stay until they are here.
+    const showEarlier = async () => {
+        if (earlierBusy.current) {
+            return;
+        }
+
+        earlierBusy.current = true;
+
+        try {
+            const shownFrom = rows[start]?.id;
+
+            if (start < TRANSCRIPT_ROWS && heldFrom(view) > 0) {
+                await loadEarlier();
+            }
+
+            const now = store.state.view;
+
+            if (now.conversation?.id !== view.conversation?.id) {
+                return;
+            }
+
+            const all = now.order
+                .map((id) => now.entries.get(id))
+                .filter((each) => each && isRow(each));
+            const at = all.findIndex((row) => row.id === shownFrom);
+
+            if (shownFrom === undefined) {
+                // Nothing shown yet: show the newest rows read.
+                store.set({ transcriptFrom: null });
+            } else if (at > 0) {
+                keepPlace();
+                store.set({ transcriptFrom: all[Math.max(0, at - TRANSCRIPT_ROWS)].id });
+            }
+        } catch (failure) {
+            notify("error", `Earlier messages could not be read: ${failure.message}`);
+        } finally {
+            earlierBusy.current = false;
+        }
     };
 
     const results = new Map();
@@ -1234,7 +1284,7 @@ export function Transcript() {
                     </p>`)
             }
             ${
-                start > 0
+                earlierLeft
                     ? html`<div class="divider">
                         <button class="link" onClick=${showEarlier}>Show earlier messages</button>
                     </div>`

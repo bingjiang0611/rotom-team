@@ -2,15 +2,23 @@
 import { useEffect, useMemo, useState } from "preact/hooks";
 import { writtenFiles } from "../calls.js";
 import { filesAvailable, setFilesOpen } from "../files-panel.js";
-import { canSteer, closeSheet, openSheet, store } from "../store.js";
+import { canSteer, closeSheet, heldFrom, loadAllEntries, openSheet, store } from "../store.js";
 import { downloadUrl, formatBytes, html, Icon, openFile, Sheet, timeAgo } from "../ui.js";
 
 export function ArtifactsSheet() {
-    const { artifacts, order, entries } = store.state.view;
+    const { view } = store.state;
+    const { artifacts, order, entries } = view;
     const files = useMemo(
         () => writtenFiles(order.map((id) => entries.get(id)).filter(Boolean)),
-        [order],
+        [order, entries],
     );
+    const [unread, setUnread] = useState(false);
+    const reading = heldFrom(view) > 0;
+
+    // A long session's view sends only its newest entries: files written earlier are in the rest.
+    useEffect(() => {
+        loadAllEntries().catch(() => setUnread(true));
+    }, []);
     const items = [...artifacts].sort(
         (a, b) => (b.versions.at(-1)?.createdAt ?? 0) - (a.versions.at(-1)?.createdAt ?? 0),
     );
@@ -21,7 +29,8 @@ export function ArtifactsSheet() {
             current files, not saved versions; copies and branches can share the same folder.
         </p>
         ${filesAvailable() && html`<button class="button" onClick=${() => setFilesOpen(true, "files")}>Browse project files</button>`}
-        <div class="group-title">Files · ${files.length}</div>
+        <div class="group-title">Files · ${files.length}${reading ? "+" : ""}</div>
+        ${reading && html`<p class="muted small">${unread ? "Earlier history could not be read: files written there are missing." : "Reading earlier history…"}</p>`}
         ${files.length === 0 && html`<p class="muted">No successful file writes recorded yet. Files made by shell commands or other tools can be found in the project folder.</p>`}
         ${files.map(
             (file) => html`<a

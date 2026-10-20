@@ -1,7 +1,7 @@
 // Find in session: messages, commands, and files, through the whole history.
 import { useEffect, useRef, useState } from "preact/hooks";
 import { jumpToEntry } from "../chat.js";
-import { actions, closeSheet, isRow, store } from "../store.js";
+import { actions, closeSheet, heldFrom, isRow, loadAllEntries, store } from "../store.js";
 import { html, Marked, plainText, Sheet, Spinner, writtenText } from "../ui.js";
 
 /** How many entries a page of earlier history has (`app.history` on the server), and how many pages find reads. */
@@ -77,17 +77,27 @@ export function FindSheet({ initial }) {
     // is searched) is here.
     const [earlier, setEarlier] = useState({ entries: [], done: false, all: true });
     const box = useRef(null);
-    const first = view.order.length > 0 ? view.entries.get(view.order[0]) : undefined;
 
     useEffect(() => box.current?.focus(), []);
     useEffect(() => {
-        if (!first || (first.kind !== "compaction" && first.kind !== "reset")) {
-            return setEarlier({ entries: [], done: true, all: true });
-        }
-
         let live = true;
 
         (async () => {
+            // A long session's view sends only its newest entries: read the rest of it first.
+            await loadAllEntries();
+
+            if (!live) {
+                return;
+            }
+
+            const now = store.state.view;
+            const whole = heldFrom(now) === 0;
+            const first = now.order.length > 0 ? now.entries.get(now.order[0]) : undefined;
+
+            if (!whole || !first || (first.kind !== "compaction" && first.kind !== "reset")) {
+                return setEarlier({ entries: [], done: true, all: whole });
+            }
+
             let entries = [];
             let before = first.id;
 
@@ -209,7 +219,7 @@ export function FindSheet({ initial }) {
             earlier.done &&
             !earlier.all &&
             html`<p class="muted small">
-                The oldest history was not searched: only the newest ${earlier.entries.length} earlier entries.
+                The oldest history was not searched${earlier.entries.length > 0 ? `: only the newest ${earlier.entries.length} earlier entries` : ""}.
             </p>`
         }
         ${results.length === 100 && html`<p class="muted small">The newest 100 are listed.</p>`}

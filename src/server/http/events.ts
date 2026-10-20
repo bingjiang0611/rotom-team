@@ -53,8 +53,18 @@ interface Poller {
     expiry: NodeJS.Timeout | undefined;
 }
 
+/** The newest entries a tab may ask to be pushed (`tail`); anything else is ignored, and the tab gets every entry. */
+function viewTail(raw: string | null): number | undefined {
+    const tail = Number(raw);
+
+    return raw !== null && Number.isSafeInteger(tail) && tail >= 1 && tail <= 100_000
+        ? tail
+        : undefined;
+}
+
 function newClient(url: URL, user: User, send: Client["send"]): Client {
     const raw = url.searchParams.get("c");
+    const tail = viewTail(url.searchParams.get("tail"));
 
     return {
         id: (url.searchParams.get("tab") ?? randomUUID()).slice(0, 64),
@@ -64,6 +74,7 @@ function newClient(url: URL, user: User, send: Client["send"]): Client {
         conversationId: raw === null || raw === "" ? undefined : conversationId(raw),
         viewClaim:
             raw === null || raw === "" ? undefined : parseClaim(url.searchParams.get("have")),
+        ...(tail === undefined ? {} : { viewTail: tail }),
         sentEntries: new Set(),
         orderKey: "",
         send,

@@ -98,10 +98,21 @@ export async function loadView(id, me, reading = readView(id)) {
  * it was saved.
  */
 export async function saveView(view, me) {
-    const order = view.order.slice(-SAVED_ENTRIES);
+    // The newest run of entries the tab holds: a long session's view sends only its newest (`TRANSCRIPT_TAIL`).
+    let from = view.order.length;
+
+    while (
+        from > 0 &&
+        view.order.length - from < SAVED_ENTRIES &&
+        view.entries.has(view.order[from - 1])
+    ) {
+        from--;
+    }
+
+    const order = view.order.slice(from);
     const entries = order.map((id) => view.entries.get(id));
 
-    if (entries.some((entry) => entry === undefined)) {
+    if (order.length === 0) {
         return false;
     }
 

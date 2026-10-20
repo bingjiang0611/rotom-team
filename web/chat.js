@@ -14,6 +14,7 @@ import {
     collab,
     drafts,
     insertIntoComposer,
+    loadAllEntries,
     markChatRead,
     notify,
     openSheet,
@@ -131,6 +132,18 @@ function clock(at) {
 /** Close the sheet and scroll the transcript to a message, briefly highlighted. The docked People panel stays. */
 export function jumpToEntry(entryId) {
     closeSheet();
+    const { view } = store.state;
+
+    // An entry of this view it did not send yet (a long session sends its newest): read it, then jump.
+    if (!view.entries.has(entryId) && view.order.includes(entryId)) {
+        loadAllEntries().then(
+            () => store.state.view.entries.has(entryId) && jumpToEntry(entryId),
+            (failure) => notify("error", `That message could not be read: ${failure.message}`),
+        );
+
+        return;
+    }
+
     // A message above the rows the transcript shows: show from it down. The render runs before the next frame.
     revealEntry(entryId);
     requestAnimationFrame(() => {
