@@ -84,6 +84,7 @@ import { type ExtensionInfo, ExtensionLoader, prepareDropInFolder } from "./relo
 import { ResendTask } from "./resend.ts";
 import { type Client, Room, ROOM_DOCS } from "./room.ts";
 import { Schedules } from "./schedules.ts";
+import { SessionLists } from "./session-lists.ts";
 import { Shell } from "./shell.ts";
 import { Spend } from "./spend.ts";
 import { Transcripts } from "./transcripts.ts";
@@ -171,6 +172,7 @@ export class PocketApp {
     /** Each conversation's browser page, which Pi and the people in the conversation share. */
     readonly browsers: Browsers;
     readonly #clients = new Set<Client>();
+    readonly #sessionLists = new SessionLists();
     readonly #rooms = new Map<ConversationId, Promise<Room>>();
     readonly #envs = new Map<string, NodeExecutionEnv>();
     readonly #busy = new Set<ConversationId>();
@@ -775,7 +777,7 @@ export class PocketApp {
         }
 
         client.send("hello", this.#helloFor(client, hello));
-        client.send("sessions", this.sessions(client.user));
+        this.#sendSessionLists([client], true);
 
         if (arriving) {
             this.#peopleChanged(client.user.id);
@@ -832,6 +834,8 @@ export class PocketApp {
         if (!this.#clients.delete(client)) {
             return;
         }
+
+        this.#sessionLists.forget(client);
 
         for (const id of client.peeks ?? []) {
             this.#unpeek(client, id);
@@ -1153,9 +1157,9 @@ export class PocketApp {
                     this.#unpeek(client, id);
                 }
             }
-
-            client.send("sessions", this.sessions(client.user));
         }
+
+        this.#sendSessionLists(this.#clients, true);
 
         for (const id of this.busyConversations()) {
             const owner = this.execution.owner(id);
@@ -1331,10 +1335,58 @@ export class PocketApp {
 
         this.config.markFinishedSeen(user.id, String(id), finishedAt);
 
-        for (const client of this.#clients) {
-            if (client.user.id === user.id) {
-                client.send("sessions", this.sessions(client.user));
+        this.#sendSessionLists([...this.#clients].filter((client) => client.user.id === user.id));
+    }
+
+    /** Re-send a full list on the same ordered stream after a tab missed a delta. Never target another user's tab. */
+    resyncSessionList(user: User, connection: string): void {
+        const client = [...this.#clients].find(
+            (candidate) =>
+                candidate.connection === connection &&
+                candidate.user.id === user.id &&
+                candidate.sessionDeltas,
+        );
+
+        if (client === undefined) {
+            throw new HttpError(404, "Session-list connection is no longer available.");
+        }
+
+        this.#sendSessionLists([client], true);
+    }
+
+    /** Filter and prepare a list once per current user per refresh; compare/send separately for each connection. */
+    #sendSessionLists(clients: Iterable<Client>, full = false): void {
+        const rows = new Map<User, ReturnType<PocketApp["sessions"]>>();
+        const prepared = new Map<User, ReturnType<SessionLists["prepare"]>>();
+
+        for (const client of clients) {
+            const user = this.config.userById(client.user.id);
+
+            if (user === undefined || !this.#clients.has(client)) {
+                continue;
             }
+
+            let items = rows.get(user);
+
+            if (items === undefined) {
+                items = this.sessions(user);
+                rows.set(user, items);
+            }
+
+            if (!client.sessionDeltas) {
+                this.#sessionLists.send(client, { items, encoded: undefined }, full);
+
+                continue;
+            }
+
+            let list = prepared.get(user);
+
+            if (list === undefined) {
+                list = this.#sessionLists.prepare(items);
+                prepared.set(user, list);
+            }
+
+            this.#sessionLists.send(client, list, full);
         }
     }
 
@@ -1346,9 +1398,7 @@ export class PocketApp {
         this.#sessionsTimer = setTimeout(() => {
             this.#sessionsTimer = undefined;
 
-            for (const client of this.#clients) {
-                client.send("sessions", this.sessions(client.user));
-            }
+            this.#sendSessionLists(this.#clients);
         }, 400);
     }
 
@@ -1410,7 +1460,7 @@ export class PocketApp {
                     ...(chat === undefined ? {} : { chatAt: chat.at, chatBy: chat.userId }),
                 };
             })
-            .sort((a, b) => b.updatedAt - a.updatedAt);
+            .sort((a, b) => b.updatedAt - a.updatedAt || a.id - b.id);
     }
 
     isBusy(id: ConversationId): boolean {
@@ -1716,7 +1766,7 @@ export class PocketApp {
             }
 
             client.send("hello", this.#helloFor(client, await this.hello(user)));
-            client.send("sessions", this.sessions(user));
+            this.#sendSessionLists([client], true);
         }
     }
 

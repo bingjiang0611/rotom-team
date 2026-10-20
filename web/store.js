@@ -1,5 +1,6 @@
 // App state, the server connection, and API calls. Components read `store.state` and re-render on `store.subscribe`.
 import { onRoute, pushRoute } from "./back.js";
+import { sessionDelta, sessionSnapshot } from "./session-list.js";
 import { observe, opened, sending, sendFailed, setTransport, switched } from "./perf.js";
 
 /** A random id. crypto.randomUUID only exists on https and localhost pages; plain-http network addresses lack it. */
@@ -63,6 +64,7 @@ export const store = {
         sessions: [],
         /** False until the server's first session list arrives: an empty list until then means "not here yet". */
         sessionsLoaded: false,
+        sessionListVersion: null,
         /** Sessions on their way into the archive (true) or out of it (false), by id, until the list catches up (`sessions.js`). */
         moving: {},
         conversationId: routeConversation(),
@@ -466,6 +468,35 @@ export function stillMoving(moving, sessions) {
 }
 
 /** What the server sends, by event name. Both transports deliver the same events. */
+/** A full-list request on the current stream is pending; deltas are ignored until its snapshot arrives. */
+let syncingSessions = null;
+
+function resyncSessions() {
+    if (syncingSessions !== null) {
+        return;
+    }
+
+    const connection = store.state.streamId;
+    const stream = source;
+
+    syncingSessions = connection;
+    api("sessions/sync", { connection }).catch((error) => {
+        if (source !== stream || syncingSessions !== connection) {
+            return;
+        }
+
+        syncingSessions = null;
+
+        if (error.status === 401) {
+            source?.close();
+            store.set({ me: null, sessionListVersion: null });
+        } else {
+            // The connection may have expired (polling) or changed (reconnect). A fresh stream starts with a full list.
+            connect();
+        }
+    });
+}
+
 const handlers = {
     hello: (data) =>
         store.set({
@@ -477,13 +508,32 @@ const handlers = {
             // This connection's id, which peek lists name (`peeks.js`). `GET /api/me` answers without one.
             ...(data.connection === undefined ? {} : { streamId: data.connection }),
         }),
-    sessions: (sessions) => {
+    sessions: (data) => {
+        const snapshot = sessionSnapshot(data);
+
+        syncingSessions = null;
         store.set((state) => ({
-            sessions,
+            ...snapshot,
             sessionsLoaded: true,
-            moving: stillMoving(state.moving, sessions),
+            moving: stillMoving(state.moving, snapshot.sessions),
         }));
         markOpenFinished();
+    },
+    "sessions-delta": (data) => {
+        if (syncingSessions !== null) {
+            return;
+        }
+
+        const state = store.state;
+        const patch = sessionDelta(state.sessions, state.sessionListVersion, data);
+
+        if (patch === null) {
+            resyncSessions();
+
+            return;
+        }
+
+        store.set({ ...patch, moving: stillMoving(state.moving, patch.sessions) });
     },
     models: (models) => store.set({ models }),
     view: applyView,
@@ -562,9 +612,10 @@ const connected = () => store.state.connection !== "open" && store.set({ connect
 
 export function connect() {
     source?.close();
-    store.set({ connection: "connecting" });
+    syncingSessions = null;
+    store.set({ connection: "connecting", sessionListVersion: null });
     const id = store.state.conversationId;
-    const query = `tab=${encodeURIComponent(TAB)}${id === null ? "" : `&c=${id}`}`;
+    const query = `tab=${encodeURIComponent(TAB)}&sessions=delta${id === null ? "" : `&c=${id}`}`;
 
     const polling = pollHere() && !local;
 

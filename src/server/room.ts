@@ -142,6 +142,8 @@ export interface Client {
      * briefly overlaps the old connection. Sent in `hello`; peek lists name it.
      */
     readonly connection: string;
+    /** This connection accepts versioned full lists and session-row deltas instead of repeated full arrays. */
+    readonly sessionDeltas?: boolean;
     /** Other sessions this tab shows as peek tiles on screen now; each gets `peek` events (`PocketApp.setPeeks`). */
     peeks?: Set<ConversationId>;
     /** The number of the last peek list taken, so one that arrives late does not undo a newer one. */

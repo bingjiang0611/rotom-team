@@ -453,6 +453,18 @@ export function createApi(options: HttpOptions, auth: Auth) {
             return json(response, 200, await app.commands.createSession(user, body));
         }
 
+        if (first === "sessions" && second === "sync" && method === "POST") {
+            const body = await readJson<{ connection?: unknown }>(request);
+
+            if (typeof body.connection !== "string" || body.connection.length > 64) {
+                throw new HttpError(400, "A session-list connection is required.");
+            }
+
+            app.resyncSessionList(user, body.connection);
+
+            return json(response, 200, { ok: true });
+        }
+
         if (first === "sessions" && second !== undefined && method === "POST") {
             const body = await readJson<{ title?: string; archived?: boolean }>(request);
 

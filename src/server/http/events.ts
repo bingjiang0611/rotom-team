@@ -58,6 +58,7 @@ function newClient(url: URL, user: User, send: Client["send"]): Client {
     return {
         id: (url.searchParams.get("tab") ?? randomUUID()).slice(0, 64),
         connection: randomUUID(),
+        sessionDeltas: url.searchParams.get("sessions") === "delta",
         user,
         conversationId: raw === null || raw === "" ? undefined : conversationId(raw),
         sentEntries: new Set(),
