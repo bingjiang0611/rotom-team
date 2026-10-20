@@ -341,7 +341,19 @@ raise the 5 MiB per-model-image limit: a noisy PNG may still be too large to sen
 
 Live event streams and large long-poll responses negotiate gzip when accepted. Events flush immediately; an SSE
 client with more than 8 MiB of buffered data is disconnected so it can reconnect for a fresh view. Long-history
-pagination and changed-row session-list pushes are not implemented yet.
+pagination is not implemented yet.
+
+## Session-list updates
+
+The web app opts into versioned session lists on its event stream or long-poll connection. It receives a full list
+first, then only changed/removed rows; unchanged refreshes send nothing. A missed version requests a fresh full list
+on the same connection. Permissions are checked when each member's list is prepared, and permission changes force a
+filtered full list. Reconnects start a new version namespace. Old clients and `GET /api/sessions` retain full arrays.
+
+The server still scans the member's visible catalogue to compare rows; server-side catalogue pagination is not
+implemented. Per-connection comparison baselines are capped at 2048 rows and 2,097,152 JSON characters; larger lists
+fall back to full snapshots without retaining that baseline. This change does not store transcript content in the
+browser. Browser-cached views and transcript pagination are separate pending work.
 
 ## Changes view freshness
 

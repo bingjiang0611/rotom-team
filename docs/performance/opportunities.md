@@ -8,6 +8,16 @@ Workload: `test/perf/workload.ts` as of 2026-10-16 (12 seeded turns of 6000-char
 `darwin-arm64` ledger baselines (worst of 10 runs from temporary checkouts) and benchmark medians, Apple M1, load below
 the core count.
 
+## Program 2, step 3 — 2026-10-20
+
+Session-list refreshes now send versioned changed/removed rows to opted-in tabs, with a full snapshot on first
+connect, reconnect, permission refresh or a missed version. Four same-member tabs, two single-session renames:
+pushed bytes 43,288 → 4,296 (−90.1%), stringify characters 44,420 → 16,162, SQL statements 49 → 43. **L1 only**;
+rename latency is unchanged (~823 ms). Immediate-base and origin/main three-run comparisons passed with
+`highLoad: false`. 525 final tests pass; an earlier unchanged native-watch burst test failed and its cause remains
+open. Next: browser view cache, then paged history, as the owner chose.
+[Experiment and compatibility-probe correction](experiments/2026-10-20-session-list-deltas.md).
+
 ## Program 2, step 2 — 2026-10-20
 
 Open Changes tabs are told when the repository moves (macOS/Windows watch) instead of re-reading after every entry.

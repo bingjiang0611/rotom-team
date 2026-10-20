@@ -45,6 +45,7 @@ used. The workload is fixed in [test/perf/workload.ts](../test/perf/workload.ts)
 | Scenario                   | What it does                                                                                                                                                               |
 | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `startup.restart`          | close the app on seeded data (13 sessions, one with 12 turns) and open it again                                                                                            |
+| `sessions.rename.tabs`     | Four delta-capable SSE tabs receive two renames, with initial catalogue setup unmeasured on both sides; every reconstructed list must equal the server list                |
 | `sessions.list`            | `GET /api/sessions`                                                                                                                                                        |
 | `session.open`             | a new event-stream tab on the 12-turn session, until its first full view                                                                                                   |
 | `turn.cold`                | first prompt of a new session (starts its rotom process), until settled + quiet                                                                                            |
@@ -78,8 +79,9 @@ only after the other workloads. Lookup includes queue waiting; decoding measures
 sum per-request intervals, not batch wall time. Failed or unfinished responses cannot become measured zeros.
 Retrieval fixtures are synthetic persisted mirrors, not cold OS caches or production network replays. The separate
 paste scenario constructs a browser PNG and performs a real authenticated upload; preparation is inside its measured
-window. The probe scopes the shared `storedImage` decoder (also called by legacy `entryImage`) so a cache miss cannot
-bypass decode attribution merely by taking a different caller path.
+window. The probe scopes both legacy `entryImage` and shared `storedImage` entry points where present, counting
+actual base64 conversions rather than wrapper invocations. Old baselines and nested delegation are therefore
+observed without missing or double-counting decode work.
 
 ## Ledger and ratchet
 

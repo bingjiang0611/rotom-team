@@ -4,20 +4,22 @@ The owner approved local implementation in this order: Program 1, then 2, then 3
 service remains separate approval. Each program removes work instead of tuning it, and each is larger than the
 previous climbs. The evidence is the journal snapshot `/tmp/rt-journal-20261019T125200Z` (see
 [opportunities](opportunities.md)), code reading at `aaaba3e`, and a few local timings on a loaded machine (load
-average 1.4–3.8: hints, not L2). Nothing here is measured as faster yet.
+average 1.4–3.8: hints, not L2). Those proposal-time observations were not faster claims; subsequent verified
+implementation results are listed below.
 
 ## Implementation status
 
-| Program                      | Status                                                                                                                                                                                              | Next owner/action                                                                                              |
-| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| 1. Bytes diet                | Complete locally: thumbnails, gzip, opt-in TLS/HTTP2 with journal coverage, single-copy paste resize, original cache/ETag/Range. L2 on paste upload and conditional originals (quiet, rotom 0.1.26) | None for Program 1; deploying TLS needs the owner's certificate/address and approval                           |
-| 2. Incremental everything    | Steps 1-2 done: kept edit log + fresh shared Git runs (L2 on `changes.poll.images`); Changes push with slow fallback (L1, Chromium)                                                                 | Coding agent: session-list deltas, browser view cache (cleared on sign-out), paged history, as the owner chose |
-| 3. Main thread / native warm | Not started                                                                                                                                                                                         | Coding agent: start after Program 2; preserve the native trust and payer checks                                |
+| Program                      | Status                                                                                                                                                                                              | Next owner/action                                                                              |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| 1. Bytes diet                | Complete locally: thumbnails, gzip, opt-in TLS/HTTP2 with journal coverage, single-copy paste resize, original cache/ETag/Range. L2 on paste upload and conditional originals (quiet, rotom 0.1.26) | None for Program 1; deploying TLS needs the owner's certificate/address and approval           |
+| 2. Incremental everything    | Steps 1-3 done: edit log/shared Git (L2); Changes push (L1); versioned session-list deltas (L1, pushed bytes −90%)                                                                                  | Coding agent: browser view cache (cleared on sign-out), then paged history, as the owner chose |
+| 3. Main thread / native warm | Not started                                                                                                                                                                                         | Coding agent: start after Program 2; preserve the native trust and payer checks                |
 
 [First-batch evidence and costs](experiments/2026-10-19-thumbnails-and-stream-compression.md) and
 [second-batch artifact, L1 results, costs and remaining acceptance](experiments/2026-10-20-bytes-remainder.md).
 The owner changed the paste choice: upload only the smaller representation, not a second retained original. This
-checkpoint does not complete Program 1 acceptance or Programs 2/3. No push, production restart, or deployment.
+checkpoint now includes Program 1 acceptance on rotom 0.1.26. Programs 2/3 remain incomplete. No push, production
+restart, or deployment. [Session-list delta evidence and limits](experiments/2026-10-20-session-list-deltas.md).
 
 ## What the deeper look found
 
