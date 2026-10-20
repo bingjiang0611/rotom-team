@@ -3018,6 +3018,47 @@ export class TeamKernel {
                 await this.executions.abort(String(id));
             }
         }
+
+        // A warm process nobody used yet goes once its member may no longer drive the session.
+        for (const { segmentId, sessionId, binding } of this.executions.unusedWarm()) {
+            try {
+                await this.#check(binding, this.#id(sessionId));
+            } catch {
+                await this.executions.retireUnused(segmentId);
+            }
+        }
+    }
+
+    /**
+     * Start this session's native process before `user` sends, as focusing the message box asks: only for the member
+     * whose account the session runs on now (another member's send hands over first), on the pinned kernel, while
+     * idle, after the checks a send makes. Whether a process is ready; a refusal is an answer, not an error.
+     */
+    async warm(id: ConversationId, user: User): Promise<{ warmed: boolean }> {
+        const current = this.#app.config.userById(user.id);
+
+        if (!current) {
+            throw new HttpError(403, "Membership ended.");
+        }
+
+        this.#app.requireSteer(current);
+        this.#app.requireSee(current, id);
+        await this.#app.requireDriver(id, current, "rotom");
+
+        if (this.#closing || !this.#ready.has(id) || this.isRunning(id)) {
+            return { warmed: false };
+        }
+
+        const { binding } = this.executions.journal.session(String(id));
+
+        if (
+            binding.memberId !== current.id ||
+            binding.kernelVersion !== verifyRotomKernel().version
+        ) {
+            return { warmed: false };
+        }
+
+        return { warmed: await this.executions.warm(String(id)) };
     }
 
     /**

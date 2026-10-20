@@ -65,6 +65,8 @@ export class TeamExecution {
     }
     async accountIdle(user: User): Promise<void> {
         this.#app.kernel?.requireAccountIdle(user);
+        // Its warm processes no request used yet would run on the account about to change.
+        await this.#app.kernel?.executions.retireUnusedOf(user.id);
 
         for (const [id, owner] of this.#owners) {
             if (owner === user.id) {

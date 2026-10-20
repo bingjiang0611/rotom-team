@@ -24,6 +24,7 @@ import {
     store,
     typing,
     uid,
+    warmSession,
 } from "./store.js";
 import { branchAvailable, headLabel } from "./sheets/branch.js";
 import { nativeCommandAccepted, showNativeResult } from "./sheets/native-command.js";
@@ -1165,7 +1166,10 @@ export function Composer() {
                         onKeyDown=${onKey}
                         onKeyUp=${(event) => setCaret(event.currentTarget.selectionStart)}
                         onClick=${(event) => setCaret(event.currentTarget.selectionStart)}
-                        onFocus=${() => loadFiles({ ifMissing: true })}
+                        onFocus=${() => {
+                            loadFiles({ ifMissing: true });
+                            warmSession();
+                        }}
                         onPaste=${onPaste}
                         enterkeyhint=${coarse ? "enter" : "send"}
                     ></textarea>

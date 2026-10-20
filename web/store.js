@@ -1324,6 +1324,36 @@ export function outputsBadge(view) {
     return { count, label: `${count}${heldFrom(view) > 0 ? "+" : ""}` };
 }
 
+/** When this tab last asked to warm each session, so focusing the message box again soon asks nothing. */
+const warmedAt = new Map();
+/** Less than the server keeps an unused warm process (`WARM_UNUSED_MS`), so a process that retired is asked again. */
+const WARM_AGAIN_MS = 4 * 60_000;
+
+/**
+ * Ask the server to start this session's native process before the person sends, as their focus in the message box
+ * says they may: only where the session runs on their own account and is idle. The server checks everything again and
+ * may refuse; nothing here waits for it or shows it.
+ */
+export function warmSession() {
+    const { view } = store.state;
+    const id = view.conversation?.id;
+
+    if (
+        id === undefined ||
+        view.checking ||
+        !view.kernel?.yours ||
+        view.kernel.initializing ||
+        view.live?.busy ||
+        !canSteer() ||
+        Date.now() - (warmedAt.get(id) ?? -Infinity) < WARM_AGAIN_MS
+    ) {
+        return;
+    }
+
+    warmedAt.set(id, Date.now());
+    api(`c/${id}/warm`, {}).catch(() => warmedAt.delete(id));
+}
+
 /** Entries that show as transcript rows. Tool results show inside their call's card instead. */
 export const isRow = (entry) =>
     ["user", "assistant", "compaction", "reset", "shell", "note"].includes(entry.kind);

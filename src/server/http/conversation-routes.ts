@@ -304,6 +304,10 @@ export async function conversationRoutes(
             );
         }
 
+        if (third === "warm" && method === "POST" && fourth === undefined) {
+            return json(response, 200, await app.kernel.warm(id, user));
+        }
+
         if (third === "abort" && method === "POST" && fourth === undefined) {
             await app.kernel.abort(id, user);
 
