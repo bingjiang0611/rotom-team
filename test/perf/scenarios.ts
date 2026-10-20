@@ -17,7 +17,7 @@ import {
 } from "./counters.ts";
 import { cleanUp, owner, root, work } from "../helpers.ts";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { once } from "node:events";
 import { mkdirSync, realpathSync, writeFileSync } from "node:fs";
@@ -972,6 +972,32 @@ await scenario("turn.prewarmed", async () => {
     assert.equal((await submit(ready, 1)).value.status, "settled");
 });
 await readyTab.close();
+
+// A subagent's start runs the team's validator (`rotom-child.ts`, through `rotom-child.sh`) as its own Node process
+// before Pi: in that member's HOME and workspace, with the shared profile, as the native process's environment has them.
+const { binding: readyBinding } = app.kernel!.executions.journal.session(String(ready));
+
+await scenario("native.validate", async () => {
+    const child = spawn(
+        process.execPath,
+        [new URL("../../src/server/rotom-child.ts", import.meta.url).pathname],
+        {
+            cwd: readyBinding.workspace,
+            env: {
+                ...process.env,
+                HOME: readyBinding.home,
+                ROTOM_TEAM_AGENT_DIR: join(app.dataDir, "team-agent"),
+            },
+            stdio: ["ignore", "pipe", "pipe"],
+        },
+    );
+    let errors = "";
+
+    child.stderr.on("data", (chunk) => (errors += chunk));
+    const [code] = await once(child, "exit");
+
+    assert.equal(code, 0, `the validator accepts the member's prepared HOME: ${errors}`);
+});
 
 writeFileSync(out, raw.stringify({ workload: WORKLOAD, results }, null, 2));
 server.closeAllConnections();
