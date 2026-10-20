@@ -39,7 +39,7 @@ import { measureImageNetwork } from "./image-network.ts";
 import { measurePasteNetwork } from "./paste-network.ts";
 import { sessionListTab } from "./session-list.ts";
 import { claimFor } from "./view-claim.ts";
-import { viewTab } from "./view-tab.ts";
+import { type Transcript, viewTab } from "./view-tab.ts";
 
 export type ScenarioResult =
     | { scenario: string; ms: number; counts: Counts; extra?: Record<string, number> }
@@ -806,6 +806,144 @@ results.push(
     "unavailable" in reopen
         ? { scenario: "web.reopen", unavailable: reopen.unavailable }
         : { scenario: "web.reopen", ms: reopen.ms, counts: reopen.counts, extra: reopen.metrics },
+);
+
+// A long history, seeded as the native mirror stores it (no model): opening it, then reading all of it.
+const long = (await call("sessions", "POST", { title: "Long", backend: "rotom" })).value
+    .id as unknown as ConversationId;
+
+await app.harness.commit(async (tx) => {
+    for (let turn = 1; turn <= WORKLOAD.longTurns; turn++) {
+        const parent = turn === 1 ? null : `long-answer-${turn - 1}`;
+
+        await tx.appendEntry(long, {
+            kind: NATIVE_ENTRY,
+            data: {
+                entry: {
+                    type: "message",
+                    id: `long-question-${turn}`,
+                    parentId: parent,
+                    message: { role: "user", timestamp: turn, content: `Long question ${turn}?` },
+                },
+            } as JsonValue,
+        });
+        await tx.appendEntry(long, {
+            kind: NATIVE_ENTRY,
+            data: {
+                entry: {
+                    type: "message",
+                    id: `long-answer-${turn}`,
+                    parentId: `long-question-${turn}`,
+                    message: {
+                        role: "assistant",
+                        timestamp: turn,
+                        stopReason: "stop",
+                        content: [
+                            {
+                                type: "text",
+                                text: `LONG-ANSWER-${turn} `.padEnd(WORKLOAD.longAnswerChars, "x"),
+                            },
+                        ],
+                    },
+                },
+            } as JsonValue,
+        });
+    }
+}, BACKGROUND_CONTEXT);
+
+// The reference: an unpaged view of the same history, outside every window.
+const reference = viewTab(base, token, raw, long as unknown as number);
+const whole = await reference.full;
+
+await reference.close();
+await quiet();
+
+let longTab: ReturnType<typeof viewTab> | undefined;
+let opened: Transcript & { kept: number };
+
+try {
+    await scenario("session.open.long", async () => {
+        longTab = viewTab(
+            base,
+            token,
+            raw,
+            long as unknown as number,
+            undefined,
+            `&tail=${WORKLOAD.longTail}`,
+        );
+        opened = await longTab.full;
+        assert.deepEqual(opened.order, whole.order, "the whole order, whatever is sent");
+        assert.equal(opened.order.at(-1), whole.order.at(-1));
+        assert.ok(opened.entries.has(whole.order.at(-1)!), "the newest entry is there");
+
+        for (const [id, entry] of opened.entries) {
+            assert.deepEqual(entry, whole.entries.get(id), `entry ${id}`);
+        }
+    });
+    // Read back what the tab lacks, newest page first, as scrolling up does; a tab that has everything asks nothing.
+    await scenario("session.history.earlier", async () => {
+        const held = opened.entries;
+        let bytes = 0;
+
+        for (let page = 0; page < 1000; page++) {
+            const first = opened.order.findIndex((id) => held.has(id));
+
+            if (first <= 0) {
+                break;
+            }
+
+            const response = await fetch(
+                `${base}/api/c/${long}/entries?before=${opened.order[first]}`,
+                { headers: { authorization: `Bearer ${token}` } },
+            );
+            const text = await response.text();
+
+            assert.equal(response.status, 200, text);
+            bytes += Buffer.byteLength(text);
+
+            const { entries } = raw.parse(text) as { entries: { id: number }[] };
+
+            assert.ok(entries.length > 0, "a page makes progress");
+
+            for (const entry of entries) {
+                held.set(entry.id, entry);
+            }
+        }
+
+        assert.deepEqual(
+            opened.order.filter((id) => !held.has(id)),
+            [],
+            "the tab holds the whole history",
+        );
+
+        for (const id of opened.order) {
+            assert.deepEqual(held.get(id), whole.entries.get(id), `entry ${id}`);
+        }
+
+        return { "http.body.bytes": bytes };
+    });
+} finally {
+    await longTab?.close();
+}
+
+const webLong = await measureWebOpen({
+    base,
+    ownerToken: app.config.ownerToken,
+    sessionId: long as unknown as number,
+    marker: `LONG-ANSWER-${WORKLOAD.longTurns} `,
+    quiet,
+    profile: join(root, "perf-browser-long"),
+});
+
+results.push(
+    "unavailable" in webLong
+        ? { scenario: "web.open.long", unavailable: webLong.unavailable }
+        : {
+              scenario: "web.open.long",
+              ms: webLong.ms,
+              counts: webLong.counts,
+              extra: webLong.metrics,
+          },
 );
 
 writeFileSync(out, raw.stringify({ workload: WORKLOAD, results }, null, 2));

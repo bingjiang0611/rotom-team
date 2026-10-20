@@ -20,6 +20,11 @@ export const WORKLOAD = {
     imageParallel: 4,
     /** The pause between chunks of a paced answer, as a real model streams. */
     pacedChunkMs: 25,
+    /** A long native history (seeded directly, no model), for opening it and reading all of it. */
+    longTurns: 300,
+    longAnswerChars: 1200,
+    /** The newest entries a tab asks for first, as the web app does (`TRANSCRIPT_TAIL` in web/store.js). */
+    longTail: 240,
 } as const;
 
 const seeded = `kernel mode; a session of ${WORKLOAD.seededTurns} turns, ${WORKLOAD.answerChars}-char answers streamed in ${WORKLOAD.streamChunks} chunks`;
@@ -40,6 +45,9 @@ export const SCENARIOS: Record<string, string> = {
     "commands.list": `${seeded}; GET the native slash-command list`,
     "web.open": `${seeded}; headless Chromium signed in, opens /s/<session> until the last answer is in the page`,
     "session.reclaim": `${seeded}; after all established scenarios, an unmeasured tab loads its full view; a new event-stream tab then claims every entry it held (server run, first id, count, digest) until its first full view; the rebuilt transcript must equal the held one`,
+    "session.open.long": `after all other scenarios, a separate native history of ${WORKLOAD.longTurns} user/assistant turns (${WORKLOAD.longAnswerChars}-char answers) seeded directly; a new event-stream tab asking for the newest ${WORKLOAD.longTail} entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view`,
+    "session.history.earlier": `after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request`,
+    "web.open.long": `after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page`,
     "web.reopen": `${seeded}; after session.reclaim, headless Chromium opens /s/<session> in one tab until shown (and saved where the page keeps copies), closes it, then a fresh tab of the same profile opens it until the last answer shows without a saved-copy check marker`,
     "web.paced": `${seeded}; after all established scenarios, a new headless Chromium tab opens that history unmeasured, then submits one ${WORKLOAD.answerChars}-char answer paced ${WORKLOAD.pacedChunkMs} ms per chunk until it appears`,
     "commands.discover.cold": `${seeded}; after all existing scenarios, an additional new native session with one tab; first explicit POST prompts, with no model request`,
@@ -422,6 +430,8 @@ export const REPORTED: Record<string, string[]> = {
     "sessions.rename.tabs": [...common, ...pushes, "http.requests"],
     "session.open": [...common, ...projection, ...pushes],
     "session.reclaim": [...common, ...projection, ...pushes],
+    "session.open.long": [...common, ...projection, ...pushes],
+    "session.history.earlier": [...common, "http.requests", "http.body.bytes"],
     "turn.cold": [...common, "subprocess.git", ...pushes],
     "turn.warm": [...common, "subprocess.git", ...projection, ...pushes],
     // Paced chunks race the 90 ms push coalescing, so its push counts depend on timing: candidates until proven stable.
@@ -462,6 +472,24 @@ export const REPORTED: Record<string, string[]> = {
     "image.original.validated": [...common, "http.requests", "http.body.bytes"],
     // JSON counts leave web.open out: the DevTools connection that drives Chromium parses and writes JSON too.
     "web.open": [
+        "sql.statements",
+        "sql.rows",
+        "subprocess.total",
+        ...projection,
+        ...pushes,
+        "http.requests",
+        "cdp.LayoutCount",
+        "cdp.RecalcStyleCount",
+        "cdp.Nodes",
+        "web.event.parse.calls",
+        "web.event.parse.chars",
+        "web.view.apply.calls",
+        "web.view.base.entry.copies",
+        "web.view.delta.entries",
+        "web.view.prune.checks",
+        "web.view.order.ids",
+    ],
+    "web.open.long": [
         "sql.statements",
         "sql.rows",
         "subprocess.total",

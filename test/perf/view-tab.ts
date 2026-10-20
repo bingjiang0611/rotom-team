@@ -14,6 +14,8 @@ export function viewTab(
     json: Json,
     id: number,
     held?: { have: string; entries: ReadonlyMap<number, Entry> },
+    /** More of the web app's connection options, such as `tail=240`. */
+    extra = "",
 ) {
     const controller = new AbortController();
     let resolveFull: (value: Transcript & { kept: number }) => void;
@@ -22,7 +24,7 @@ export function viewTab(
         resolveFull = resolve;
         rejectFull = reject;
     });
-    const query = `c=${id}&tab=perf-view-${id}-${Date.now()}${held ? `&have=${encodeURIComponent(held.have)}` : ""}`;
+    const query = `c=${id}&tab=perf-view-${id}-${Date.now()}${held ? `&have=${encodeURIComponent(held.have)}` : ""}${extra}`;
     const reading = (async () => {
         const response = await fetch(`${base}/api/events?${query}`, {
             headers: { authorization: `Bearer ${token}` },
