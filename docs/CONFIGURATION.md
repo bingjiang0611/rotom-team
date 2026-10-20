@@ -219,8 +219,13 @@ command receipt on the retained process. A model or account change of the same m
 its intent and the segment's current model commit together, the idle process retires, and native restarts on the same
 session file with the new model, then records `model_change` and reapplies the selected thinking level. The segment's
 original binding stays the immutable identity anchor; each attempt keeps its own binding for response validation and
-usage. A known rejection restores the previous model; an unknown outcome keeps the new one and stays fenced. A payer
-or kernel change still uses the existing handoff path. Session-list model labels read the current native journal binding,
+usage. A known rejection restores the previous model; an unknown outcome keeps the new one and stays fenced. After a
+kernel pin upgrade, the paying member's own next dispatch (prompt, command, model/thinking change, compaction or
+discovery) moves the idle head segment to the new kernel in place: only the current binding's version changes, the
+same session file reopens on it, and the native session id and full history stay. Running or unknown work refuses the
+move. A payer change, or another member sending, still uses the existing handoff path. Rolling the executable back to
+the previous kernel makes such a segment's version differ again, so its next send on the old release hands off.
+Session-list model labels read the current native journal binding,
 not the legacy Durable agent's stale preference. A single batch read joins current conversation heads and model overrides,
 without a per-row native session lookup or a second model-state cache. Model switches and server restarts do not change historical receipt bindings.
 
