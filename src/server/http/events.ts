@@ -11,6 +11,7 @@ import type { User } from "../config.ts";
 import type { Client } from "../room.ts";
 import { pushChannel, type PushSignal } from "../perf-channels.ts";
 import { conversationId, json, send } from "./io.ts";
+import { parseClaim } from "../view-claim.ts";
 
 const gzip = promisify(gzipCallback);
 
@@ -61,6 +62,8 @@ function newClient(url: URL, user: User, send: Client["send"]): Client {
         sessionDeltas: url.searchParams.get("sessions") === "delta",
         user,
         conversationId: raw === null || raw === "" ? undefined : conversationId(raw),
+        viewClaim:
+            raw === null || raw === "" ? undefined : parseClaim(url.searchParams.get("have")),
         sentEntries: new Set(),
         orderKey: "",
         send,

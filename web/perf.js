@@ -177,7 +177,8 @@ export function observe(state) {
 
         if (state.missing || state.conversationId !== wait.conversationId) {
             waits.delete(name);
-        } else if (view.conversation?.id === wait.conversationId) {
+        } else if (view.conversation?.id === wait.conversationId && !view.checking) {
+            // A saved copy shown while the server confirms it does not end the wait: the confirmed view does.
             shown(name);
         }
     }

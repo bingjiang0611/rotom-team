@@ -61,6 +61,7 @@ import {
     type ViewProjectionSignal,
 } from "./perf-channels.ts";
 import { describeRepeat } from "./when.ts";
+import { claimedRun, type ViewClaim } from "./view-claim.ts";
 
 function roomPart<T>(part: RoomPartSignal["part"], project: () => T): T {
     if (!roomPartChannel.hasSubscribers) {
@@ -144,6 +145,8 @@ export interface Client {
     readonly connection: string;
     /** This connection accepts versioned full lists and session-row deltas instead of repeated full arrays. */
     readonly sessionDeltas?: boolean;
+    /** Entries the tab says it holds from an earlier connection; checked and used up by its first full view. */
+    viewClaim?: ViewClaim;
     /** Other sessions this tab shows as peek tiles on screen now; each gets `peek` events (`PocketApp.setPeeks`). */
     peeks?: Set<ConversationId>;
     /** The number of the last peek list taken, so one that arrives late does not undo a newer one. */
@@ -493,16 +496,26 @@ export class Room {
         }
 
         const sentFields = (client.sentFields ??= new Map());
+        const claim = full ? client.viewClaim : undefined;
 
         if (full) {
             client.sentEntries.clear();
             client.orderKey = "";
             sentFields.clear();
+            client.viewClaim = undefined;
         }
 
         const entries: ClientEntry[] = [];
         const sequence = this.#sequence(view.entries);
         const { entries: projectedEntries, order, orderKey } = sequence;
+        // A run of entries the tab still holds is not sent again; the view says which, so the tab keeps exactly those.
+        const kept =
+            claim === undefined ? undefined : claimedRun(claim, this.#app.startedAt, order);
+
+        for (const id of kept ?? []) {
+            client.sentEntries.add(id);
+        }
+
         const clientSequence = this.#clientSequences.get(client);
         const from = full
             ? 0
@@ -612,6 +625,7 @@ export class Room {
             full,
             conversation: this.#app.conversationInfo(this),
             entries,
+            ...(kept === undefined ? {} : { kept: { first: kept[0], count: kept.length } }),
             ...(orderChanged || full ? { order } : {}),
             live: roomPart("live", () =>
                 this.#native() ? this.#app.kernel!.clientLive(this.id) : projectLive(live),

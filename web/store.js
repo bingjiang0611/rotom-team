@@ -2,6 +2,16 @@
 import { onRoute, pushRoute } from "./back.js";
 import { sessionDelta, sessionSnapshot } from "./session-list.js";
 import { observe, opened, sending, sendFailed, setTransport, switched } from "./perf.js";
+import { claimOf, keptEntries } from "./view-claim.js";
+import {
+    accessOf,
+    clearViews,
+    dropView,
+    keepViews,
+    loadView,
+    readView,
+    saveView,
+} from "./view-cache.js";
 
 /** A random id. crypto.randomUUID only exists on https and localhost pages; plain-http network addresses lack it. */
 export function uid() {
@@ -52,7 +62,24 @@ const emptyView = () => ({
     branch: null,
     /** A rotom session's segment, payer, and pending receipt; null for a Durable session. */
     kernel: null,
+    /** The transcript is this browser's saved copy, not yet confirmed by the server (`view-cache.js`). */
+    checking: false,
+    /** The server run (its start time) whose projection made these entries, for the next connection's claim. */
+    build: null,
 });
+
+/** A saved copy as a view to show while the server confirms it: transcript only, nothing to act on. */
+function savedView(record) {
+    return {
+        ...emptyView(),
+        conversation: record.conversation,
+        order: record.order,
+        entries: new Map(record.entries.map((entry) => [entry.id, entry])),
+        authors: record.authors,
+        checking: true,
+        build: record.build,
+    };
+}
 
 export const store = {
     state: {
@@ -126,6 +153,71 @@ export const store = {
 
 // Content-free timings of what people wait for here, for the server's performance journal (perf.js).
 store.subscribe(observe);
+
+// ─── Saved copies of recent sessions (view-cache.js) ───────────────────────────────
+
+/** A view is saved this long after its transcript last changed, when the tab is idle. */
+const SAVE_AFTER_MS = 1000;
+let savedOrder = null;
+let saveTimer = null;
+/** Who signed in and what they may see, as last known: undefined unknown, null signed out. */
+let savedAccess;
+let saving = true;
+
+if (window.__rotomPerf && typeof indexedDB !== "undefined") {
+    window.__rotomPerf.viewCache = true;
+}
+
+function saveSoon() {
+    const { view, me } = store.state;
+
+    if (!saving || !me || !view.conversation || view.checking || view.build === null) {
+        return;
+    }
+
+    saveView(view, me).then((saved) => {
+        const perf = window.__rotomPerf;
+
+        if (saved && perf) {
+            perf.viewCacheSaves = (perf.viewCacheSaves ?? 0) + 1;
+        }
+    });
+}
+
+store.subscribe((state) => {
+    const access = state.me ? accessOf(state.me) : state.me;
+
+    // Signed out, or someone else, or other access: no copy outlives it.
+    if (access !== savedAccess) {
+        if (state.me === null || typeof savedAccess === "string") {
+            clearViews();
+        }
+
+        savedAccess = access;
+    }
+
+    const view = state.view;
+
+    if (!state.me || !view.conversation || view.checking || view.order === savedOrder) {
+        return;
+    }
+
+    savedOrder = view.order;
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(
+        () => (window.requestIdleCallback ?? ((run) => run()))(saveSoon),
+        SAVE_AFTER_MS,
+    );
+});
+
+/** Signing out: stop saving and remove every saved copy, before the sign-in cookie goes. */
+export function forgetSavedViews() {
+    saving = false;
+    clearTimeout(saveTimer);
+
+    return clearViews();
+}
+
 opened(store.state.conversationId);
 
 function routeConversation() {
@@ -365,10 +457,17 @@ function applyView(data) {
     let orderIds = 0;
 
     store.set((state) => {
+        const sameConversation = state.view.conversation?.id === data.conversation.id;
+        // A full view that keeps a run the tab claimed starts from that run of what the tab held, and nothing else.
         const base =
-            data.full || state.view.conversation?.id !== data.conversation.id
-                ? emptyView()
-                : state.view;
+            data.full && data.kept && sameConversation
+                ? {
+                      ...emptyView(),
+                      entries: keptEntries(state.view.entries, data.order, data.kept),
+                  }
+                : data.full || !sameConversation
+                  ? emptyView()
+                  : state.view;
         // Live/status-only updates do not change transcript entries. Keep their immutable Map instead of copying it.
         const changesEntries = data.entries.length > 0 || data.order !== undefined;
         const entries = changesEntries ? new Map(base.entries) : base.entries;
@@ -437,10 +536,22 @@ function applyView(data) {
                 // What the folder has checked out: `{ branch }` or `{ detached }`, and null outside a repository.
                 branch: data.branch === undefined ? base.branch : data.branch,
                 kernel: data.kernel ?? null,
+                checking: false,
+                build: data.full ? (state.server?.startedAt ?? null) : base.build,
             },
             missing: null,
         };
     });
+
+    // The server keeps what the claim named; should the tab not hold all of it after all, connect again for everything.
+    if (
+        data.full &&
+        data.kept &&
+        store.state.view.order.some((id) => !store.state.view.entries.has(id))
+    ) {
+        unclaimed = true;
+        connect();
+    }
 
     if (perf) {
         perf.viewApplyCalls++;
@@ -512,6 +623,7 @@ const handlers = {
         const snapshot = sessionSnapshot(data);
 
         syncingSessions = null;
+        keepViews(new Set(snapshot.sessions.map((session) => session.id)));
         store.set((state) => ({
             ...snapshot,
             sessionsLoaded: true,
@@ -565,7 +677,18 @@ const handlers = {
     peek: (data) =>
         store.set((state) => ({ peeks: { ...state.peeks, [data.conversationId]: data } })),
     users: (users) => store.set({ users }),
-    missing: (data) => store.set({ missing: data.message }),
+    missing: (data) => {
+        const id = store.state.conversationId;
+
+        if (id !== null) {
+            dropView(id);
+        }
+
+        store.set((state) => ({
+            missing: data.message,
+            ...(state.view.checking ? { view: emptyView() } : {}),
+        }));
+    },
     // A notice may link to a conversation, such as a mention elsewhere: tapping it goes there.
     notice: (data) =>
         notify(
@@ -610,12 +733,23 @@ let streamRetries = 0;
 
 const connected = () => store.state.connection !== "open" && store.set({ connection: "open" });
 
+/** The next connection claims nothing: the last claim's run turned out incomplete. */
+let unclaimed = false;
+/** Counts connects, so a saved copy read for an older one does not connect again. */
+let connects = 0;
+
 export function connect() {
+    connects++;
     source?.close();
     syncingSessions = null;
     store.set({ connection: "connecting", sessionListVersion: null });
     const id = store.state.conversationId;
-    const query = `tab=${encodeURIComponent(TAB)}&sessions=delta${id === null ? "" : `&c=${id}`}`;
+    const claim = id === null || unclaimed ? null : claimOf(store.state.view, id);
+
+    unclaimed = false;
+    const query = `tab=${encodeURIComponent(TAB)}&sessions=delta${id === null ? "" : `&c=${id}`}${
+        claim === null ? "" : `&have=${encodeURIComponent(claim)}`
+    }`;
 
     const polling = pollHere() && !local;
 
@@ -883,7 +1017,7 @@ export function navigate(conversationId, { replace = false, sheet = null } = {})
         drawer: false,
         ...sheetChange(sheet, state),
     }));
-    connect();
+    connectSaved(conversationId);
 }
 
 // Back or forward to another route. Back that only closes a layer (a sheet, a panel) is back.js's.
@@ -903,11 +1037,53 @@ onRoute(() => {
             sheet: null,
             drawer: false,
         });
-        connect();
+        connectSaved(id);
     }
 });
 
+/** How long opening a session waits for its saved copy before connecting without it. */
+const SAVED_WAIT_MS = 150;
+
+/**
+ * Show session `id`'s saved copy, if this browser has one for this person, then connect claiming it. `reading` is a
+ * read of it already under way.
+ */
+function connectSaved(id, reading) {
+    const me = store.state.me;
+
+    if (id === null || !me) {
+        connect();
+
+        return;
+    }
+
+    const ticket = ++connects;
+
+    // The last session's stream stops now: none of its events may land on this session while its copy is read.
+    source?.close();
+    source = null;
+
+    Promise.race([
+        loadView(id, me, reading).catch(() => null),
+        new Promise((resolve) => setTimeout(() => resolve(null), SAVED_WAIT_MS)),
+    ]).then((record) => {
+        if (ticket !== connects) {
+            return;
+        }
+
+        if (record && store.state.conversationId === id && !store.state.view.conversation) {
+            store.set({ view: savedView(record) });
+        }
+
+        connect();
+    });
+}
+
 export async function start() {
+    const id = store.state.conversationId;
+    // Read the saved copy while asking who this is; it shows only once the answer says it is theirs.
+    const reading = id === null ? undefined : readView(id);
+
     try {
         const hello = await api("me");
 
@@ -918,7 +1094,7 @@ export async function start() {
             guard: hello.guard,
             server: hello.server,
         });
-        connect();
+        connectSaved(id, reading);
     } catch (error) {
         store.set({ me: error.status === 401 ? null : undefined });
 

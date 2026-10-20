@@ -275,7 +275,11 @@ function App() {
                     ${
                         state.view.conversation &&
                         !state.missing &&
-                        html`<${Composer} key=${state.conversationId} />`
+                        (state.view.checking
+                            ? html`<p class="status-line" role="status" data-view-checking>
+                                  saved copy · checking for changes…
+                              </p>`
+                            : html`<${Composer} key=${state.conversationId} />`)
                     }`
                     : html`<div class="home-list"><${SessionList} /></div><${Splash} />`
             }

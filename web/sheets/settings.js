@@ -1,6 +1,15 @@
 // Settings: the one place for everything app-wide. Its pages are the sheets they always were, shown beside a list of
 // them; opening any of those sheets, from anywhere, opens it here.
-import { api, attempt, closeSheet, collab, notify, openSheet, store } from "../store.js";
+import {
+    api,
+    attempt,
+    closeSheet,
+    collab,
+    forgetSavedViews,
+    notify,
+    openSheet,
+    store,
+} from "../store.js";
 import { paletteOf } from "../theme.js";
 import { html, Icon, Sheet, SettingsPage } from "../ui.js";
 
@@ -82,6 +91,7 @@ function groups() {
 
 const signOut = () =>
     attempt(async () => {
+        await forgetSavedViews();
         await api("logout", {});
         location.href = "/";
     });
