@@ -8,6 +8,14 @@ Workload: `test/perf/workload.ts` as of 2026-10-16 (12 seeded turns of 6000-char
 `darwin-arm64` ledger baselines (worst of 10 runs from temporary checkouts) and benchmark medians, Apple M1, load below
 the core count.
 
+## Program 3, step 2 — 2026-10-21
+
+The team validator each **subagent** start runs (`rotom-child.ts`, its own Node process) now loads only the resource
+policy and the pin check, not the native process client and eleven native modules: 964.3 → 669.4 ms (−31%, **L2**,
+`highLoad: false`). Same checks. Correction to the proposal: the member's main native process never ran this validator,
+so `turn.cold` is unchanged (it parses 4,540 characters fewer). Node's own start, about 0.36 s, remains.
+[Experiment](experiments/2026-10-21-light-validator.md).
+
 ## Program 3, step 1 — 2026-10-21
 
 Focusing the message box of one's own idle native session starts its native process before the send, with a gate that
