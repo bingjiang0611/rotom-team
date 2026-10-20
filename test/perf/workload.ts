@@ -51,6 +51,7 @@ export const SCENARIOS: Record<string, string> = {
     "image.thumbs.first": `${imageHistory}; after image.concurrent, request images ${WORKLOAD.imageParallel + 1} through ${2 * WORKLOAD.imageParallel} concurrently as transcript thumbnails (?size=thumb), the first time this server sees them, until all client bodies and quiet`,
     "image.thumbs.again": `${imageHistory}; after image.thumbs.first, the same ${WORKLOAD.imageParallel} thumbnail requests again on the same server, without a browser cache, until all client bodies and quiet`,
     "image.thumbs.network": `${imageHistory}; after all loopback scenarios, Chromium downloads and decodes ${WORKLOAD.imageParallel} previously unrequested images (indices ${2 * WORKLOAD.imageParallel + 1} through ${3 * WORKLOAD.imageParallel}) as thumbnails, cache disabled, CDP-emulated 4 Mbit/s throughput and 40 ms latency; includes first server resize cost; synthetic link, not production network`,
+    "changes.poll.images": `${imageHistory}; after all image scenarios, ${WORKLOAD.projectionTabs} concurrent GET changes for that image session (same Git workspace with ${WORKLOAD.changedFiles} changed files), then the same ${WORKLOAD.projectionTabs} again with nothing changed; every answer identical, until quiet`,
     "image.paste.network":
         "after all other scenarios, real Chromium prepares and uploads one deterministic xorshift-noise 3000x1500 opaque PNG from its clipboard path to the same synthetic session, on a CDP-emulated 4 Mbit/s uplink and 40 ms latency; includes browser resize, HTTP upload, metadata response and decode, excludes fixture construction/module loading; older revisions without the helper upload the original, matching their unchanged paste behavior; no inference, synthetic link",
 };
@@ -452,6 +453,7 @@ export const REPORTED: Record<string, string[]> = {
     ],
     "image.paste.network": ["http.upload.bytes", "http.requests", "sql.statements", "sql.rows"],
     "image.original.again": [...common, "http.requests", "http.body.bytes"],
+    "changes.poll.images": [...common, "subprocess.git", "http.requests", "http.body.bytes"],
     "image.original.validated": [...common, "http.requests", "http.body.bytes"],
     // JSON counts leave web.open out: the DevTools connection that drives Chromium parses and writes JSON too.
     "web.open": [

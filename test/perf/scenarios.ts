@@ -710,6 +710,30 @@ for (const name of ["image.original.again", "image.original.validated"]) {
     });
 }
 
+// Changes polling on a long history whose entries carry images: four tabs ask at once, then all four ask again
+// with nothing changed (what the browser's 4-8 s poll does while the agent works).
+await scenario("changes.poll.images", async () => {
+    let bytes = 0;
+
+    for (let round = 0; round < 2; round++) {
+        const answers = await Promise.all(
+            Array.from({ length: WORKLOAD.projectionTabs }, () =>
+                call(`c/${imageSession}/changes`),
+            ),
+        );
+        const first = raw.stringify(answers[0]!.value);
+
+        assert.ok(Array.isArray(answers[0]!.value.files), "a changes listing");
+        assert.ok(
+            answers.every((answer) => raw.stringify(answer.value) === first),
+            "every tab sees the same changes",
+        );
+        bytes += answers.reduce((sum, answer) => sum + answer.bytes, 0);
+    }
+
+    return { "http.body.bytes": bytes };
+});
+
 writeFileSync(out, raw.stringify({ workload: WORKLOAD, results }, null, 2));
 server.closeAllConnections();
 server.close();
