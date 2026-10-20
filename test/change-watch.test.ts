@@ -50,7 +50,19 @@ test(
 
         assert.equal(watch.watching, true);
         assert.equal(watches.size, 1, "one watch for the repository, whichever folder of it");
-        await settle(300);
+
+        // The watcher may still be handed the setup's own writes (git init, a.txt) late, and tell them 300 ms after:
+        // wait until nothing has been told for longer than that, so the burst below is the only thing told.
+        for (let quiet = told.length, rounds = 0; rounds < 20; rounds++) {
+            await settle(700);
+
+            if (told.length === quiet) {
+                break;
+            }
+
+            quiet = told.length;
+        }
+
         told.length = 0;
 
         for (let index = 0; index < 20; index++) {
