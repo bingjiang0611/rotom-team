@@ -8,6 +8,16 @@ Workload: `test/perf/workload.ts` as of 2026-10-16 (12 seeded turns of 6000-char
 `darwin-arm64` ledger baselines (worst of 10 runs from temporary checkouts) and benchmark medians, Apple M1, load below
 the core count.
 
+## Program 2, step 5 — 2026-10-20
+
+A session's view now sends its newest 240 entries and the whole order; the browser reads earlier entries 200 at a time
+as the reader scrolls up, and in full for find, Outputs and jumps. On a 600-entry native history, open push bytes
+422,380 → 179,320 (−58%); the server open got faster, 24.7 → 17.3 ms (**L2**, `highLoad: false`). The browser's time to
+the newest answer on loopback did not change (134 → 135 ms, **L1**). The moved work is visible in
+`session.history.earlier`: 2 requests, 243,098 bytes to read everything. The server still projects the whole history
+once per room. 533 tests pass in a clean worktree. Measurement fix on the way: `perf:ci` silently skipped comparing once
+the ledger passed 1 MiB (`a0c54ee`). [Experiment](experiments/2026-10-20-paged-history.md).
+
 ## Program 2, step 4 — 2026-10-20
 
 The browser keeps a per-person copy of the 10 most recent sessions and shows it marked "checking" until the server

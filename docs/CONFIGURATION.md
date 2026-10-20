@@ -357,7 +357,7 @@ fall back to full snapshots without retaining that baseline.
 ## Saved session copies
 
 The web app keeps a copy of the 10 sessions this browser opened most recently, in IndexedDB (`rotom-views`). Each
-copy holds the newest 400 transcript entries, the session's title information and message authors. It does not hold
+copy holds the newest transcript entries the tab holds, up to 400, the session's title information and message authors. It does not hold
 live state, approvals, queued messages or rotom payer/segment state. Coming back to a session shows its copy at once,
 marked "saved copy · checking for changes…", with no message box. The server's own view then replaces it.
 
@@ -369,8 +369,18 @@ the named run reconnects for the full view.
 Copies belong to one person and one level of access. Signing out (Settings or an expired sign-in) clears all of them.
 So does a change of the signed-in person, role or session grants. A session the server says is missing loses its copy,
 and copies of sessions no longer in the person's list are dropped. Anyone using the same browser profile before
-sign-out could read the copies. Where IndexedDB is unavailable, nothing is saved. Transcript pagination is separate
-pending work.
+sign-out could read the copies. Where IndexedDB is unavailable, nothing is saved.
+
+## Long sessions
+
+Opening a session, the web app asks for its newest 240 entries (`tail=240` on the event connection). The view still
+names every entry in order, but sends only those, plus anything new later. Scrolling up near the top, or "Show earlier
+messages", reads the entries before them 200 at a time (`GET /api/c/:id/entries?before=<entry id>`); the rows on screen
+stay where they are. Find in session, the Outputs list and a jump to a message the tab does not hold read the rest of
+the history first; the Outputs badge reads `n+` until it is all here. Export reads the whole history on the server as
+before. Each page is checked like any other read of the session, and comes from the same projection as the view, so it
+is identical to what an unpaged view sends. Connections that do not ask for a tail (older tabs, other clients) get
+every entry, as before. History before a compaction or a new context still loads separately, as before.
 
 ## Changes view freshness
 

@@ -18118,7 +18118,7 @@
             "tolerance": 1087,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 129810
+                "darwin-arm64": 129808
             }
         },
         "session.reclaim/json.parse.durableStorage.calls": {
@@ -18258,7 +18258,7 @@
             "tolerance": 5,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 127105
+                "darwin-arm64": 127103
             }
         },
         "session.reclaim/json.parse.nativeReadback.calls": {
@@ -19421,6 +19421,2078 @@
             "ceiling": null,
             "baselines": {
                 "darwin-arm64": 26
+            }
+        },
+        "session.open.long/native.rpc.notify.records": {
+            "scenario": "session.open.long",
+            "metric": "native.rpc.notify.records",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "transport RPC records that carry a notify string payload (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open.long/fs.read.calls": {
+            "scenario": "session.open.long",
+            "metric": "fs.read.calls",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "synchronous readSync calls in the parent process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open.long/fs.read.bytes": {
+            "scenario": "session.open.long",
+            "metric": "fs.read.bytes",
+            "layer": "storage",
+            "unit": "bytes",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "bytes returned by synchronous readSync in the parent process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open.long/sql.statements": {
+            "scenario": "session.open.long",
+            "metric": "sql.statements",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "node:sqlite StatementSync run/get/all/iterate + DatabaseSync.exec (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 16
+            }
+        },
+        "session.open.long/sql.rows": {
+            "scenario": "session.open.long",
+            "metric": "sql.rows",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "rows returned by StatementSync all/get (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 47
+            }
+        },
+        "session.open.long/subprocess.total": {
+            "scenario": "session.open.long",
+            "metric": "subprocess.total",
+            "layer": "process",
+            "unit": "count",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "ChildProcess.prototype.spawn + spawnSync/execFileSync/execSync (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open.long/json.parse.calls": {
+            "scenario": "session.open.long",
+            "metric": "json.parse.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "global JSON.parse calls in the server process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 5
+            }
+        },
+        "session.open.long/json.parse.chars": {
+            "scenario": "session.open.long",
+            "metric": "json.parse.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "characters given to JSON.parse (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 2705
+            }
+        },
+        "session.open.long/json.parse.durableStorage.calls": {
+            "scenario": "session.open.long",
+            "metric": "json.parse.durableStorage.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "JSON.parse in exclusive durableStorage scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open.long/json.parse.durableStorage.chars": {
+            "scenario": "session.open.long",
+            "metric": "json.parse.durableStorage.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "JSON.parse in exclusive durableStorage scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open.long/json.parse.journal.calls": {
+            "scenario": "session.open.long",
+            "metric": "json.parse.journal.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "JSON.parse in exclusive journal scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 4
+            }
+        },
+        "session.open.long/json.parse.journal.chars": {
+            "scenario": "session.open.long",
+            "metric": "json.parse.journal.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "JSON.parse in exclusive journal scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 2164
+            }
+        },
+        "session.open.long/json.parse.journalHistory.calls": {
+            "scenario": "session.open.long",
+            "metric": "json.parse.journalHistory.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "JSON.parse in exclusive journalHistory scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open.long/json.parse.journalHistory.chars": {
+            "scenario": "session.open.long",
+            "metric": "json.parse.journalHistory.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "JSON.parse in exclusive journalHistory scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open.long/json.parse.journalThinking.calls": {
+            "scenario": "session.open.long",
+            "metric": "json.parse.journalThinking.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "JSON.parse in exclusive journalThinking scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "session.open.long/json.parse.journalThinking.chars": {
+            "scenario": "session.open.long",
+            "metric": "json.parse.journalThinking.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "JSON.parse in exclusive journalThinking scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 541
+            }
+        },
+        "session.open.long/json.parse.journalSegments.calls": {
+            "scenario": "session.open.long",
+            "metric": "json.parse.journalSegments.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "JSON.parse in exclusive journalSegments scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open.long/json.parse.journalSegments.chars": {
+            "scenario": "session.open.long",
+            "metric": "json.parse.journalSegments.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "JSON.parse in exclusive journalSegments scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open.long/json.parse.nativeReadback.calls": {
+            "scenario": "session.open.long",
+            "metric": "json.parse.nativeReadback.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "JSON.parse in exclusive nativeReadback scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open.long/json.parse.nativeReadback.chars": {
+            "scenario": "session.open.long",
+            "metric": "json.parse.nativeReadback.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "JSON.parse in exclusive nativeReadback scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open.long/json.parse.nativePin.calls": {
+            "scenario": "session.open.long",
+            "metric": "json.parse.nativePin.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "JSON.parse in exclusive nativePin scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open.long/json.parse.nativePin.chars": {
+            "scenario": "session.open.long",
+            "metric": "json.parse.nativePin.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "JSON.parse in exclusive nativePin scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open.long/json.parse.nativeResolver.calls": {
+            "scenario": "session.open.long",
+            "metric": "json.parse.nativeResolver.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "JSON.parse in exclusive nativeResolver scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open.long/json.parse.nativeResolver.chars": {
+            "scenario": "session.open.long",
+            "metric": "json.parse.nativeResolver.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "JSON.parse in exclusive nativeResolver scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open.long/json.parse.nativeSettings.calls": {
+            "scenario": "session.open.long",
+            "metric": "json.parse.nativeSettings.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "JSON.parse in exclusive nativeSettings scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open.long/json.parse.nativeSettings.chars": {
+            "scenario": "session.open.long",
+            "metric": "json.parse.nativeSettings.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "JSON.parse in exclusive nativeSettings scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open.long/json.parse.http.calls": {
+            "scenario": "session.open.long",
+            "metric": "json.parse.http.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "JSON.parse in exclusive http scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open.long/json.parse.http.chars": {
+            "scenario": "session.open.long",
+            "metric": "json.parse.http.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "JSON.parse in exclusive http scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open.long/json.parse.other.calls": {
+            "scenario": "session.open.long",
+            "metric": "json.parse.other.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "JSON.parse in exclusive other scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open.long/json.parse.other.chars": {
+            "scenario": "session.open.long",
+            "metric": "json.parse.other.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "JSON.parse in exclusive other scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open.long/json.parse.nativeRpc.calls": {
+            "scenario": "session.open.long",
+            "metric": "json.parse.nativeRpc.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "JSON.parse in exclusive nativeRpc scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open.long/json.parse.nativeRpc.chars": {
+            "scenario": "session.open.long",
+            "metric": "json.parse.nativeRpc.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "JSON.parse in exclusive nativeRpc scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open.long/json.parse.nativeRpcRecord.calls": {
+            "scenario": "session.open.long",
+            "metric": "json.parse.nativeRpcRecord.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "JSON.parse in exclusive nativeRpcRecord scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open.long/json.parse.nativeRpcRecord.chars": {
+            "scenario": "session.open.long",
+            "metric": "json.parse.nativeRpcRecord.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "JSON.parse in exclusive nativeRpcRecord scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open.long/json.parse.nativeRpcNotify.calls": {
+            "scenario": "session.open.long",
+            "metric": "json.parse.nativeRpcNotify.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "JSON.parse in exclusive nativeRpcNotify scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open.long/json.parse.nativeRpcNotify.chars": {
+            "scenario": "session.open.long",
+            "metric": "json.parse.nativeRpcNotify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "JSON.parse in exclusive nativeRpcNotify scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open.long/json.parse.nativeJsonl.calls": {
+            "scenario": "session.open.long",
+            "metric": "json.parse.nativeJsonl.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "JSON.parse in exclusive nativeJsonl scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open.long/json.parse.nativeJsonl.chars": {
+            "scenario": "session.open.long",
+            "metric": "json.parse.nativeJsonl.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "JSON.parse in exclusive nativeJsonl scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open.long/json.parse.nativeJsonlIngest.calls": {
+            "scenario": "session.open.long",
+            "metric": "json.parse.nativeJsonlIngest.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "JSON.parse in exclusive nativeJsonlIngest scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open.long/json.parse.nativeJsonlIngest.chars": {
+            "scenario": "session.open.long",
+            "metric": "json.parse.nativeJsonlIngest.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "JSON.parse in exclusive nativeJsonlIngest scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open.long/json.parse.nativeJsonlSnapshot.calls": {
+            "scenario": "session.open.long",
+            "metric": "json.parse.nativeJsonlSnapshot.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "JSON.parse in exclusive nativeJsonlSnapshot scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open.long/json.parse.nativeJsonlSnapshot.chars": {
+            "scenario": "session.open.long",
+            "metric": "json.parse.nativeJsonlSnapshot.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "JSON.parse in exclusive nativeJsonlSnapshot scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open.long/json.parse.nativeGate.calls": {
+            "scenario": "session.open.long",
+            "metric": "json.parse.nativeGate.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "JSON.parse in exclusive nativeGate scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open.long/json.parse.nativeGate.chars": {
+            "scenario": "session.open.long",
+            "metric": "json.parse.nativeGate.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "JSON.parse in exclusive nativeGate scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open.long/json.stringify.chars": {
+            "scenario": "session.open.long",
+            "metric": "json.stringify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "characters JSON.stringify produced (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 34,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 179825
+            }
+        },
+        "session.open.long/view.entry.visits": {
+            "scenario": "session.open.long",
+            "metric": "view.entry.visits",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "durable entries traversed to project room views (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open.long/view.client.entry.scans": {
+            "scenario": "session.open.long",
+            "metric": "view.client.entry.scans",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "cached projected entries scanned for a client's missing IDs (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 600
+            }
+        },
+        "session.open.long/view.stats.entry.scans": {
+            "scenario": "session.open.long",
+            "metric": "view.stats.entry.scans",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "entries visited in the stats reverse scan (src/server/projection.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open.long/view.fields.stringify.calls": {
+            "scenario": "session.open.long",
+            "metric": "view.fields.stringify.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "slow view fields serialized for per-client change detection (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 12
+            }
+        },
+        "session.open.long/view.fields.stringify.chars": {
+            "scenario": "session.open.long",
+            "metric": "view.fields.stringify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "characters of slow view fields serialized before unchanged fields are omitted (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 73
+            }
+        },
+        "session.open.long/view.live.project.calls": {
+            "scenario": "session.open.long",
+            "metric": "view.live.project.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "live projections constructed per client push (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "session.open.long/view.inbox.project.calls": {
+            "scenario": "session.open.long",
+            "metric": "view.inbox.project.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "inbox projections constructed per client push (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "session.open.long/view.kernel.project.calls": {
+            "scenario": "session.open.long",
+            "metric": "view.kernel.project.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "native kernel projections constructed per client push (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "session.open.long/view.kernel.sql.statements": {
+            "scenario": "session.open.long",
+            "metric": "view.kernel.sql.statements",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "SQL statements inside synchronous native kernel roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 3
+            }
+        },
+        "session.open.long/view.kernel.sql.heads": {
+            "scenario": "session.open.long",
+            "metric": "view.kernel.sql.heads",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "SQL FROM kernel_heads during synchronous roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "session.open.long/view.kernel.sql.sessions": {
+            "scenario": "session.open.long",
+            "metric": "view.kernel.sql.sessions",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "SQL FROM kernel_sessions during synchronous roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open.long/view.kernel.sql.attempts": {
+            "scenario": "session.open.long",
+            "metric": "view.kernel.sql.attempts",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "SQL FROM kernel_attempts during synchronous roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 2
+            }
+        },
+        "session.open.long/view.kernel.sql.command_inputs": {
+            "scenario": "session.open.long",
+            "metric": "view.kernel.sql.command_inputs",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "SQL FROM kernel_command_inputs during synchronous roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open.long/view.kernel.sql.resume": {
+            "scenario": "session.open.long",
+            "metric": "view.kernel.sql.resume",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "SQL FROM kernel_resume during synchronous roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open.long/view.kernel.sql.rows": {
+            "scenario": "session.open.long",
+            "metric": "view.kernel.sql.rows",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "SQL rows returned inside synchronous native kernel roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "session.open.long/view.kernel.json.parse.calls": {
+            "scenario": "session.open.long",
+            "metric": "view.kernel.json.parse.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "JSON decodes inside synchronous native kernel roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "session.open.long/view.kernel.json.parse.chars": {
+            "scenario": "session.open.long",
+            "metric": "view.kernel.json.parse.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "characters decoded inside synchronous native kernel roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 541
+            }
+        },
+        "session.open.long/push.events": {
+            "scenario": "session.open.long",
+            "metric": "push.events",
+            "layer": "push",
+            "unit": "count",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "events written to tabs, rotom-team:push channel (src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 10
+            }
+        },
+        "session.open.long/push.bytes": {
+            "scenario": "session.open.long",
+            "metric": "push.bytes",
+            "layer": "push",
+            "unit": "bytes",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "event-stream bytes written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 179320
+            }
+        },
+        "session.open.long/push.view.count": {
+            "scenario": "session.open.long",
+            "metric": "push.view.count",
+            "layer": "push",
+            "unit": "count",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "view events written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "session.open.long/push.view.bytes": {
+            "scenario": "session.open.long",
+            "metric": "push.view.bytes",
+            "layer": "push",
+            "unit": "bytes",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "view event bytes written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 165843
+            }
+        },
+        "session.history.earlier/native.rpc.notify.records": {
+            "scenario": "session.history.earlier",
+            "metric": "native.rpc.notify.records",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "transport RPC records that carry a notify string payload (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/fs.read.calls": {
+            "scenario": "session.history.earlier",
+            "metric": "fs.read.calls",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "synchronous readSync calls in the parent process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/fs.read.bytes": {
+            "scenario": "session.history.earlier",
+            "metric": "fs.read.bytes",
+            "layer": "storage",
+            "unit": "bytes",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "bytes returned by synchronous readSync in the parent process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/sql.statements": {
+            "scenario": "session.history.earlier",
+            "metric": "sql.statements",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "node:sqlite StatementSync run/get/all/iterate + DatabaseSync.exec (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/sql.rows": {
+            "scenario": "session.history.earlier",
+            "metric": "sql.rows",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "rows returned by StatementSync all/get (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/subprocess.total": {
+            "scenario": "session.history.earlier",
+            "metric": "subprocess.total",
+            "layer": "process",
+            "unit": "count",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "ChildProcess.prototype.spawn + spawnSync/execFileSync/execSync (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/json.parse.calls": {
+            "scenario": "session.history.earlier",
+            "metric": "json.parse.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "global JSON.parse calls in the server process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/json.parse.chars": {
+            "scenario": "session.history.earlier",
+            "metric": "json.parse.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "characters given to JSON.parse (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/json.parse.durableStorage.calls": {
+            "scenario": "session.history.earlier",
+            "metric": "json.parse.durableStorage.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "JSON.parse in exclusive durableStorage scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/json.parse.durableStorage.chars": {
+            "scenario": "session.history.earlier",
+            "metric": "json.parse.durableStorage.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "JSON.parse in exclusive durableStorage scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/json.parse.journal.calls": {
+            "scenario": "session.history.earlier",
+            "metric": "json.parse.journal.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "JSON.parse in exclusive journal scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/json.parse.journal.chars": {
+            "scenario": "session.history.earlier",
+            "metric": "json.parse.journal.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "JSON.parse in exclusive journal scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/json.parse.journalHistory.calls": {
+            "scenario": "session.history.earlier",
+            "metric": "json.parse.journalHistory.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "JSON.parse in exclusive journalHistory scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/json.parse.journalHistory.chars": {
+            "scenario": "session.history.earlier",
+            "metric": "json.parse.journalHistory.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "JSON.parse in exclusive journalHistory scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/json.parse.journalThinking.calls": {
+            "scenario": "session.history.earlier",
+            "metric": "json.parse.journalThinking.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "JSON.parse in exclusive journalThinking scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/json.parse.journalThinking.chars": {
+            "scenario": "session.history.earlier",
+            "metric": "json.parse.journalThinking.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "JSON.parse in exclusive journalThinking scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/json.parse.journalSegments.calls": {
+            "scenario": "session.history.earlier",
+            "metric": "json.parse.journalSegments.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "JSON.parse in exclusive journalSegments scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/json.parse.journalSegments.chars": {
+            "scenario": "session.history.earlier",
+            "metric": "json.parse.journalSegments.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "JSON.parse in exclusive journalSegments scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/json.parse.nativeReadback.calls": {
+            "scenario": "session.history.earlier",
+            "metric": "json.parse.nativeReadback.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "JSON.parse in exclusive nativeReadback scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/json.parse.nativeReadback.chars": {
+            "scenario": "session.history.earlier",
+            "metric": "json.parse.nativeReadback.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "JSON.parse in exclusive nativeReadback scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/json.parse.nativePin.calls": {
+            "scenario": "session.history.earlier",
+            "metric": "json.parse.nativePin.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "JSON.parse in exclusive nativePin scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/json.parse.nativePin.chars": {
+            "scenario": "session.history.earlier",
+            "metric": "json.parse.nativePin.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "JSON.parse in exclusive nativePin scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/json.parse.nativeResolver.calls": {
+            "scenario": "session.history.earlier",
+            "metric": "json.parse.nativeResolver.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "JSON.parse in exclusive nativeResolver scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/json.parse.nativeResolver.chars": {
+            "scenario": "session.history.earlier",
+            "metric": "json.parse.nativeResolver.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "JSON.parse in exclusive nativeResolver scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/json.parse.nativeSettings.calls": {
+            "scenario": "session.history.earlier",
+            "metric": "json.parse.nativeSettings.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "JSON.parse in exclusive nativeSettings scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/json.parse.nativeSettings.chars": {
+            "scenario": "session.history.earlier",
+            "metric": "json.parse.nativeSettings.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "JSON.parse in exclusive nativeSettings scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/json.parse.http.calls": {
+            "scenario": "session.history.earlier",
+            "metric": "json.parse.http.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "JSON.parse in exclusive http scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/json.parse.http.chars": {
+            "scenario": "session.history.earlier",
+            "metric": "json.parse.http.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "JSON.parse in exclusive http scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/json.parse.other.calls": {
+            "scenario": "session.history.earlier",
+            "metric": "json.parse.other.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "JSON.parse in exclusive other scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/json.parse.other.chars": {
+            "scenario": "session.history.earlier",
+            "metric": "json.parse.other.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "JSON.parse in exclusive other scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/json.parse.nativeRpc.calls": {
+            "scenario": "session.history.earlier",
+            "metric": "json.parse.nativeRpc.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "JSON.parse in exclusive nativeRpc scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/json.parse.nativeRpc.chars": {
+            "scenario": "session.history.earlier",
+            "metric": "json.parse.nativeRpc.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "JSON.parse in exclusive nativeRpc scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/json.parse.nativeRpcRecord.calls": {
+            "scenario": "session.history.earlier",
+            "metric": "json.parse.nativeRpcRecord.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "JSON.parse in exclusive nativeRpcRecord scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/json.parse.nativeRpcRecord.chars": {
+            "scenario": "session.history.earlier",
+            "metric": "json.parse.nativeRpcRecord.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "JSON.parse in exclusive nativeRpcRecord scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/json.parse.nativeRpcNotify.calls": {
+            "scenario": "session.history.earlier",
+            "metric": "json.parse.nativeRpcNotify.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "JSON.parse in exclusive nativeRpcNotify scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/json.parse.nativeRpcNotify.chars": {
+            "scenario": "session.history.earlier",
+            "metric": "json.parse.nativeRpcNotify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "JSON.parse in exclusive nativeRpcNotify scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/json.parse.nativeJsonl.calls": {
+            "scenario": "session.history.earlier",
+            "metric": "json.parse.nativeJsonl.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "JSON.parse in exclusive nativeJsonl scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/json.parse.nativeJsonl.chars": {
+            "scenario": "session.history.earlier",
+            "metric": "json.parse.nativeJsonl.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "JSON.parse in exclusive nativeJsonl scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/json.parse.nativeJsonlIngest.calls": {
+            "scenario": "session.history.earlier",
+            "metric": "json.parse.nativeJsonlIngest.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "JSON.parse in exclusive nativeJsonlIngest scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/json.parse.nativeJsonlIngest.chars": {
+            "scenario": "session.history.earlier",
+            "metric": "json.parse.nativeJsonlIngest.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "JSON.parse in exclusive nativeJsonlIngest scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/json.parse.nativeJsonlSnapshot.calls": {
+            "scenario": "session.history.earlier",
+            "metric": "json.parse.nativeJsonlSnapshot.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "JSON.parse in exclusive nativeJsonlSnapshot scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/json.parse.nativeJsonlSnapshot.chars": {
+            "scenario": "session.history.earlier",
+            "metric": "json.parse.nativeJsonlSnapshot.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "JSON.parse in exclusive nativeJsonlSnapshot scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/json.parse.nativeGate.calls": {
+            "scenario": "session.history.earlier",
+            "metric": "json.parse.nativeGate.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "JSON.parse in exclusive nativeGate scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/json.parse.nativeGate.chars": {
+            "scenario": "session.history.earlier",
+            "metric": "json.parse.nativeGate.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "JSON.parse in exclusive nativeGate scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/json.stringify.chars": {
+            "scenario": "session.history.earlier",
+            "metric": "json.stringify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "characters JSON.stringify produced (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 243098
+            }
+        },
+        "session.history.earlier/http.requests": {
+            "scenario": "session.history.earlier",
+            "metric": "http.requests",
+            "layer": "http",
+            "unit": "count",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "http.server.request.start diagnostics channel (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 2
+            }
+        },
+        "session.history.earlier/http.body.bytes": {
+            "scenario": "session.history.earlier",
+            "metric": "http.body.bytes",
+            "layer": "http",
+            "unit": "bytes",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "answer body bytes the benchmark received (test/perf/scenarios.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 243098
+            }
+        },
+        "web.open.long/sql.statements": {
+            "scenario": "web.open.long",
+            "metric": "sql.statements",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "node:sqlite StatementSync run/get/all/iterate + DatabaseSync.exec (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 1,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 17
+            }
+        },
+        "web.open.long/sql.rows": {
+            "scenario": "web.open.long",
+            "metric": "sql.rows",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "rows returned by StatementSync all/get (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 18,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 65
+            }
+        },
+        "web.open.long/subprocess.total": {
+            "scenario": "web.open.long",
+            "metric": "subprocess.total",
+            "layer": "process",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "ChildProcess.prototype.spawn + spawnSync/execFileSync/execSync (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "web.open.long/view.entry.visits": {
+            "scenario": "web.open.long",
+            "metric": "view.entry.visits",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "durable entries traversed to project room views (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "web.open.long/view.client.entry.scans": {
+            "scenario": "web.open.long",
+            "metric": "view.client.entry.scans",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "cached projected entries scanned for a client's missing IDs (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 600
+            }
+        },
+        "web.open.long/view.stats.entry.scans": {
+            "scenario": "web.open.long",
+            "metric": "view.stats.entry.scans",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "entries visited in the stats reverse scan (src/server/projection.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "web.open.long/view.fields.stringify.calls": {
+            "scenario": "web.open.long",
+            "metric": "view.fields.stringify.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "slow view fields serialized for per-client change detection (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 12
+            }
+        },
+        "web.open.long/view.fields.stringify.chars": {
+            "scenario": "web.open.long",
+            "metric": "view.fields.stringify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "characters of slow view fields serialized before unchanged fields are omitted (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 73
+            }
+        },
+        "web.open.long/view.live.project.calls": {
+            "scenario": "web.open.long",
+            "metric": "view.live.project.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "live projections constructed per client push (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "web.open.long/view.inbox.project.calls": {
+            "scenario": "web.open.long",
+            "metric": "view.inbox.project.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "inbox projections constructed per client push (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "web.open.long/view.kernel.project.calls": {
+            "scenario": "web.open.long",
+            "metric": "view.kernel.project.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "native kernel projections constructed per client push (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "web.open.long/view.kernel.sql.statements": {
+            "scenario": "web.open.long",
+            "metric": "view.kernel.sql.statements",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "SQL statements inside synchronous native kernel roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 3
+            }
+        },
+        "web.open.long/view.kernel.sql.heads": {
+            "scenario": "web.open.long",
+            "metric": "view.kernel.sql.heads",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "SQL FROM kernel_heads during synchronous roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "web.open.long/view.kernel.sql.sessions": {
+            "scenario": "web.open.long",
+            "metric": "view.kernel.sql.sessions",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "SQL FROM kernel_sessions during synchronous roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "web.open.long/view.kernel.sql.attempts": {
+            "scenario": "web.open.long",
+            "metric": "view.kernel.sql.attempts",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "SQL FROM kernel_attempts during synchronous roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 2
+            }
+        },
+        "web.open.long/view.kernel.sql.command_inputs": {
+            "scenario": "web.open.long",
+            "metric": "view.kernel.sql.command_inputs",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "SQL FROM kernel_command_inputs during synchronous roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "web.open.long/view.kernel.sql.resume": {
+            "scenario": "web.open.long",
+            "metric": "view.kernel.sql.resume",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "SQL FROM kernel_resume during synchronous roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "web.open.long/view.kernel.sql.rows": {
+            "scenario": "web.open.long",
+            "metric": "view.kernel.sql.rows",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "SQL rows returned inside synchronous native kernel roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "web.open.long/view.kernel.json.parse.calls": {
+            "scenario": "web.open.long",
+            "metric": "view.kernel.json.parse.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "JSON decodes inside synchronous native kernel roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "web.open.long/view.kernel.json.parse.chars": {
+            "scenario": "web.open.long",
+            "metric": "view.kernel.json.parse.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "characters decoded inside synchronous native kernel roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 541
+            }
+        },
+        "web.open.long/push.events": {
+            "scenario": "web.open.long",
+            "metric": "push.events",
+            "layer": "push",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "events written to tabs, rotom-team:push channel (src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 2,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 10
+            }
+        },
+        "web.open.long/push.bytes": {
+            "scenario": "web.open.long",
+            "metric": "push.bytes",
+            "layer": "push",
+            "unit": "bytes",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "event-stream bytes written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 972,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 174437
+            }
+        },
+        "web.open.long/push.view.count": {
+            "scenario": "web.open.long",
+            "metric": "push.view.count",
+            "layer": "push",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "view events written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "web.open.long/push.view.bytes": {
+            "scenario": "web.open.long",
+            "metric": "push.view.bytes",
+            "layer": "push",
+            "unit": "bytes",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "view event bytes written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 165843
+            }
+        },
+        "web.open.long/http.requests": {
+            "scenario": "web.open.long",
+            "metric": "http.requests",
+            "layer": "http",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "http.server.request.start diagnostics channel (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 78
+            }
+        },
+        "web.open.long/cdp.LayoutCount": {
+            "scenario": "web.open.long",
+            "metric": "cdp.LayoutCount",
+            "layer": "web",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "Chromium Performance.getMetrics LayoutCount delta (test/perf/browser.ts)",
+            "status": "candidate",
+            "tolerance": 2,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 12
+            }
+        },
+        "web.open.long/cdp.RecalcStyleCount": {
+            "scenario": "web.open.long",
+            "metric": "cdp.RecalcStyleCount",
+            "layer": "web",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "Chromium Performance.getMetrics RecalcStyleCount delta (test/perf/browser.ts)",
+            "status": "candidate",
+            "tolerance": 3,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 22
+            }
+        },
+        "web.open.long/cdp.Nodes": {
+            "scenario": "web.open.long",
+            "metric": "cdp.Nodes",
+            "layer": "web",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "Chromium Performance.getMetrics Nodes once the answer shows (test/perf/browser.ts)",
+            "status": "candidate",
+            "tolerance": 24,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1585
+            }
+        },
+        "web.open.long/web.event.parse.calls": {
+            "scenario": "web.open.long",
+            "metric": "web.event.parse.calls",
+            "layer": "web",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "browser event-stream JSON.parse calls (web/store.js)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 8
+            }
+        },
+        "web.open.long/web.event.parse.chars": {
+            "scenario": "web.open.long",
+            "metric": "web.event.parse.chars",
+            "layer": "web",
+            "unit": "chars",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "browser event-stream characters parsed as JSON (web/store.js)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 173274
+            }
+        },
+        "web.open.long/web.view.apply.calls": {
+            "scenario": "web.open.long",
+            "metric": "web.view.apply.calls",
+            "layer": "web",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "browser view events applied to the store (web/store.js)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "web.open.long/web.view.base.entry.copies": {
+            "scenario": "web.open.long",
+            "metric": "web.view.base.entry.copies",
+            "layer": "web",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "existing Map entries copied while applying view events (web/store.js)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "web.open.long/web.view.delta.entries": {
+            "scenario": "web.open.long",
+            "metric": "web.view.delta.entries",
+            "layer": "web",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "new or replacement entries merged while applying view events (web/store.js)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 240
+            }
+        },
+        "web.open.long/web.view.prune.checks": {
+            "scenario": "web.open.long",
+            "metric": "web.view.prune.checks",
+            "layer": "web",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "browser entry IDs tested against a changed server order (web/store.js)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 240
+            }
+        },
+        "web.open.long/web.view.order.ids": {
+            "scenario": "web.open.long",
+            "metric": "web.view.order.ids",
+            "layer": "web",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "server order IDs copied into browser keep sets (web/store.js)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 600
             }
         }
     }
