@@ -147,10 +147,15 @@ Existing `unknown` receipts are not rewritten or replayed by this change.
 
 ## Team subagent defaults
 
+On rotom 0.1.26, session shutdown sends SIGTERM to live child runners, which records them as `paused`. Team's private
+stop command therefore waits, up to 10 seconds, for each stopped child's runner to close before the kernel may close;
+`npm run test:kernel:app` asserts the hanging child ends `stopped`. A runner that does not close in time is left to
+shutdown and may still be `paused`. Neither state proves that external side effects were undone.
+
 `test/rotom-subagents.test.ts` compares derived settings with the pinned native SettingsManager defaults, checks two
 isolated member HOMEs and retirement of old managed overrides, and preserves shared retry, model-specific compaction
 and role settings. `npm run test:kernel` uses the actual pinned subagent tool against a loopback model: its executable
-list contains all six native roles (`scout`, `worker`, `reviewer`, `delegate`, `oracle`, `researcher`). Its separate
+list contains all five native roles on rotom 0.1.26 (`scout`, `worker`, `reviewer`, `delegate`, `oracle`). Its separate
 no-redispatch fixture explicitly disables recovery in that fixture's shared profile, not in production code.
 `node test/rotom-native-defaults-proof.ts` verifies actual Agent retry, provider retry options, automatic compaction,
 same-payer gate checks and persisted summary usage with synthetic loopback requests. Journal unit tests preserve

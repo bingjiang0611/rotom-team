@@ -130,10 +130,10 @@ paging/streaming protocol, not silently truncating data or raising limits withou
 
 ## Native pin and subagent defaults
 
-The pin is rotom 0.1.25. Team does not override native retry, compaction or builtin role settings. An empty shared
+The pin is rotom 0.1.26. Team does not override native retry, compaction or builtin role settings. An empty shared
 profile uses native defaults: automatic retry enabled (3 retries, 2-second exponential base delay, 60-second maximum),
-automatic compaction enabled (16,384 reserve tokens and approximately 20,000 recent tokens retained), and all six builtin
-roles: scout, worker, reviewer, delegate, oracle and researcher (alias advisor for oracle). Compaction triggers when the
+automatic compaction enabled (16,384 reserve tokens and approximately 20,000 recent tokens retained), and all five builtin
+roles: scout, worker, reviewer, delegate and oracle (alias advisor for oracle). Compaction triggers when the
 native context estimate exceeds the selected model's context window minus reserve tokens, and uses native overflow
 recovery. Context windows come from model metadata, not a Team-wide limit. Shared `compaction.modelOverrides` and
 `retry.provider` settings retain native precedence. Provider request retry options are forwarded unchanged; the pinned
