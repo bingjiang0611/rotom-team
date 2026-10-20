@@ -1,9 +1,9 @@
 /** Preserve the derived shared member profile; trusted projects use native resource discovery. */
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync, lstatSync } from "node:fs";
-import { isAbsolute, join, relative } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { isDeepStrictEqual } from "node:util";
-import { nativeConfigurationApi } from "./rotom-kernel.ts";
+import { nativeResourcePolicyApi } from "./rotom-product.ts";
 import { parseWithWork } from "./perf-channels.ts";
 
 export class TeamResourcePolicyError extends Error {}
@@ -155,7 +155,7 @@ export async function assertTeamResourceSources(
     cwd: string,
     phase: "prepare" | "live" = "live",
 ): Promise<void> {
-    const api = await nativeConfigurationApi();
+    const api = await nativeResourcePolicyApi();
     const agentDir = join(home, ".pi/agent");
     const previous = json(safeConfigurationPath(home, ".pi/agent/team-resource-view.json"));
     const member = json(safeConfigurationPath(home, ".pi/agent/settings.json"));
@@ -236,4 +236,14 @@ export function teamSubagentEnvironment(shared: string): Record<string, string> 
         npm_config_prefix: join(shared, "global-npm"),
         PI_SUBAGENT_EXTRA_AGENT_DIRS: join(shared, "agents"),
     };
+}
+
+/** The shared profile's own context file paths, as native context selection finds them (at most one). */
+export async function sharedContextPaths(directory: string): Promise<string[]> {
+    const api = await nativeResourcePolicyApi();
+
+    return api
+        .loadProjectContextFiles({ cwd: directory, agentDir: directory })
+        .filter((file: { path: string }) => dirname(file.path) === resolve(directory))
+        .map((file: { path: string }) => file.path);
 }

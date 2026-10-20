@@ -2,7 +2,9 @@
 
 Native skills: `rotom-kernel.ts` and `rotom-child.sh` disable default skill discovery. The
 `rotom-skills.mjs` extension reuses the pinned resolver to load project skills only. Personal skill files may remain
-in a member HOME without blocking runs. `TeamKernel.skillCommands` likewise excludes personal defaults.
+in a member HOME without blocking runs. `TeamKernel.skillCommands` likewise excludes personal defaults. Each subagent
+start runs the validator `rotom-child.ts` first; it imports only `rotom-resource-policy.ts` and `rotom-product.ts` (the
+pin check and the few native loaders the policy needs), never `rotom-kernel.ts`.
 
 **rotom team additions:** `bin/rotom-team.js` isolates deployment resources; `src/server/team-accounts.ts`, `credential-store.ts`, and `team-execution.ts` implement personal provider routing, private storage and durable authorization; `vendor/qoder/` pins the Qoder provider. `test/team.test.ts` and `test/team-serve.ts` validate/demo this fork. [PRODUCT.md](PRODUCT.md) is the current product contract; the inherited map below documents upstream components, including features not enabled for personal accounts.
 

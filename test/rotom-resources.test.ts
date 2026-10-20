@@ -11,6 +11,7 @@ import {
     statSync,
     chmodSync,
 } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -437,4 +438,72 @@ test("live child validation rejects later member package/extension/config overri
         readFileSync(join(home, ".pi/agent/AGENTS.md"), "utf8"),
         "LATE_PRIVATE_INSTRUCTIONS",
     );
+});
+
+test("the subagent validator, as its own process, accepts a prepared HOME, rejects a member extension, and names the shared context", async () => {
+    const { home, shared, project } = fixture();
+    const validator = new URL("../src/server/rotom-child.ts", import.meta.url).pathname;
+    const run = (environment: Record<string, string> = {}) =>
+        new Promise<{ code: number | null; out: string; err: string }>((done) => {
+            const child = spawn(process.execPath, [validator], {
+                cwd: project,
+                env: { ...process.env, HOME: home, ROTOM_TEAM_AGENT_DIR: shared, ...environment },
+                stdio: ["ignore", "pipe", "pipe"],
+            });
+            let out = "",
+                err = "";
+
+            child.stdout.on("data", (chunk) => (out += chunk));
+            child.stderr.on("data", (chunk) => (err += chunk));
+            child.on("exit", (code) => done({ code, out, err }));
+        });
+
+    writeFileSync(join(shared, "AGENTS.md"), "SHARED_CONTEXT");
+    await prepareTeamResources(home, shared, project);
+    const accepted = await run();
+
+    assert.equal(accepted.code, 0, accepted.err);
+    assert.equal(accepted.out, "");
+    assert.deepEqual(await run({ ROTOM_TEAM_FROZEN_CONTEXT: "frozen" }), {
+        code: 0,
+        out: join(shared, "AGENTS.md"),
+        err: "",
+    });
+
+    // A member extension installed after preparation is refused before Pi would load it.
+    mkdirSync(join(home, ".pi/agent/extensions"), { recursive: true });
+    writeFileSync(join(home, ".pi/agent/extensions/private.ts"), "export default () => {};");
+    const refused = await run();
+
+    assert.notEqual(refused.code, 0);
+    assert.match(refused.err, /Member extensions are not allowed/);
+});
+
+test("the subagent validator loads no native process client, model library or RPC", () => {
+    const log = join(mkdtempSync(join(tmpdir(), "rotom-validator-imports-")), "imports.log");
+    const hooks = join(log, "..", "hooks.mjs");
+
+    writeFileSync(
+        hooks,
+        `import { registerHooks } from "node:module";
+import { appendFileSync } from "node:fs";
+registerHooks({ resolve(specifier, context, next) { const resolved = next(specifier, context); appendFileSync(${JSON.stringify(log)}, resolved.url + "\\n"); return resolved; } });`,
+    );
+    // Without a HOME to check it fails, after its imports.
+    spawnSync(
+        process.execPath,
+        ["--import", hooks, new URL("../src/server/rotom-child.ts", import.meta.url).pathname],
+        { env: { ...process.env, HOME: join(log, "..", "missing") }, stdio: "ignore" },
+    );
+    const loaded = readFileSync(log, "utf8").split("\n");
+
+    assert.ok(loaded.some((url) => url.endsWith("/src/server/rotom-resource-policy.ts")));
+
+    for (const heavy of ["rotom-kernel.ts", "rotom-rpc.ts", "rotom-resources.ts"]) {
+        assert.ok(!loaded.some((url) => url.endsWith(`/src/server/${heavy}`)), heavy);
+    }
+
+    const teamModels = new URL("../node_modules/@earendil-works/pi-ai/", import.meta.url).href;
+
+    assert.ok(!loaded.some((url) => url.startsWith(teamModels)), "the team's own model library");
 });

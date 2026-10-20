@@ -12,13 +12,14 @@ import {
 } from "node:fs";
 import { isDeepStrictEqual } from "node:util";
 import { homedir } from "node:os";
-import { dirname, isAbsolute, join, resolve } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import {
     assertTeamResourceSources,
     teamResourceSettings,
     resourceFileDigest,
     safeConfigurationPath,
     privateConfigurationNames,
+    sharedContextPaths,
     TeamResourcePolicyError,
 } from "./rotom-resource-policy.ts";
 import { nativeConfigurationApi } from "./rotom-kernel.ts";
@@ -365,11 +366,4 @@ export function memberConfigurationChanges(
 }
 
 /** Keep the native context-file precedence, adding only the shared base to frozen project context. */
-export async function sharedContextPaths(directory: string): Promise<string[]> {
-    const api = await nativeConfigurationApi();
-
-    return api
-        .loadProjectContextFiles({ cwd: directory, agentDir: directory })
-        .filter((file: { path: string }) => dirname(file.path) === resolve(directory))
-        .map((file: { path: string }) => file.path);
-}
+export { sharedContextPaths };

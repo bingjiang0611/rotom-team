@@ -1,13 +1,13 @@
 /** Experimental pinned rotom product boundary. Not yet connected to Pocket's Durable execution backend. */
 import { execFile, spawn, type ChildProcess } from "node:child_process";
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { once } from "node:events";
 import { clampThinkingLevel, type Model, type ModelThinkingLevel } from "@earendil-works/pi-ai";
 import { teamSubagentEnvironment } from "./rotom-resource-policy.ts";
-import { accessSync, constants, lstatSync, readFileSync, realpathSync } from "node:fs";
+import { lstatSync, readFileSync, realpathSync } from "node:fs";
 import { connect } from "node:net";
 import { homedir } from "node:os";
-import { dirname, isAbsolute, join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { RotomRpc } from "./rotom-rpc.ts";
@@ -18,38 +18,13 @@ import {
     type NativeStartSignal,
 } from "./perf-channels.ts";
 import { prepareTeamResources, sharedContextPaths } from "./rotom-resources.ts";
+import { canonical, product, verifyRotomKernel } from "./rotom-product.ts";
 
-const runtime = fileURLToPath(new URL("../../runtime/rotom/", import.meta.url));
-const product = join(runtime, "node_modules/@bingjiang0611/rotom");
+export { verifyRotomKernel };
 
 /** Team's own extensions: every member session loads both, next to the product's (each one runs through the gate). */
 export const teamSkillsExtension = fileURLToPath(new URL("./rotom-skills.mjs", import.meta.url));
 export const teamPolicyExtension = fileURLToPath(new URL("./rotom-policy.mjs", import.meta.url));
-
-const bootstrapFiles = [
-    "package.json",
-    "bin/rotom",
-    "bin/rotom-launcher",
-    "runtime/launch-runtime.mjs",
-    "runtime/product-config.mjs",
-    "runtime/resolve-installed-pi.mjs",
-    "runtime/verify-pi-runtime.mjs",
-];
-
-function canonical(path: string, kind: "file" | "directory"): string {
-    if (!isAbsolute(path)) {
-        throw new Error("Kernel paths must be absolute");
-    }
-
-    const stat = lstatSync(path),
-        actual = realpathSync(path);
-
-    if (actual !== resolve(path) || (kind === "file" ? !stat.isFile() : !stat.isDirectory())) {
-        throw new Error("Kernel path must be canonical and must not be a symlink");
-    }
-
-    return actual;
-}
 
 /** Session data operations only: load the pinned fork, never a second Agent execution loop. */
 export async function nativeBuiltinCommands(): Promise<
@@ -196,46 +171,6 @@ export async function nativeConfigurationApi() {
         packageUrl: productInfo.ROTOM_PACKAGE_URL,
         updateGuidance: productInfo.ROTOM_UPDATE_GUIDANCE,
     };
-}
-
-export function verifyRotomKernel(): { version: string; executable: string } {
-    canonical(product, "directory");
-    const pin = parseWithWork("native-pin", readFileSync(join(runtime, "pin.json"), "utf8"));
-    const pkg = parseWithWork("native-pin", readFileSync(join(product, "package.json"), "utf8"));
-    const lock = parseWithWork(
-        "native-pin",
-        readFileSync(join(runtime, "package-lock.json"), "utf8"),
-    );
-    const locked = lock.packages["node_modules/@bingjiang0611/rotom"];
-
-    if (locked.version !== pin.version || locked.integrity !== pin.integrity) {
-        throw new Error("Kernel lock and product pin disagree");
-    }
-
-    if (
-        pkg.version !== pin.version ||
-        pkg.name !== "@bingjiang0611/rotom" ||
-        pkg.bin?.rotom !== "bin/rotom"
-    ) {
-        throw new Error("Pinned rotom package identity mismatch");
-    }
-
-    for (const relative of bootstrapFiles) {
-        const path = canonical(join(product, relative), "file");
-
-        if (
-            createHash("sha256").update(readFileSync(path)).digest("hex") !== pin.sha256[relative]
-        ) {
-            throw new Error(`Pinned rotom bootstrap mismatch: ${relative}`);
-        }
-    }
-
-    const executable = join(product, "bin/rotom");
-
-    accessSync(executable, constants.X_OK);
-
-    // The verified product launcher performs its own bundled Pi/resource identity gate. Never invoke raw Pi instead.
-    return { version: pkg.version, executable };
 }
 
 /** Preserve network routing, not general environment credentials. The local auth gate must never traverse a proxy. */
