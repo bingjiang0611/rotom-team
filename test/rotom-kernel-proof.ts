@@ -461,7 +461,7 @@ try {
 
     assert.deepEqual(
         [...agentList.matchAll(/^- (\w+) \(/gm)].map((match) => match[1]).sort(),
-        ["delegate", "oracle", "researcher", "reviewer", "scout", "worker"],
+        ["delegate", "oracle", "reviewer", "scout", "worker"],
         agentList,
     );
 

@@ -224,18 +224,62 @@ export default function (pi) {
         });
     }
 
+    // A runner's close, whatever its state; the product emits it after persisting the close evidence.
+    const closeWaiters = new Map();
+
+    const closed = (id) => {
+        closeWaiters.get(id)?.();
+        closeWaiters.delete(id);
+    };
+
+    pi.events.on("subagent:process-terminal", (proof) => closed(String(proof?.runId)));
+    pi.events.on("subagent:async-complete", (data) => closed(String(data?.id)));
+
     pi.registerCommand("team-kernel-stop-children", {
         description: "Private: stop this run's background subagents (no model request)",
         handler: async () => {
-            for (const id of children) {
-                // pi-subagents' cross-extension RPC; it signals the child before it replies.
-                pi.events.emit("subagents:rpc:v1:request", {
-                    version: 1,
-                    requestId: randomUUID(),
-                    method: "stop",
-                    params: { id },
-                });
-            }
+            const stops = [...children].map(
+                (id) =>
+                    new Promise((resolve) => {
+                        const requestId = randomUUID();
+                        const reply = `subagents:rpc:v1:reply:${requestId}`;
+
+                        let unsubscribe = () => {};
+
+                        const done = () => {
+                            unsubscribe();
+                            closeWaiters.delete(id);
+                            resolve();
+                        };
+
+                        closeWaiters.set(id, done);
+                        unsubscribe = pi.events.on(reply, (answer) => {
+                            // A run that is not running anymore has nothing to stop or wait for.
+                            if (answer?.success !== true) {
+                                done();
+                            }
+                        });
+                        // pi-subagents' cross-extension RPC: it files a stop request the runner reads.
+                        pi.events.emit("subagents:rpc:v1:request", {
+                            version: 1,
+                            requestId,
+                            method: "stop",
+                            params: { id },
+                        });
+                    }),
+            );
+
+            // Session shutdown interrupts (pauses) a runner that has not read its stop request yet, so wait for each
+            // runner to close before the kernel may close. Bounded: a runner that does not close is left to shutdown.
+            let timer;
+
+            await Promise.race([
+                Promise.all(stops),
+                new Promise((resolve) => {
+                    timer = setTimeout(resolve, 10_000);
+                }),
+            ]);
+            clearTimeout(timer);
         },
     });
 
