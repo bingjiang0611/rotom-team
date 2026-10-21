@@ -3796,10 +3796,57 @@ button.chip:hover {
     color: var(--accent);
 }
 
+/* Keep the browser's space: recent folders must not flex-shrink it down to a clipped toolbar.
+   On short screens the sheet body scrolls instead of compressing its controls. */
+.cwd-sheet > .sheet-body > * {
+    flex-shrink: 0;
+}
+
+.cwd-sheet .row input {
+    min-width: 0;
+}
+
+.cwd-sheet .button.primary {
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+.cwd-sheet .list-item > span:first-child {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.cwd-sheet .list-item > .icon {
+    flex-shrink: 0;
+}
+
 .dir-list {
     display: flex;
     flex-direction: column;
-    max-height: 42vh;
+    max-height: 42dvh;
+}
+
+.dir-list > .dir-tools,
+.dir-list > .new-folder {
+    flex-shrink: 0;
+}
+
+.dir-entries {
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.cwd-recent > summary {
+    cursor: pointer;
+    padding: 0.4rem 0;
+    margin: 0;
+}
+
+.cwd-recent-list {
+    max-height: 10rem;
     overflow-y: auto;
 }
 

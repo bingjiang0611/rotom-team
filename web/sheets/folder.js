@@ -132,10 +132,12 @@ export function CwdSheet({ mode }) {
     return html`<${Sheet}
         title=${mode === "change" ? "Working directory" : "New session"}
         onClose=${closeSheet}
+        className="cwd-sheet"
     >
         <div class="row">
             <input
                 class="mono"
+                aria-label="Working directory"
                 value=${path}
                 onInput=${(event) => {
                     setPath(event.currentTarget.value);
@@ -165,7 +167,7 @@ export function CwdSheet({ mode }) {
                 <input type="checkbox" checked=${worktree} onChange=${(event) => setWorktree(event.currentTarget.checked)} /> In a git worktree of its own: a branch, apart from this folder
             </label>`
         }
-        <button class="button primary wide" ref=${useButton} onClick=${() => use(path)}>
+        <button class="button primary wide" ref=${useButton} title=${path} onClick=${() => use(path)}>
             ${missing === path ? "Create and use" : "Use"} ${shortPath(path, home)}
         </button>
         ${
@@ -198,32 +200,40 @@ export function CwdSheet({ mode }) {
                         onCancel=${() => setNaming(false)}
                     />`
                 }
-                ${
-                    listing.parent &&
-                    html`<button class="list-item" onClick=${() => load(listing.parent)}>
-                        <span class="mono">..</span>
-                    </button>`
-                }
-                ${listing.dirs.map(
-                    (dir) => html`<button class="list-item" onClick=${() => load(dir.path)}>
-                        <span><${Icon} name="folder" size=${15} /> ${dir.name}</span>
-                        <${Icon} name="chevron" size=${14} />
-                    </button>`,
-                )}
-                ${listing.dirs.length === 0 && html`<div class="muted pad">No folders here.</div>`}
+                <div class="dir-entries">
+                    ${
+                        listing.parent &&
+                        html`<button class="list-item" onClick=${() => load(listing.parent)}>
+                            <span class="mono">..</span>
+                        </button>`
+                    }
+                    ${listing.dirs.map(
+                        (dir) => html`<button
+                            class="list-item"
+                            title=${dir.path}
+                            onClick=${() => load(dir.path)}
+                        >
+                            <span><${Icon} name="folder" size=${15} /> ${dir.name}</span>
+                            <${Icon} name="chevron" size=${14} />
+                        </button>`,
+                    )}
+                    ${listing.dirs.length === 0 && html`<div class="muted pad">No folders here.</div>`}
+                </div>
             </div>`
         }
         ${
             listing?.recent?.length > 0 &&
-            html`<div class="group">
-                <div class="group-title">Recent</div>
-                ${listing.recent.map(
-                    (dir) =>
-                        html`<button class="list-item" onClick=${() => use(dir)}>
-                            <span class="mono">${shortPath(dir, listing.home)}</span>
-                        </button>`,
-                )}
-            </div>`
+            html`<details class="cwd-recent">
+                <summary class="group-title">Recent folders (${listing.recent.length})</summary>
+                <div class="cwd-recent-list">
+                    ${listing.recent.map(
+                        (dir) =>
+                            html`<button class="list-item" title=${dir} onClick=${() => use(dir)}>
+                                <span class="mono">${shortPath(dir, listing.home)}</span>
+                            </button>`,
+                    )}
+                </div>
+            </details>`
         }
     <//>`;
 }
