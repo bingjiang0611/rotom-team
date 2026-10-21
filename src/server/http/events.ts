@@ -261,10 +261,10 @@ export function createEventStreams(app: PocketApp, maxStreamBytes = STREAM_BUFFE
                     } satisfies PushSignal);
                 }
 
-                // A short pause lets a burst of events go out in one answer.
+                // Answer once this burst of events (sent together, synchronously) is queued: the tab is waiting.
                 if (created.waiting !== undefined) {
                     clearTimeout(created.timer);
-                    created.timer = setTimeout(() => answerPoll(created), 30);
+                    created.timer = setTimeout(() => answerPoll(created), 0);
                 }
             });
             created.client.close = () => closePoller(created);
@@ -290,7 +290,7 @@ export function createEventStreams(app: PocketApp, maxStreamBytes = STREAM_BUFFE
         current.gzip = acceptsGzip(request.headers["accept-encoding"]);
         current.timer = setTimeout(
             () => answerPoll(current),
-            current.queue.length > 0 ? 30 : POLL_HOLD_MS,
+            current.queue.length > 0 ? 0 : POLL_HOLD_MS,
         );
         // Closes when answered, or when the browser gives up on this request.
         response.on("close", () => {

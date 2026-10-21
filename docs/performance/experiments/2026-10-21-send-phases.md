@@ -55,10 +55,49 @@ one run of ten (90 ms coalescing, as in `turn.paced`). `push.*.bytes` count even
   network and proxy round trips, a poll answer that is already in flight, a larger session view, or a slower device.
   This is unverified, and needs a field measurement or a scenario with injected latency to decide.
 
+## Change: push the first change at once, answer a waiting poll at once
+
+`src/server/room.ts` `schedule()` still sends at most one push per client every 90 ms, but after a quiet spell the
+first change goes out on the next timer turn instead of 90 ms later. A full `pushAll` (a tab attaching) now cancels a
+scheduled push, which would find nothing new. `src/server/http/events.ts` answers a waiting long poll once the current
+synchronous burst of events is queued (timer 0) instead of after a 30 ms pause.
+
+`perf:ci -- HEAD --runs 5` (base and head alternating, same benchmark, `highLoad: false`), medians in ms:
+
+| Phase                         | poll before | poll after | stream before | stream after |
+| ----------------------------- | ----------: | ---------: | ------------: | -----------: |
+| first reply chunk on the wire |        1187 |       1094 |          1169 |         1084 |
+| **first reply chunk painted** |    **1228** |   **1108** |      **1183** |     **1089** |
+| own message on the wire       |         107 |        106 |           106 |          107 |
+| **own message painted**       |     **151** |    **116** |       **116** |      **119** |
+
+Every head run of `reply.first` is faster than every base run on both transports: −120 ms on poll (−90 ms
+coalescing, −30 ms poll pause) and −94 ms on the event stream. `send.shown` gains about 35 ms on poll (the poll pause)
+and nothing on the event stream. The own message does not wait on coalescing: it reaches the view only when the
+native process journals the user entry (`onProgress` → `mirror` in `team-kernel.ts`), about 100 ms after Enter here.
+Showing it sooner needs the optimistic display by `requestId` (Proposal 2), not push timing.
+
+Work that grew, all necessary for the earlier push: a burst that starts after a quiet spell now goes out in two pushes
+(the first change at once, the rest at most 90 ms later) instead of one. That is one extra push per client per such
+burst: about 7–14 more SQL statements and up to 50 KB more JSON parsed (`turn.warm` 143 → 157 statements, view pushes
+1 → 2; `web.send.*` 18 → 24–26 view pushes). The push rate during streaming is unchanged (still one per 90 ms at
+most). Opening a session does less: `session.open` 61 → 46 statements and 2 → 1 view pushes,
+`projection.large.open` 123 → 98, because a full push now cancels the redundant scheduled one. Poll requests in
+`web.send.poll` 16 → 18. The ratchet check and the ledger guard pass.
+
+`turn.cold` was 1684 → 1751 ms in this comparison, all of it in `nativeStartRpcInitializeMs` (the rotom child
+process starting). Across the other reports of the same code it overlaps: old code 1659–1724 ms, new code
+1704–1751 ms, and in the first `perf:ci` (against `origin/main`) base runs 1614–1772 against head 1625–1772. Read
+as noise in the child's start, not a cost of this change; not proven.
+
+The first comparison also showed `session.open.long` doing more work. That was the benchmark: the server notices a
+closed event stream on its next write, and with pushes timed differently the reference tab's departure fell inside
+the counted window. Fixed in the benchmark in its own commit (push once and wait for the departure before the window).
+
 ## Next
 
-1. Turn the 90 ms coalescing off for the first push after a send (own message) and for the first delta of a reply, and
-   check whether ~95 ms leaves both phases (expected L1 win: ~190 ms across the two waits, on both transports).
-2. Answer a waiting poll at once for those two events instead of after the 30 ms burst pause.
-3. Add injected round-trip latency (for example 150 ms per request) to `web.send.poll`, under a new key, to see whether
+1. Show the own message at once from the composer, matched to the server's entry by `requestId` (Proposal 2).
+2. Add injected round-trip latency (for example 150 ms per request) to `web.send.poll`, under a new key, to see whether
    poll reconnects make up the real 1.2 s.
+3. Confirm in the journal after deployment: current-release `reply.first` and `send.shown` on poll, once each group
+   has 30 samples.

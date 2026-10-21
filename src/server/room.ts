@@ -191,6 +191,8 @@ export class Room {
     #view: AttachedReplicatedState<ConversationView> | undefined;
     #unsubscribe: (() => void) | undefined;
     #timer: NodeJS.Timeout | undefined;
+    /** When the last push to every client went out (`performance.now()`). */
+    #pushedAt = -Infinity;
     #closeTimer: NodeJS.Timeout | undefined;
     #headTimer: NodeJS.Timeout | undefined;
     /** The branch this view last read, as JSON. */
@@ -386,7 +388,11 @@ export class Room {
         return this.#view?.value;
     }
 
-    /** Coalesce bursts of commits (streaming commits land every 100 ms) into one update per client. */
+    /**
+     * Coalesce bursts of commits (streaming commits land every 100 ms) into at most one update per client every 90 ms.
+     * After a quiet spell the first change goes out at once, on the next timer turn so changes made together still go
+     * together: a sent message and the first words of an answer are what people wait for.
+     */
     schedule(): void {
         this.schedulePeek();
 
@@ -394,11 +400,14 @@ export class Room {
             return;
         }
 
-        this.#timer = setTimeout(() => {
-            this.#timer = undefined;
+        this.#timer = setTimeout(
+            () => {
+                this.#timer = undefined;
 
-            this.pushAll();
-        }, 90);
+                this.pushAll();
+            },
+            Math.max(0, this.#pushedAt + 90 - performance.now()),
+        );
     }
 
     #entry(entry: EntryRecord): ClientEntry | null {
@@ -491,6 +500,11 @@ export class Room {
     /** One synchronous fanout shares public room readback, never viewer-specific safety fields. */
     pushAll(fullClient?: Client): void {
         let info: ReturnType<TeamKernel["roomInfo"]> | undefined;
+
+        // Every tab gets the current view now: a push already scheduled would find nothing new.
+        clearTimeout(this.#timer);
+        this.#timer = undefined;
+        this.#pushedAt = performance.now();
 
         const roomInfo = () => {
             info ??= this.#app.kernel!.roomInfo(this.id);
