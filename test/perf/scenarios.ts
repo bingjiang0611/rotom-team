@@ -867,6 +867,15 @@ const reference = viewTab(base, token, raw, long as unknown as number);
 const whole = await reference.full;
 
 await reference.close();
+// The server learns that an event stream closed when it next writes to it; push once, so the reference tab has left
+// before the window opens instead of whenever the next write happens to fall (inside the window or not).
+app.roomChanged(long);
+
+for (let waited = 0; app.watching(alice.id, long) && waited < 5_000; waited += 20) {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+}
+
+assert.equal(app.watching(alice.id, long), false, "the reference tab has left");
 await quiet();
 
 let longTab: ReturnType<typeof viewTab> | undefined;
