@@ -27,6 +27,12 @@ export const WORKLOAD = {
     longTail: 240,
 } as const;
 
+/**
+ * The model's pause before the first chunk of a send timed in phases (`web.send.*`), so the sender's own message is
+ * pushed before the reply. Outside `WORKLOAD`, whose equality `perf:compare` checks: older reports stay comparable.
+ */
+export const SPLIT_FIRST_OUTPUT_MS = 1000;
+
 const seeded = `kernel mode; a session of ${WORKLOAD.seededTurns} turns, ${WORKLOAD.answerChars}-char answers streamed in ${WORKLOAD.streamChunks} chunks`;
 const imageHistory = `kernel mode; separate Durable mirror of ${WORKLOAD.imageEntries} native user messages, each with ${WORKLOAD.answerChars} text chars and one distinct ${WORKLOAD.imageWidth}x${WORKLOAD.imageHeight} RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference`;
 
@@ -53,6 +59,8 @@ export const SCENARIOS: Record<string, string> = {
     "native.validate": `after turn.prewarmed, the team validator a subagent start runs (rotom-child.ts, its own Node process) in that member's HOME and workspace, until it exits`,
     "web.reopen": `${seeded}; after session.reclaim, headless Chromium opens /s/<session> in one tab until shown (and saved where the page keeps copies), closes it, then a fresh tab of the same profile opens it until the last answer shows without a saved-copy check marker`,
     "web.paced": `${seeded}; after all established scenarios, a new headless Chromium tab opens that history unmeasured, then submits one ${WORKLOAD.answerChars}-char answer paced ${WORKLOAD.pacedChunkMs} ms per chunk until it appears`,
+    "web.send.poll": `${seeded}; after all other scenarios, headless Chromium on a non-loopback name with long polling opens that history (now ${WORKLOAD.seededTurns + 1} turns) unmeasured, focuses the message box, warms the native process and types; from Enter until the first chunk of the ${WORKLOAD.answerChars}-char answer (sent ${SPLIT_FIRST_OUTPUT_MS} ms after the request, then paced ${WORKLOAD.pacedChunkMs} ms per chunk) is painted, its milliseconds split into phases; one more Node event-stream tab watches; counted until settled and quiet`,
+    "web.send.stream": `${seeded}; after web.send.poll, the same send to that history (now ${WORKLOAD.seededTurns + 2} turns) from a new headless Chromium on the same name using the event stream; one more Node event-stream tab watches; counted until settled and quiet`,
     "commands.discover.cold": `${seeded}; after all existing scenarios, an additional new native session with one tab; first explicit POST prompts, with no model request`,
     "commands.discover.warm": `${seeded}; same additional session/tab after cold discovery; a second explicit POST prompts with a new request ID, with no model request`,
     "turn.prepared": `${seeded}; same additional session/tab after both discoveries; first ordinary prompt, until settled and quiet`,
@@ -535,6 +543,45 @@ export const REPORTED: Record<string, string[]> = {
         "sql.statements",
         "sql.rows",
         "subprocess.total",
+        ...projection,
+        ...pushes,
+        "http.requests",
+        "cdp.LayoutCount",
+        "cdp.RecalcStyleCount",
+        "cdp.Nodes",
+        "web.event.parse.calls",
+        "web.event.parse.chars",
+        "web.view.apply.calls",
+        "web.view.base.entry.copies",
+        "web.view.delta.entries",
+        "web.view.prune.checks",
+        "web.view.order.ids",
+    ],
+    // As web.paced, and no native start: the send goes to the process the focused message box warmed.
+    "web.send.poll": [
+        "sql.statements",
+        "sql.rows",
+        "subprocess.total",
+        "subprocess.rotom",
+        ...projection,
+        ...pushes,
+        "http.requests",
+        "cdp.LayoutCount",
+        "cdp.RecalcStyleCount",
+        "cdp.Nodes",
+        "web.event.parse.calls",
+        "web.event.parse.chars",
+        "web.view.apply.calls",
+        "web.view.base.entry.copies",
+        "web.view.delta.entries",
+        "web.view.prune.checks",
+        "web.view.order.ids",
+    ],
+    "web.send.stream": [
+        "sql.statements",
+        "sql.rows",
+        "subprocess.total",
+        "subprocess.rotom",
         ...projection,
         ...pushes,
         "http.requests",

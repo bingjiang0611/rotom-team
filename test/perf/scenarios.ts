@@ -28,7 +28,7 @@ import { createHandler } from "../../src/server/http.ts";
 import type { Runtime } from "../../src/server/team-accounts.ts";
 import type { User } from "../../src/server/config.ts";
 import { measureWebOpen } from "./browser.ts";
-import { WORKLOAD } from "./workload.ts";
+import { SPLIT_FIRST_OUTPUT_MS, WORKLOAD } from "./workload.ts";
 import { imageFixture, probeImages } from "./images.ts";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { ConversationId } from "@earendil-works/pi-durable";
@@ -37,6 +37,7 @@ import { NATIVE_ENTRY } from "../../src/server/entry-format.ts";
 import { sniffImage } from "../../src/server/http/assets.ts";
 import { measureImageNetwork } from "./image-network.ts";
 import { measurePasteNetwork } from "./paste-network.ts";
+import { measureSend } from "./send-phases.ts";
 import { sessionListTab } from "./session-list.ts";
 import { claimFor } from "./view-claim.ts";
 import { type Transcript, viewTab } from "./view-tab.ts";
@@ -81,9 +82,14 @@ const model = createServer(async (req, res) => {
     const users = input.messages.filter((m) => m.role === "user");
     const request = raw.stringify(users.at(-1)?.content ?? "");
     const fullAnswer = answer(users.length);
-    const text = request.includes("PROJECTION-SEED")
-        ? fullAnswer.slice(0, WORKLOAD.projectionAnswerChars)
-        : fullAnswer;
+    // A send timed in phases (`send-phases.ts`) names itself; the answer's first chunk names it back.
+    const split = /SPLIT-USER-([a-z]+)/.exec(request)?.[1];
+    const text =
+        split !== undefined
+            ? `SPLIT-REPLY-${split} ${fullAnswer}`
+            : request.includes("PROJECTION-SEED")
+              ? fullAnswer.slice(0, WORKLOAD.projectionAnswerChars)
+              : fullAnswer;
     // A paced answer streams like a real model, so the server's 90 ms push coalescing has something to coalesce.
     const paced = request.includes("PACED");
     const size = Math.ceil(text.length / WORKLOAD.streamChunks);
@@ -94,6 +100,11 @@ const model = createServer(async (req, res) => {
 
     res.writeHead(200, { "Content-Type": "text/event-stream" });
     emit({ role: "assistant" });
+
+    // A real model thinks before it answers: long enough that the sender's own message is pushed before the reply.
+    if (split !== undefined) {
+        await new Promise((resolve) => setTimeout(resolve, SPLIT_FIRST_OUTPUT_MS));
+    }
 
     for (let at = 0; at < text.length; at += size) {
         emit({ content: text.slice(at, at + size) });
@@ -998,6 +1009,29 @@ await scenario("native.validate", async () => {
 
     assert.equal(code, 0, `the validator accepts the member's prepared HOME: ${errors}`);
 });
+
+// Last, so nothing above changes: a send from the composer to the History session, timed in phases, over long polling
+// and then over the event stream. Each answer is the next turn of that history.
+for (const [index, transport] of (["poll", "stream"] as const).entries()) {
+    const turn = WORKLOAD.seededTurns + 2 + index;
+    const sent = await measureSend({
+        base,
+        ownerToken: app.config.ownerToken,
+        token,
+        sessionId: history,
+        transport,
+        ready: `END-OF-ANSWER-${turn - 1}`,
+        done: `END-OF-ANSWER-${turn}`,
+        quiet,
+        profile: join(root, `perf-browser-send-${transport}`),
+    });
+
+    results.push(
+        "unavailable" in sent
+            ? { scenario: `web.send.${transport}`, unavailable: sent.unavailable }
+            : { scenario: `web.send.${transport}`, ...sent },
+    );
+}
 
 writeFileSync(out, raw.stringify({ workload: WORKLOAD, results }, null, 2));
 server.closeAllConnections();
