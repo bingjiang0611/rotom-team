@@ -75,7 +75,18 @@ export async function measureWebOpen(options: {
         // Watch from the document's start, reading text only: innerText would lay the page out and count as work.
         // For a reopen, "confirmed" also needs no element saying the transcript is a saved copy still being checked; a
         // page that never shows saved copies is confirmed as soon as it is shown. A first open watches as before.
-        const watch = `window.__rotomPerf = {
+        const watch = `window.__perfWarms = new Set();
+                const originalFetch = window.fetch;
+                window.fetch = (...args) => {
+                    const pending = originalFetch(...args);
+                    if (typeof args[0] === "string" && /\\/warm$/.test(args[0])) {
+                        window.__perfWarms.add(pending);
+                        const done = () => window.__perfWarms.delete(pending);
+                        pending.then(done, done);
+                    }
+                    return pending;
+                };
+                window.__rotomPerf = {
                     eventParseCalls: 0, eventParseChars: 0, eventParseMs: 0,
                     viewApplyCalls: 0, viewApplyMs: 0, viewBaseEntryCopies: 0,
                     viewDeltaEntries: 0, viewPruneChecks: 0, viewOrderIds: 0
@@ -111,6 +122,23 @@ export async function measureWebOpen(options: {
                 });`
                         : ""
                 }`;
+
+        // Opening now may start a native process in the background. Keep its work in the open window and finish it
+        // before closing the tab or counting the next scenario: a quiet SQL/push gap does not mean startup has ended.
+        const settleWarms = async (sessionId: string) => {
+            const answer = await cdp.send(
+                "Runtime.evaluate",
+                { expression: "Promise.allSettled([...window.__perfWarms])", awaitPromise: true },
+                sessionId,
+                30_000,
+            );
+
+            if (answer.exceptionDetails) {
+                throw new Error(
+                    `Could not settle page-started warming: ${raw.stringify(answer.exceptionDetails)}`,
+                );
+            }
+        };
 
         if (options.reopen) {
             const earlier = await page();
@@ -152,6 +180,7 @@ export async function measureWebOpen(options: {
                 earlier.sessionId,
                 15_000,
             );
+            await settleWarms(earlier.sessionId);
             await cdp.send("Target.closeTarget", { targetId: earlier.targetId });
             await options.quiet();
         }
@@ -199,6 +228,8 @@ export async function measureWebOpen(options: {
             : undefined;
         let after = await metrics();
 
+        await options.quiet();
+        await settleWarms(tab.sessionId);
         await options.quiet();
 
         if (options.afterOpen) {
