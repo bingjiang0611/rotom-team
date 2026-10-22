@@ -36,6 +36,15 @@ function reducer() {
         Map,
         Set,
         markOpenFinished() {},
+        warmCalls: 0,
+        warmSession() {
+            context.warmCalls++;
+        },
+        unclaimed: false,
+        reconnects: 0,
+        connect() {
+            context.reconnects++;
+        },
     };
 
     runInNewContext(
@@ -46,6 +55,7 @@ function reducer() {
     return {
         store,
         perf,
+        context,
         apply: (context as typeof context & { apply: (data: any) => void }).apply,
     };
 }
@@ -132,4 +142,56 @@ test("full reconnect and conversation switch discard old maps, including empty t
     assert.notEqual(r.store.state.view.entries, switched);
     assert.equal(r.store.state.view.entries.size, 0);
     assert.equal(switched.has(3), true);
+});
+
+test("versioned live text patches reconstruct immutable snapshots and reject missing baselines", () => {
+    const r = reducer();
+    const live = (text: string) => ({
+        busy: true,
+        generation: { attempt: 1, message: { blocks: [{ type: "text", text }] } },
+    });
+
+    r.apply(view([], { full: true, order: [], live: live("prefix"), liveVersion: 1 }));
+    const before = r.store.state.view;
+    const patch = { base: 1, append: [{ index: 0, at: 6 }] };
+
+    r.apply(view([], { live: live(" suffix"), liveVersion: 2, livePatch: patch }));
+    assert.equal(r.store.state.view.live.generation.message.blocks[0].text, "prefix suffix");
+    assert.equal(before.live.generation.message.blocks[0].text, "prefix");
+    assert.equal(r.context.reconnects, 0);
+    const confirmed = r.store.state.view;
+
+    r.apply(view([], { live: live(" suffix"), liveVersion: 2, livePatch: patch }));
+    assert.equal(
+        r.context.reconnects,
+        1,
+        "a repeated or missed patch reconnects without applying it",
+    );
+    assert.equal(r.store.state.view, confirmed);
+    r.apply(view([], { full: true, order: [], live: live("complete"), liveVersion: 1 }));
+    assert.equal(r.store.state.view.live.generation.message.blocks[0].text, "complete");
+    r.apply(
+        view([], {
+            live: live("x"),
+            liveVersion: 2,
+            livePatch: { base: 1, append: [{ index: 0, at: 99 }] },
+        }),
+    );
+    assert.equal(r.context.reconnects, 2, "a wrong prefix length cannot silently truncate text");
+    assert.equal(r.store.state.view.live.generation.message.blocks[0].text, "complete");
+});
+
+test("an initializing open retries warming only on authoritative readiness, not every incremental update", () => {
+    const r = reducer();
+
+    r.apply(view([], { full: true, order: [], kernel: { initializing: true } }));
+    assert.equal(r.context.warmCalls, 1);
+    r.apply(view([], { kernel: { initializing: false } }));
+    assert.equal(
+        r.context.warmCalls,
+        2,
+        "readiness after the initial full view is an open trigger too",
+    );
+    r.apply(view([], { kernel: { initializing: false } }));
+    assert.equal(r.context.warmCalls, 2, "ordinary streaming updates cannot cause warm requests");
 });

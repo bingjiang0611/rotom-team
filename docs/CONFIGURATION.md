@@ -95,8 +95,10 @@ idle. Failures/unknown outcomes retire the process, and handoff retires the old 
 transport. Server shutdown awaits closure of retained processes before releasing its journal lock. No idle eviction or
 cross-restart in-memory restoration is claimed; reopening after restart uses the persisted native session.
 
-Focusing the message box of an idle native session that runs on one's own account asks the server to start its process
-before the first send (`POST /api/c/:id/warm`, at most once per session every four minutes per tab). The server starts
+Opening an idle native session that runs on one's own account asks the server to start its process after the first
+authoritative full view, before composer focus or the first send. Hidden tabs defer until visible; cached/checking
+views, other members' sessions, initializing/busy sessions and non-steering members do not ask. Composer focus remains
+a fallback (`POST /api/c/:id/warm`, at most once per session every four minutes per tab). The server starts
 it only for that member, if they may see, steer and drive the session, on the pinned kernel, after the send's admission
 checks. The process's gate has nothing active, so it can spend nothing until a send is admitted; every inference is
 still authorized there. Each member keeps at most one unused warm process (warming another session retires the first),
@@ -420,6 +422,18 @@ Nothing automatically changes the running listener, binds another address or obt
 
 HTTP/2 requests use the same redacted journal schema, excluding held streams/polls. Their `wireBytes` is `null`
 (unavailable): streams share a connection, so a socket byte delta cannot be attributed to one request.
+
+A remote tab falls back to polling if its initial event stream does not deliver a complete view/session list within
+six seconds. While polling, it actively retries the stream after one hour without needing navigation. Hidden/offline
+tabs defer an overdue retry until visible/online. The poll closes before the stream opens; another incomplete stream
+starts a fresh one-hour polling period. A complete stream clears the saved fallback choice. Local loopback addresses
+keep using event streams. No journal fields or collection semantics change: fallback reasons are not yet journaled.
+A private trusted HTTPS/HTTP2 route can avoid HTTP/1 connection limits, but cannot force a buffering proxy to flush SSE.
+
+New tabs negotiate live text deltas with `live=delta` on either transport. Each connection keeps one bounded live
+baseline; append-only text/thinking blocks send only their suffix, while replacements, tool calls, retries and other
+metadata remain snapshots. Full views/reconnects always carry complete live text. A missing/wrong patch baseline
+causes read-only full resynchronization, never a send retry. Older tabs that do not negotiate still receive full text.
 
 ## Verification
 

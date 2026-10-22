@@ -547,6 +547,57 @@ function markOpenFinished() {
 function applyView(data) {
     const perf = window.__rotomPerf;
     const started = perf ? performance.now() : 0;
+    const becameReady =
+        store.state.view.kernel?.initializing === true && data.kernel?.initializing === false;
+
+    if (data.livePatch) {
+        const before = store.state.view;
+        const blocks = data.live?.generation?.message?.blocks;
+        const append = data.livePatch.append;
+        const valid =
+            !data.full &&
+            before.conversation?.id === data.conversation.id &&
+            before.liveVersion === data.livePatch.base &&
+            data.liveVersion === data.livePatch.base + 1 &&
+            Array.isArray(blocks) &&
+            Array.isArray(append) &&
+            append.every(({ index, at }) => {
+                const old = before.live?.generation?.message?.blocks[index];
+                const next = blocks[index];
+
+                return (
+                    (next?.type === "text" || next?.type === "thinking") &&
+                    old?.type === next.type &&
+                    old.text.length === at
+                );
+            });
+
+        if (!valid) {
+            // A lost baseline must not produce truncated or concatenated text. Get a fresh full snapshot, read only.
+            unclaimed = true;
+            connect();
+
+            return;
+        }
+
+        const joined = [...blocks];
+
+        for (const { index } of append) {
+            joined[index] = {
+                ...blocks[index],
+                text: before.live.generation.message.blocks[index].text + blocks[index].text,
+            };
+        }
+
+        data = {
+            ...data,
+            live: {
+                ...data.live,
+                generation: { ...data.live.generation, message: { blocks: joined } },
+            },
+        };
+    }
+
     let baseEntryCopies = 0;
     let deltaEntries = 0;
     let pruneChecks = 0;
@@ -610,6 +661,7 @@ function applyView(data) {
                 entries,
                 order,
                 live: data.live,
+                liveVersion: data.liveVersion,
                 inbox: data.inbox,
                 agent: data.agent,
                 stats: data.stats,
@@ -662,6 +714,10 @@ function applyView(data) {
     }
 
     markOpenFinished();
+
+    if (data.full || becameReady) {
+        warmSession();
+    }
 }
 
 /** The `moving` marks that a session list has not caught up with yet: it still shows those sessions where they were. */
@@ -811,8 +867,8 @@ const handlers = {
 
 const TRANSPORT_KEY = "pocket.transport";
 const local = /^(localhost|127\.\d+\.\d+\.\d+|\[::1\])$/.test(location.hostname);
-/** After an event stream stalls on this address, poll for a day, then try the stream again: one slow start is not forever. */
-const POLL_FOR_MS = 24 * 60 * 60_000;
+/** After an event stream stalls, poll for an hour, then actively try the stream again while visible and online. */
+const POLL_FOR_MS = 60 * 60_000;
 
 const pollHere = () => {
     const saved = localStorage.getItem(TRANSPORT_KEY) ?? "";
@@ -846,7 +902,7 @@ export function connect() {
     const claim = id === null || unclaimed ? null : claimOf(store.state.view, id);
 
     unclaimed = false;
-    const query = `tab=${encodeURIComponent(TAB)}&sessions=delta${
+    const query = `tab=${encodeURIComponent(TAB)}&sessions=delta&live=delta${
         id === null ? "" : `&c=${id}&tail=${TRANSCRIPT_TAIL}`
     }${claim === null ? "" : `&have=${encodeURIComponent(claim)}`}`;
 
@@ -902,6 +958,8 @@ function streamEvents(query) {
 
             if (settles.includes(name)) {
                 settled = true;
+                clearTimeout(fallback);
+                localStorage.removeItem(TRANSPORT_KEY);
             }
 
             const perf = window.__rotomPerf;
@@ -938,7 +996,7 @@ function streamEvents(query) {
         try {
             await api("me");
         } catch (error) {
-            if (error.status === 401) {
+            if (error.status === 401 && source === connection) {
                 connection.close();
                 store.set({ me: null });
 
@@ -968,9 +1026,32 @@ function pollEvents(query) {
     let ack = 0;
     let stopped = false;
     let request = null;
+    let probeTimer;
+
+    const probe = () => {
+        clearTimeout(probeTimer);
+
+        if (stopped || source !== connection || local) {
+            return;
+        }
+
+        const at = Number((localStorage.getItem(TRANSPORT_KEY) ?? "").split(":")[1]);
+        const left = at + POLL_FOR_MS - Date.now();
+
+        if (left > 0) {
+            probeTimer = setTimeout(probe, left);
+        } else if (!document.hidden && navigator.onLine !== false) {
+            // Close the poll first; its acknowledgement and any interrupted read are replaced by a full snapshot.
+            connect();
+        }
+    };
+
     const connection = {
         close() {
             stopped = true;
+            clearTimeout(probeTimer);
+            document.removeEventListener("visibilitychange", probe);
+            removeEventListener("online", probe);
             request?.abort();
 
             if (session) {
@@ -978,6 +1059,11 @@ function pollEvents(query) {
             }
         },
     };
+
+    document.addEventListener("visibilitychange", probe);
+    addEventListener("online", probe);
+    // Defer until `source` owns this connection. No simultaneous stream probe or second polling loop.
+    probeTimer = setTimeout(probe, 0);
 
     (async () => {
         let failures = 0;
@@ -992,7 +1078,11 @@ function pollEvents(query) {
                 );
 
                 if (response.status === 401) {
-                    stopped = true;
+                    if (stopped || source !== connection) {
+                        return;
+                    }
+
+                    connection.close();
                     store.set({ me: null });
 
                     return;
@@ -1018,6 +1108,10 @@ function pollEvents(query) {
                 connected();
 
                 for (const item of data.events) {
+                    if (stopped || source !== connection) {
+                        return;
+                    }
+
                     if (item.seq <= ack) {
                         continue;
                     }
@@ -1461,8 +1555,8 @@ const warmedAt = new Map();
 const WARM_AGAIN_MS = 4 * 60_000;
 
 /**
- * Ask the server to start this session's native process before the person sends, as their focus in the message box
- * says they may: only where the session runs on their own account and is idle. The server checks everything again and
+ * Ask the server to start this session's native process on confirmed open, visibility return or composer focus:
+ * only where the session runs on their own account and is idle. The server checks everything again and
  * may refuse; nothing here waits for it or shows it.
  */
 export function warmSession() {
@@ -1471,6 +1565,8 @@ export function warmSession() {
 
     if (
         id === undefined ||
+        id !== store.state.conversationId ||
+        document.hidden ||
         view.checking ||
         !view.kernel?.yours ||
         view.kernel.initializing ||
@@ -1482,7 +1578,14 @@ export function warmSession() {
     }
 
     warmedAt.set(id, Date.now());
-    api(`c/${id}/warm`, {}).catch(() => warmedAt.delete(id));
+    api(`c/${id}/warm`, {})
+        .then((result) => {
+            // A transient refusal (for example another session still warming) must not suppress composer focus.
+            if (!result.warmed) {
+                warmedAt.delete(id);
+            }
+        })
+        .catch(() => warmedAt.delete(id));
 }
 
 /** Entries that show as transcript rows. Tool results show inside their call's card instead. */
@@ -1655,6 +1758,7 @@ function reportVisibility() {
 document.addEventListener("visibilitychange", () => {
     reportVisibility();
     markOpenFinished();
+    warmSession();
 });
 store.subscribe((state) => {
     // Report again after each (re)connect: the server starts every new connection as visible.

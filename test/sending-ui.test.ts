@@ -40,6 +40,12 @@ test("a native message shows at once, and its own entry takes its place", real, 
         await new Promise((resolve) => setTimeout(resolve, 300));
         emit({ role: "assistant" });
         emit({ content: "Received." });
+
+        for (let index = 0; index < 5; index++) {
+            await new Promise((resolve) => setTimeout(resolve, 120));
+            emit({ content: ` ${index}:` + "x".repeat(400) });
+        }
+
         emit({}, "stop");
         response.end("data: [DONE]\n\n");
     });
@@ -122,6 +128,21 @@ test("a native message shows at once, and its own entry takes its place", real, 
             "session",
             30_000,
         );
+        const room = await app.room(id);
+        let livePatches = 0;
+
+        for (const client of room.clients) {
+            const send = client.send.bind(client);
+
+            client.send = (name, data: any) => {
+                if (name === "view" && data.livePatch) {
+                    livePatches++;
+                }
+
+                send(name, data);
+            };
+        }
+
         // Note every message row marked as sending that ever shows the text.
         await page.evaluate(`window.__sending = [];
             window.__unknown = [];
@@ -163,6 +184,18 @@ test("a native message shows at once, and its own entry takes its place", real, 
                 ),
             "the answer",
             30_000,
+        );
+
+        assert.ok(
+            livePatches > 0,
+            "the actual native browser connection receives live text patches",
+        );
+        assert.equal(
+            await check(
+                `document.querySelector('.transcript').textContent.includes(' 4:' + 'x'.repeat(400))`,
+            ),
+            true,
+            "the browser reconstructed the final streamed text",
         );
 
         const idle = () =>

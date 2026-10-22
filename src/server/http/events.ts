@@ -70,6 +70,7 @@ function newClient(url: URL, user: User, send: Client["send"]): Client {
         id: (url.searchParams.get("tab") ?? randomUUID()).slice(0, 64),
         connection: randomUUID(),
         sessionDeltas: url.searchParams.get("sessions") === "delta",
+        liveDeltas: url.searchParams.get("live") === "delta",
         user,
         conversationId: raw === null || raw === "" ? undefined : conversationId(raw),
         viewClaim:

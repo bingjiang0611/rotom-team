@@ -44,6 +44,7 @@ import {
 } from "./docs.ts";
 import { SHELL_ENTRY } from "./entry-format.ts";
 import { agentInfo } from "./models.ts";
+import { liveUpdate, type LiveSnapshot } from "./live-delta.ts";
 import {
     type ClientEntry,
     type ClientStats,
@@ -145,6 +146,8 @@ export interface Client {
     readonly connection: string;
     /** This connection accepts versioned full lists and session-row deltas instead of repeated full arrays. */
     readonly sessionDeltas?: boolean;
+    /** This connection understands versioned append-only live text. Older tabs still receive full snapshots. */
+    readonly liveDeltas?: boolean;
     /** Entries the tab says it holds from an earlier connection; checked and used up by its first full view. */
     viewClaim?: ViewClaim;
     /**
@@ -201,6 +204,7 @@ export class Room {
     #entrySource: ConversationView["entries"] | undefined;
     #entrySequence: ProjectedSequence | undefined;
     readonly #clientSequences = new WeakMap<Client, object>();
+    readonly #clientLive = new WeakMap<Client, LiveSnapshot>();
     #statsEntrySource: ConversationView["entries"] | undefined;
     #statsUsage: UsageState | undefined;
     #stats: ClientStats | undefined;
@@ -664,6 +668,17 @@ export class Room {
             } satisfies ViewProjectionSignal);
         }
 
+        const liveState = roomPart("live", () =>
+            this.#native() ? this.#app.kernel!.clientLive(this.id) : projectLive(live),
+        );
+        const update = client.liveDeltas
+            ? liveUpdate(full ? undefined : this.#clientLive.get(client), liveState)
+            : undefined;
+
+        if (update) {
+            this.#clientLive.set(client, update.snapshot);
+        }
+
         client.send("view", {
             full,
             conversation: this.#app.conversationInfo(this),
@@ -672,9 +687,7 @@ export class Room {
             ...(orderChanged || full ? { order } : {}),
             // The first position of the order this view sent entries from: the tab holds every entry from there on.
             ...(full && floor > 0 ? { start: floor } : {}),
-            live: roomPart("live", () =>
-                this.#native() ? this.#app.kernel!.clientLive(this.id) : projectLive(live),
-            ),
+            ...(update?.wire ?? { live: liveState }),
             inbox: roomPart("inbox", () =>
                 inbox.items.map((item) =>
                     item.mode === "write"

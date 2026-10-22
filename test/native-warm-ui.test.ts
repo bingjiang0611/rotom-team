@@ -1,5 +1,5 @@
-// Warming in real Chromium: focusing the message box of one's own idle native session asks the server, once, to start
-// its native process, and the process is ready before anything is sent.
+// Warming in real Chromium: opening one's own idle native session asks the server, once, to start its native process,
+// before composer focus or any send. Focusing the composer afterwards asks nothing more.
 import { cleanUp, noInferenceModels, owner, root, until, work } from "./helpers.ts";
 import assert from "node:assert/strict";
 import { once } from "node:events";
@@ -16,7 +16,7 @@ after(cleanUp);
 const executable = findBrowser();
 
 test(
-    "focusing the message box warms one's own native session once",
+    "opening one's own native session warms it once before composer focus",
     { skip: executable === undefined && "needs Chromium", timeout: 60_000 },
     async () => {
         const app = await PocketApp.open({
@@ -102,10 +102,9 @@ test(
             const unused = () => app.kernel!.executions.unusedWarm().length;
 
             await navigate(`${base}/login?token=${encodeURIComponent(app.config.ownerToken)}`);
+            await cdp.send("Target.activateTarget", { targetId });
             await navigate(`${base}/s/${id}`);
-            assert.equal(unused(), 0);
-            await focus();
-            await until(() => unused() === 1, "the warm process", 30_000);
+            await until(() => unused() === 1, "the warm process before composer focus", 30_000);
             assert.equal(warms, 1);
             // Focusing again soon after asks nothing more.
             await focus();
