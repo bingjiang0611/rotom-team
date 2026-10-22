@@ -1,7 +1,8 @@
 /**
  * A native message shows as it goes: Enter puts it in the transcript at once, marked as sending, and only the
- * server's entry with the same browser request id takes that row's place. A send that fails takes the row away and
- * leaves the text in the box. Real Chromium, real rotom kernel, loopback model, no model account.
+ * server's entry with the same browser request id takes that row's place. A send the server refuses takes the row away;
+ * one whose answer is lost keeps it, marked as of unknown outcome, until its entry comes after all or it is put away.
+ * The text stays in the box either way. Real Chromium, real rotom kernel, loopback model, no model account.
  */
 import assert from "node:assert/strict";
 import { once } from "node:events";
@@ -123,9 +124,13 @@ test("a native message shows at once, and its own entry takes its place", real, 
         );
         // Note every message row marked as sending that ever shows the text.
         await page.evaluate(`window.__sending = [];
+            window.__unknown = [];
             new MutationObserver(() => {
                 for (const row of document.querySelectorAll(".transcript .user-row.sending")) {
                     if (!window.__sending.includes(row.textContent)) window.__sending.push(row.textContent);
+                    if (row.matches(".unknown") && !window.__unknown.includes(row.textContent)) {
+                        window.__unknown.push(row.textContent);
+                    }
                 }
             }).observe(document, { subtree: true, childList: true, characterData: true }); true`);
 
@@ -160,25 +165,97 @@ test("a native message shows at once, and its own entry takes its place", real, 
             30_000,
         );
 
-        // A send that fails (here the network, after a moment): the row goes, the text stays in the box.
-        await page.evaluate(`const original = window.fetch;
-            window.fetch = (input, init) => String(input).includes("/submit")
-                ? new Promise((_, reject) => setTimeout(() => reject(new TypeError("offline")), 300))
-                : original(input, init);
-            true`);
-        await page.type({ selector: box }, "second-words", { submit: true });
+        const idle = () =>
+            until(
+                () =>
+                    check(
+                        `const { store } = await import('/store.js'); !store.state.view.live?.busy`,
+                    ),
+                "an idle session",
+                30_000,
+            );
+        // Answers each send as `answer` says, after a moment; every other request goes through.
+        const sendsAnswer = (answer: string) =>
+            page.evaluate(`window.__fetch ??= window.fetch;
+                window.fetch = (input, init) => String(input).includes("/submit")
+                    ? new Promise((resolve) => setTimeout(resolve, 300)).then(() => ${answer})
+                    : window.__fetch(input, init);
+                true`);
+
+        // Refused by the server: the row goes, the text stays in the box.
+        await sendsAnswer(`new Response(JSON.stringify({ error: "Refused." }), { status: 409 })`);
+        await page.type({ selector: box }, "refused-words", { submit: true });
         await until(
-            () => check(`window.__sending.some((text) => text.includes("second-words"))`),
-            "the failed send's row",
+            () => check(`window.__sending.some((text) => text.includes("refused-words"))`),
+            "the refused send's row",
         );
         await until(
             () => check(`!document.querySelector(".user-row.sending")`),
-            "the failed row gone",
+            "the refused row gone",
         );
-        assert.equal(await check(`${rows("second-words")}.length === 0`), true);
+        assert.equal(await check(`${rows("refused-words")}.length === 0`), true);
         assert.equal(
-            await check(`document.querySelector("${box}").value === "second-words"`),
+            await check(`document.querySelector("${box}").value === "refused-words"`),
             true,
+        );
+
+        // Never arrived (the network failed first): the row stays, marked unknown, and is never taken as sent.
+        await sendsAnswer(`Promise.reject(new TypeError("offline"))`);
+        await page.type({ selector: box }, "lost-words", { submit: true });
+        await until(
+            () => check(`${rows("lost-words")}.some((row) => row.matches(".sending.unknown"))`),
+            "the lost send marked unknown",
+        );
+        assert.equal(
+            await check(`${rows("lost-words")}[0].textContent.includes("outcome unknown")`),
+            true,
+        );
+        assert.equal(await check(`document.querySelector("${box}").value === "lost-words"`), true);
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        assert.equal(
+            await check(
+                `${rows("lost-words")}.length === 1 && ${rows("lost-words")}[0].matches(".sending.unknown")`,
+            ),
+            true,
+            "a send of unknown outcome stays",
+        );
+        // Put away by its sender, it goes; nothing is sent again.
+        await page.evaluate(
+            `document.querySelector(".user-row.unknown button.link").click(); true`,
+        );
+        await until(() => check(`${rows("lost-words")}.length === 0`), "the dismissed row gone");
+
+        // Went, but its answer was lost: marked unknown until its own entry comes and takes its place.
+        await sendsAnswer(
+            `window.__fetch(input, init).then(() => { throw new TypeError("connection lost"); })`,
+        );
+        await page.type({ selector: box }, "went-words", { submit: true });
+        await until(
+            () => check(`window.__sending.some((text) => text.includes("went-words"))`),
+            "the row of the send whose answer was lost",
+        );
+        await until(
+            () =>
+                check(
+                    `${rows("went-words")}.length === 1 && !document.querySelector(".user-row.sending")`,
+                ),
+            "its entry in place of the row",
+            30_000,
+        );
+        // The server answers once the send is recorded, before the native run writes its entry, so it showed unknown.
+        assert.equal(
+            await check(`window.__unknown.some((text) => text.includes("went-words"))`),
+            true,
+            "marked unknown before its entry came",
+        );
+        await idle();
+        await page.evaluate(`window.fetch = window.__fetch; true`);
+        assert.equal(
+            await check(
+                `const { store } = await import('/store.js'); store.state.view.order.filter((id) => store.state.view.entries.get(id)?.text === "went-words").length === 1`,
+            ),
+            true,
+            "sent once",
         );
     } finally {
         await browsers.closeAll({ final: true });

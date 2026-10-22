@@ -164,13 +164,16 @@ store.subscribe(observe);
 
 // ─── Messages on their way (sendsInFlight) ───────────────────────────────
 
-/** Past this a message still without its entry is not shown as on its way: something else went wrong. */
+/** Past this a message still without its entry is no longer shown as on its way, but as of unknown outcome. */
 const SEND_SHOWN_MS = 2 * 60_000;
+
+/** The most messages kept here: older ones are dropped first. Only lost sends stay long. */
+const SENDS_KEPT = 20;
 
 /** Entries that arrived for a message this tab already showed: they take its place without sliding in again. */
 export const echoedEntries = new Set();
 
-// A run that started and ended without the message's entry did not take it: the row goes.
+// A run that started and ended without the message's entry: what became of the message is not known here.
 store.subscribe((state) => {
     if (state.view.live?.busy) {
         for (const send of state.pendingSends) {
@@ -181,16 +184,38 @@ store.subscribe((state) => {
     }
 });
 
-function dropSend(key) {
+/** A message is no longer shown: refused by the server, or put away by its sender. */
+export function dropSend(key) {
     store.set((state) => ({
         pendingSends: state.pendingSends.filter((send) => send.key !== key),
     }));
 }
 
+function lostSend(key) {
+    store.set((state) => ({
+        pendingSends: state.pendingSends.map((send) =>
+            send.key === key ? { ...send, unknown: true } : send,
+        ),
+    }));
+}
+
 /**
- * The native messages this tab sent to the open session that the view does not show yet, oldest first. Only the
- * server's user entry with the same browser request id and member replaces one, so equal text from someone else, or
- * another send by this person, never does.
+ * Whether the tab cannot tell if a message it showed went: the answer to its send was lost or unknown, its run
+ * ended without it, or it waited too long. Such a message stays, marked, until its entry comes after all (then it
+ * went) or its sender puts it away. It is never taken as sent, and never sent again by itself.
+ */
+export function sendUnknown(send, view) {
+    return (
+        send.unknown === true ||
+        Date.now() - send.at >= SEND_SHOWN_MS ||
+        (send.ran === true && !view.live?.busy)
+    );
+}
+
+/**
+ * The native messages this tab sent to the open session that the view does not show yet, oldest first, including
+ * those of unknown outcome. Only the server's user entry with the same browser request id and member replaces one, so
+ * equal text from someone else, or another send by this person, never does.
  */
 export function sendsInFlight(state) {
     const { view, me } = state;
@@ -202,15 +227,9 @@ export function sendsInFlight(state) {
         return sends;
     }
 
-    const now = Date.now();
-
     return sends.filter((send) => {
+        // Where the view started over (another branch, a reset), the whole of it is looked through.
         const from = send.after === null ? 0 : view.order.indexOf(send.after) + 1;
-
-        // The view started over (another branch, a reset): its own entries say what was sent.
-        if (from === 0 && send.after !== null) {
-            return false;
-        }
 
         for (let index = from; index < view.order.length; index++) {
             const id = view.order[index];
@@ -227,7 +246,7 @@ export function sendsInFlight(state) {
             }
         }
 
-        return now - send.at < SEND_SHOWN_MS && !(send.ran && !view.live?.busy);
+        return true;
     });
 }
 
@@ -1213,8 +1232,8 @@ export const actions = {
             request.catch(() => sendFailed(timed));
         }
 
-        // The message shows at once, marked as going, until its entry takes its place; a refused or unknown send
-        // takes it away (an unknown one shows its entry if it went after all).
+        // The message shows at once, marked as going, until its entry takes its place. A send the server refused
+        // goes away; one whose answer was lost or unknown stays, marked as such (`sendUnknown`).
         if (optimistic) {
             store.set((state) => ({
                 pendingSends: [
@@ -1226,16 +1245,30 @@ export const actions = {
                         at: Date.now(),
                         after: view.order.at(-1) ?? null,
                         ran: false,
+                        unknown: false,
                     },
-                ],
+                ].slice(-SENDS_KEPT),
             }));
+
+            const lost = () => {
+                lostSend(requestId);
+                notify(
+                    "warning",
+                    "Not known whether your message was sent. It shows as sent if it arrives; check before sending it again.",
+                );
+            };
+
             request.then(
                 (result) => {
-                    if (["unknown", "rejected", "interrupted"].includes(result?.status)) {
+                    if (result?.status === "rejected") {
                         dropSend(requestId);
+                    } else if (["unknown", "interrupted"].includes(result?.status)) {
+                        lost();
                     }
                 },
-                () => dropSend(requestId),
+                // A refusal has an answer below 500; no answer, or a server failure, may have come after it went.
+                (error) =>
+                    error instanceof ApiError && error.status < 500 ? dropSend(requestId) : lost(),
             );
         }
 

@@ -100,9 +100,12 @@ The web app now puts a native message in the transcript the moment it is sent, m
 (`.user-row.sending`), when the session is idle and the message is not a slash command. Its row stays until the
 server's user entry for the same browser `requestId` and member arrives, and that entry takes its place without
 sliding in again. The mirror (`team-kernel.ts`) now stores that request id in the mirrored entry's data, and the
-projection sends it with user entries. A refused send, an unknown outcome or a failed request takes the row away and
-leaves the text in the box, as before; so does a run that ends without the entry, or two minutes without it. Durable
-(non-native) sessions are unchanged: their entries carry no request id.
+projection sends it with user entries. A send the server refuses (an answer below 500, or
+`rejected`) takes the row away and leaves the text in the box, as before. Any other failure is of unknown outcome: no
+answer, a server failure, `unknown` or `interrupted`, a run that ends without the entry, or two minutes without it.
+That row stays, marked "outcome unknown", with a warning, until the entry with its request id comes after all (then it
+went) or the sender dismisses it; it is never shown as sent by itself and never sent again. The text stays in the box.
+Durable (non-native) sessions are unchanged: their entries carry no request id.
 
 `perf:ci -- HEAD --runs 5`, alternating, `highLoad: false`, medians in ms:
 
@@ -124,7 +127,8 @@ means is a journal change for the owner to decide. In the field, the message on 
 network at all; `send.shown` keeps measuring the round trip.
 
 `test/sending-ui.test.ts` (real Chromium, real kernel, loopback model) checks that the row shows, that only the entry
-with the request id replaces it without a second slide-in, and that a failed send takes it away and keeps the text. It
+with the request id replaces it without a second slide-in, that a refused send takes it away, that a send that never
+arrived stays marked unknown until dismissed, and that one whose answer was lost shows unknown, then its entry, once. It
 fails with the web change removed (no sending row) and with the request id removed from the mirror.
 
 ## Next

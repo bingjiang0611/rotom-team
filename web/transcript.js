@@ -12,6 +12,7 @@ import {
     canSteer,
     collab,
     discuss,
+    dropSend,
     heldFrom,
     isRow,
     loadEarlier,
@@ -20,6 +21,7 @@ import {
     openSheet,
     echoedEntries,
     sendsInFlight,
+    sendUnknown,
     store,
     TRANSCRIPT_ROWS,
 } from "./store.js";
@@ -145,19 +147,31 @@ function MentionedText({ text }) {
     return parts;
 }
 
-/** A message this tab sent, shown as it goes out until its entry arrives and takes its place (`sendsInFlight`). */
-function SendingEntry({ send }) {
+/**
+ * A message this tab sent, shown as it goes out until its entry arrives and takes its place (`sendsInFlight`). One
+ * whose outcome is not known says so and stays until its entry comes after all or its sender puts it away.
+ */
+function SendingEntry({ send, view }) {
     const { me } = store.state;
+    const unknown = sendUnknown(send, view);
 
-    return html`<div class="user-row sending enter">
-        <div class="bubble" title="Sending">
+    return html`<div class=${`user-row sending enter${unknown ? " unknown" : ""}`}>
+        <div class="bubble" title=${unknown ? "Not known whether this was sent" : "Sending"}>
             ${
                 me &&
                 html`<div class="author" style=${`color:${personColor(me.id)}`}>
-                    ${me.name}<span class="muted"> · sending</span>
+                    ${me.name}<span class="muted">${unknown ? " · outcome unknown" : " · sending"}</span>
                 </div>`
             }
             <div class="user-text"><${MentionedText} text=${send.text} /></div>
+            ${
+                unknown &&
+                html`<div class="send-unknown small">
+                    Not known whether this was sent. It shows as sent if it arrived; check before sending it
+                    again.${" "}
+                    <button class="link small" onClick=${() => dropSend(send.key)}>Dismiss</button>
+                </div>`
+            }
         </div>
     </div>`;
 }
@@ -1153,15 +1167,14 @@ export function Transcript() {
         return () => element.removeEventListener("load", onLoad, true);
     }, [view.conversation?.id]);
 
-    // A message whose entry arrived, or that went wrong, is no longer kept (other sessions' until they are too old).
+    // A message whose entry arrived, or that its sender put away, is no longer kept (other sessions' stay, few).
     useEffect(() => {
         const { pendingSends } = store.state;
         // Read now, not from the render: a send can be added after that render and before this effect runs.
         const current = sendsInFlight(store.state);
-        const left = pendingSends.filter((send) =>
-            send.conversationId === store.state.view.conversation?.id
-                ? current.includes(send)
-                : Date.now() - send.at < PENDING_MS,
+        const left = pendingSends.filter(
+            (send) =>
+                send.conversationId !== store.state.view.conversation?.id || current.includes(send),
         );
 
         if (left.length !== pendingSends.length) {
@@ -1359,7 +1372,7 @@ export function Transcript() {
                 />`,
             )}
             <${PendingShells} conversationId=${conversation.id} rows=${rows} />
-            ${goingOut.map((send) => html`<${SendingEntry} key=${send.key} send=${send} />`)}
+            ${goingOut.map((send) => html`<${SendingEntry} key=${send.key} send=${send} view=${view} />`)}
             ${
                 partial.length > 0 &&
                 html`<div class="assistant live">

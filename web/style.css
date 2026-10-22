@@ -1032,6 +1032,17 @@ kbd {
     border-right-color: var(--line-strong);
 }
 
+/* One whose outcome is not known: not faded, so it is read, and marked like other warnings. */
+.user-row.sending.unknown .bubble {
+    opacity: 1;
+    border-right-color: var(--warn);
+}
+
+.send-unknown {
+    margin-top: 0.3rem;
+    color: var(--warn);
+}
+
 .user-text {
     white-space: pre-wrap;
     overflow-wrap: anywhere;
