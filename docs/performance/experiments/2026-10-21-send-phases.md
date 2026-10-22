@@ -94,10 +94,42 @@ The first comparison also showed `session.open.long` doing more work. That was t
 closed event stream on its next write, and with pushes timed differently the reference tab's departure fell inside
 the counted window. Fixed in the benchmark in its own commit (push once and wait for the departure before the window).
 
+## Change: show a native message at once, replaced by its own entry
+
+The web app now puts a native message in the transcript the moment it is sent, marked as sending
+(`.user-row.sending`), when the session is idle and the message is not a slash command. Its row stays until the
+server's user entry for the same browser `requestId` and member arrives, and that entry takes its place without
+sliding in again. The mirror (`team-kernel.ts`) now stores that request id in the mirrored entry's data, and the
+projection sends it with user entries. A refused send, an unknown outcome or a failed request takes the row away and
+leaves the text in the box, as before; so does a run that ends without the entry, or two minutes without it. Durable
+(non-native) sessions are unchanged: their entries carry no request id.
+
+`perf:ci -- HEAD --runs 5`, alternating, `highLoad: false`, medians in ms:
+
+| Phase                                    | poll before | poll after | stream before | stream after |
+| ---------------------------------------- | ----------: | ---------: | ------------: | -----------: |
+| **message on screen** (`userEchoedMs`)   |     **116** |     **10** |       **121** |        **9** |
+| server's entry on screen (`userShownMs`) |         116 |        114 |           121 |          115 |
+| journal `send.shown` (`appSendShownMs`)  |         113 |        111 |           119 |          111 |
+| first reply chunk painted                |        1101 |       1097 |          1097 |         1098 |
+
+Every head run of `userEchoedMs` (6–16 ms) is below every base run (110–129 ms). Nothing else moved past noise.
+Work grew by the request id in each user entry: 96–279 more pushed bytes per scenario that sends or opens a session
+with native user messages. `commands.list` read 26 → 47 ms in this comparison with identical work counters; across
+nine reports of this and earlier code it ranges 23–64 ms, and in an earlier comparison of this change under load the
+head was the faster side. Read as noise; not proven.
+
+The journal's `send.shown` still ends at the server's entry, not at the row the tab shows by itself: changing what it
+means is a journal change for the owner to decide. In the field, the message on screen now no longer waits on the
+network at all; `send.shown` keeps measuring the round trip.
+
+`test/sending-ui.test.ts` (real Chromium, real kernel, loopback model) checks that the row shows, that only the entry
+with the request id replaces it without a second slide-in, and that a failed send takes it away and keeps the text. It
+fails with the web change removed (no sending row) and with the request id removed from the mirror.
+
 ## Next
 
-1. Show the own message at once from the composer, matched to the server's entry by `requestId` (Proposal 2).
-2. Add injected round-trip latency (for example 150 ms per request) to `web.send.poll`, under a new key, to see whether
-   poll reconnects make up the real 1.2 s.
-3. Confirm in the journal after deployment: current-release `reply.first` and `send.shown` on poll, once each group
-   has 30 samples.
+1. Add injected round-trip latency (for example 150 ms per request) to `web.send.poll`, under a new key, to see whether
+   poll reconnects make up the real 1.2 s `send.shown`.
+2. Decide whether the journal's `send.shown` should end at the row the tab shows by itself.
+3. Confirm in the journal after deployment: current-release `reply.first` on poll, once the group has 30 samples.

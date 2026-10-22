@@ -27,7 +27,16 @@ export type ClientBlock =
       };
 
 export type ClientEntry =
-    | { id: number; kind: "user"; text: string; images: number; from?: string; files?: string[] }
+    | {
+          id: number;
+          kind: "user";
+          text: string;
+          images: number;
+          from?: string;
+          files?: string[];
+          /** The browser request whose native prompt made this entry, for replacing its optimistic row. */
+          requestId?: string;
+      }
     | {
           id: number;
           kind: "assistant";
@@ -368,7 +377,8 @@ export function projectEntry(entry: EntryRecord, full = false): ClientEntry | un
 
 /** A mirrored rotom entry shows as Pocket's own kind of the same message; bookkeeping entries do not show. */
 function projectNative(entry: EntryRecord, full: boolean): ClientEntry | undefined {
-    const native = (entry.data as { entry?: Record<string, unknown> } | undefined)?.entry;
+    const data = entry.data as { entry?: Record<string, unknown>; requestId?: unknown } | undefined;
+    const native = data?.entry;
     const id = entry.id as unknown as number;
 
     if (native?.type === "compaction" || native?.type === "branch_summary") {
@@ -405,11 +415,21 @@ function projectNative(entry: EntryRecord, full: boolean): ClientEntry | undefin
 
     const projected = projectEntry({ ...entry, kind, model: [message as never] }, full);
 
-    if (projected?.kind === "user" && projected.text.startsWith(RESUME_PREFIX)) {
+    if (projected?.kind === "user") {
+        const requestId =
+            typeof data?.requestId === "string" && data.requestId !== ""
+                ? data.requestId
+                : undefined;
+
         return {
             ...projected,
-            text: projected.text.slice(RESUME_PREFIX.length).trim(),
-            from: "server",
+            ...(requestId === undefined ? {} : { requestId }),
+            ...(projected.text.startsWith(RESUME_PREFIX)
+                ? {
+                      text: projected.text.slice(RESUME_PREFIX.length).trim(),
+                      from: "server",
+                  }
+                : {}),
         };
     }
 

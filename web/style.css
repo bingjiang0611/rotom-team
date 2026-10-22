@@ -1026,6 +1026,12 @@ kbd {
     margin-bottom: 0.1rem;
 }
 
+/* A message on its way: shown at once, a little faded, until the server's copy takes its place. */
+.user-row.sending .bubble {
+    opacity: 0.72;
+    border-right-color: var(--line-strong);
+}
+
 .user-text {
     white-space: pre-wrap;
     overflow-wrap: anywhere;

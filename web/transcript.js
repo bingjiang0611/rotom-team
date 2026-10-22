@@ -18,6 +18,8 @@ import {
     navigate,
     notify,
     openSheet,
+    echoedEntries,
+    sendsInFlight,
     store,
     TRANSCRIPT_ROWS,
 } from "./store.js";
@@ -143,8 +145,30 @@ function MentionedText({ text }) {
     return parts;
 }
 
+/** A message this tab sent, shown as it goes out until its entry arrives and takes its place (`sendsInFlight`). */
+function SendingEntry({ send }) {
+    const { me } = store.state;
+
+    return html`<div class="user-row sending enter">
+        <div class="bubble" title="Sending">
+            ${
+                me &&
+                html`<div class="author" style=${`color:${personColor(me.id)}`}>
+                    ${me.name}<span class="muted"> · sending</span>
+                </div>`
+            }
+            <div class="user-text"><${MentionedText} text=${send.text} /></div>
+        </div>
+    </div>`;
+}
+
 function UserEntry({ entry, view, users }) {
-    const [fresh] = useState(() => settledFor !== null && settledFor === view.conversation?.id);
+    const [fresh] = useState(
+        () =>
+            settledFor !== null &&
+            settledFor === view.conversation?.id &&
+            !echoedEntries.has(entry.id),
+    );
     const report = REPORT.exec(entry.text);
 
     if (report) {
@@ -1060,6 +1084,8 @@ export function Transcript() {
     const start = windowStart(rows, transcriptFrom);
     // Rows above the first shown: loaded and hidden, or not sent by the view yet.
     const earlierLeft = start > 0 || heldFrom(view) > 0;
+    // Before the rows render: an entry that takes a shown message's place does not slide in again.
+    const goingOut = sendsInFlight(store.state);
 
     useLayoutEffect(() => {
         const element = scroller.current;
@@ -1126,6 +1152,22 @@ export function Transcript() {
 
         return () => element.removeEventListener("load", onLoad, true);
     }, [view.conversation?.id]);
+
+    // A message whose entry arrived, or that went wrong, is no longer kept (other sessions' until they are too old).
+    useEffect(() => {
+        const { pendingSends } = store.state;
+        // Read now, not from the render: a send can be added after that render and before this effect runs.
+        const current = sendsInFlight(store.state);
+        const left = pendingSends.filter((send) =>
+            send.conversationId === store.state.view.conversation?.id
+                ? current.includes(send)
+                : Date.now() - send.at < PENDING_MS,
+        );
+
+        if (left.length !== pendingSends.length) {
+            store.set({ pendingSends: left });
+        }
+    });
 
     // A `!` command whose entry arrived is no longer pending.
     const shells = rows.filter((row) => row.kind === "shell").length;
@@ -1317,6 +1359,7 @@ export function Transcript() {
                 />`,
             )}
             <${PendingShells} conversationId=${conversation.id} rows=${rows} />
+            ${goingOut.map((send) => html`<${SendingEntry} key=${send.key} send=${send} />`)}
             ${
                 partial.length > 0 &&
                 html`<div class="assistant live">

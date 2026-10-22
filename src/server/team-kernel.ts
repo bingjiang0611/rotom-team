@@ -2490,19 +2490,28 @@ export class TeamKernel {
                         }
                     }
 
-                    const record = await tx.appendEntry(id, {
-                        kind: NATIVE_ENTRY,
-                        data: { entry: publicEntry(row.entry) } as unknown as JsonValue,
-                    });
                     const message = row.entry.message as { role?: unknown } | undefined;
-
-                    // A person's own prompt; inherited fork history and automatic continuations have no author.
-                    if (
+                    // A person's own prompt; inherited fork history and automatic continuations have no author. The
+                    // supplied request id lets only the sending tab replace the optimistic row with this entry.
+                    const ownPrompt =
                         ["prompt", "command"].includes(row.operation) &&
                         !row.requestId.includes("#resume") &&
                         row.entry.type === "message" &&
-                        message?.role === "user"
-                    ) {
+                        message?.role === "user";
+                    const prefix = `${row.memberId}:`;
+                    const requestId =
+                        ownPrompt && row.requestId.startsWith(prefix)
+                            ? row.requestId.slice(prefix.length)
+                            : undefined;
+                    const record = await tx.appendEntry(id, {
+                        kind: NATIVE_ENTRY,
+                        data: {
+                            entry: publicEntry(row.entry),
+                            ...(requestId === undefined ? {} : { requestId }),
+                        } as unknown as JsonValue,
+                    });
+
+                    if (ownPrompt) {
                         authors.entries[String(record.id)] = row.memberId;
                     }
                 }

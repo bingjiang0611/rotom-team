@@ -358,6 +358,24 @@ test("peek lines keep each step short: shell commands, notes, attachments, long 
     assert.deepEqual(peekLines([], { busy: false }), []);
 });
 
+test("a mirrored native prompt carries its browser request id", () => {
+    assert.deepEqual(
+        projectEntry({
+            id: 1,
+            conversationId: 2,
+            kind: NATIVE_ENTRY,
+            data: {
+                requestId: "browser-1",
+                entry: {
+                    type: "message",
+                    message: { role: "user", content: [{ type: "text", text: "Hello" }] },
+                },
+            },
+        } as unknown as EntryRecord),
+        { id: 1, kind: "user", text: "Hello", images: 0, requestId: "browser-1" },
+    );
+});
+
 test("a rotom extension's message shows only when it is marked for display", () => {
     const report = (display: boolean) =>
         projectEntry({

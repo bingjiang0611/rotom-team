@@ -122,6 +122,8 @@ export const store = {
         filesLoaded: 0,
         /** `!` commands this tab started that have no entry yet: `{ taskId, command, conversationId, at }`. */
         pendingShells: [],
+        /** Messages this tab is sending, shown until their entries come (`sendsInFlight`). */
+        pendingSends: [],
         /** The session's browser page as the server last told: address, title, loading, size (`browser.js`). */
         browser: null,
         /** The Browser panel shows; kept per tab, so the reload after a live edit keeps it. */
@@ -159,6 +161,75 @@ export const store = {
 
 // Content-free timings of what people wait for here, for the server's performance journal (perf.js).
 store.subscribe(observe);
+
+// ─── Messages on their way (sendsInFlight) ───────────────────────────────
+
+/** Past this a message still without its entry is not shown as on its way: something else went wrong. */
+const SEND_SHOWN_MS = 2 * 60_000;
+
+/** Entries that arrived for a message this tab already showed: they take its place without sliding in again. */
+export const echoedEntries = new Set();
+
+// A run that started and ended without the message's entry did not take it: the row goes.
+store.subscribe((state) => {
+    if (state.view.live?.busy) {
+        for (const send of state.pendingSends) {
+            if (send.conversationId === state.view.conversation?.id) {
+                send.ran = true;
+            }
+        }
+    }
+});
+
+function dropSend(key) {
+    store.set((state) => ({
+        pendingSends: state.pendingSends.filter((send) => send.key !== key),
+    }));
+}
+
+/**
+ * The native messages this tab sent to the open session that the view does not show yet, oldest first. Only the
+ * server's user entry with the same browser request id and member replaces one, so equal text from someone else, or
+ * another send by this person, never does.
+ */
+export function sendsInFlight(state) {
+    const { view, me } = state;
+    const sends = state.pendingSends.filter(
+        (send) => send.conversationId === view.conversation?.id,
+    );
+
+    if (sends.length === 0) {
+        return sends;
+    }
+
+    const now = Date.now();
+
+    return sends.filter((send) => {
+        const from = send.after === null ? 0 : view.order.indexOf(send.after) + 1;
+
+        // The view started over (another branch, a reset): its own entries say what was sent.
+        if (from === 0 && send.after !== null) {
+            return false;
+        }
+
+        for (let index = from; index < view.order.length; index++) {
+            const id = view.order[index];
+            const entry = view.entries.get(id);
+
+            if (
+                entry?.kind === "user" &&
+                entry.requestId === send.key &&
+                view.authors?.[id] === me?.id
+            ) {
+                echoedEntries.add(id);
+
+                return false;
+            }
+        }
+
+        return now - send.at < SEND_SHOWN_MS && !(send.ran && !view.live?.busy);
+    });
+}
 
 // ─── Saved copies of recent sessions (view-cache.js) ───────────────────────────────
 
@@ -1123,15 +1194,16 @@ export const actions = {
     submit: (text, attachments, mode, inlineFiles = false, wait) => {
         const view = store.state.view;
         // Only a message to an idle session is timed: a queued one waits for the run, and a command has no reply.
-        const timed =
-            view.conversation && !view.live?.busy && !text.trimStart().startsWith("/")
-                ? sending(view)
-                : undefined;
+        const idle = view.conversation && !view.live?.busy && !text.trimStart().startsWith("/");
+        // Native entries carry the browser request id; other backends keep their confirmed-only display.
+        const optimistic = idle && view.kernel && text.trim() !== "";
+        const timed = idle ? sending(view) : undefined;
+        const requestId = uid();
         const request = api(`c/${current()}/submit`, {
             text,
             attachments,
             mode,
-            requestId: uid(),
+            requestId,
             ...(inlineFiles ? { inlineFiles } : {}),
             // Ordinary rotom prompts answer once intent is recorded; native commands wait for handler rejection.
             ...(store.state.view.kernel ? { wait: wait ?? false } : {}),
@@ -1139,6 +1211,32 @@ export const actions = {
 
         if (timed !== undefined) {
             request.catch(() => sendFailed(timed));
+        }
+
+        // The message shows at once, marked as going, until its entry takes its place; a refused or unknown send
+        // takes it away (an unknown one shows its entry if it went after all).
+        if (optimistic) {
+            store.set((state) => ({
+                pendingSends: [
+                    ...state.pendingSends,
+                    {
+                        key: requestId,
+                        conversationId: view.conversation.id,
+                        text: text.trim(),
+                        at: Date.now(),
+                        after: view.order.at(-1) ?? null,
+                        ran: false,
+                    },
+                ],
+            }));
+            request.then(
+                (result) => {
+                    if (["unknown", "rejected", "interrupted"].includes(result?.status)) {
+                        dropSend(requestId);
+                    }
+                },
+                () => dropSend(requestId),
+            );
         }
 
         return request;
