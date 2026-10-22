@@ -16,17 +16,19 @@ function harness(saved?: string) {
     let timerId = 0;
     let authReject: ((error: unknown) => void) | undefined;
     const timers = new Map<number, { at: number; fn: () => void }>();
-    const listeners = new Map<string, Set<() => void>>();
+    const listeners = new Map<string, Set<(event?: { type: string }) => void>>();
+    const transitions: string[] = [];
     const storage = new Map(saved ? [["pocket.transport", saved]] : []);
 
-    const add = (name: string, fn: () => void) => {
+    const add = (name: string, fn: (event?: { type: string }) => void) => {
         const set = listeners.get(name) ?? new Set();
 
         set.add(fn);
         listeners.set(name, set);
     };
 
-    const remove = (name: string, fn: () => void) => listeners.get(name)?.delete(fn);
+    const remove = (name: string, fn: (event?: { type: string }) => void) =>
+        listeners.get(name)?.delete(fn);
     const streams: Stream[] = [];
     const polls: { resolve: (response: any) => void; signal: AbortSignal; active: boolean }[] = [];
     let activePolls = 0;
@@ -84,6 +86,8 @@ function harness(saved?: string) {
         TRANSCRIPT_TAIL: 100,
         claimOf: () => null,
         setTransport() {},
+        reportTransport: (transition: string, from: string, to: string) =>
+            transitions.push(`${transition}:${from}->${to}`),
         handlers: { hello() {}, sessions: () => received++, view() {}, missing() {} },
         store: {
             state: {
@@ -170,12 +174,13 @@ function harness(saved?: string) {
         flush,
         event: (name: string) => {
             for (const fn of [...(listeners.get(name) ?? [])]) {
-                fn();
+                fn({ type: name });
             }
         },
         authFail: () => authReject?.({ status: 401 }),
         maxPolls: () => maxPolls,
         received: () => received,
+        transitions,
     };
 }
 
@@ -197,6 +202,11 @@ test("an incomplete stream falls back, actively reprobes in an hour, and returns
     assert.equal(h.streams[1]!.readyState, 2);
     assert.equal(h.polls.length, 2);
     assert.equal(h.maxPolls(), 1);
+    assert.deepEqual(h.transitions, [
+        "stream-initial-timeout:stream->poll",
+        "poll-hourly-reprobe:poll->stream",
+        "stream-initial-timeout:stream->poll",
+    ]);
     h.context.source.close();
 });
 
@@ -221,6 +231,10 @@ test("a complete probe stays on SSE; hidden and offline tabs defer an overdue pr
     assert.equal(h.polls.length, 1);
     assert.equal(h.storage.has("pocket.transport"), false);
     assert.equal(h.received(), 1);
+    assert.deepEqual(h.transitions, [
+        "poll-reprobe-online:poll->stream",
+        "stream-initial-complete:poll->stream",
+    ]);
     h.context.source.close();
 });
 

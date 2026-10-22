@@ -25,6 +25,8 @@ import {
     type KernelRunSignal,
     pushChannel,
     type PushSignal,
+    transportChannel,
+    type TransportSignal,
     webTimingChannel,
     type WebTimingSignal,
 } from "./perf-channels.ts";
@@ -42,6 +44,7 @@ export type PerformanceObservation =
       }
     | ({ kind: "kernel-run" } & KernelRunSignal)
     | ({ kind: "web" } & WebTimingSignal)
+    | ({ kind: "transport" } & TransportSignal)
     | {
           kind: "push";
           intervalMs: number;
@@ -371,7 +374,7 @@ export function routeShape(url: string): string {
  * Requests held open for live events: their duration is how long a tab stayed, not how slow the server was. A tab's
  * timing report is recorded as the `web` waits it carries instead.
  */
-const HELD = new Set(["/api/events", "/api/poll", "/api/perf"]);
+const HELD = new Set(["/api/events", "/api/poll", "/api/perf", "/api/perf-transport"]);
 
 type RequestStart = {
     request: IncomingMessage;
@@ -520,6 +523,9 @@ export async function startPerformanceJournal(options: {
     const onWeb = (message: unknown) =>
         journal.record({ kind: "web", ...(message as WebTimingSignal) });
 
+    const onTransport = (message: unknown) =>
+        journal.record({ kind: "transport", ...(message as TransportSignal) });
+
     subscribe("http.server.request.start", onStart);
     subscribe("http.server.response.finish", onFinish);
     subscribe("http2.server.stream.start", onH2Start);
@@ -527,6 +533,7 @@ export async function startPerformanceJournal(options: {
     pushChannel.subscribe(onPush);
     kernelRunChannel.subscribe(onRun);
     webTimingChannel.subscribe(onWeb);
+    transportChannel.subscribe(onTransport);
 
     // The histogram records the time between its timer's ticks, so every sample includes the sampling interval: an idle
     // loop reads about 20 ms. The journal records the delay beyond it.
@@ -589,6 +596,7 @@ export async function startPerformanceJournal(options: {
             pushChannel.unsubscribe(onPush);
             kernelRunChannel.unsubscribe(onRun);
             webTimingChannel.unsubscribe(onWeb);
+            transportChannel.unsubscribe(onTransport);
             await journal.close();
         },
     };

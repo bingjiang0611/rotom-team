@@ -177,6 +177,32 @@ test("the server's requests, pushed events, and native runs reach the journal, w
         assert.equal((await report({ timings })).status, 400, JSON.stringify(timings[0]));
     }
 
+    const transport = (body: unknown) =>
+        fetch(`${base}/api/perf-transport`, {
+            method: "POST",
+            headers: { ...headers, "x-pocket": "1", "content-type": "application/json" },
+            body: JSON.stringify(body),
+        });
+
+    assert.equal(
+        (
+            await transport({
+                transition: "stream-initial-timeout",
+                from: "stream",
+                to: "poll",
+            })
+        ).status,
+        200,
+    );
+
+    for (const body of [
+        { transition: "stream-initial-timeout", from: "stream", to: "poll", url: "private-words" },
+        { transition: "private-words", from: "stream", to: "poll" },
+        { transition: "stream-initial-timeout", from: "poll", to: "poll" },
+    ]) {
+        assert.equal((await transport(body)).status, 400, JSON.stringify(body));
+    }
+
     controller.abort();
     pushChannel.unsubscribe(listen);
     await journal.stop();
@@ -231,6 +257,14 @@ test("the server's requests, pushed events, and native runs reach the journal, w
             { kind: "web", name: "switch", transport: "stream", ms: 81.3 },
             { kind: "web", name: "reply.first", transport: "poll", unavailable: "hidden" },
         ],
+    );
+    assert.deepEqual(
+        kinds.filter((each) => each.kind === "transport"),
+        [{ kind: "transport", transition: "stream-initial-timeout", from: "stream", to: "poll" }],
+    );
+    assert.ok(
+        kinds.every((each) => each.kind !== "http" || each.route !== "/api/perf-transport"),
+        "a transport report is a transition, not a request people waited for",
     );
     assert.ok(
         kinds.every((each) => each.kind !== "http" || each.route !== "/api/perf"),
@@ -341,6 +375,12 @@ test("the report splits prompt runs by process and phase, and browser waits by n
         record({ kind: "kernel-run", ms: 50, outcome: "discover:handled" }),
         record({ kind: "web", name: "switch", transport: "stream", ms: 80 }),
         record({ kind: "web", name: "switch", transport: "stream", unavailable: "hidden" }),
+        record({
+            kind: "transport",
+            transition: "stream-initial-timeout",
+            from: "stream",
+            to: "poll",
+        }),
     ]);
 
     assert.deepEqual(
@@ -360,4 +400,7 @@ test("the report splits prompt runs by process and phase, and browser waits by n
         result.web.map((each) => [each.wait, each.count, each.p50, each.hidden]),
         [["switch stream", 1, 80, 1]],
     );
+    assert.deepEqual(result.transports, [
+        { transition: "stream-initial-timeout stream->poll", count: 1 },
+    ]);
 });

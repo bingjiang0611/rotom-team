@@ -145,6 +145,7 @@ The running server writes [src/server/perf-journal.ts](../src/server/perf-journa
 | `kernel-run` | each native run         | duration from admission to receipt, `<operation>:<status>` or `error` |
 |              | (a run that prompted)   | phases: `prompt.process`, `dispatchMs`, `firstOutputMs`, `toolMs`     |
 | `web`        | each wait in a tab      | wait name, transport, ms (or `unavailable: hidden`)                   |
+| `transport`  | a remote tab switches   | closed transition name, `from`, `to` (`stream` or `poll`)             |
 | `push`       | each minute with pushes | per event name: count, and bytes where the transport sizes them       |
 | `process`    | each minute             | event-loop delay p50/p99/max, event-loop busy share, CPU, RSS, heap   |
 | `health`     | at shutdown             | records dropped from a full queue                                     |
@@ -160,19 +161,29 @@ native process) or `reused` (the session's running one); `dispatchMs` runs from 
 streamed output, null when none came; `toolMs` is the time with at least one tool running (parallel tools count once)
 over `tools` executions. The rest of the run is the model and finalization.
 
-Browser tabs time what people wait for, from their action to the first paint that shows its result
-([web/perf.js](../web/perf.js)), and report in batches to `POST /api/perf` (not itself an `http` record):
+Browser tabs time what people wait for, from their action to the first paint that shows its result or, for arrival
+phases, the store state that holds it ([web/perf.js](../web/perf.js)). They report in batches to `POST /api/perf` (not
+itself an `http` record):
 
-| Wait                        | From                        | To, on screen                               |
-| --------------------------- | --------------------------- | ------------------------------------------- |
-| `open.home`, `open.session` | the page's navigation start | the session list, or the session            |
-| `switch`                    | picking another session     | its view                                    |
-| `send.shown`                | sending to an idle session  | the message (in the transcript or queued)   |
-| `reply.first`               | the same send               | the first of the answer (streamed or saved) |
+| Wait                        | From                        | To                                                    |
+| --------------------------- | --------------------------- | ----------------------------------------------------- |
+| `open.home`, `open.session` | the page's navigation start | the session list, or the session, on screen           |
+| `switch`                    | picking another session     | its view on screen                                    |
+| `send.echoed`               | sending to an idle session  | its tab-local optimistic row on screen (native only)  |
+| `send.answered`             | the same send               | a successful submit answer (not delivery proof)       |
+| `send.arrived`              | the same send               | its confirmed entry or queue item in the store        |
+| `send.shown`                | the same send               | the confirmed message on screen (unchanged semantics) |
+| `reply.arrived`             | the same send               | the first answer in the store                         |
+| `reply.first`               | the same send               | the first of the answer on screen                     |
 
 A wait the tab was hidden for did not paint, so it is `unavailable: hidden`, never a duration. The server accepts only
 these names, `stream`/`poll`, and durations up to 10 minutes; a report with anything else is refused whole. A lost
 report is a gap in the journal: the tab never retries it.
+
+Remote tabs also report a rare `transport` record to `POST /api/perf-transport`: `stream-initial-timeout` (stream to
+poll), `poll-hourly-reprobe`, `poll-reprobe-visible`, `poll-reprobe-online` (poll to stream), and
+`stream-initial-complete` (a saved polling choice recovered to a complete stream). It has only `transition`, `from`,
+and `to`; network errors, addresses, URLs, ids, and text are refused.
 
 A full file (5 MiB) is renamed to `performance-<UTC stamp>-<id>.jsonl` and gzip-compressed off the write path;
 compressed archives are capped at 64 MiB, oldest first. Writing fails open: a broken disk stops the journal with one

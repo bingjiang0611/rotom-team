@@ -33,7 +33,11 @@ export const WEB_TIMINGS = [
     "open.home",
     "open.session",
     "switch",
+    "send.echoed",
     "send.shown",
+    "send.arrived",
+    "send.answered",
+    "reply.arrived",
     "reply.first",
 ] as const;
 
@@ -42,6 +46,40 @@ export type WebTimingSignal = {
     name: (typeof WEB_TIMINGS)[number];
     transport: "stream" | "poll";
 } & ({ ms: number } | { unavailable: "hidden" });
+
+/** Why one remote tab chose or left long polling. Content-free; no URL, id, path, text or network address. */
+export const TRANSPORT_TRANSITIONS = [
+    "stream-initial-timeout",
+    "poll-hourly-reprobe",
+    "poll-reprobe-visible",
+    "poll-reprobe-online",
+    "stream-initial-complete",
+] as const;
+
+export type TransportSignal = {
+    transition: (typeof TRANSPORT_TRANSITIONS)[number];
+    from: "stream" | "poll";
+    to: "stream" | "poll";
+};
+
+/** Read a tab's content-free transport transition. Null for any extra or unknown field. */
+export function parseTransportSignal(body: unknown): TransportSignal | null {
+    const item = body as Record<string, unknown> | null;
+    const keys = Object.keys(item ?? {})
+        .sort()
+        .join(",");
+    const transition = TRANSPORT_TRANSITIONS.find((each) => each === item?.transition);
+    const from = item?.from;
+    const to = item?.to;
+
+    return keys === "from,to,transition" &&
+        transition !== undefined &&
+        (from === "stream" || from === "poll") &&
+        (to === "stream" || to === "poll") &&
+        from !== to
+        ? { transition, from, to }
+        : null;
+}
 
 /** At most this many timings per report; the tab sends more in another. */
 export const WEB_TIMING_BATCH = 20;
@@ -194,3 +232,4 @@ export const kernelRunChannel = channel("rotom-team:kernel-run");
 export const nativeStartChannel = channel("rotom-team:native-start");
 export const viewProjectionChannel = channel("rotom-team:view-projection");
 export const webTimingChannel = channel("rotom-team:web");
+export const transportChannel = channel("rotom-team:web-transport");

@@ -92,7 +92,7 @@ test(
             await until(async () => {
                 await journal.journal.flush();
 
-                return web().length >= 5;
+                return web().length >= 8;
             }, "the tab's report");
 
             const waits = web();
@@ -101,7 +101,10 @@ test(
             assert.deepEqual(waits.map((each) => each.name).sort(), [
                 "open.home",
                 "open.session",
+                "reply.arrived",
                 "reply.first",
+                "send.answered",
+                "send.arrived",
                 "send.shown",
                 "switch",
             ]);
@@ -119,6 +122,9 @@ test(
 
             // The message shows before its answer can.
             assert.ok(ms("send.shown") <= ms("reply.first"), JSON.stringify(waits));
+            // This scripted backend has no optimistic row: an echo would be a false display measurement.
+            assert.ok(ms("send.arrived") <= ms("send.shown"), JSON.stringify(waits));
+            assert.ok(ms("reply.arrived") <= ms("reply.first"), JSON.stringify(waits));
             assert.doesNotMatch(
                 readFileSync(join(directory, "performance-0.jsonl"), "utf8"),
                 /private-words/,

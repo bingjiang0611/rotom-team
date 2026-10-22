@@ -161,6 +161,11 @@ export function analyse(records: PerformanceRecord[]) {
             hidden: items.filter((each) => "unavailable" in each).length,
         }))
         .sort((a, b) => a.wait.localeCompare(b.wait));
+    const transports = [
+        ...group(of("transport"), (each) => `${each.transition} ${each.from}->${each.to}`),
+    ]
+        .map(([transition, items]) => ({ transition, count: items.length }))
+        .sort((a, b) => a.transition.localeCompare(b.transition));
     const samples = of("process");
     const pushes = new Map<string, { count: number; bytes: number; sized: number }>();
     let pushMs = 0;
@@ -190,6 +195,7 @@ export function analyse(records: PerformanceRecord[]) {
         runs,
         prompts,
         web,
+        transports,
         eventLoop: {
             samples: samples.length,
             p99Median: quantile(
@@ -257,10 +263,15 @@ export function format(result: ReturnType<typeof analyse>, truncated: number): s
                 `  ${`${each.process} process`.padEnd(18)}${String(each.runs).padStart(6)} runs · dispatch p50 ${ms(each.dispatch.p50)} p95 ${ms(each.dispatch.p95)} · first output p50 ${ms(each.firstOutput.p50)} p95 ${ms(each.firstOutput.p95)}${each.noOutput > 0 ? ` (${each.noOutput} without)` : ""} · tools ${each.tools}, ${each.toolShare === null ? "-" : `${Math.round(each.toolShare * 100)}%`} of run time${few(each.dispatch)}`,
         ),
         "",
-        "Browser waits, action to the paint that shows it (by transport):",
+        "Browser waits, action to the store state or paint that ends it (by transport):",
         ...result.web.map(
             (each) =>
                 `  ${each.wait.padEnd(26)}${String(each.count).padStart(6)} · p50 ${ms(each.p50)} · p95 ${ms(each.p95)} · max ${ms(each.max)} ms${each.hidden > 0 ? ` · ${each.hidden} hidden, unmeasured` : ""}${few(each)}`,
+        ),
+        "",
+        "Browser transport transitions:",
+        ...result.transports.map(
+            (each) => `  ${each.transition.padEnd(48)}${String(each.count).padStart(6)}`,
         ),
         "",
         `Event loop over ${result.eventLoop.samples} minute samples: delay p99 median ${result.eventLoop.p99Median ?? "-"} ms, worst ${result.eventLoop.p99Worst ?? "-"} ms, longest stall ${result.eventLoop.maxWorst ?? "-"} ms; busy median ${result.eventLoop.utilizationMedian ?? "-"}, worst ${result.eventLoop.utilizationWorst ?? "-"}; RSS worst ${result.eventLoop.rssWorstBytes === null ? "-" : `${Math.round(result.eventLoop.rssWorstBytes / 1048576)} MiB`}`,

@@ -23,7 +23,12 @@ import {
 import type { User } from "../config.ts";
 import { HttpError } from "../errors.ts";
 import { desktopTheme, wallpaperFile } from "../omarchy.ts";
-import { parseWebTimings, webTimingChannel } from "../perf-channels.ts";
+import {
+    parseTransportSignal,
+    parseWebTimings,
+    webTimingChannel,
+    transportChannel,
+} from "../perf-channels.ts";
 import { runningNow } from "../running.ts";
 import { serveImage } from "./assets.ts";
 import { browserRoutes } from "./browser-routes.ts";
@@ -345,6 +350,20 @@ export function createApi(options: HttpOptions, auth: Auth) {
                 for (const timing of timings) {
                     webTimingChannel.publish(timing);
                 }
+            }
+
+            return json(response, 200, { ok: true });
+        }
+
+        if (first === "perf-transport" && method === "POST") {
+            const transition = parseTransportSignal(await readJson(request));
+
+            if (transition === null) {
+                throw new HttpError(400, "Not a transport report");
+            }
+
+            if (transportChannel.hasSubscribers) {
+                transportChannel.publish(transition);
             }
 
             return json(response, 200, { ok: true });

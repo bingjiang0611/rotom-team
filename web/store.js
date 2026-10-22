@@ -1,7 +1,16 @@
 // App state, the server connection, and API calls. Components read `store.state` and re-render on `store.subscribe`.
 import { onRoute, pushRoute } from "./back.js";
 import { sessionDelta, sessionSnapshot } from "./session-list.js";
-import { observe, opened, sending, sendFailed, setTransport, switched } from "./perf.js";
+import {
+    observe,
+    opened,
+    reportTransport,
+    sendAnswered,
+    sending,
+    sendFailed,
+    setTransport,
+    switched,
+} from "./perf.js";
 import { writtenFiles } from "./calls.js";
 import { claimOf, keptEntries } from "./view-claim.js";
 import {
@@ -930,6 +939,7 @@ function streamEvents(query) {
     /** The first batch arrived whole: the session's view, or the session list when no session is open. */
     let settled = false;
     const settles = query.includes("&c=") ? ["view", "missing"] : ["sessions"];
+    const reprobing = (localStorage.getItem(TRANSPORT_KEY) ?? "").startsWith("poll");
     const connection = {
         close() {
             clearTimeout(fallback);
@@ -947,6 +957,7 @@ function streamEvents(query) {
               }
 
               localStorage.setItem(TRANSPORT_KEY, `poll:${Date.now()}`);
+              reportTransport("stream-initial-timeout", "stream", "poll");
               connect();
           }, 6000);
 
@@ -956,10 +967,14 @@ function streamEvents(query) {
                 return;
             }
 
-            if (settles.includes(name)) {
+            if (settles.includes(name) && !settled) {
                 settled = true;
                 clearTimeout(fallback);
                 localStorage.removeItem(TRANSPORT_KEY);
+
+                if (reprobing && !local) {
+                    reportTransport("stream-initial-complete", "poll", "stream");
+                }
             }
 
             const perf = window.__rotomPerf;
@@ -1028,7 +1043,7 @@ function pollEvents(query) {
     let request = null;
     let probeTimer;
 
-    const probe = () => {
+    const probe = (event) => {
         clearTimeout(probeTimer);
 
         if (stopped || source !== connection || local) {
@@ -1042,6 +1057,15 @@ function pollEvents(query) {
             probeTimer = setTimeout(probe, left);
         } else if (!document.hidden && navigator.onLine !== false) {
             // Close the poll first; its acknowledgement and any interrupted read are replaced by a full snapshot.
+            reportTransport(
+                event?.type === "visibilitychange"
+                    ? "poll-reprobe-visible"
+                    : event?.type === "online"
+                      ? "poll-reprobe-online"
+                      : "poll-hourly-reprobe",
+                "poll",
+                "stream",
+            );
             connect();
         }
     };
@@ -1310,7 +1334,7 @@ export const actions = {
         const idle = view.conversation && !view.live?.busy && !text.trimStart().startsWith("/");
         // Native entries carry the browser request id; other backends keep their confirmed-only display.
         const optimistic = idle && view.kernel && text.trim() !== "";
-        const timed = idle ? sending(view) : undefined;
+        const timed = idle ? sending(view, { echoed: optimistic }) : undefined;
         const requestId = uid();
         const request = api(`c/${current()}/submit`, {
             text,
@@ -1323,7 +1347,16 @@ export const actions = {
         });
 
         if (timed !== undefined) {
-            request.catch(() => sendFailed(timed));
+            request.then(
+                (result) => {
+                    if (result?.status === "rejected") {
+                        sendFailed(timed);
+                    } else if (!["unknown", "interrupted"].includes(result?.status)) {
+                        sendAnswered(timed);
+                    }
+                },
+                () => sendFailed(timed),
+            );
         }
 
         // The message shows at once, marked as going, until its entry takes its place. A send the server refused

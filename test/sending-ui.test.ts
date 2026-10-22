@@ -14,6 +14,7 @@ import { PocketApp } from "../src/server/app.ts";
 import { Browsers } from "../src/server/browser.ts";
 import { findBrowser } from "../src/server/browser/discovery.ts";
 import { createHandler } from "../src/server/http.ts";
+import { type WebTimingSignal, webTimingChannel } from "../src/server/perf-channels.ts";
 import { cleanUp, owner, root, until, work } from "./helpers.ts";
 
 const chromium = findBrowser();
@@ -109,6 +110,10 @@ test("a native message shows at once, and its own entry takes its place", real, 
         save: () => {},
     });
     const box = ".composer textarea";
+    const timings: WebTimingSignal[] = [];
+    const timing = (message: unknown) => timings.push(message as WebTimingSignal);
+
+    webTimingChannel.subscribe(timing);
 
     try {
         await app.hello(owner(app));
@@ -290,7 +295,23 @@ test("a native message shows at once, and its own entry takes its place", real, 
             true,
             "sent once",
         );
+        // Leaving sends queued timings. The optimistic copy is journaled separately from the confirmed entry.
+        await page.navigate("about:blank");
+        await until(
+            () =>
+                ["send.echoed", "send.shown"].every((name) =>
+                    timings.some((each) => each.name === name && "ms" in each),
+                ),
+            "the native send timings",
+        );
+        const ms = (name: string) =>
+            Math.min(
+                ...timings.flatMap((each) => (each.name === name && "ms" in each ? [each.ms] : [])),
+            );
+
+        assert.ok(ms("send.echoed") <= ms("send.shown"), JSON.stringify(timings));
     } finally {
+        webTimingChannel.unsubscribe(timing);
         await browsers.closeAll({ final: true });
         server.closeAllConnections();
         await new Promise<void>((resolve) => server.close(() => resolve()));
