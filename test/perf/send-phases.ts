@@ -8,6 +8,9 @@
  * offset measured over DevTools before and after, and `clockUncertaintyMs` bounds that mapping. The page also reports
  * the app's own `send.shown` and `reply.first` (`web/perf.js`), the numbers the daily journal holds, as a check that
  * this measures the same waits. Where this machine has no Chromium the scenario is unavailable, never zero.
+ *
+ * `userEchoedMs` is the first paint of the message anywhere in the transcript, including a row the tab shows by itself
+ * while the message goes (`.user-row.sending`); `userShownMs` is the first paint of the server's entry for it.
  */
 import assert from "node:assert/strict";
 import { mkdirSync } from "node:fs";
@@ -34,6 +37,7 @@ type Phases = {
     submitAnswered: number | null;
     userArrived: number | null;
     replyArrived: number | null;
+    userEchoed: number | null;
     userShown: number | null;
     replyShown: number | null;
 };
@@ -59,7 +63,7 @@ const pageScript = (transport: "poll" | "stream") => `(() => {
     const now = () => performance.timeOrigin + performance.now();
     const phases = window.__sendPhases = {
         key: null, polls: 0, streams: 0, submitSent: null, submitAnswered: null,
-        userArrived: null, replyArrived: null, userShown: null, replyShown: null
+        userArrived: null, replyArrived: null, userEchoed: null, userShown: null, replyShown: null
     };
     let markers = null;
 
@@ -169,12 +173,23 @@ const pageScript = (transport: "poll" | "stream") => `(() => {
         markers = { user, reply };
         const painted = (name) =>
             requestAnimationFrame(() => setTimeout(() => (phases[name] ??= now()), 0));
+        // The message as the tab shows it while it goes (a row marked \`sending\`), and as the server's entry.
+        const confirmed = () =>
+            [...document.querySelectorAll(".transcript .user-row:not(.sending)")].some((row) =>
+                row.textContent.includes(markers.user)
+            );
+        let userEchoed = false;
         let userSeen = false;
         let replySeen = false;
         const observer = new MutationObserver(() => {
             const text = transcript();
 
-            if (!userSeen && text.includes(markers.user)) {
+            if (!userEchoed && text.includes(markers.user)) {
+                userEchoed = true;
+                painted("userEchoed");
+            }
+
+            if (!userSeen && confirmed()) {
                 userSeen = true;
                 painted("userShown");
             }
@@ -197,7 +212,12 @@ const pageScript = (transport: "poll" | "stream") => `(() => {
     window.__sendDone = (marker) => new Promise((resolve, reject) => {
         const started = performance.now();
         const check = () => {
-            if (phases.userShown !== null && phases.replyShown !== null && transcript().includes(marker)) {
+            if (
+                phases.userShown !== null &&
+                phases.replyShown !== null &&
+                transcript().includes(marker) &&
+                !document.querySelector(".transcript .user-row.sending")
+            ) {
                 resolve(true);
             } else if (performance.now() - started > 30000) {
                 reject(new Error("the answer did not finish showing"));
@@ -514,6 +534,7 @@ export async function measureSend(options: {
             promptDispatchedMs: server(dispatched),
             userPushedMs: server(watch.seen.get(user)!),
             userArrivedMs: fromKey(phases.userArrived),
+            userEchoedMs: fromKey(phases.userEchoed),
             userShownMs: fromKey(phases.userShown),
             modelFirstOutputMs: server(dispatched + run.prompt.firstOutputMs),
             replyPushedMs: server(watch.seen.get(reply)!),
