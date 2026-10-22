@@ -53,6 +53,11 @@ import { prefs, setPrefs, startTheme } from "./theme.js";
 import { Transcript } from "./transcript.js";
 import { APPLE, Boot, html, Icon, iconPath, shortPath, usePresence } from "./ui.js";
 
+/** The tab's icon, plain, and the one with the dot that says Pi is working in this tab. */
+const TAB_ICON = "/icon.svg";
+const WORKING_TAB_ICON = "/icon-running.svg";
+const TAB_ICON_BLINK_MS = 800;
+
 /**
  * Back to the session list, where it is not beside the conversation: back past the sessions opened from it, as a
  * phone's back would go, or to it in this session's place when history does not lead there.
@@ -217,12 +222,48 @@ function PanelHost({ shown, panel }) {
 
 function App() {
     const state = store.state;
+    const working = Boolean(state.view.live?.busy);
 
     useEffect(() => {
         document.title = state.view.conversation?.title
             ? `${state.view.conversation.title} · rotom team`
             : "rotom team";
     }, [state.view.conversation?.title]);
+
+    // The tab's icon carries a dot while Pi works in it. A browser draws an SVG favicon once and animates nothing
+    // inside it, so the dot blinks by swapping the plain icon and the dotted one.
+    useEffect(() => {
+        const link = document.querySelector('link[rel="icon"]');
+
+        if (!link) {
+            return;
+        }
+
+        if (!working) {
+            link.href = TAB_ICON;
+
+            return;
+        }
+
+        if (document.documentElement.dataset.motion === "reduced") {
+            link.href = WORKING_TAB_ICON;
+
+            return;
+        }
+
+        let dotted = true;
+
+        link.href = WORKING_TAB_ICON;
+        const timer = setInterval(() => {
+            dotted = !dotted;
+            link.href = dotted ? WORKING_TAB_ICON : TAB_ICON;
+        }, TAB_ICON_BLINK_MS);
+
+        return () => {
+            clearInterval(timer);
+            link.href = TAB_ICON;
+        };
+    }, [working]);
 
     if (state.me === undefined) {
         return html`<${Boot}
