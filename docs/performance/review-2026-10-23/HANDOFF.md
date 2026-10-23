@@ -34,7 +34,7 @@
 | B3    | B    | 房间级字段每次推送只算一次                  | 已推送待核验 | `8d42e63`                       |
 | B4    | B    | journal 预编译语句缓存                      | 已推送待核验 | `37cb733`                       |
 | B5    | B    | 长轮询队列字节上限                          | 已推送待核验 | `5fb4bbe`                       |
-| C1–C6 | C    | 需要 owner 决策，只写方案                   | 待做         |                                 |
+| C1–C6 | C    | 需要 owner 决策，只写方案                   | 进行中       | 方案已写，未实现                |
 
 状态取值：`待做` / `进行中` / `已推送待核验` / `核验通过` / `核验未通过` / `放弃（写明原因）`。
 
@@ -510,3 +510,89 @@
 <!-- 每项一节：核验了什么、结论（通过 / 未通过）、未通过的原因。 -->
 
 ## C 方案（执行方追加）
+
+### 边界与建议顺序
+
+本节是待 owner 决策的方案，**C1–C6 均未实现**。A/B 没有顺带引入进程淘汰、worker、旧后端下线、新订阅协议或大文件拆分。建议先补当前架构文档与基线，再做可证明的纯移动；C1、C2、C3 分别审批，C4 是独立产品决策。所有方案保留个人凭据路由、unknown 不重放、可信原生边界和既有文档存储合同。
+
+### C1 — 已用原生进程的预算与空闲回收
+
+- 建议起点：全局 **8 个原生进程预算**，包含 active、retained、warming、closing；已用空闲进程 **15 分钟**后回收。这是建议值，不是已启用配置。
+- unused warm 保留现有每成员 1 个、全局 3 个、5 分钟，但也计入总预算。满额先关闭 unused warm，再淘汰已证明 settled 且无活动 receipt 的空闲 LRU。全部忙时拒绝新启动并明确提示，不增加跨账号任务排队，不驱逐正在运行的进程。
+- 关闭确认前仍占预算；从 Map 删除不等于进程已退出。send/warm/回收需在同一 segment 生命周期协调内互斥。未知关闭或未结算 receipt 保持 fenced，不能把回收当作重放许可。
+- 回收会丢失扩展内存并断开 MCP；下次从持久化 JSONL 恢复并重新连接，内存中的扩展状态不恢复。按历史约 327 MiB/进程估算，8 个约 2.55 GiB，**不含**服务、子 Agent、MCP，也不是 RSS 硬上限。
+- 归属：`rotom-executions.ts` 管预算/淘汰，`team-kernel.ts` 保留 admission/权限。需更新 `CONFIGURATION.md` 的 “No idle eviction”、预热说明及 `PRODUCT.md` 生命周期承诺。
+- 验收：上限竞争、warm 与 send 同时到达、权限撤销、MCP 重连、关闭超时和 unknown 各有回归；先测峰值 RSS 和打开/首轮等待。owner 决定机器预算、8/15 参数、满额拒绝语义及扩展内存寿命变化。
+
+### C2 — handoff 复制成本与选项
+
+**当前事实。** `RotomExecutions.handoff` 先构造公开历史，再 reserve/关闭旧进程，`#seed` attach 新文件、append、文件/目录 fsync、读回、两次 stringify 比较，最后 journal.finish。materialization 已开始后的失败仍是 unknown；异步化不能把它改成 rejected。handoff seed 不重复计入 Durable 镜像或接收者 usage。
+
+**合成观测，不是生产 SLO。** 在本分支 B4 代码上，用真实 `RotomExecutions.handoff` 和 pinned SessionManager，临时 PocketApp、64 条交替 user/assistant 消息、同一合成付费人；模型配置只指向 loopback port 1，没有提交推理。初始化与原始 journal 种入在计时外，原生模块已加载。随后实际 warm 新 segment，关闭应用并删除临时数据。每档只测一次，darwin-arm64 / Node 24.18.0，timing lock，highLoad=false（2.69→2.64/8 核）。证据：`/tmp/rotom-review-C/handoff.log`；重现脚本仅在 `/tmp/rotom-review-C2.mjs`，没有添加 C 产品实现。
+
+| 文本输入         |  handoff | 新 seed 文件 | 新 journal body | Native SessionManager.open | 新进程 warm |
+| ---------------- | -------: | -----------: | --------------: | -------------------------: | ----------: |
+| 1 MiB / 64 消息  |  45.1 ms |  1,068,094 B |     1,067,824 B |                    1.52 ms |  2,150.8 ms |
+| 10 MiB / 64 消息 | 142.1 ms | 10,505,278 B |    10,505,008 B |                   11.74 ms |  1,767.2 ms |
+
+- 新增正文实际约 2.04 / 20.04 MiB；journal 数字是 SQL body 字节之和，不是 SQLite 文件/索引/WAL 总增量。文件数、同步写与复制正文随交接增长。
+- warm 包含新原生进程启动，不包含首次推理或真实 MCP 服务。10 MiB 单次 warm 更短只能说明启动采样波动，**不能**推断大历史更快。SessionManager.open 仅量化其中历史重读片段，不是完整冷启动。
+- 设一次公开历史正文为 P，复制约增加 `seed + journal body ≈ 2P`，另加 entry/header/页/索引开销。固定 10 MiB 交接 20 次，重复正文约 400 MiB；若每次新增 g、初始 H₀、交接 k 次，近似 `2 × [kH₀ + gk(k+1)/2]`。这是明确假设的算术，不是容量实测。
+
+**方案顺序。** 先补 1/10/100 MiB、多次交接的阶段计时、事件循环延迟、RSS、实际 DB/WAL 增量及后续首轮测量。优先把 materialization 放到受控异步执行边界，保留 attach→持久化→readback→二次授权→finish 顺序；只换异步 fs API 不会消除公开投影/stringify/hash 的 CPU 阻塞。暂不直接复用旧 seed：原生可能已经追加它，且原文件可能带私有状态；不能跨付费人硬链接可变 session。真正去重需另设计不可变公开投影对象、引用/GC、备份与权限合同。owner 决定先仅消除主线程阻塞，还是承担新的存储格式和生命周期；建议先选前者。
+
+### C3 — Program 3 的 kernel journal worker 补充
+
+当前 Durable 队列和 kernel journal 是不同一致性域；不得把多个 `DatabaseSync` 直接分散成互不协调的 writer。
+
+```text
+拟议：主线程 HTTP / 权限 / native transport / payer gate
+          │ 有界命令、关联 ID、持久化 ACK
+          ▼
+      单 storage worker
+      ├─ Durable Harness + mutation queue
+      └─ RotomJournal writer + commit/mirror 协调
+```
+
+- 先选择一个 storage worker 同时拥有两套存储写入及其顺序，不先增加两个 worker 间的排序问题。迁移需要把同步 journal 调用链改成明确异步操作，不能伪装成纯移动。
+- reserve/attach/progress/finish 以完整操作跨边界，不拆事务；收到 durable ACK 才执行依赖该事实的副作用。保留 usage、文档提交和镜像顺序，NativeMirrorDoc count 仍只在 Durable 提交后推进。
+- 命令/结果按字节限额，历史分页；测 structured clone、大对象序列化及队列等待，不宣称“放进 worker 就零阻塞”。worker 丢失 ACK 是 unknown：停止新 admission、只读对账，不自动重发有副作用的操作。
+- 关闭先停 admission，等待 native/gate/子进程关闭及持久化收尾，再关 storage worker、释放锁。备份/恢复仍受同一所有权边界约束。
+- 只读连接另立后续阶段，须等待 pi-durable 明确的快照/读取 API，不绕开 Durable 私有表和全局队列。涉及 `app.ts`、`rotom-journal.ts`、`rotom-executions.ts`、`team-kernel.ts`；不修改 schema version。
+- owner 先批准线程归属、ACK 丢失/关闭失败策略及 upstream API 边界。验收必须有 worker crash、晚到 ACK、双写拒绝、unknown 不重放、镜像顺序和权限隔离的故障注入。
+
+### C4 — 下线旧后端
+
+不能把“不加载旧服务扩展”等同于“不需要 Durable”。原生会话仍依赖 Durable 的共享文档、历史镜像和提交队列；现合同仍包含旧 Durable 会话及 `--no-rotom-kernel`。
+
+1. owner 先选旧会话继续执行、只读归档或显式迁移。授权后做只读存量/未完成任务盘点，本次未读取线上数据。
+2. 若选只读，先单独发布行为变更：禁止新的旧后端执行/恢复，保留授权、读取、导出；未完成任务明确阻断，不静默丢弃。
+3. 再删除旧 agent 执行分支和仅它使用的 loader/API；保留 native 仍需的 Durable 文档、投影和存储定义。
+4. 最后删确认无引用的 `src/server/extensions/` 代码及旧执行测试，更新 CLI、PRODUCT/CONFIGURATION 和迁移/回滚说明；不删除用户历史和旧开关记录。
+
+入口涉及 `main.ts`、`app.ts`、HTTP/commands。原审查的 65 分支/2156 行不是当前删除清单，不能按行数直接裁剪。风险是旧数据可读性、恢复计划、客户端兼容和回滚；验收需真实旧格式的合成持久化 fixture，而不只是新建空库。
+
+### C5 — 大文件拆分，逐步证明纯移动
+
+A/B 后重新定位边界。每次仅移动一个连续职责块，保留原算法、条件顺序、错误/权限边界及状态 owner；先比对移动代码等价，再跑相关测试。使用同名子目录、直接导入 owner，不加 barrel、注册表或通用工厂。
+
+| 顺序 | 候选移动                                                            | 不得混入的变化                                  | 移动证据                                                               |
+| ---- | ------------------------------------------------------------------- | ----------------------------------------------- | ---------------------------------------------------------------------- |
+| 1    | conversation-routes 的连续、自包含路由块 → 对应 conversation 子模块 | 重排匹配优先级、移动鉴权、合并分支              | 代码块/条件顺序一致，HTTP 权限/错误/重放 fixture                       |
+| 2    | team-kernel 的纯 helper/type，再到独立公开投影 adapter              | 将 #submit/queue 去重冒充移动，改变私有状态归属 | 导入图与代码等价，native command/fork/unknown proofs                   |
+| 3    | rotom-executions 的独立 JSONL/readback helper                       | 改 #track、receipt、gate、关闭所有权            | 调用顺序和错误路径不变，大历史/恢复测试                                |
+| 4    | style.css 的连续区段 → 保持相同相对 URL 基准的相邻样式文件          | 按组件重新排序 cascade、改选择器或媒体查询      | 按原顺序重组后规则完全一致，真实浏览器 computed style/mobile/peek 回归 |
+
+前端必须保留 theme→prefs、模块初始化及 store 订阅顺序。CSS 拆分的加载胶水若产生新 waterfall，必须测量且单列网络成本；不能宣称性能等价。不能保证原加载/级联顺序时暂停该步，不用“测试通过”代替纯移动证据。需要重新设计私有字段接口的 run/#submit 拆分不是纯移动，留待另案批准。每步独立提交、完整验证，可独立回滚。
+
+### C6 — 其余五项分别立项
+
+| 项目                | 建议方案与边界                                                                                                          | 先做的验证 / owner 决策                                                            |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| notify 前缀控制消息 | 先集中现有 envelope 解码/校验，再申请 native 专用结构化事件；不要直接改 pin/vendor 或把任意普通通知当控制指令           | 普通通知不误吞、畸形/未知 kind 拒绝；决定是否推动原生协议支持                      |
+| 切会话单连接        | 接续 Program 2 第 3 项，用订阅 POST + generation/ACK；逐次检查权限，取消旧 room，拒绝晚到旧 view；SSE 和 poll 同时支持  | 快速来回切换、撤权、断线/重连、旧 tab 兼容；不重发用户 send                        |
+| 流式 Markdown       | 已完成块已有 500 项 LRU，先量化增长块重复解析；可合并到帧并在结束时立即 flush，之后再评估真正增量解析                   | 未闭合 fence/跨块结构、XSS、最终文本等价；不能省略 DOMPurify 或信任局部未清洗 HTML |
+| App 根更新          | 现有 microtask 已合并更新；root render 不等于整个 DOM 重建。先量化组件提交，再让高频 live state 用局部订阅              | 只改已证实的热组件，保持订阅顺序，不引入新状态库                                   |
+| architecture/map    | 按 PRODUCT/CONFIGURATION 修正 Team 主体；把上游机制标为 legacy，画清个人凭据、原生 journal、Durable 镜像及关闭/恢复次序 | 文档逐条对应当前调用链；本次只提方案，不提前宣称 worker/旧后端下线已实现           |
+
+owner 下一步建议：先批准文档纠偏及 C2 扩展测量；若要产品行为变更，先确认 C1 的预算/回收参数。C4 的旧会话处置必须单独决定，不能随重构默认下线。
