@@ -28,7 +28,7 @@
 | A1    | A    | journal 索引 + 镜像游标                     | 已推送待核验 | `2a2ac90`、`b44ca33`、`7c880fc` |
 | A2    | A    | thinking level / native goal 跨推送缓存     | 已推送待核验 | `b8d63f4`、`c13245d`            |
 | A3    | A    | 启动时不再全量解析历史                      | 已推送待核验 | `0f39ea3`                       |
-| A4    | A    | 静态资源 ETag / gzip / modulepreload        | 待做         |                                 |
+| A4    | A    | 静态资源 ETag / gzip / modulepreload        | 已推送待核验 | `c8d7cbd`（测量见记录）         |
 | B1    | B    | `teamResourceRevision` 不在请求路径读大文件 | 待做         |                                 |
 | B2    | B    | `finishedSeen` 写入与清理                   | 待做         |                                 |
 | B3    | B    | 房间级字段每次推送只算一次                  | 待做         |                                 |
@@ -233,6 +233,44 @@
 | changes.poll.images/http.body.bytes         | 20296→20328   | D，+32 B；该 handler 无 A3 改动，未承诺固定同字节输出     |
 
 - 单轮 Web/动态字段计数不能证明长期回归或改善；D 的逐字/逐节点来源未单独追踪，保留给审查方，不以不存在的零差异代替观测。未部署或重启线上。
+
+### A4 — 静态资源
+
+- 测量提交 `f9c946b`、`ec1a3d3`、`306cf01`；优化 `c8d7cbd`。node:http 直接记录 53 个 bundle 资源的实际传输字节，解压后与磁盘原始文件逐字比较；不将 bundle 视为整个浏览器导航。
+- 内容 SHA-256 强 ETag，identity/gzip 分别哈希实际响应字节；保留 no-cache、Vary 和 If-None-Match/304。异步读取/压缩按 ino/size/mtimeNs/ctimeNs 复用，合并同版并发读取，缓存最多 128 文件/16 MiB（另有一个页面缓存）；不在每次请求同步压缩。
+- index 在 importmap 后注入静态 import 图预加载，按源文件版本重新生成；不改 script 内容、CSP hash 或执行顺序。扫描器仅支持当前 literal static ESM 语法；如采用新语法，先换 parser 并扩展独立 AST 等价测试。动态 import 仍 lazy。
+- format/check/lint/format:check 全通过；npm test 567/567、无跳过，包含实际 Chromium mobile-ui/peeks-ui。新测试验证 same-size 文件编辑、删除、gzip 字节/validator、304、并发复用和缓存淘汰；独立 TypeScript AST 核对完整静态 import 图、脚本顺序及 CSP。
+- 最终 `perf:ci -- origin/main --runs 1` passed、gating/guard passed；darwin-arm64 / Node 24.18.0，**highLoad=true**（5.26→19.58/8 核），不采纳毫秒速度结论。首次 bundle 1,142,870→405,839 B（约 -64.5%）；再次 1,142,870→0 B，53 次条件请求保留，所有资源 304。报告 `/tmp/rotom-review-A4/ci/`。此前子任务未使用 timing lock 的基线报告只用于计数器注册，不作为时间证据。
+- 全部 worse（包含 A1/A2；D 的逐字/调度来源限制继续保留）：
+
+| 计数器                                      | base→head   | 解释                                                               |
+| ------------------------------------------- | ----------- | ------------------------------------------------------------------ |
+| startup.restart/sql.statements              | 848→851     | A1 索引初始化及游标/分叉恢复                                       |
+| session.open/sql.statements                 | 46→48       | A2 indexed revision 标量查询/结果（R）                             |
+| session.open/sql.rows                       | 107→109     | A2 indexed revision 标量查询/结果（R）                             |
+| turn.warm/sql.statements                    | 157→158     | A2 indexed revision 标量查询/结果（R）                             |
+| turn.paced/sql.statements                   | 286→288     | A2 indexed revision 标量查询/结果（R）                             |
+| web.open/sql.statements                     | 31→32       | A2 indexed revision 标量查询/结果（R）                             |
+| web.open/cdp.Nodes                          | 996→1136    | 新增 modulepreload link/分隔文本节点；实际分配节点增加是预加载代价 |
+| session.open.long/sql.statements            | 16→17       | A2 indexed revision 标量查询/结果（R）                             |
+| session.open.long/sql.rows                  | 47→49       | A2 indexed revision 标量查询/结果（R）                             |
+| web.open.long/cdp.Nodes                     | 1585→1725   | 新增 modulepreload link/分隔文本节点；实际分配节点增加是预加载代价 |
+| native.warm/sql.rows                        | 10→11       | A2 indexed revision 标量查询/结果（R）                             |
+| web.reopen/cdp.Nodes                        | 1090→1230   | 新增 modulepreload link/分隔文本节点；实际分配节点增加是预加载代价 |
+| web.paced/sql.statements                    | 306→308     | A2 indexed revision 标量查询/结果（R）                             |
+| web.paced/cdp.Nodes                         | 1295→1435   | 新增 modulepreload link/分隔文本节点；实际分配节点增加是预加载代价 |
+| web.send.poll/sql.statements                | 392→413     | 高负载采样多推中间视图；SQL 和该 view 字节相应增加                 |
+| web.send.poll/push.bytes                    | 61166→67916 | 高负载采样多推中间视图；SQL 和该 view 字节相应增加                 |
+| web.send.poll/push.view.bytes               | 48707→55457 | 高负载采样多推中间视图；SQL 和该 view 字节相应增加                 |
+| web.send.poll/cdp.Nodes                     | 1476→1577   | 新增 modulepreload link/分隔文本节点；实际分配节点增加是预加载代价 |
+| web.send.stream/cdp.Nodes                   | 1495→1632   | 新增 modulepreload link/分隔文本节点；实际分配节点增加是预加载代价 |
+| commands.discover.cold/sql.rows             | 78→81       | A2 indexed revision 标量查询/结果（R）                             |
+| commands.discover.warm/sql.rows             | 64→66       | A2 indexed revision 标量查询/结果（R）                             |
+| commands.discover.warm/json.stringify.chars | 27229→27263 | 动态元数据采样 +34 字符；同 A2 的 D 限制                           |
+| projection.large.open/sql.statements        | 98→99       | A2 indexed revision 标量查询/结果（R）                             |
+| projection.large.paced/sql.statements       | 572→574     | A2 indexed revision 标量查询/结果（R）                             |
+
+- 未做隧道限速时间承诺；真实 Chromium 功能测试通过，不等同线上或物理手机验收。没有部署/重启。
 
 ## 核验记录（审查方追加）
 
