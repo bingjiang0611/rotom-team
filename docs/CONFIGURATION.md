@@ -356,8 +356,12 @@ small/animated/unknown images, unsupported browsers and failed/unhelpful convers
 raise the 5 MiB per-model-image limit: a noisy PNG may still be too large to send.
 
 Live event streams and large long-poll responses negotiate gzip when accepted. Events flush immediately; an SSE
-client with more than 8 MiB of buffered data is disconnected so it can reconnect for a fresh view. Long-history
-pagination is not implemented yet.
+client with more than 8 MiB of buffered data is disconnected so it can reconnect for a fresh view. A long-poll
+connection likewise retains at most 8 MiB of serialized UTF-8 event data (including separators, plus a fixed response
+envelope). Each event is serialized once; unacknowledged responses reuse those bytes. Overflow closes and detaches
+the poller instead of returning a partial view; the next poll receives a new session and full view. An individual
+initial event larger than the limit cannot be delivered through that connection. Use the supported history tail/pages
+below; supporting an oversized single event requires a separately designed bounded event protocol.
 
 ## Session-list updates
 

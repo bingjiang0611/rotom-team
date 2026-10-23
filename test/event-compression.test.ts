@@ -145,6 +145,159 @@ test(
 );
 
 test(
+    "poll retransmissions reuse serialized events and acknowledged UTF-8 bytes free the queue",
+    { timeout: 10_000 },
+    async () => {
+        let client!: Client;
+        let serializations = 0;
+        const payload = {
+            text: "😀".repeat(60),
+            toJSON() {
+                serializations++;
+
+                return { text: this.text };
+            },
+        };
+        const { server, base } = await fixture((attached) => {
+            client = attached;
+            client.send("view", payload);
+        }, 512);
+
+        try {
+            const first = (await (await fetch(`${base}/poll`)).json()) as {
+                session: string;
+                events: unknown[];
+            };
+
+            assert.equal(serializations, 1);
+            payload.text = "mutated after enqueue";
+            const repeated = await (await fetch(`${base}/poll?session=${first.session}`)).json();
+
+            assert.deepEqual(
+                repeated,
+                first,
+                "retransmission preserves the originally enqueued value",
+            );
+            assert.equal(serializations, 1, "no second toJSON on an unacknowledged event");
+            payload.text = "😀".repeat(60);
+            // The server installs the poll's waiting response synchronously before this request listener runs.
+            server.once("request", () => client.send("view", payload));
+            const acknowledged = (await (
+                await fetch(`${base}/poll?session=${first.session}&ack=1`)
+            ).json()) as typeof first;
+
+            assert.equal(
+                acknowledged.session,
+                first.session,
+                "ACK frees bytes before the next event",
+            );
+            assert.deepEqual(acknowledged.events, [
+                { seq: 2, event: "view", data: { text: payload.text } },
+            ]);
+            assert.equal(serializations, 2);
+            await (await fetch(`${base}/poll?session=${first.session}&close=1`)).arrayBuffer();
+        } finally {
+            await close(server);
+        }
+    },
+);
+
+test(
+    "poll overflow closes a waiting response and a stale session reconnects with a complete view",
+    { timeout: 10_000 },
+    async () => {
+        let client!: Client;
+        let generation = 0;
+        const { server, base, detached } = await fixture((attached) => {
+            client = attached;
+            client.send("view", { full: true, generation: ++generation });
+        }, 512);
+
+        try {
+            const first = (await (await fetch(`${base}/poll`)).json()) as {
+                session: string;
+                events: unknown[];
+            };
+
+            server.once("request", () => client.send("view", { text: "😀".repeat(200) }));
+            await assert.rejects(fetch(`${base}/poll?session=${first.session}&ack=1`));
+            await detached;
+            let serializedAfterClose = false;
+
+            client.send("ignored", {
+                toJSON() {
+                    serializedAfterClose = true;
+
+                    return {};
+                },
+            });
+            assert.equal(
+                serializedAfterClose,
+                false,
+                "a detached client's later sends are ignored",
+            );
+            const fresh = (await (
+                await fetch(`${base}/poll?session=${first.session}&ack=999`)
+            ).json()) as typeof first;
+
+            assert.notEqual(fresh.session, first.session);
+            assert.deepEqual(fresh.events, [
+                { seq: 1, event: "view", data: { full: true, generation: 2 } },
+            ]);
+            await (await fetch(`${base}/poll?session=${fresh.session}&close=1`)).arrayBuffer();
+        } finally {
+            await close(server);
+        }
+    },
+);
+
+test("unacknowledged poll events share one byte budget", { timeout: 10_000 }, async () => {
+    let client!: Client;
+    const { server, base, detached } = await fixture((attached) => {
+        client = attached;
+        client.send("view", { text: "😀".repeat(60) });
+    }, 512);
+
+    try {
+        const first = (await (await fetch(`${base}/poll`)).json()) as { session: string };
+
+        client.send("view", { text: "😀".repeat(60) });
+        await detached;
+        const fresh = (await (
+            await fetch(`${base}/poll?session=${first.session}`)
+        ).json()) as typeof first;
+
+        assert.notEqual(
+            fresh.session,
+            first.session,
+            "two individually fitting events overflow together",
+        );
+        await (await fetch(`${base}/poll?session=${fresh.session}&close=1`)).arrayBuffer();
+    } finally {
+        await close(server);
+    }
+});
+
+test(
+    "an oversized initial poll never succeeds with a truncated view",
+    { timeout: 10_000 },
+    async () => {
+        const { server, base, detached } = await fixture((client) => {
+            client.send("hello", { ok: true });
+            client.send("view", { text: "😀".repeat(200) });
+            client.send("ready", { ok: true });
+        }, 512);
+
+        try {
+            await assert.rejects(fetch(`${base}/poll`));
+            await detached;
+        } finally {
+            await close(server);
+        }
+    },
+);
+
+test(
     "a blocked stream is disconnected and detached rather than buffering unlimited events",
     { timeout: 10_000 },
     async () => {
