@@ -31,7 +31,7 @@
 | A4    | A    | 静态资源 ETag / gzip / modulepreload        | 已推送待核验 | `c8d7cbd`（测量见记录）         |
 | B1    | B    | `teamResourceRevision` 不在请求路径读大文件 | 已推送待核验 | `9ccc0aa`                       |
 | B2    | B    | `finishedSeen` 写入与清理                   | 已推送待核验 | `cc652cc`                       |
-| B3    | B    | 房间级字段每次推送只算一次                  | 待做         |                                 |
+| B3    | B    | 房间级字段每次推送只算一次                  | 已推送待核验 | `8d42e63`                       |
 | B4    | B    | journal 预编译语句缓存                      | 待做         |                                 |
 | B5    | B    | 长轮询队列字节上限                          | 待做         |                                 |
 | C1–C6 | C    | 需要 owner 决策，只写方案                   | 待做         |                                 |
@@ -364,6 +364,44 @@
 | projection.large.paced/push.view.bytes      | 206056→210856 | paced 合并时点不同，增量视图 payload 字节增加                           |
 
 - 报告 `/tmp/rotom-review-B2/ci/`。未部署/重启。
+
+### B3 — 房间级投影复用
+
+- 实现 `8d42e63`。一次 pushAll 只构造/序列化一套公共 fields、读一次 Git head；每个 client 仍有独立 sentFields 比较、full/delta、live 和 roomState。没有跨 push 缓存公共值。
+- format/check/lint/format:check 和 npm test 全通过：571/571，无跳过。新测试同时包含旧 tab、新 tab、完整重发、AuthorsDoc 更新：两 tab 序列化成本等于一个 tab，旧 tab 不重复字段，新 tab 不丢字段。
+- perf:ci origin/main --runs 1 passed，darwin-arm64 / Node 24.18.0、highLoad=false，gating/guard passed；四 tab paced 场景 fields.stringify.calls **528→132**，chars **131688→32922**（-75%，L1）。报告 `/tmp/rotom-review-B3/ci/`。
+- 全部 worse（包含前序项目，单轮调度差异保留）：
+
+| 计数器                                         | base→head     | 解释                                                                |
+| ---------------------------------------------- | ------------- | ------------------------------------------------------------------- |
+| startup.restart/sql.statements                 | 848→851       | A1 初始化/游标                                                      |
+| session.open/sql.statements                    | 46→47         | A2 revision 查询/标量结果（R）                                      |
+| turn.warm/sql.statements                       | 157→158       | A2 revision 查询/标量结果（R）                                      |
+| turn.paced/sql.statements                      | 286→288       | A2 revision 查询/标量结果（R）                                      |
+| web.open/sql.statements                        | 31→32         | A2 revision 查询/标量结果（R）                                      |
+| web.open/cdp.Nodes                             | 996→1112      | A4 preload DOM 节点及浏览器采样                                     |
+| session.open.long/sql.statements               | 16→17         | A2 revision 查询/标量结果（R）                                      |
+| session.open.long/sql.rows                     | 47→49         | A2 revision 查询/标量结果（R）                                      |
+| web.open.long/cdp.Nodes                        | 1561→1701     | A4 preload DOM 节点及浏览器采样                                     |
+| native.warm/sql.rows                           | 10→11         | A2 revision 查询/标量结果（R）                                      |
+| turn.prewarmed/fs.read.calls                   | 25→26         | 本轮额外中间持久化/投影读取，cold/warm 时序差异；未新增 B3 读取路径 |
+| turn.prewarmed/sql.statements                  | 203→219       | 本轮额外中间持久化/投影读取，cold/warm 时序差异；未新增 B3 读取路径 |
+| turn.prewarmed/json.parse.durableStorage.calls | 18→20         | 本轮额外中间持久化/投影读取，cold/warm 时序差异；未新增 B3 读取路径 |
+| turn.prewarmed/json.parse.durableStorage.chars | 1122→1424     | 本轮额外中间持久化/投影读取，cold/warm 时序差异；未新增 B3 读取路径 |
+| web.reopen/cdp.Nodes                           | 1090→1206     | A4 preload DOM 节点及浏览器采样                                     |
+| web.paced/sql.statements                       | 306→308       | A2 revision 查询/标量结果（R）                                      |
+| web.paced/cdp.Nodes                            | 1294→1433     | A4 preload DOM 节点及浏览器采样                                     |
+| web.send.poll/cdp.Nodes                        | 1450→1590     | A4 preload DOM 节点及浏览器采样                                     |
+| web.send.stream/sql.statements                 | 384→386       | A2 revision 查询/标量结果（R）                                      |
+| web.send.stream/cdp.Nodes                      | 1488→1656     | A4 preload DOM 节点及浏览器采样                                     |
+| commands.discover.cold/sql.rows                | 78→81         | A2 revision 查询/标量结果（R）                                      |
+| commands.discover.warm/sql.rows                | 64→66         | A2 revision 查询/标量结果（R）                                      |
+| projection.large.open/sql.statements           | 98→99         | A2 revision 查询/标量结果（R）                                      |
+| projection.large.paced/sql.statements          | 572→574       | A2 revision 查询/标量结果（R）                                      |
+| projection.large.paced/push.bytes              | 248228→256228 | 流式合并时点导致 view 字节增加；field 本身仍按客户端基线过滤        |
+| projection.large.paced/push.view.bytes         | 206856→214856 | 流式合并时点导致 view 字节增加；field 本身仍按客户端基线过滤        |
+
+- 未改变 viewer 权限计算或个人凭据路由。未部署/重启。
 
 ## 核验记录（审查方追加）
 
