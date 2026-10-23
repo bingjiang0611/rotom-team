@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { request as httpRequest } from "node:http";
-import { readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { gunzipSync } from "node:zlib";
 import { VENDOR, WEB } from "../../src/server/http/assets.ts";
 import { join } from "node:path";
@@ -103,6 +103,7 @@ type ObservedAsset = {
 export function createStaticAssetsProbe(base: string) {
     const assets = enumerateStaticAssets();
     const observed = new Map<string, ObservedAsset>();
+    const expected = new Map(assets.map((asset) => [asset.path, readFileSync(asset.file)]));
 
     const first = async (): Promise<Record<string, number>> => {
         let bodyBytes = 0;
@@ -117,7 +118,7 @@ export function createStaticAssetsProbe(base: string) {
                 200,
                 `${asset.path}: expected 200, got ${response.status}`,
             );
-            assert.ok(body.length > 0, `${asset.path}: empty successful response`);
+            assert.deepEqual(body, expected.get(asset.path), `${asset.path}: actual file bytes`);
             observed.set(asset.path, { digest: digest(body), etag: response.etag, body });
             bodyBytes += response.body.length;
             requests++;
