@@ -352,7 +352,7 @@ const COUNTERS: Record<string, MetricSpec> = {
     "http.requests": {
         layer: "http",
         unit: "count",
-        source: "http.server.request.start diagnostics channel (test/perf/counters.ts)",
+        source: "http.server.request.start diagnostics channel; static bundle completed node:http responses (test/perf/counters.ts and test/perf/static-assets.ts)",
     },
     "http.body.bytes": {
         layer: "http",
