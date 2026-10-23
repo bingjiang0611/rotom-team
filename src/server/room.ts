@@ -494,11 +494,79 @@ export class Room {
         return this.#stats;
     }
 
+    /** Public fields are identical for every viewer in one synchronous fanout. */
+    #fields(roomInfo: () => ReturnType<TeamKernel["roomInfo"]>) {
+        const fields: Record<string, unknown> = {
+            artifacts: Object.entries(this.artifacts).map(([id, meta]) => ({
+                id,
+                title: meta.title,
+                type: meta.type,
+                versions: meta.versions.map((version) => ({
+                    version: version.version,
+                    size: version.size,
+                    createdAt: version.createdAt,
+                })),
+            })),
+            subagents: Object.entries(this.subagents).map(([name, record]) => ({
+                name,
+                conversationId: record.conversationId,
+                busy: this.#app.isBusy(record.conversationId),
+            })),
+            authors: this.authors,
+            reactions: this.reactions,
+            pins: this.pins,
+            turns: this.turns,
+            decisions: this.decisions,
+            plan: this.plan,
+            schedules: Object.values(this.schedules)
+                .sort((a, b) => a.next - b.next)
+                .map(({ id, text, next, every, by, runs }) => ({
+                    id,
+                    text,
+                    next,
+                    ...(every === undefined ? {} : { repeat: describeRepeat(every) }),
+                    ...(by === undefined ? {} : { by }),
+                    runs,
+                })),
+            // The branch is read from the repository each time, so one Pi or a person switched to shows on the next update.
+            branch: this.#readHead(),
+            goal:
+                this.goal === undefined
+                    ? null
+                    : {
+                          command: this.goal.command,
+                          by: this.goal.by,
+                          status: this.goal.status,
+                          tries: this.goal.tries,
+                          max: this.goal.max,
+                          ...(this.goal.last === undefined ? {} : { last: this.goal.last }),
+                      },
+            ...(this.#native() ? { nativeGoal: roomInfo().goal ?? null } : {}),
+        };
+
+        const serialized = Object.entries(fields).map(([key, value]) => ({
+            key,
+            value,
+            json: JSON.stringify(value),
+        }));
+
+        if (viewProjectionChannel.hasSubscribers) {
+            viewProjectionChannel.publish({
+                fieldStringifyCalls: serialized.length,
+                fieldStringifyChars: serialized.reduce((sum, field) => sum + field.json.length, 0),
+            } satisfies ViewProjectionSignal);
+        }
+
+        return serialized;
+    }
+
     /** Send one client a fresh projection; do not retain the room-wide readback across calls. */
     push(client: Client, full: boolean): void {
         let info: ReturnType<TeamKernel["roomInfo"]> | undefined;
 
-        this.#push(client, full, () => (info ??= this.#app.kernel!.roomInfo(this.id)));
+        const roomInfo = () => (info ??= this.#app.kernel!.roomInfo(this.id));
+
+        this.#push(client, full, roomInfo, () => this.#fields(roomInfo));
     }
 
     /** One synchronous fanout shares public room readback, never viewer-specific safety fields. */
@@ -516,19 +584,27 @@ export class Room {
             return info;
         };
 
+        let fields: { key: string; value: unknown; json: string }[] | undefined;
+        const commonFields = () => (fields ??= this.#fields(roomInfo));
+
         if (fullClient !== undefined) {
-            this.#push(fullClient, true, roomInfo);
+            this.#push(fullClient, true, roomInfo, commonFields);
         }
 
         for (const client of this.clients) {
             if (client !== fullClient) {
-                this.#push(client, false, roomInfo);
+                this.#push(client, false, roomInfo, commonFields);
             }
         }
     }
 
     /** Each client still validates its own sent entries, catalog, member and pending state. */
-    #push(client: Client, full: boolean, roomInfo: () => ReturnType<TeamKernel["roomInfo"]>): void {
+    #push(
+        client: Client,
+        full: boolean,
+        roomInfo: () => ReturnType<TeamKernel["roomInfo"]>,
+        commonFields: () => { key: string; value: unknown; json: string }[],
+    ): void {
         const view = this.#view?.value;
 
         if (view === undefined) {
@@ -595,77 +671,13 @@ export class Room {
         const agentState = (view.docs["pi.agent"] ?? {}) as AgentState;
         const inbox = (view.docs["pi.inbox"] ?? { items: [] }) as unknown as InboxState;
         const live = view.docs["pi.live"] as LiveState | undefined;
-        // These grow with the session (authors has one item per message) but rarely change: streaming sends an update
-        // every 90 ms, which would repeat them all each time. Send each only when it differs from what this client has.
-        const fields: Record<string, unknown> = {
-            artifacts: Object.entries(this.artifacts).map(([id, meta]) => ({
-                id,
-                title: meta.title,
-                type: meta.type,
-                versions: meta.versions.map((version) => ({
-                    version: version.version,
-                    size: version.size,
-                    createdAt: version.createdAt,
-                })),
-            })),
-            subagents: Object.entries(this.subagents).map(([name, record]) => ({
-                name,
-                conversationId: record.conversationId,
-                busy: this.#app.isBusy(record.conversationId),
-            })),
-            authors: this.authors,
-            reactions: this.reactions,
-            pins: this.pins,
-            turns: this.turns,
-            decisions: this.decisions,
-            plan: this.plan,
-            schedules: Object.values(this.schedules)
-                .sort((a, b) => a.next - b.next)
-                .map(({ id, text, next, every, by, runs }) => ({
-                    id,
-                    text,
-                    next,
-                    ...(every === undefined ? {} : { repeat: describeRepeat(every) }),
-                    ...(by === undefined ? {} : { by }),
-                    runs,
-                })),
-            // The branch is read from the repository each time, so one Pi or a person switched to shows on the next update.
-            branch: this.#readHead(),
-            goal:
-                this.goal === undefined
-                    ? null
-                    : {
-                          command: this.goal.command,
-                          by: this.goal.by,
-                          status: this.goal.status,
-                          tries: this.goal.tries,
-                          max: this.goal.max,
-                          ...(this.goal.last === undefined ? {} : { last: this.goal.last }),
-                      },
-            ...(this.#native() ? { nativeGoal: roomInfo().goal ?? null } : {}),
-        };
+        const fields: Record<string, unknown> = {};
 
-        let fieldStringifyCalls = 0;
-        let fieldStringifyChars = 0;
-
-        for (const [key, value] of Object.entries(fields)) {
-            const json = JSON.stringify(value);
-
-            fieldStringifyCalls++;
-            fieldStringifyChars += json.length;
-
-            if (sentFields.get(key) === json) {
-                delete fields[key];
-            } else {
+        for (const { key, value, json } of commonFields()) {
+            if (sentFields.get(key) !== json) {
+                fields[key] = value;
                 sentFields.set(key, json);
             }
-        }
-
-        if (viewProjectionChannel.hasSubscribers) {
-            viewProjectionChannel.publish({
-                fieldStringifyCalls,
-                fieldStringifyChars,
-            } satisfies ViewProjectionSignal);
         }
 
         const liveState = roomPart("live", () =>

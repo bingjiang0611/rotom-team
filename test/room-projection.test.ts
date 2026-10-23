@@ -18,6 +18,7 @@ import type { ConversationId, EntryRecord } from "@earendil-works/pi-durable";
 import { viewProjectionChannel, type ViewProjectionSignal } from "../src/server/perf-channels.ts";
 import { projectEntry } from "../src/server/projection.ts";
 import type { Client, Room } from "../src/server/room.ts";
+import { AuthorsDoc } from "../src/server/docs.ts";
 
 after(cleanUp);
 
@@ -105,6 +106,57 @@ async function appendAnswer(
         context,
     );
 }
+
+test("room fields serialize once per fanout while each tab keeps independent deltas", async () => {
+    const app = await openApp(scriptedModel(), join(root, "fields-fanout"));
+
+    try {
+        const id = await newSession(app);
+        const record = await append(app, id, "fields");
+        const room = await app.room(id);
+        const first = fakeTab(id, owner(app));
+        const second = fakeTab(id, owner(app));
+        let calls = 0;
+
+        const listener = (message: unknown) => {
+            calls += (message as ViewProjectionSignal).fieldStringifyCalls ?? 0;
+        };
+
+        viewProjectionChannel.subscribe(listener);
+
+        try {
+            room.push(first.client, true);
+            const single = calls;
+
+            assert.ok(single > 0);
+            room.clients.add(first.client);
+            room.clients.add(second.client);
+            calls = 0;
+            room.pushAll();
+            assert.equal(calls, single, "two tabs cost one field serialization set");
+            assert.ok(
+                !("authors" in first.last("view")!),
+                "unchanged tab receives no repeated field",
+            );
+            assert.ok("authors" in second.last("view")!, "new tab still receives all fields");
+            await app.harness.commit(async (tx) => {
+                (await tx.doc(AuthorsDoc, id)).entries[String(record.id)] = owner(app).id;
+            }, context);
+            calls = 0;
+            room.pushAll(first.client);
+            assert.equal(calls, single, "full and incremental clients share one fresh projection");
+            assert.deepEqual(first.last("view")!.authors, second.last("view")!.authors);
+            assert.equal(
+                (first.last("view")!.authors as Record<string, string>)[String(record.id)],
+                owner(app).id,
+            );
+        } finally {
+            viewProjectionChannel.unsubscribe(listener);
+        }
+    } finally {
+        await app.close();
+    }
+});
 
 test("room entry sequence is shared across tabs but invalidates on append and head reset", async () => {
     const app = await openApp(scriptedModel(), join(root, "sequence"));
