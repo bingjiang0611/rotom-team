@@ -47,6 +47,44 @@ function setup() {
     return { root, data, binding };
 }
 
+test("journal prepares each SQL once, reads fresh values and never reuses a closed connection statement", (t) => {
+    const f = setup();
+    let journal = new RotomJournal(f.data);
+    const original = DatabaseSync.prototype.prepare;
+    const prepared: StatementSync[] = [];
+
+    t.mock.method(DatabaseSync.prototype, "prepare", function (this: DatabaseSync, sql: string) {
+        const statement = original.call(this, sql);
+
+        if (sql === "SELECT 1 FROM kernel_heads WHERE conversation_id=?") {
+            prepared.push(statement);
+        }
+
+        return statement;
+    });
+
+    try {
+        assert.equal(journal.hasConversation("cached"), false);
+        assert.equal(journal.hasConversation("missing"), false);
+        journal.bind("cached", f.binding);
+        assert.equal(
+            journal.hasConversation("cached"),
+            true,
+            "cached SQL does not cache query results",
+        );
+        assert.equal(prepared.length, 1);
+        journal.close();
+        assert.throws(() => journal.hasConversation("cached"), /not open|closed/i);
+        journal = new RotomJournal(f.data);
+        assert.equal(journal.hasConversation("cached"), true);
+        assert.equal(prepared.length, 2);
+        assert.notEqual(prepared[0], prepared[1]);
+    } finally {
+        journal.close();
+        rmSync(f.root, { recursive: true, force: true });
+    }
+});
+
 test("batch model projection follows current heads and model intents, not immutable identity or old segments", () => {
     const f = setup();
     let journal = new RotomJournal(f.data);
