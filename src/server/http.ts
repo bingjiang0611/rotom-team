@@ -43,7 +43,12 @@ export function createHandler(options: HttpOptions) {
             }
 
             if (parts[0] === "vendor" && parts[1] !== undefined && VENDOR[parts[1]] !== undefined) {
-                return serveFile(response, VENDOR[parts[1]]!, "text/javascript; charset=utf-8");
+                return await serveFile(
+                    request,
+                    response,
+                    VENDOR[parts[1]]!,
+                    "text/javascript; charset=utf-8",
+                );
             }
 
             if (parts[0] === "login" && (request.method === "GET" || request.method === "POST")) {
@@ -62,7 +67,7 @@ export function createHandler(options: HttpOptions) {
 
             // The web app: index.html for app routes, files from web/ otherwise.
             if (parts.length === 0 || parts[0] === "s") {
-                return serveApp(response);
+                return await serveApp(request, response);
             }
 
             const file = normalize(join(WEB, ...parts));
@@ -72,10 +77,10 @@ export function createHandler(options: HttpOptions) {
             }
 
             if (file === join(WEB, "index.html")) {
-                return serveApp(response);
+                return await serveApp(request, response);
             }
 
-            return serveFile(response, file);
+            return await serveFile(request, response, file);
         } catch (error) {
             const status =
                 error instanceof HttpError
