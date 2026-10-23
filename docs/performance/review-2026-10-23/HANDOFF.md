@@ -30,7 +30,7 @@
 | A3    | A    | 启动时不再全量解析历史                      | 已推送待核验 | `0f39ea3`                       |
 | A4    | A    | 静态资源 ETag / gzip / modulepreload        | 已推送待核验 | `c8d7cbd`（测量见记录）         |
 | B1    | B    | `teamResourceRevision` 不在请求路径读大文件 | 已推送待核验 | `9ccc0aa`                       |
-| B2    | B    | `finishedSeen` 写入与清理                   | 待做         |                                 |
+| B2    | B    | `finishedSeen` 写入与清理                   | 已推送待核验 | `cc652cc`                       |
 | B3    | B    | 房间级字段每次推送只算一次                  | 待做         |                                 |
 | B4    | B    | journal 预编译语句缓存                      | 待做         |                                 |
 | B5    | B    | 长轮询队列字节上限                          | 待做         |                                 |
@@ -307,6 +307,63 @@
 | changes.poll.images/http.body.bytes      | 20272→20304 | 动态元数据输出差异（D，未逐字归因）；此路径无 B1 代码改动 |
 
 - 这是减少重复文件读取/哈希，不是完整文件监控保证；继承“深层资源修改需 reload”的合同。未部署/重启。
+
+### B2 — 已读标记与持久化
+
+- 实现 `cc652cc`。已读标记立即更新内存，最多每秒合并写盘；其他配置写入同时消化 pending batch。正常 app.close 显式 flush；写入失败发 warning、保留 dirty，关闭 flush 失败会拒绝而不是假装保存成功。异常断电仍可能丢失最后一秒已读状态，不影响任务/计费事实。
+- 所有 config save 在 rename 前 fsync 文件、rename 后 fsync 目录。启动时和 SessionsDoc 确认移除会话后清理标记；删除用户随其整条记录清理。当前无新增“删除会话”HTTP API，只响应权威目录变化，归档不删除标记。
+- format/check/lint/format:check 通过。初次 npm test 出现既有 drop-in reload 等待及 HTTPS Chromium Runtime.evaluate 超时；检查失败日志后，无代码改动单独重跑 6/6，再完整 npm test **570/570**、无跳过。未加重试逻辑、未加超时、未弱化断言。两次原始日志均留在 `/tmp/rotom-review-B2/`。
+- 新测试用实际文件+虚拟 timer 验证十次 mark 只有一次写入，以及 file fsync→rename→directory fsync 顺序；真实 app close 验证 pending 保存，真实 SessionsDoc 删除验证清理。
+- perf:ci origin/main --runs 1 passed，darwin-arm64 / Node 24.18.0、highLoad=false，gating/guard passed。同步 fsync 是明确的持久化成本；合并减少频繁 marker 写入，不宣称消除所有配置写入阻塞。全部 worse（含前序 A）如下；中间 view 差异按实测计数解释，不将单轮时序差异伪装成稳定零回归：
+
+| 计数器                                      | base→head     | 解释                                                                    |
+| ------------------------------------------- | ------------- | ----------------------------------------------------------------------- |
+| startup.restart/sql.statements              | 848→851       | A1 初始化/游标工作                                                      |
+| session.open/sql.statements                 | 45→47         | A2 revision 查询/单行结果（R）                                          |
+| session.open/sql.rows                       | 94→96         | A2 revision 查询/单行结果（R）                                          |
+| turn.warm/sql.statements                    | 157→174       | 本轮额外中间 view（2→3）及 session 推送；相关投影/SQL/JSON/字节随之增加 |
+| turn.warm/sql.rows                          | 116→145       | 本轮额外中间 view（2→3）及 session 推送；相关投影/SQL/JSON/字节随之增加 |
+| turn.warm/json.parse.calls                  | 147→154       | 本轮额外中间 view（2→3）及 session 推送；相关投影/SQL/JSON/字节随之增加 |
+| turn.warm/json.parse.chars                  | 338695→342144 | 本轮额外中间 view（2→3）及 session 推送；相关投影/SQL/JSON/字节随之增加 |
+| turn.warm/json.stringify.chars              | 85248→91641   | 本轮额外中间 view（2→3）及 session 推送；相关投影/SQL/JSON/字节随之增加 |
+| turn.warm/view.entry.visits                 | 8→15          | 本轮额外中间 view（2→3）及 session 推送；相关投影/SQL/JSON/字节随之增加 |
+| turn.warm/view.stats.entry.scans            | 8→15          | 本轮额外中间 view（2→3）及 session 推送；相关投影/SQL/JSON/字节随之增加 |
+| turn.warm/view.fields.stringify.calls       | 24→36         | 本轮额外中间 view（2→3）及 session 推送；相关投影/SQL/JSON/字节随之增加 |
+| turn.warm/view.fields.stringify.chars       | 279→441       | 本轮额外中间 view（2→3）及 session 推送；相关投影/SQL/JSON/字节随之增加 |
+| turn.warm/view.live.project.calls           | 2→3           | 本轮额外中间 view（2→3）及 session 推送；相关投影/SQL/JSON/字节随之增加 |
+| turn.warm/view.inbox.project.calls          | 2→3           | 本轮额外中间 view（2→3）及 session 推送；相关投影/SQL/JSON/字节随之增加 |
+| turn.warm/view.kernel.project.calls         | 2→3           | 本轮额外中间 view（2→3）及 session 推送；相关投影/SQL/JSON/字节随之增加 |
+| turn.warm/view.kernel.sql.heads             | 2→3           | 本轮额外中间 view（2→3）及 session 推送；相关投影/SQL/JSON/字节随之增加 |
+| turn.warm/view.kernel.sql.attempts          | 4→6           | 本轮额外中间 view（2→3）及 session 推送；相关投影/SQL/JSON/字节随之增加 |
+| turn.warm/view.kernel.sql.command_inputs    | 3→5           | 本轮额外中间 view（2→3）及 session 推送；相关投影/SQL/JSON/字节随之增加 |
+| turn.warm/push.events                       | 3→5           | 本轮额外中间 view（2→3）及 session 推送；相关投影/SQL/JSON/字节随之增加 |
+| turn.warm/push.bytes                        | 13102→18817   | 本轮额外中间 view（2→3）及 session 推送；相关投影/SQL/JSON/字节随之增加 |
+| turn.warm/push.view.count                   | 2→3           | 本轮额外中间 view（2→3）及 session 推送；相关投影/SQL/JSON/字节随之增加 |
+| turn.warm/push.view.bytes                   | 8656→9926     | 本轮额外中间 view（2→3）及 session 推送；相关投影/SQL/JSON/字节随之增加 |
+| turn.paced/sql.statements                   | 286→288       | A2 revision 查询/单行结果（R）                                          |
+| web.open/sql.statements                     | 31→32         | A2 revision 查询/单行结果（R）                                          |
+| web.open/cdp.Nodes                          | 996→1112      | A4 preload DOM 节点；其他小差异为浏览器采样                             |
+| session.open.long/sql.statements            | 16→17         | A2 revision 查询/单行结果（R）                                          |
+| session.open.long/sql.rows                  | 47→49         | A2 revision 查询/单行结果（R）                                          |
+| web.open.long/cdp.Nodes                     | 1561→1725     | A4 preload DOM 节点；其他小差异为浏览器采样                             |
+| native.warm/sql.rows                        | 10→11         | A2 revision 查询/单行结果（R）                                          |
+| web.reopen/cdp.Nodes                        | 1090→1230     | A4 preload DOM 节点；其他小差异为浏览器采样                             |
+| web.paced/sql.statements                    | 306→308       | A2 revision 查询/单行结果（R）                                          |
+| web.paced/cdp.Nodes                         | 1283→1434     | A4 preload DOM 节点；其他小差异为浏览器采样                             |
+| web.send.poll/sql.statements                | 392→413       | R 加上额外中间状态的查询                                                |
+| web.send.poll/cdp.Nodes                     | 1454→1595     | A4 preload DOM 节点；其他小差异为浏览器采样                             |
+| web.send.stream/sql.statements              | 384→386       | A2 revision 查询/单行结果（R）                                          |
+| web.send.stream/cdp.Nodes                   | 1492→1630     | A4 preload DOM 节点；其他小差异为浏览器采样                             |
+| commands.discover.cold/sql.rows             | 78→81         | A2 revision 查询/单行结果（R）                                          |
+| commands.discover.warm/sql.rows             | 64→66         | A2 revision 查询/单行结果（R）                                          |
+| commands.discover.warm/json.stringify.chars | 27229→27263   | 动态元数据（D）；未逐字归因                                             |
+| projection.large.open/sql.statements        | 98→99         | A2 revision 查询/单行结果（R）                                          |
+| projection.large.paced/sql.statements       | 572→574       | A2 revision 查询/单行结果（R）                                          |
+| projection.large.paced/json.stringify.chars | 520461→525295 | paced 合并时点不同，增量视图 payload 字节增加                           |
+| projection.large.paced/push.bytes           | 247428→252228 | paced 合并时点不同，增量视图 payload 字节增加                           |
+| projection.large.paced/push.view.bytes      | 206056→210856 | paced 合并时点不同，增量视图 payload 字节增加                           |
+
+- 报告 `/tmp/rotom-review-B2/ci/`。未部署/重启。
 
 ## 核验记录（审查方追加）
 
