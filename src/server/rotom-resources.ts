@@ -8,6 +8,7 @@ import {
     renameSync,
     rmSync,
     lstatSync,
+    statSync,
     writeFileSync,
 } from "node:fs";
 import { isDeepStrictEqual } from "node:util";
@@ -109,6 +110,37 @@ export function sharedConfigFiles(directory: string): string[] {
     return [...unique.values()];
 }
 
+const revisionFiles = new Map<string, { stamp: string; digest: string }>();
+
+/** Stat follows project links as the previous read did; shared paths are policy-checked before this call. */
+function revisionFile(file: string): string {
+    const info = statSync(file, { bigint: true, throwIfNoEntry: false });
+
+    if (!info) {
+        revisionFiles.delete(file);
+
+        return "";
+    }
+
+    const stamp = `${info.dev}:${info.ino}:${info.size}:${info.mtimeNs}:${info.ctimeNs}`;
+    const cached = revisionFiles.get(file);
+
+    if (cached?.stamp === stamp) {
+        return cached.digest;
+    }
+
+    const digest = createHash("sha256").update(readFileSync(file)).digest("hex");
+
+    revisionFiles.delete(file);
+    revisionFiles.set(file, { stamp, digest });
+
+    if (revisionFiles.size > 256) {
+        revisionFiles.delete(revisionFiles.keys().next().value!);
+    }
+
+    return digest;
+}
+
 /** Bounded, read-only freshness hint: declared configuration and immediate resource metadata, never dependency trees. */
 export function teamResourceRevision(directory: string, workspace?: string): string {
     const hash = createHash("sha256");
@@ -119,9 +151,7 @@ export function teamResourceRevision(directory: string, workspace?: string): str
 
             hash.update(file);
 
-            if (existsSync(file)) {
-                hash.update(readFileSync(file));
-            }
+            hash.update(revisionFile(file));
         }
     }
 
@@ -137,9 +167,7 @@ export function teamResourceRevision(directory: string, workspace?: string): str
 
         hash.update(name);
 
-        if (existsSync(file)) {
-            hash.update(readFileSync(file));
-        }
+        hash.update(revisionFile(file));
     }
 
     for (const name of [
