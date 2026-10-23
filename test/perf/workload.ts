@@ -33,6 +33,9 @@ export const WORKLOAD = {
     journalEntryChars: 2000,
     /** The newest entries a tab asks for first, as the web app does (`TRANSCRIPT_TAIL` in web/store.js). */
     longTail: 240,
+    /** The explicit static bundle is a transport workload, not a full browser navigation. */
+    staticAssetBundle:
+        "root web/*.js and *.css, known VENDOR modules, and all synthetic public assets",
 } as const;
 
 /**
@@ -86,6 +89,8 @@ export const SCENARIOS: Record<string, string> = {
     "image.paste.network":
         "after all other scenarios, real Chromium prepares and uploads one deterministic xorshift-noise 3000x1500 opaque PNG from its clipboard path to the same synthetic session, on a CDP-emulated 4 Mbit/s uplink and 40 ms latency; includes browser resize, HTTP upload, metadata response and decode, excludes fixture construction/module loading; older revisions without the helper upload the original, matching their unchanged paste behavior; no inference, synthetic link",
     "journal.large": `after all other scenarios, a separate RotomJournal with ${WORKLOAD.journalConversations} conversations × ${WORKLOAD.journalAttempts} attempts × ${WORKLOAD.journalEntriesPerAttempt} entries of about ${WORKLOAD.journalEntryChars} characters; measure an entries suffix, segmentEntries and credits`,
+    "assets.first": `${WORKLOAD.staticAssetBundle}; request each asset with Accept-Encoding: gzip and retain its decoded body digest and ETag; raw node:http body bytes and completed request count are transport observations`,
+    "assets.validated": `${WORKLOAD.staticAssetBundle}; request each asset again with If-None-Match when the first response supplied an ETag; accept matching empty 304 or decoded-equal full 200; raw node:http body bytes and completed request count are transport observations`,
 };
 
 export type Layer = "storage" | "process" | "cpu" | "push" | "http" | "web";
@@ -352,7 +357,7 @@ const COUNTERS: Record<string, MetricSpec> = {
     "http.body.bytes": {
         layer: "http",
         unit: "bytes",
-        source: "answer body bytes the benchmark received (test/perf/scenarios.ts)",
+        source: "raw response body bytes received by transport probes (test/perf/scenarios.ts and test/perf/static-assets.ts)",
     },
     "cdp.LayoutCount": {
         layer: "web",
@@ -617,6 +622,8 @@ export const REPORTED: Record<string, string[]> = {
         "json.parse.journalSegments.calls",
         "json.parse.journalSegments.chars",
     ],
+    "assets.first": ["http.requests", "http.body.bytes"],
+    "assets.validated": ["http.requests", "http.body.bytes"],
 };
 
 export function metricSpec(metric: string): MetricSpec {

@@ -44,6 +44,7 @@ import { sessionListTab } from "./session-list.ts";
 import { claimFor } from "./view-claim.ts";
 import { type Transcript, viewTab } from "./view-tab.ts";
 import { createJournalLargeFixture, measureJournalLarge } from "./journal-large.ts";
+import { createStaticAssetsProbe } from "./static-assets.ts";
 
 export type ScenarioResult =
     | { scenario: string; ms: number; counts: Counts; extra?: Record<string, number> }
@@ -1171,6 +1172,13 @@ await scenario("session.open.native-long", async () => {
 
     return { "roomInfo.segmentEntries.calls": segmentEntriesCalls };
 });
+
+// Append the named static bundle workload after every existing scenario. It is an explicit asset transport probe,
+// not a claim about full browser navigation or browser-side module execution.
+const staticAssets = createStaticAssetsProbe(base);
+
+await scenario("assets.first", () => staticAssets.first());
+await scenario("assets.validated", () => staticAssets.validated());
 
 writeFileSync(out, raw.stringify({ workload: WORKLOAD, results }, null, 2));
 server.closeAllConnections();
