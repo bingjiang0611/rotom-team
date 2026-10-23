@@ -26,7 +26,7 @@
 | 编号  | 批次 | 标题                                        | 状态         | 提交                            |
 | ----- | ---- | ------------------------------------------- | ------------ | ------------------------------- |
 | A1    | A    | journal 索引 + 镜像游标                     | 已推送待核验 | `2a2ac90`、`b44ca33`、`7c880fc` |
-| A2    | A    | thinking level / native goal 跨推送缓存     | 待做         |                                 |
+| A2    | A    | thinking level / native goal 跨推送缓存     | 进行中       | 测量见执行记录                  |
 | A3    | A    | 启动时不再全量解析历史                      | 待做         |                                 |
 | A4    | A    | 静态资源 ETag / gzip / modulepreload        | 待做         |                                 |
 | B1    | B    | `teamResourceRevision` 不在请求路径读大文件 | 待做         |                                 |
@@ -162,6 +162,11 @@
 
 - 初次三轮中的 journal 来源归属变化来自新增方法未被测量代理标为 history，不是额外解析；已用独立测量提交修正，最终结果以上述复验为准。当前证据是受控查询加速/索引计划，不是线上 L3。原要求“计数器下降”对 sql.rows（返回行数）不适用于保持输出等价的索引优化；本项明确保留这一验收差异，交审查方核验，不伪造下降。
 - 服务未重启、未部署；用户原有两处文档改动逐字保留。日志位于 `/tmp/rotom-review-A1/`，不含真实账号数据。
+
+### A2 — 测量层
+
+- 独立测量提交 `A2: measure repeated idle native room projections`：真实 app 创建会话，直接种入 600 条原生 journal 历史；预读一次，窗口内再读三次 roomInfo，断言 Goal 和 thinking 一致。新 scenario 放在所有既有场景之后，不改变它们的会话列表/ID。
+- 两次独立 `perf:measure --runs 1` 通过，darwin-arm64 / Node 24.18.0、highLoad=false；新增三个 candidate（segmentEntries 查询次数及 journalSegments 解析调用/字符数），无阈值放宽。原始报告 `/tmp/rotom-review-A2/before-{1,2}.json`。TypeScript 和 scoped lint/format 已通过；全套验收在优化阶段执行。
 
 ## 核验记录（审查方追加）
 

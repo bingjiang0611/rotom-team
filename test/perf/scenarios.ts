@@ -19,6 +19,7 @@ import { cleanUp, owner, root, work } from "../helpers.ts";
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
+import { StatementSync } from "node:sqlite";
 import { once } from "node:events";
 import { mkdirSync, realpathSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
@@ -34,6 +35,7 @@ import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { ConversationId } from "@earendil-works/pi-durable";
 import type { JsonValue } from "@earendil-works/chord";
 import { NATIVE_ENTRY } from "../../src/server/entry-format.ts";
+import type { KernelEntry } from "../../src/server/rotom-journal.ts";
 import { sniffImage } from "../../src/server/http/assets.ts";
 import { measureImageNetwork } from "./image-network.ts";
 import { measurePasteNetwork } from "./paste-network.ts";
@@ -1063,6 +1065,112 @@ try {
 } finally {
     journalLarge.close();
 }
+
+// A real app-created native session with a long journal, seeded directly without inference. Its roomInfo projections
+// are measured separately from the seed and the one reference read below.
+const nativeLong = (await call("sessions", "POST", { title: "Native long", backend: "rotom" }))
+    .value.id as unknown as ConversationId;
+const nativeLongJournal = app.kernel!.executions.journal;
+const nativeLongBinding = nativeLongJournal.session(String(nativeLong)).binding;
+const nativeLongEntries: KernelEntry[] = [];
+let nativeLongParent: string | null = null;
+
+for (let index = 0; index < WORKLOAD.nativeLongEntries; index++) {
+    const id = `native-long-${index}`;
+    const entry: KernelEntry =
+        index === 0
+            ? {
+                  id,
+                  parentId: null,
+                  type: "custom",
+                  customType: "goal-state",
+                  data: { goal: { id: "native-long", status: "active" } },
+              }
+            : index === 1
+              ? {
+                    id,
+                    parentId: nativeLongParent,
+                    type: "thinking_level_change",
+                    thinkingLevel: "high",
+                }
+              : index === WORKLOAD.nativeLongEntries - 1
+                ? {
+                      id,
+                      parentId: nativeLongParent,
+                      type: "message",
+                      message: {
+                          role: "assistant",
+                          provider: nativeLongBinding.provider,
+                          model: nativeLongBinding.model,
+                          stopReason: "stop",
+                          content: [
+                              {
+                                  type: "text",
+                                  text: "x".repeat(WORKLOAD.nativeLongEntryChars),
+                              },
+                          ],
+                      },
+                  }
+                : {
+                      id,
+                      parentId: nativeLongParent,
+                      type: "custom",
+                      customType: "native-long-entry",
+                      data: { text: "x".repeat(WORKLOAD.nativeLongEntryChars) },
+                  };
+
+    nativeLongEntries.push(entry);
+    nativeLongParent = id;
+}
+
+const nativeLongAttempt = nativeLongJournal.reserve(
+    String(nativeLong),
+    "native-long-seed",
+    "native-long-seed",
+);
+
+nativeLongJournal.attach(
+    nativeLongAttempt.id,
+    join(nativeLongBinding.home, "native-long.jsonl"),
+    "native-long",
+);
+nativeLongJournal.finish(nativeLongAttempt.id, "settled", nativeLongEntries);
+
+// Establish the expected values outside the measured window; this is an actual native roomInfo read, not a fixture.
+const nativeLongReference = app.kernel!.roomInfo(nativeLong);
+
+assert.deepEqual(nativeLongReference.goal, {
+    goal: { id: "native-long", status: "active" },
+});
+assert.equal(nativeLongReference.agent.thinkingLevel, "high");
+
+await scenario("session.open.native-long", async () => {
+    let segmentEntriesCalls = 0;
+    const originalAll = StatementSync.prototype.all;
+
+    StatementSync.prototype.all = function (...args) {
+        if (
+            this.sourceSQL === "SELECT body FROM kernel_entries WHERE session_id=? ORDER BY rowid"
+        ) {
+            segmentEntriesCalls++;
+        }
+
+        return Reflect.apply(originalAll, this, args);
+    };
+
+    try {
+        for (let projection = 0; projection < 3; projection++) {
+            const info = app.kernel!.roomInfo(nativeLong);
+
+            assert.deepEqual(info.goal, nativeLongReference.goal);
+            assert.equal(info.agent.thinkingLevel, nativeLongReference.agent.thinkingLevel);
+        }
+    } finally {
+        StatementSync.prototype.all = originalAll;
+    }
+
+    return { "roomInfo.segmentEntries.calls": segmentEntriesCalls };
+});
 
 writeFileSync(out, raw.stringify({ workload: WORKLOAD, results }, null, 2));
 server.closeAllConnections();

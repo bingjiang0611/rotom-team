@@ -23,6 +23,9 @@ export const WORKLOAD = {
     /** A long native history (seeded directly, no model), for opening it and reading all of it. */
     longTurns: 300,
     longAnswerChars: 1200,
+    /** A native journal history for repeated roomInfo projections, seeded directly with no model. */
+    nativeLongEntries: 600,
+    nativeLongEntryChars: 1200,
     /** A separate synthetic RotomJournal fixture for the A1 query measurement. */
     journalConversations: 60,
     journalAttempts: 50,
@@ -57,6 +60,7 @@ export const SCENARIOS: Record<string, string> = {
     "web.open": `${seeded}; headless Chromium signed in, opens /s/<session> until the last answer is in the page`,
     "session.reclaim": `${seeded}; after all established scenarios, an unmeasured tab loads its full view; a new event-stream tab then claims every entry it held (server run, first id, count, digest) until its first full view; the rebuilt transcript must equal the held one`,
     "session.open.long": `after all other scenarios, a separate native history of ${WORKLOAD.longTurns} user/assistant turns (${WORKLOAD.longAnswerChars}-char answers) seeded directly; a new event-stream tab asking for the newest ${WORKLOAD.longTail} entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view`,
+    "session.open.native-long": `after all other scenarios, a real app-created native session with ${WORKLOAD.nativeLongEntries} valid journal entries of about ${WORKLOAD.nativeLongEntryChars} characters seeded outside the window without inference; call native roomInfo once before the window, then make 3 real roomInfo projections inside it and require identical goal and thinking values`,
     "session.history.earlier": `after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request`,
     "web.open.long": `after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page`,
     "native.warm": `after all other scenarios, a new native session with one tab watching; its member asks to warm it (as focusing the message box does) until the answer; servers without warming refuse at once`,
@@ -314,6 +318,11 @@ const COUNTERS: Record<string, MetricSpec> = {
         layer: "cpu",
         unit: "chars",
         source: "characters decoded inside synchronous native kernel roomState projection (test/perf/counters.ts)",
+    },
+    "roomInfo.segmentEntries.calls": {
+        layer: "storage",
+        unit: "count",
+        source: "benchmark-local StatementSync.all wrapper counts the segmentEntries history query during synchronous roomInfo projections (test/perf/scenarios.ts)",
     },
     "push.events": {
         layer: "push",
@@ -603,6 +612,11 @@ export const REPORTED: Record<string, string[]> = {
         "web.view.order.ids",
     ],
     "journal.large": ["sql.statements", "sql.rows"],
+    "session.open.native-long": [
+        "roomInfo.segmentEntries.calls",
+        "json.parse.journalSegments.calls",
+        "json.parse.journalSegments.chars",
+    ],
 };
 
 export function metricSpec(metric: string): MetricSpec {
