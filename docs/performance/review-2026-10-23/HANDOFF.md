@@ -33,7 +33,7 @@
 | B2    | B    | `finishedSeen` 写入与清理                   | 已推送待核验 | `cc652cc`                       |
 | B3    | B    | 房间级字段每次推送只算一次                  | 已推送待核验 | `8d42e63`                       |
 | B4    | B    | journal 预编译语句缓存                      | 已推送待核验 | `37cb733`                       |
-| B5    | B    | 长轮询队列字节上限                          | 待做         |                                 |
+| B5    | B    | 长轮询队列字节上限                          | 已推送待核验 | `5fb4bbe`                       |
 | C1–C6 | C    | 需要 owner 决策，只写方案                   | 待做         |                                 |
 
 状态取值：`待做` / `进行中` / `已推送待核验` / `核验通过` / `核验未通过` / `放弃（写明原因）`。
@@ -459,6 +459,51 @@
 | changes.poll.images/json.stringify.chars        | 20296→20330   | 动态元数据输出差异；B4 未修改此路径，具体字符来源未追踪（D 限制）                        |
 
 - 没有修改 vendor、凭据或 unknown 结果处理；未部署/重启。
+
+### B5 — 长轮询队列
+
+- 实现 `5fb4bbe`。每个 poller 的 UTF-8 event JSON+分隔符最多 8 MiB（另加固定 UUID envelope）；入队只序列化一次，重发拼接已存字符串。ACK 释放对应字节，关闭清空队列；溢出销毁等待响应并 detach，旧 session 再请求获得新 session/full view。attach 阶段超限也不会把部分初始视图当成功返回。没有改 journal push 采集 schema、权限或用户 send 重放语义。
+- 四个新 HTTP 回归覆盖：toJSON 仅入队一次且原对象后续变化不改重发内容；UTF-8 多字节计数和 ACK 释放；多个单独能容纳的未确认事件累计超限；等待请求/初始大 view 超限断开后完整重连。已有 gzip/SSE 测试保留。负控禁用上限后，“oversized initial poll”因没有拒绝而失败；恢复后通过。
+- format/check/lint/format:check passed；最终 npm test **576/576**、无跳过。第一次 perf 在未改的 origin/main 基线阶段因缺少 send.shown 报告失败，未运行 head；当时 highLoad=true（17.74→21.20/8 核），日志 `/tmp/rotom-review-B5/perf.log`。没有改断言、加超时或提高 ledger。
+- 原标准复验 `perf:ci -- origin/main --runs 1` passed，gating/guard passed；darwin-arm64 / Node 24.18.0，**highLoad=true**（9.74→6.45/8 核），只接受计数/正确性，不作毫秒加速承诺。最终报告 `/tmp/rotom-review-B5/final-ci/`；全部 worse 如下（包含前序 A/B）。
+
+| 计数器                                         | base→head     | 解释                                                                                |
+| ---------------------------------------------- | ------------- | ----------------------------------------------------------------------------------- |
+| startup.restart/sql.statements                 | 848→851       | A1/A3 启动索引、游标及分叉恢复                                                      |
+| session.open/sql.statements                    | 46→48         | A2 indexed revision 标量查询及结果                                                  |
+| session.open/sql.rows                          | 107→109       | A2 indexed revision 标量查询及结果                                                  |
+| turn.paced/sql.statements                      | 286→288       | A2 indexed revision 标量查询及结果                                                  |
+| web.open/sql.statements                        | 31→32         | A2 indexed revision 标量查询及结果                                                  |
+| web.open/cdp.Nodes                             | 996→1112      | A4 preload 元素/分隔文本成本，叠加采样节点生命周期差异                              |
+| session.open.long/sql.statements               | 16→17         | A2 indexed revision 标量查询及结果                                                  |
+| session.open.long/sql.rows                     | 47→49         | A2 indexed revision 标量查询及结果                                                  |
+| session.history.earlier/json.stringify.chars   | 243098→243132 | 动态元数据输出差异；对应非 poll 路径未改，逐字来源未追踪（D 限制）                  |
+| web.open.long/cdp.Nodes                        | 1561→1701     | A4 preload 元素/分隔文本成本，叠加采样节点生命周期差异                              |
+| native.warm/sql.rows                           | 10→11         | A2 indexed revision 标量查询及结果                                                  |
+| turn.prewarmed/fs.read.calls                   | 25→26         | 预热首轮收尾采样多了文件/Durable 读取；另含 A2 revision（不是 poll 队列路径）       |
+| turn.prewarmed/sql.statements                  | 189→205       | 预热首轮收尾采样多了文件/Durable 读取；另含 A2 revision（不是 poll 队列路径）       |
+| turn.prewarmed/json.parse.durableStorage.calls | 18→20         | 预热首轮收尾采样多了文件/Durable 读取；另含 A2 revision（不是 poll 队列路径）       |
+| turn.prewarmed/json.parse.durableStorage.chars | 1122→1424     | 预热首轮收尾采样多了文件/Durable 读取；另含 A2 revision（不是 poll 队列路径）       |
+| web.reopen/cdp.Nodes                           | 1090→1230     | A4 preload 元素/分隔文本成本，叠加采样节点生命周期差异                              |
+| web.paced/sql.statements                       | 306→308       | A2 indexed revision 标量查询及结果                                                  |
+| web.paced/cdp.LayoutCount                      | 13→15         | 高负载下浏览器帧/布局采样差异；B5 无 DOM 实现改动，不据此声称时间改善               |
+| web.paced/cdp.Nodes                            | 1294→1424     | A4 preload 元素/分隔文本成本，叠加采样节点生命周期差异                              |
+| web.send.poll/cdp.Nodes                        | 1474→1596     | A4 preload 元素/分隔文本成本，叠加采样节点生命周期差异                              |
+| web.send.stream/sql.statements                 | 384→386       | A2 indexed revision 标量查询及结果                                                  |
+| web.send.stream/push.bytes                     | 91291→91894   | 原有 stream/paced 合并窗口中的 live 文本/元数据采样差异；B5 未改变 stream 帧 schema |
+| web.send.stream/push.view.bytes                | 77497→78100   | 原有 stream/paced 合并窗口中的 live 文本/元数据采样差异；B5 未改变 stream 帧 schema |
+| web.send.stream/cdp.Nodes                      | 1509→1651     | A4 preload 元素/分隔文本成本，叠加采样节点生命周期差异                              |
+| commands.discover.cold/sql.rows                | 78→81         | A2 indexed revision 标量查询及结果                                                  |
+| commands.discover.warm/sql.rows                | 64→66         | A2 indexed revision 标量查询及结果                                                  |
+| projection.large.open/sql.statements           | 98→99         | A2 indexed revision 标量查询及结果                                                  |
+| projection.large.paced/sql.statements          | 572→574       | A2 indexed revision 标量查询及结果                                                  |
+| projection.large.paced/push.bytes              | 253028→257828 | 原有 stream/paced 合并窗口中的 live 文本/元数据采样差异；B5 未改变 stream 帧 schema |
+| projection.large.paced/push.view.bytes         | 211656→216456 | 原有 stream/paced 合并窗口中的 live 文本/元数据采样差异；B5 未改变 stream 帧 schema |
+| image.single/json.stringify.chars              | 349→417       | 动态元数据输出差异；对应非 poll 路径未改，逐字来源未追踪（D 限制）                  |
+| changes.poll.images/json.stringify.chars       | 20272→20388   | 动态元数据输出差异；对应非 poll 路径未改，逐字来源未追踪（D 限制）                  |
+| changes.poll.images/http.body.bytes            | 20272→20320   | 动态元数据输出差异；对应非 poll 路径未改，逐字来源未追踪（D 限制）                  |
+
+- 限制已写入 CONFIGURATION：超过上限的单个 initial event 无法通过该连接交付，必须使用现有 tail/pages；若仍超限，需要另设计有界事件协议，而不是静默截断或提高阈值。D 项仍没有逐字归因证据；本次未据其宣称没有任何字节/调度差异。未部署/重启。
 
 ## 核验记录（审查方追加）
 
