@@ -136,6 +136,7 @@ test(
 
         try {
             const prefix = [
+                { type: "custom", id: "branch-marker", customType: "team-kernel-branch" },
                 messageEntry("prefix-user", binding, "user"),
                 messageEntry("prefix-answer", binding, "assistant"),
             ];
@@ -151,12 +152,13 @@ test(
 
             assert.equal(prefixDoc?.count, prefix.length);
             assert.deepEqual(recordSummary(prefixNative), [
+                { id: "branch-marker", requestId: undefined },
                 { id: "prefix-user", requestId: "prefix" },
                 { id: "prefix-answer", requestId: undefined },
             ]);
             const prefixAuthors = await app.harness.snapshot(AuthorsDoc, session.id, context);
 
-            assert.equal(prefixAuthors?.entries[String(prefixNative[0]!.id)], member.id);
+            assert.equal(prefixAuthors?.entries[String(prefixNative[1]!.id)], member.id);
 
             const expectedHead = journal.session(String(id)).segmentId;
             const handoff = journal.handoff(
@@ -204,7 +206,6 @@ test(
 
             assert.equal(afterRetry?.count, prefix.length + 2);
             append("last-suffix", [
-                { type: "custom", id: "branch-marker", customType: "team-kernel-branch" },
                 messageEntry("last-suffix-user", binding, "user"),
                 messageEntry("last-suffix-answer", binding, "assistant"),
             ]);
@@ -222,11 +223,11 @@ test(
                 "restart preserves exact journal order without replaying handoff seeds",
             );
             assert.deepEqual(recordSummary(restarted.native), [
+                { id: "branch-marker", requestId: undefined },
                 { id: "prefix-user", requestId: "prefix" },
                 { id: "prefix-answer", requestId: undefined },
                 { id: "after-handoff-user", requestId: "after-handoff" },
                 { id: "after-handoff-answer", requestId: undefined },
-                { id: "branch-marker", requestId: undefined },
                 { id: "last-suffix-user", requestId: "last-suffix" },
                 { id: "last-suffix-answer", requestId: undefined },
             ]);

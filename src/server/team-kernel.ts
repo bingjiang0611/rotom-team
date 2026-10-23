@@ -2481,13 +2481,13 @@ export class TeamKernel {
         const skip = mirrored;
         const rows = journal.entriesAfter(String(id), cursor);
         const count = skip + rows.length;
-        // A3 replaces this once-per-process history inspection; preserve branch notices for now.
-        const history =
-            this.#mirrorHistoryLoaded.has(id) || mirrored === 0
-                ? rows
-                : journal.entries(String(id));
 
-        if (history.some((row) => row.entry.customType === "team-kernel-branch")) {
+        if (
+            (mirrored > 0 &&
+                !this.#mirrorHistoryLoaded.has(id) &&
+                journal.hasBranchedHistory(String(id))) ||
+            rows.some((row) => row.entry.customType === "team-kernel-branch")
+        ) {
             this.#branchedHistory.add(id);
         }
 

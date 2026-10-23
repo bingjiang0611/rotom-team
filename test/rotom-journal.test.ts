@@ -322,14 +322,28 @@ test("entry cursors preserve journal order across foreign rows, handoff seeds an
         const handoff = journal.handoff("shared", "handoff", "shared", bob);
 
         journal.attach(handoff.id, "handoff.jsonl", "native-bob");
-        journal.finish(handoff.id, "settled", [entry("copied-handoff-seed")]);
+        journal.finish(handoff.id, "settled", [
+            { ...entry("copied-handoff-seed"), customType: "team-kernel-branch" },
+        ]);
         nativeIds.set("shared", "native-bob");
         sessionFiles.set("shared", "handoff.jsonl");
         append("shared", "shared-after-handoff", [
             entry("shared-next-user", "user"),
             entry("shared-next"),
         ]);
-        append("forked", "fork-seed", [entry("included-fork-seed")], "fork");
+        append(
+            "forked",
+            "fork-seed",
+            [{ ...entry("included-fork-seed"), customType: "team-kernel-branch" }],
+            "fork",
+        );
+        assert.equal(journal.hasBranchedHistory("shared"), false, "handoff copies are excluded");
+        assert.equal(
+            journal.hasBranchedHistory("foreign"),
+            false,
+            "other conversations are excluded",
+        );
+        assert.equal(journal.hasBranchedHistory("forked"), true, "fork history remains eligible");
 
         const all = journal.entries("shared");
 

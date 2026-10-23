@@ -1357,6 +1357,17 @@ export class RotomJournal {
         return row ? this.receipt(String(row.id)) : undefined;
     }
 
+    /** Historical branch notice, without transferring or parsing the already mirrored prefix. */
+    hasBranchedHistory(sessionId: string): boolean {
+        return Boolean(
+            this.#db
+                .prepare(
+                    "SELECT EXISTS(SELECT 1 FROM kernel_attempts a CROSS JOIN kernel_entries e ON e.attempt_id=a.id WHERE a.conversation_id=? AND a.operation<>'handoff' AND json_extract(e.body,'$.customType')='team-kernel-branch') AS found",
+                )
+                .get(sessionId)!.found,
+        );
+    }
+
     /** Resolve the persisted mirror count once after restart; handoff seeds never count. */
     entryCursor(sessionId: string, count: number): number {
         if (!Number.isSafeInteger(count) || count < 0) {
