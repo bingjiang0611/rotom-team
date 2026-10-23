@@ -53,12 +53,12 @@ test(
                     window.folderRequests.push(String(input));
                     const path = new URL(input, location.href).searchParams.get('path');
                     return Promise.resolve(Response.json({
-                        path, home: '/Users/test', parent: '/Users/test',
+                        path, home: '/Users/example', parent: '/Users/example',
                         dirs: Array.from({ length: 40 }, (_, i) => ({
                             name: 'folder-' + i, path: path + '/folder-' + i,
                         })),
                         recent: Array.from({ length: 8 }, (_, i) =>
-                            '/Users/test/rotom-team-deployment/workspace/' + 'long-project-name-'.repeat(8) + i),
+                            '/Users/example/rotom-team-deployment/workspace/' + 'long-project-name-'.repeat(8) + i),
                     }));
                 };
                 return JSON.stringify(true);
@@ -77,7 +77,7 @@ test(
                     await evaluate(`
                         const { openSheet, store } = await import('/store.js');
                         store.set({ server: { ...store.state.server,
-                            defaultCwd: '/Users/test/rotom-team-deployment/workspace/' + 'long-path-'.repeat(10) } });
+                            defaultCwd: '/Users/example/rotom-team-deployment/workspace/' + 'long-path-'.repeat(10) } });
                         openSheet({ type: 'cwd', mode: ${JSON.stringify(mode)} });
                         return JSON.stringify(true);
                     `);

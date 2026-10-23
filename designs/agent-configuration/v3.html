@@ -263,11 +263,11 @@
             };
 
             /* Sample paths: a deployment data folder and two registered projects. */
-            const DATA = "/Users/test/rotom-team-deployment/data";
+            const DATA = "/Users/example/rotom-team-deployment/data";
             const AGENT = `${DATA}/team-agent`;
             const PROJECTS = {
-                "rotom-team": "/Users/test/vibecoding/rotom-team",
-                scry: "/Users/test/vibecoding/scry",
+                "rotom-team": "/Users/example/vibecoding/rotom-team",
+                scry: "/Users/example/vibecoding/scry",
             };
             const MEMBER_PROJECTS = ["rotom-team"];
             const PKG = `${AGENT}/npm/node_modules/@example/pi-tools`;
@@ -302,7 +302,7 @@
                     {
                         instructions: [
                             [`${AGENT}/AGENTS.md`, true],
-                            ["/Users/test/vibecoding/AGENTS.md", true],
+                            ["/Users/example/vibecoding/AGENTS.md", true],
                             [`${p}/AGENTS.md`, true],
                         ],
                         skills: [
@@ -570,7 +570,7 @@
                     <div class="ar-chain">
                         ${row({ ...SHARED.instructions[0], src: "shared" })}
                         ${link}
-                        ${row({ name: "AGENTS.md", path: "/Users/test/vibecoding/AGENTS.md", sub: "Ancestor folder of the project · 0.6 KB", ancestor: true })}
+                        ${row({ name: "AGENTS.md", path: "/Users/example/vibecoding/AGENTS.md", sub: "Ancestor folder of the project · 0.6 KB", ancestor: true })}
                         ${link}
                         ${row({ name: "AGENTS.md", path: `${p}/AGENTS.md`, sub: "4.1 KB · modified 2026-10-15 19:41", src: "project" })}
                     </div>`;
