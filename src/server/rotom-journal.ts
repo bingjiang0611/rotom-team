@@ -226,6 +226,14 @@ export class RotomJournal {
                 "CREATE TABLE IF NOT EXISTS kernel_segment_models (segment_id TEXT PRIMARY KEY REFERENCES kernel_sessions(id), binding TEXT NOT NULL)",
             );
 
+            // Additive, unversioned indexes: schema-6 releases can still open this journal on rollback.
+            this.#db.exec(`
+                CREATE INDEX IF NOT EXISTS kernel_entries_attempt ON kernel_entries(attempt_id);
+                CREATE INDEX IF NOT EXISTS kernel_entries_session ON kernel_entries(session_id);
+                CREATE INDEX IF NOT EXISTS kernel_usage_attempt ON kernel_usage(attempt_id);
+                CREATE INDEX IF NOT EXISTS kernel_child_usage_attempt ON kernel_child_usage(attempt_id);
+            `);
+
             // A cleanly released parent lock is not evidence that an unfinished dispatch never happened.
             this.#db.exec(
                 "UPDATE kernel_attempts SET status='unknown' WHERE status='dispatch-intent'",
@@ -1312,6 +1320,52 @@ export class RotomJournal {
         return row ? this.receipt(String(row.id)) : undefined;
     }
 
+    /** Resolve the persisted mirror count once after restart; handoff seeds never count. */
+    entryCursor(sessionId: string, count: number): number {
+        if (!Number.isSafeInteger(count) || count < 0) {
+            throw new RangeError("Native history count must be a non-negative safe integer");
+        }
+
+        if (count === 0) {
+            return 0;
+        }
+
+        const row = this.#db
+            .prepare(
+                "SELECT e.rowid FROM kernel_attempts a CROSS JOIN kernel_entries e ON e.attempt_id=a.id WHERE a.conversation_id=? AND a.operation<>'handoff' ORDER BY e.rowid LIMIT 1 OFFSET ?",
+            )
+            .get(sessionId, count - 1);
+
+        if (!row) {
+            throw new Error("Native mirror count exceeds journal history");
+        }
+
+        return Number(row.rowid);
+    }
+
+    /** Warm mirror suffix. Start with this conversation's attempts, not a rowid scan of other histories. */
+    entriesAfter(sessionId: string, cursor: number) {
+        return this.#db
+            .prepare(
+                "SELECT e.rowid,e.attempt_id,e.body,a.operation,a.request_id,a.binding FROM kernel_attempts a CROSS JOIN kernel_entries e ON e.attempt_id=a.id WHERE a.conversation_id=? AND a.operation<>'handoff' AND e.rowid>? ORDER BY e.rowid",
+            )
+            .all(sessionId, cursor)
+            .map((row) => ({
+                rowid: Number(row.rowid),
+                ...this.#historyEntry(row),
+            }));
+    }
+
+    #historyEntry(row: Record<string, SQLOutputValue>) {
+        return {
+            attemptId: String(row.attempt_id),
+            entry: JSON.parse(String(row.body)) as KernelEntry,
+            operation: row.operation as KernelOperation,
+            requestId: String(row.request_id),
+            memberId: (JSON.parse(String(row.binding)) as KernelBinding).memberId,
+        };
+    }
+
     /** Own history in append-only order, skipping an already-consumed prefix (never handoff seed copies). */
     entries(
         sessionId: string,
@@ -1329,16 +1383,10 @@ export class RotomJournal {
 
         return this.#db
             .prepare(
-                "SELECT e.attempt_id,e.body,a.operation,a.request_id,a.binding FROM kernel_entries e JOIN kernel_attempts a ON a.id=e.attempt_id WHERE a.conversation_id=? AND a.operation<>'handoff' ORDER BY e.rowid LIMIT -1 OFFSET ?",
+                "SELECT e.attempt_id,e.body,a.operation,a.request_id,a.binding FROM kernel_attempts a CROSS JOIN kernel_entries e ON e.attempt_id=a.id WHERE a.conversation_id=? AND a.operation<>'handoff' ORDER BY e.rowid LIMIT -1 OFFSET ?",
             )
             .all(sessionId, skip)
-            .map((row) => ({
-                attemptId: String(row.attempt_id),
-                entry: JSON.parse(String(row.body)),
-                operation: row.operation as KernelOperation,
-                requestId: String(row.request_id),
-                memberId: (JSON.parse(String(row.binding)) as KernelBinding).memberId,
-            }));
+            .map((row) => this.#historyEntry(row));
     }
 
     /** Full native entries for exactly one segment, including inherited seed entries. */

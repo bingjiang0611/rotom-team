@@ -265,6 +265,213 @@ test("optional head session is one fresh read and distinguishes absence from cor
     }
 });
 
+test("entry cursors preserve journal order across foreign rows, handoff seeds and forks", () => {
+    const f = setup();
+    let journal = new RotomJournal(f.data);
+    const entry = (id: string, role: "user" | "assistant" = "assistant"): KernelEntry => ({
+        type: "message",
+        id,
+        message: {
+            role,
+            ...(role === "assistant"
+                ? { provider: f.binding.provider, model: f.binding.model, stopReason: "stop" }
+                : {}),
+        },
+    });
+
+    try {
+        journal.bind("shared", f.binding);
+        const bobHome = join(f.data, "kernel-homes", "bob");
+
+        mkdirSync(bobHome, { mode: 0o700 });
+        const bob = { ...f.binding, memberId: "bob", home: bobHome };
+
+        journal.bind("foreign", f.binding);
+        journal.bind("forked", bob);
+
+        const nativeIds = new Map([
+            ["shared", "native-alice"],
+            ["foreign", "native-foreign"],
+            ["forked", "native-fork"],
+        ]);
+        const sessionFiles = new Map([
+            ["shared", "shared.jsonl"],
+            ["foreign", "foreign.jsonl"],
+            ["forked", "forked.jsonl"],
+        ]);
+
+        const append = (
+            sessionId: string,
+            requestId: string,
+            entries: KernelEntry[],
+            operation: "prompt" | "fork" = "prompt",
+        ) => {
+            const run = journal.reserve(sessionId, requestId, requestId, operation);
+
+            journal.attach(run.id, sessionFiles.get(sessionId)!, nativeIds.get(sessionId)!);
+            journal.finish(run.id, "settled", entries);
+
+            return run;
+        };
+
+        append("shared", "shared-first", [
+            entry("shared-first-user", "user"),
+            entry("shared-first"),
+        ]);
+        append("foreign", "foreign-only", [entry("foreign-user", "user"), entry("foreign-answer")]);
+        const handoff = journal.handoff("shared", "handoff", "shared", bob);
+
+        journal.attach(handoff.id, "handoff.jsonl", "native-bob");
+        journal.finish(handoff.id, "settled", [entry("copied-handoff-seed")]);
+        nativeIds.set("shared", "native-bob");
+        sessionFiles.set("shared", "handoff.jsonl");
+        append("shared", "shared-after-handoff", [
+            entry("shared-next-user", "user"),
+            entry("shared-next"),
+        ]);
+        append("forked", "fork-seed", [entry("included-fork-seed")], "fork");
+
+        const all = journal.entries("shared");
+
+        assert.deepEqual(
+            all.map((row) => row.entry.id),
+            ["shared-first-user", "shared-first", "shared-next-user", "shared-next"],
+        );
+        assert.equal(
+            all.some((row) => row.entry.id === "copied-handoff-seed"),
+            false,
+        );
+        assert.equal(journal.entryCursor("shared", 0), 0);
+        assert.equal(journal.entriesAfter("shared", 0).length, all.length);
+        const prefixCursor = journal.entryCursor("shared", 2);
+        const suffix = journal.entriesAfter("shared", prefixCursor);
+
+        assert.ok(suffix[0]!.rowid > prefixCursor);
+        assert.equal(typeof suffix[0]!.rowid, "number");
+        assert.deepEqual(
+            suffix.map((row) => ({
+                id: row.entry.id,
+                requestId: row.requestId,
+                memberId: row.memberId,
+            })),
+            [
+                { id: "shared-next-user", requestId: "shared-after-handoff", memberId: "bob" },
+                { id: "shared-next", requestId: "shared-after-handoff", memberId: "bob" },
+            ],
+        );
+        assert.equal(
+            journal.entriesAfter("shared", journal.entryCursor("shared", all.length)).length,
+            0,
+        );
+        assert.deepEqual(
+            journal
+                .entriesAfter("forked", journal.entryCursor("forked", 0))
+                .map((row) => row.entry.id),
+            ["included-fork-seed"],
+        );
+        assert.throws(
+            () => journal.entryCursor("shared", all.length + 1),
+            /exceeds journal history/,
+        );
+        const beforeRestart = journal.entries("shared");
+
+        journal.close();
+        journal = new RotomJournal(f.data);
+        assert.deepEqual(
+            journal.entries("shared"),
+            beforeRestart,
+            "the old entries API remains stable after reopen",
+        );
+        assert.deepEqual(journal.entriesAfter("shared", prefixCursor), suffix);
+    } finally {
+        journal.close();
+        rmSync(f.root, { recursive: true, force: true });
+    }
+});
+
+test("schema 6 journal indexes drive every hot-path query plan", () => {
+    const f = setup();
+    let journal = new RotomJournal(f.data);
+
+    try {
+        journal.bind("native", f.binding);
+        const run = journal.reserve("native", "plan", "plan");
+
+        journal.attach(run.id, "plan.jsonl", "native-id");
+        journal.finish(run.id, "settled", [
+            { type: "message", id: "plan-user", message: { role: "user" } },
+            {
+                type: "message",
+                id: "plan-answer",
+                message: {
+                    role: "assistant",
+                    provider: f.binding.provider,
+                    model: f.binding.model,
+                    stopReason: "stop",
+                },
+            },
+        ]);
+        journal.close();
+
+        const db = new DatabaseSync(join(f.data, "kernel.sqlite"));
+        const plan = (sql: string) =>
+            db
+                .prepare(`EXPLAIN QUERY PLAN ${sql}`)
+                .all()
+                .map((row) => String(row.detail));
+        const entriesPlan = plan(
+            "SELECT e.attempt_id,e.body,a.operation,a.request_id,a.binding FROM kernel_attempts a CROSS JOIN kernel_entries e ON e.attempt_id=a.id WHERE a.conversation_id='native' AND a.operation<>'handoff' ORDER BY e.rowid LIMIT -1 OFFSET 0",
+        );
+        const afterPlan = plan(
+            "SELECT e.rowid,e.attempt_id,e.body,a.operation,a.request_id,a.binding FROM kernel_attempts a CROSS JOIN kernel_entries e ON e.attempt_id=a.id WHERE a.conversation_id='native' AND a.operation<>'handoff' AND e.rowid>0 ORDER BY e.rowid",
+        );
+        const usagePlan = plan(
+            "SELECT u.* FROM kernel_usage u JOIN kernel_attempts a ON a.id=u.attempt_id WHERE a.conversation_id='native' ORDER BY u.rowid",
+        );
+        const creditsPlan = plan(
+            "SELECT a.id,a.session_id,a.binding,a.status,s.kernel_session_id,e.body FROM kernel_attempts a JOIN kernel_sessions s ON s.id=a.session_id LEFT JOIN kernel_entries e ON e.attempt_id=a.id AND json_extract(e.body,'$.customType')='qoder-credits' WHERE a.conversation_id='native' AND a.operation IN ('prompt','compact','command') ORDER BY a.rowid,e.rowid",
+        );
+        const terminalPlan = plan(
+            "SELECT body FROM kernel_entries WHERE attempt_id='plan' ORDER BY rowid",
+        );
+        const segmentPlan = plan(
+            "SELECT body FROM kernel_entries WHERE session_id='native' ORDER BY rowid",
+        );
+        const indexes = db
+            .prepare("SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'kernel_%'")
+            .all()
+            .map((row) => String(row.name));
+
+        assert.equal(Number(db.prepare("PRAGMA user_version").get()!.user_version), 6);
+        assert.deepEqual(indexes.sort(), [
+            "kernel_child_usage_attempt",
+            "kernel_entries_attempt",
+            "kernel_entries_session",
+            "kernel_usage_attempt",
+        ]);
+
+        for (const details of [entriesPlan, afterPlan, usagePlan]) {
+            assert.match(details[0]!, /SEARCH a USING INDEX one_conversation_request/);
+            assert.match(details[1]!, /SEARCH (e|u) USING INDEX kernel_(entries|usage)_attempt/);
+            assert.ok(!details.some((detail) => /SCAN e\b/.test(detail)), details.join("; "));
+        }
+
+        assert.match(creditsPlan[0]!, /SEARCH a USING INDEX one_conversation_request/);
+        assert.ok(
+            creditsPlan.some((detail) =>
+                /SEARCH e USING INDEX kernel_entries_attempt/.test(detail),
+            ),
+        );
+        assert.ok(!creditsPlan.some((detail) => /SCAN e\b/.test(detail)), creditsPlan.join("; "));
+        assert.match(segmentPlan[0]!, /SEARCH kernel_entries USING INDEX kernel_entries_session/);
+        assert.match(terminalPlan[0]!, /SEARCH kernel_entries USING INDEX kernel_entries_attempt/);
+        db.close();
+    } finally {
+        journal.close();
+        rmSync(f.root, { recursive: true, force: true });
+    }
+});
+
 test("history suffix reads preserve ordering, bindings and restart without replaying the prefix", () => {
     const f = setup();
     let journal = new RotomJournal(f.data);

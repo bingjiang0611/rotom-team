@@ -233,6 +233,7 @@ export class TeamKernel {
     readonly #nativeGoal = new Map<ConversationId, unknown>();
     readonly #branchedHistory = new Set<ConversationId>();
     readonly #mirrorHistoryLoaded = new Set<ConversationId>();
+    readonly #mirrorCursors = new Map<ConversationId, { count: number; rowid: number }>();
     readonly #mcp: McpSignIns;
     readonly #mirrors = new Map<ConversationId, Promise<void>>();
     readonly #operations = new Map<
@@ -2453,13 +2454,20 @@ export class TeamKernel {
         const app = this.#app;
         const mirrored =
             (await app.harness.snapshot(NativeMirrorDoc, id, BACKGROUND_CONTEXT))?.count ?? 0;
-        // Once per process, inspect the prefix too so historical branch notices survive restart.
-        // Thereafter SQL returns only the unmirrored suffix, avoiding old body/binding JSON decoding.
-        const skip = this.#mirrorHistoryLoaded.has(id) ? mirrored : 0;
-        const rows = this.executions.journal.entries(String(id), skip);
+        const journal = this.executions.journal;
+        const cached = this.#mirrorCursors.get(id);
+        const cursor =
+            cached?.count === mirrored ? cached.rowid : journal.entryCursor(String(id), mirrored);
+        const skip = mirrored;
+        const rows = journal.entriesAfter(String(id), cursor);
         const count = skip + rows.length;
+        // A3 replaces this once-per-process history inspection; preserve branch notices for now.
+        const history =
+            this.#mirrorHistoryLoaded.has(id) || mirrored === 0
+                ? rows
+                : journal.entries(String(id));
 
-        if (rows.some((row) => row.entry.customType === "team-kernel-branch")) {
+        if (history.some((row) => row.entry.customType === "team-kernel-branch")) {
             this.#branchedHistory.add(id);
         }
 
@@ -2520,6 +2528,8 @@ export class TeamKernel {
             }, BACKGROUND_CONTEXT);
         }
 
+        // Only a successful Durable commit consumes rows. A failed mirror must retry the same suffix.
+        this.#mirrorCursors.set(id, { count, rowid: rows.at(-1)?.rowid ?? cursor });
         const live = this.#live.get(id);
 
         if (live?.generation?.ended) {
