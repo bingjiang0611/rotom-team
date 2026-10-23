@@ -27,7 +27,7 @@
 | ----- | ---- | ------------------------------------------- | ------------ | ------------------------------- |
 | A1    | A    | journal 索引 + 镜像游标                     | 已推送待核验 | `2a2ac90`、`b44ca33`、`7c880fc` |
 | A2    | A    | thinking level / native goal 跨推送缓存     | 已推送待核验 | `b8d63f4`、`c13245d`            |
-| A3    | A    | 启动时不再全量解析历史                      | 待做         |                                 |
+| A3    | A    | 启动时不再全量解析历史                      | 已推送待核验 | `0f39ea3`                       |
 | A4    | A    | 静态资源 ETag / gzip / modulepreload        | 待做         |                                 |
 | B1    | B    | `teamResourceRevision` 不在请求路径读大文件 | 待做         |                                 |
 | B2    | B    | `finishedSeen` 写入与清理                   | 待做         |                                 |
@@ -199,6 +199,40 @@
 | changes.poll.images/json.stringify.chars    | 20328→20362   | D，+34 字符；该 Git/image 路径无 A2 实现改动       |
 
 - D 的具体字符来源未逐字追踪，仅能确认路径未变、采样输出不完全同字节；审查时可要求补充 payload 追踪，不能把这项限制隐藏为已经证明没有字节回归。未部署、未碰真实账号。
+
+### A3 — 启动增量镜像
+
+- 实现 `0f39ea3`。复用既有 `startup.restart` 测量，不修改仪表或 workload。已镜像前缀的分叉标记改为 indexed SQL EXISTS，只返回布尔值；首次镜像 count=0 时直接检查正在读取的后缀，不多做 SQL。SQLite 仍需在该会话范围内检查 JSON，未宣称消除了所有 SQLite 内部工作。
+- format/check/lint/format:check 和 npm test 通过（564/564，无跳过）。真实新进程重启测试把 branch 标记移到已镜像前缀，同时禁止启动调用全量 entries API；handoff seed 的标记不计入、其他会话不串入、fork 标记仍可见。负控恢复全量历史调用后，该测试报“Startup mirror must not parse the historical prefix”；恢复 SQL 路径后通过。
+- 最终 `perf:ci -- origin/main --runs 1` passed，darwin-arm64 / Node 24.18.0、highLoad=false、gating/guard passed。startup.restart 的 journalHistory 解析 56→0 次、135,546→0 字符（L1）。日志/前后报告 `/tmp/rotom-review-A3/final-ci/`；首次实验发现空会话多余 EXISTS，已经修正并重新跑完整四项检查及 perf。
+- 最终相对 origin/main 的 worse 全部如下。R/S/D 含义同 A2；V 表示本次实际多推了一个中间视图（session.open push.events 9→10），其 SQL/序列化相应增加。只解释已观察到的工作，不放宽 ledger。
+
+| 计数器                                      | base→head     | 解释                                                      |
+| ------------------------------------------- | ------------- | --------------------------------------------------------- |
+| startup.restart/sql.statements              | 848→851       | S，索引初始化/游标定位/布尔恢复，不再传回历史正文         |
+| session.open/sql.statements                 | 45→48         | R + V                                                     |
+| session.open/sql.rows                       | 94→109        | R + V                                                     |
+| session.open/json.stringify.chars           | 84622→88107   | V                                                         |
+| session.open/push.events                    | 9→10          | V，原有合并窗口中的额外中间状态                           |
+| session.open/push.bytes                     | 82236→86312   | V                                                         |
+| turn.warm/sql.statements                    | 157→158       | R                                                         |
+| turn.warm/json.stringify.chars              | 85248→85250   | D，+2 字符                                                |
+| turn.paced/sql.statements                   | 286→288       | R                                                         |
+| web.open/sql.statements                     | 31→32         | R                                                         |
+| session.open.long/sql.statements            | 16→17         | R                                                         |
+| session.open.long/sql.rows                  | 47→49         | R                                                         |
+| native.warm/sql.rows                        | 10→11         | R                                                         |
+| web.paced/sql.statements                    | 320→322       | R                                                         |
+| web.send.stream/cdp.Nodes                   | 1479→1492     | D，CDP 采样时存活/分配节点差异；本项没有 Web DOM 代码改动 |
+| commands.discover.cold/sql.rows             | 78→81         | R                                                         |
+| commands.discover.cold/json.stringify.chars | 33812→33846   | D，+34 字符                                               |
+| commands.discover.warm/sql.rows             | 64→66         | R                                                         |
+| projection.large.open/sql.statements        | 98→99         | R                                                         |
+| projection.large.open/json.stringify.chars  | 199672→199706 | D，+34 字符                                               |
+| projection.large.paced/sql.statements       | 572→574       | R                                                         |
+| changes.poll.images/http.body.bytes         | 20296→20328   | D，+32 B；该 handler 无 A3 改动，未承诺固定同字节输出     |
+
+- 单轮 Web/动态字段计数不能证明长期回归或改善；D 的逐字/逐节点来源未单独追踪，保留给审查方，不以不存在的零差异代替观测。未部署或重启线上。
 
 ## 核验记录（审查方追加）
 
