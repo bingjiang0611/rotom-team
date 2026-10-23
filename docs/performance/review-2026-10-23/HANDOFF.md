@@ -32,7 +32,7 @@
 | B1    | B    | `teamResourceRevision` 不在请求路径读大文件 | 已推送待核验 | `9ccc0aa`                       |
 | B2    | B    | `finishedSeen` 写入与清理                   | 已推送待核验 | `cc652cc`                       |
 | B3    | B    | 房间级字段每次推送只算一次                  | 已推送待核验 | `8d42e63`                       |
-| B4    | B    | journal 预编译语句缓存                      | 待做         |                                 |
+| B4    | B    | journal 预编译语句缓存                      | 已推送待核验 | `37cb733`                       |
 | B5    | B    | 长轮询队列字节上限                          | 待做         |                                 |
 | C1–C6 | C    | 需要 owner 决策，只写方案                   | 待做         |                                 |
 
@@ -402,6 +402,63 @@
 | projection.large.paced/push.view.bytes         | 206856→214856 | 流式合并时点导致 view 字节增加；field 本身仍按客户端基线过滤        |
 
 - 未改变 viewer 权限计算或个人凭据路由。未部署/重启。
+
+### B4 — 预编译语句
+
+- 实现 `37cb733`。按 SQL 文本缓存连接所属 StatementSync；close 清空缓存再关连接。不缓存查询结果，不改变事务、绑定参数或 schema。SQL 只有有限 literal 和两个 usage 表名，没有用户输入增长的缓存键。
+- 接手时保留已有实现和正在运行的验证，没有重放。独立 TypeScript AST 比较确认前后 **64 个 literal/template SQL 调用文本完全一致**。新测试检查三个查询只 prepare 一次、后续写入立即可见、关闭后拒绝查询、重开不复用旧 statement。负控仅绕过 cache hit 后以 3≠1 失败；恢复后通过。
+- format/check/lint/format:check passed；npm test **572/572**、无跳过。perf:ci origin/main --runs 1 passed，darwin-arm64 / Node 24.18.0，highLoad=false，gating/guard passed，报告 `/tmp/rotom-review-B4/ci/`。现有 sql.statements 数的是执行次数，不数 prepare，故不把它不变伪称为编译工作未减少，也不凭单轮时间宣称加速。
+- 全部 worse（origin/main 比较包含 A1–B3；既有 D 的逐字归因限制保留）：
+
+| 计数器                                          | base→head     | 解释                                                                                     |
+| ----------------------------------------------- | ------------- | ---------------------------------------------------------------------------------------- |
+| startup.restart/sql.statements                  | 848→851       | A1/A3 启动索引、游标及分叉恢复                                                           |
+| startup.restart/json.parse.durableStorage.calls | 458→459       | 启动采样多读一个 19 字符 Durable 值；非 journal statement/result 缓存                    |
+| startup.restart/json.parse.durableStorage.chars | 51416→51435   | 启动采样多读一个 19 字符 Durable 值；非 journal statement/result 缓存                    |
+| session.open/sql.statements                     | 45→47         | A2 indexed revision 标量查询及结果                                                       |
+| session.open/sql.rows                           | 94→96         | A2 indexed revision 标量查询及结果                                                       |
+| turn.warm/sql.statements                        | 157→158       | A2 indexed revision 标量查询及结果                                                       |
+| turn.paced/sql.statements                       | 286→288       | A2 indexed revision 标量查询及结果                                                       |
+| web.open/sql.statements                         | 31→32         | A2 indexed revision 标量查询及结果                                                       |
+| web.open/cdp.Nodes                              | 996→1112      | A4 preload 元素/文本节点成本，加上采样时节点生命周期差异                                 |
+| session.open.long/sql.statements                | 16→17         | A2 indexed revision 标量查询及结果                                                       |
+| session.open.long/sql.rows                      | 47→49         | A2 indexed revision 标量查询及结果                                                       |
+| web.open.long/cdp.Nodes                         | 1585→1701     | A4 preload 元素/文本节点成本，加上采样时节点生命周期差异                                 |
+| native.warm/sql.rows                            | 10→11         | A2 indexed revision 标量查询及结果                                                       |
+| native.validate/json.stringify.chars            | 617→685       | 动态元数据输出差异；B4 未修改此路径，具体字符来源未追踪（D 限制）                        |
+| web.reopen/cdp.Nodes                            | 1090→1230     | A4 preload 元素/文本节点成本，加上采样时节点生命周期差异                                 |
+| web.paced/sql.statements                        | 306→322       | 本次 paced view 推送 11→12；相应投影、SQL、解析/序列化和传输增加（SQL 另含 A2 revision） |
+| web.paced/view.fields.stringify.calls           | 132→144       | 本次 paced view 推送 11→12；相应投影、SQL、解析/序列化和传输增加（SQL 另含 A2 revision） |
+| web.paced/view.fields.stringify.chars           | 7050→7695     | 本次 paced view 推送 11→12；相应投影、SQL、解析/序列化和传输增加（SQL 另含 A2 revision） |
+| web.paced/view.live.project.calls               | 11→12         | 本次 paced view 推送 11→12；相应投影、SQL、解析/序列化和传输增加（SQL 另含 A2 revision） |
+| web.paced/view.inbox.project.calls              | 11→12         | 本次 paced view 推送 11→12；相应投影、SQL、解析/序列化和传输增加（SQL 另含 A2 revision） |
+| web.paced/view.kernel.project.calls             | 11→12         | 本次 paced view 推送 11→12；相应投影、SQL、解析/序列化和传输增加（SQL 另含 A2 revision） |
+| web.paced/view.kernel.sql.statements            | 54→59         | 本次 paced view 推送 11→12；相应投影、SQL、解析/序列化和传输增加（SQL 另含 A2 revision） |
+| web.paced/view.kernel.sql.heads                 | 11→12         | 本次 paced view 推送 11→12；相应投影、SQL、解析/序列化和传输增加（SQL 另含 A2 revision） |
+| web.paced/view.kernel.sql.attempts              | 22→24         | 本次 paced view 推送 11→12；相应投影、SQL、解析/序列化和传输增加（SQL 另含 A2 revision） |
+| web.paced/view.kernel.sql.command_inputs        | 21→23         | 本次 paced view 推送 11→12；相应投影、SQL、解析/序列化和传输增加（SQL 另含 A2 revision） |
+| web.paced/view.kernel.sql.rows                  | 32→35         | 本次 paced view 推送 11→12；相应投影、SQL、解析/序列化和传输增加（SQL 另含 A2 revision） |
+| web.paced/view.kernel.json.parse.calls          | 32→35         | 本次 paced view 推送 11→12；相应投影、SQL、解析/序列化和传输增加（SQL 另含 A2 revision） |
+| web.paced/view.kernel.json.parse.chars          | 17312→18935   | 本次 paced view 推送 11→12；相应投影、SQL、解析/序列化和传输增加（SQL 另含 A2 revision） |
+| web.paced/push.events                           | 15→16         | 本次 paced view 推送 11→12；相应投影、SQL、解析/序列化和传输增加（SQL 另含 A2 revision） |
+| web.paced/push.bytes                            | 29633→31430   | 本次 paced view 推送 11→12；相应投影、SQL、解析/序列化和传输增加（SQL 另含 A2 revision） |
+| web.paced/push.view.count                       | 11→12         | 本次 paced view 推送 11→12；相应投影、SQL、解析/序列化和传输增加（SQL 另含 A2 revision） |
+| web.paced/push.view.bytes                       | 27295→29092   | 本次 paced view 推送 11→12；相应投影、SQL、解析/序列化和传输增加（SQL 另含 A2 revision） |
+| web.paced/cdp.Nodes                             | 1284→1410     | A4 preload 元素/文本节点成本，加上采样时节点生命周期差异                                 |
+| web.paced/web.event.parse.calls                 | 13→14         | 本次 paced view 推送 11→12；相应投影、SQL、解析/序列化和传输增加（SQL 另含 A2 revision） |
+| web.paced/web.event.parse.chars                 | 28184→29961   | 本次 paced view 推送 11→12；相应投影、SQL、解析/序列化和传输增加（SQL 另含 A2 revision） |
+| web.paced/web.view.apply.calls                  | 11→12         | 本次 paced view 推送 11→12；相应投影、SQL、解析/序列化和传输增加（SQL 另含 A2 revision） |
+| web.send.poll/cdp.Nodes                         | 1456→1615     | A4 preload 元素/文本节点成本，加上采样时节点生命周期差异                                 |
+| web.send.stream/sql.statements                  | 403→405       | A2 indexed revision 标量查询及结果                                                       |
+| web.send.stream/cdp.Nodes                       | 1472→1639     | A4 preload 元素/文本节点成本，加上采样时节点生命周期差异                                 |
+| commands.discover.cold/sql.rows                 | 78→81         | A2 indexed revision 标量查询及结果                                                       |
+| commands.discover.warm/sql.rows                 | 64→66         | A2 indexed revision 标量查询及结果                                                       |
+| projection.large.open/sql.statements            | 98→99         | A2 indexed revision 标量查询及结果                                                       |
+| projection.large.paced/push.bytes               | 248456→249828 | 原有合并窗口中发送的 live 文本长度不同；本次 +1372 B，未改变 payload schema              |
+| projection.large.paced/push.view.bytes          | 207084→208456 | 原有合并窗口中发送的 live 文本长度不同；本次 +1372 B，未改变 payload schema              |
+| changes.poll.images/json.stringify.chars        | 20296→20330   | 动态元数据输出差异；B4 未修改此路径，具体字符来源未追踪（D 限制）                        |
+
+- 没有修改 vendor、凭据或 unknown 结果处理；未部署/重启。
 
 ## 核验记录（审查方追加）
 
