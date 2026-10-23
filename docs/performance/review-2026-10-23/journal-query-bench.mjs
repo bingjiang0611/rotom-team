@@ -37,6 +37,8 @@ CREATE UNIQUE INDEX one_conversation_writer ON kernel_attempts(conversation_id) 
 const QUERIES = {
     "entries (mirror suffix)":
         "SELECT e.attempt_id,e.body,a.operation,a.request_id,a.binding FROM kernel_entries e JOIN kernel_attempts a ON a.id=e.attempt_id WHERE a.conversation_id=? AND a.operation<>'handoff' ORDER BY e.rowid LIMIT -1 OFFSET ?",
+    entriesAfter:
+        "SELECT e.rowid,e.attempt_id,e.body,a.operation,a.request_id,a.binding FROM kernel_attempts a CROSS JOIN kernel_entries e ON e.attempt_id=a.id WHERE a.conversation_id=? AND a.operation<>'handoff' AND e.rowid>? ORDER BY e.rowid",
     segmentEntries: "SELECT body FROM kernel_entries WHERE session_id=? ORDER BY rowid",
     "#terminal": "SELECT body FROM kernel_entries WHERE attempt_id=? ORDER BY rowid",
     usage: "SELECT u.* FROM kernel_usage u JOIN kernel_attempts a ON a.id=u.attempt_id WHERE a.conversation_id=? ORDER BY u.rowid",
@@ -45,6 +47,7 @@ const QUERIES = {
 };
 const PARAMS = {
     "entries (mirror suffix)": (c) => [`${c}`, ATTEMPTS * PER_ATTEMPT],
+    entriesAfter: (c) => [`${c}`, (c + 1) * ATTEMPTS * PER_ATTEMPT],
     segmentEntries: (c) => [`s${c}`],
     "#terminal": (c) => [`a${c}-0`],
     usage: (c) => [`${c}`],

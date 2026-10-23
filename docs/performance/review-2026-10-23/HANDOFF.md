@@ -23,18 +23,18 @@
 
 ## 状态表（执行方维护）
 
-| 编号  | 批次 | 标题                                        | 状态 | 提交 |
-| ----- | ---- | ------------------------------------------- | ---- | ---- |
-| A1    | A    | journal 索引 + 镜像游标                     | 待做 |      |
-| A2    | A    | thinking level / native goal 跨推送缓存     | 待做 |      |
-| A3    | A    | 启动时不再全量解析历史                      | 待做 |      |
-| A4    | A    | 静态资源 ETag / gzip / modulepreload        | 待做 |      |
-| B1    | B    | `teamResourceRevision` 不在请求路径读大文件 | 待做 |      |
-| B2    | B    | `finishedSeen` 写入与清理                   | 待做 |      |
-| B3    | B    | 房间级字段每次推送只算一次                  | 待做 |      |
-| B4    | B    | journal 预编译语句缓存                      | 待做 |      |
-| B5    | B    | 长轮询队列字节上限                          | 待做 |      |
-| C1–C6 | C    | 需要 owner 决策，只写方案                   | 待做 |      |
+| 编号  | 批次 | 标题                                        | 状态   | 提交               |
+| ----- | ---- | ------------------------------------------- | ------ | ------------------ |
+| A1    | A    | journal 索引 + 镜像游标                     | 进行中 | 测量提交见执行记录 |
+| A2    | A    | thinking level / native goal 跨推送缓存     | 待做   |                    |
+| A3    | A    | 启动时不再全量解析历史                      | 待做   |                    |
+| A4    | A    | 静态资源 ETag / gzip / modulepreload        | 待做   |                    |
+| B1    | B    | `teamResourceRevision` 不在请求路径读大文件 | 待做   |                    |
+| B2    | B    | `finishedSeen` 写入与清理                   | 待做   |                    |
+| B3    | B    | 房间级字段每次推送只算一次                  | 待做   |                    |
+| B4    | B    | journal 预编译语句缓存                      | 待做   |                    |
+| B5    | B    | 长轮询队列字节上限                          | 待做   |                    |
+| C1–C6 | C    | 需要 owner 决策，只写方案                   | 待做   |                    |
 
 状态取值：`待做` / `进行中` / `已推送待核验` / `核验通过` / `核验未通过` / `放弃（写明原因）`。
 
@@ -138,6 +138,14 @@
 ## 执行记录（执行方追加）
 
 <!-- 每项一节：做了什么、提交号、测试结果、perf:ci 摘要（平台、highLoad、每个变差计数器的解释）、遗留问题。 -->
+
+### A1 — 测量层
+
+- 首个纯格式提交：`329df5b`，已推送；未混入实现。
+- 测量提交：`A1: measure large journal queries`（本节所在提交）。新增独立 `journal.large`，60 会话 × 50 attempts × 12 entries；测最后一个会话的镜像后缀、整段历史和真实 Qoder credit 汇总。所有返回值有断言，数据构造不计入查询窗口。
+- `check`、`lint`、`format:check`、`npm test` 均通过；560/560，无跳过。两次独立 `perf:measure --runs 1` 通过，darwin-arm64 / Node 24.18.0，highLoad=false；scenario 总耗时 153.0 / 120.3 ms。
+- 仅注册 `journal.large/sql.statements`、`journal.large/sql.rows` 两个 candidate，没有提高既有阈值。`sql.rows` 是返回行数，不是 SQLite 扫描行数；索引效果将用实际查询计划和每次查询耗时验证，不能声称返回相同数据的查询减少了返回行数。
+- 本地证据：`/tmp/rotom-review-A1/before-{1,2}.json` 及同目录检查日志。尚无生产优化；完整 perf:ci 和重启回归在优化阶段执行。未使用真实账号、未重启/部署服务。
 
 ## 核验记录（审查方追加）
 

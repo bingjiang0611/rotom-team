@@ -23,6 +23,11 @@ export const WORKLOAD = {
     /** A long native history (seeded directly, no model), for opening it and reading all of it. */
     longTurns: 300,
     longAnswerChars: 1200,
+    /** A separate synthetic RotomJournal fixture for the A1 query measurement. */
+    journalConversations: 60,
+    journalAttempts: 50,
+    journalEntriesPerAttempt: 12,
+    journalEntryChars: 2000,
     /** The newest entries a tab asks for first, as the web app does (`TRANSCRIPT_TAIL` in web/store.js). */
     longTail: 240,
 } as const;
@@ -76,6 +81,7 @@ export const SCENARIOS: Record<string, string> = {
     "changes.poll.images": `${imageHistory}; after all image scenarios, ${WORKLOAD.projectionTabs} concurrent GET changes for that image session (same Git workspace with ${WORKLOAD.changedFiles} changed files), then the same ${WORKLOAD.projectionTabs} again with nothing changed; every answer identical, until quiet`,
     "image.paste.network":
         "after all other scenarios, real Chromium prepares and uploads one deterministic xorshift-noise 3000x1500 opaque PNG from its clipboard path to the same synthetic session, on a CDP-emulated 4 Mbit/s uplink and 40 ms latency; includes browser resize, HTTP upload, metadata response and decode, excludes fixture construction/module loading; older revisions without the helper upload the original, matching their unchanged paste behavior; no inference, synthetic link",
+    "journal.large": `after all other scenarios, a separate RotomJournal with ${WORKLOAD.journalConversations} conversations × ${WORKLOAD.journalAttempts} attempts × ${WORKLOAD.journalEntriesPerAttempt} entries of about ${WORKLOAD.journalEntryChars} characters; measure an entries suffix, segmentEntries and credits`,
 };
 
 export type Layer = "storage" | "process" | "cpu" | "push" | "http" | "web";
@@ -596,6 +602,7 @@ export const REPORTED: Record<string, string[]> = {
         "web.view.prune.checks",
         "web.view.order.ids",
     ],
+    "journal.large": ["sql.statements", "sql.rows"],
 };
 
 export function metricSpec(metric: string): MetricSpec {

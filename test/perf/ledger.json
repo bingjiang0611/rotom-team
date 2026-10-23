@@ -24490,6 +24490,34 @@
             "baselines": {
                 "darwin-arm64": 59
             }
+        },
+        "journal.large/sql.statements": {
+            "scenario": "journal.large",
+            "metric": "sql.statements",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "after all other scenarios, a separate RotomJournal with 60 conversations × 50 attempts × 12 entries of about 2000 characters; measure an entries suffix, segmentEntries and credits",
+            "source": "node:sqlite StatementSync run/get/all/iterate + DatabaseSync.exec (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 3
+            }
+        },
+        "journal.large/sql.rows": {
+            "scenario": "journal.large",
+            "metric": "sql.rows",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "after all other scenarios, a separate RotomJournal with 60 conversations × 50 attempts × 12 entries of about 2000 characters; measure an entries suffix, segmentEntries and credits",
+            "source": "rows returned by StatementSync all/get (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 662
+            }
         }
     }
 }

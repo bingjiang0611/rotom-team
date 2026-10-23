@@ -41,6 +41,7 @@ import { measureSend } from "./send-phases.ts";
 import { sessionListTab } from "./session-list.ts";
 import { claimFor } from "./view-claim.ts";
 import { type Transcript, viewTab } from "./view-tab.ts";
+import { createJournalLargeFixture, measureJournalLarge } from "./journal-large.ts";
 
 export type ScenarioResult =
     | { scenario: string; ms: number; counts: Counts; extra?: Record<string, number> }
@@ -1040,6 +1041,27 @@ for (const [index, transport] of (["poll", "stream"] as const).entries()) {
             ? { scenario: `web.send.${transport}`, unavailable: sent.unavailable }
             : { scenario: `web.send.${transport}`, ...sent },
     );
+}
+
+// The synthetic journal is deliberately isolated from the app journal and seeded before this measured window.
+const journalLarge = createJournalLargeFixture(root, {
+    conversations: WORKLOAD.journalConversations,
+    attempts: WORKLOAD.journalAttempts,
+    entriesPerAttempt: WORKLOAD.journalEntriesPerAttempt,
+    entryChars: WORKLOAD.journalEntryChars,
+});
+let journalLargeTimings: ReturnType<typeof measureJournalLarge> | undefined;
+
+try {
+    await scenario(
+        "journal.large",
+        async () => {
+            journalLargeTimings = measureJournalLarge(journalLarge);
+        },
+        () => journalLargeTimings ?? {},
+    );
+} finally {
+    journalLarge.close();
 }
 
 writeFileSync(out, raw.stringify({ workload: WORKLOAD, results }, null, 2));
