@@ -13,6 +13,8 @@
         "node": ">=24"
     },
     "scripts": {
+        "hooks:install": "node scripts/install-git-hooks.mjs",
+        "check:staged-file-size": "node scripts/check-staged-file-size.mjs",
         "postinstall": "node scripts/prepare-runtime.mjs",
         "prepare:runtime": "node scripts/prepare-runtime.mjs",
         "install:kernel": "npm ci --prefix runtime/rotom --ignore-scripts && node scripts/check-kernel.ts",
