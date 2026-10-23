@@ -26,7 +26,7 @@
 | 编号  | 批次 | 标题                                        | 状态         | 提交                            |
 | ----- | ---- | ------------------------------------------- | ------------ | ------------------------------- |
 | A1    | A    | journal 索引 + 镜像游标                     | 已推送待核验 | `2a2ac90`、`b44ca33`、`7c880fc` |
-| A2    | A    | thinking level / native goal 跨推送缓存     | 进行中       | 测量见执行记录                  |
+| A2    | A    | thinking level / native goal 跨推送缓存     | 已推送待核验 | `b8d63f4`、`c13245d`            |
 | A3    | A    | 启动时不再全量解析历史                      | 待做         |                                 |
 | A4    | A    | 静态资源 ETag / gzip / modulepreload        | 待做         |                                 |
 | B1    | B    | `teamResourceRevision` 不在请求路径读大文件 | 待做         |                                 |
@@ -167,6 +167,38 @@
 
 - 独立测量提交 `A2: measure repeated idle native room projections`：真实 app 创建会话，直接种入 600 条原生 journal 历史；预读一次，窗口内再读三次 roomInfo，断言 Goal 和 thinking 一致。新 scenario 放在所有既有场景之后，不改变它们的会话列表/ID。
 - 两次独立 `perf:measure --runs 1` 通过，darwin-arm64 / Node 24.18.0、highLoad=false；新增三个 candidate（segmentEntries 查询次数及 journalSegments 解析调用/字符数），无阈值放宽。原始报告 `/tmp/rotom-review-A2/before-{1,2}.json`。TypeScript 和 scoped lint/format 已通过；全套验收在优化阶段执行。
+
+### A2 — 优化及验收
+
+- 实现 `c13245d`，测量 `b8d63f4`。thinking/Goal 按 segment + 最大 rowid 缓存；thinking 另含 fallback level，二者包含 kernelVersion。只缓存派生值，每种最多 128 段，不保留完整历史；当前 live 状态优先。新行、切换 head、model fallback 和 kernel upgrade 均不会命中旧值。
+- format/check/lint/format:check 全通过；npm test 564/564，无跳过；native-commands-proof passed（真实 pinned kernel、合成 loopback 模型）。新增 real TeamKernel 测试覆盖空 Goal、重复 idle 读取、progress/finish、fallback 变化、handoff、fork、upgrade。负控：仅禁用 Goal cache hit，测试在第二次 idle 读取以 2≠1 失败；恢复后全通过。
+- `perf:ci -- origin/main --runs 1` 通过，darwin-arm64 / Node 24.18.0，highLoad=false，gating/guard 均通过。session.open.native-long 的三次投影：segmentEntries 3→0，解析调用 1800→0，解析字符 2,370,165→0，L1 达成；结果值逐次相等。单轮不用于稳定毫秒速度承诺。证据 `/tmp/rotom-review-A2/ci/`。
+- 下表列出相对 origin/main 的全部 worse（该比较包含 A1）。R：必要的 indexed MAX(rowid) revision 查询/单行结果，以小标量查询换掉历史解析；S：A1 启动索引/游标定位。D：未改变对应序列化或 payload schema，动态运行元数据/合并推送时点的采样差异；正确性用真实状态等价及 native proof 检查，未据此提高任何阈值，也不承诺逐字节下降。
+
+| 计数器                                      | base→head     | 解释                                               |
+| ------------------------------------------- | ------------- | -------------------------------------------------- |
+| startup.restart/sql.statements              | 848→851       | S                                                  |
+| session.open/sql.statements                 | 45→47         | R                                                  |
+| session.open/sql.rows                       | 94→96         | R                                                  |
+| turn.warm/sql.statements                    | 157→158       | R                                                  |
+| turn.paced/sql.statements                   | 286→288       | R                                                  |
+| web.open/sql.statements                     | 31→32         | R                                                  |
+| session.open.long/sql.statements            | 16→17         | R                                                  |
+| session.open.long/sql.rows                  | 47→49         | R，空历史也缓存 absent 值                          |
+| native.warm/sql.rows                        | 10→11         | R，thinking 授权前读取 revision                    |
+| web.paced/sql.statements                    | 306→308       | R                                                  |
+| web.send.stream/sql.statements              | 384→386       | R                                                  |
+| web.send.stream/push.bytes                  | 91291→91693   | D，+402 B                                          |
+| web.send.stream/push.view.bytes             | 77497→77899   | D，同一 view payload 的 +402 B，不是第二份额外工作 |
+| commands.discover.cold/sql.rows             | 78→81         | R                                                  |
+| commands.discover.cold/json.stringify.chars | 33812→33846   | D，+34 字符                                        |
+| commands.discover.warm/sql.rows             | 64→66         | R                                                  |
+| projection.large.open/sql.statements        | 98→99         | R                                                  |
+| projection.large.open/json.stringify.chars  | 199672→199706 | D，+34 字符                                        |
+| projection.large.paced/sql.statements       | 572→574       | R                                                  |
+| changes.poll.images/json.stringify.chars    | 20328→20362   | D，+34 字符；该 Git/image 路径无 A2 实现改动       |
+
+- D 的具体字符来源未逐字追踪，仅能确认路径未变、采样输出不完全同字节；审查时可要求补充 payload 追踪，不能把这项限制隐藏为已经证明没有字节回归。未部署、未碰真实账号。
 
 ## 核验记录（审查方追加）
 
