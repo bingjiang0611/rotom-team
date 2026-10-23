@@ -23,18 +23,18 @@
 
 ## 状态表（执行方维护）
 
-| 编号 | 批次 | 标题 | 状态 | 提交 |
-| ---- | ---- | ---- | ---- | ---- |
-| A1 | A | journal 索引 + 镜像游标 | 待做 | |
-| A2 | A | thinking level / native goal 跨推送缓存 | 待做 | |
-| A3 | A | 启动时不再全量解析历史 | 待做 | |
-| A4 | A | 静态资源 ETag / gzip / modulepreload | 待做 | |
-| B1 | B | `teamResourceRevision` 不在请求路径读大文件 | 待做 | |
-| B2 | B | `finishedSeen` 写入与清理 | 待做 | |
-| B3 | B | 房间级字段每次推送只算一次 | 待做 | |
-| B4 | B | journal 预编译语句缓存 | 待做 | |
-| B5 | B | 长轮询队列字节上限 | 待做 | |
-| C1–C6 | C | 需要 owner 决策，只写方案 | 待做 | |
+| 编号  | 批次 | 标题                                        | 状态 | 提交 |
+| ----- | ---- | ------------------------------------------- | ---- | ---- |
+| A1    | A    | journal 索引 + 镜像游标                     | 待做 |      |
+| A2    | A    | thinking level / native goal 跨推送缓存     | 待做 |      |
+| A3    | A    | 启动时不再全量解析历史                      | 待做 |      |
+| A4    | A    | 静态资源 ETag / gzip / modulepreload        | 待做 |      |
+| B1    | B    | `teamResourceRevision` 不在请求路径读大文件 | 待做 |      |
+| B2    | B    | `finishedSeen` 写入与清理                   | 待做 |      |
+| B3    | B    | 房间级字段每次推送只算一次                  | 待做 |      |
+| B4    | B    | journal 预编译语句缓存                      | 待做 |      |
+| B5    | B    | 长轮询队列字节上限                          | 待做 |      |
+| C1–C6 | C    | 需要 owner 决策，只写方案                   | 待做 |      |
 
 状态取值：`待做` / `进行中` / `已推送待核验` / `核验通过` / `核验未通过` / `放弃（写明原因）`。
 
@@ -45,21 +45,24 @@
 ### A1. kernel journal 缺索引，热路径全表扫描
 
 **证据**
+
 - `src/server/rotom-journal.ts:173-176`：`kernel_entries` 只有 `(kernel_session_id, entry_id)` 主键；`session_id`、`attempt_id` 没有索引。`kernel_usage.attempt_id`、`kernel_child_usage.attempt_id` 也没有索引。
 - 下列查询的执行计划都是 `SCAN kernel_entries`（扫描所有会话的记录）：
-  - `entries(sessionId, skip)`（`:1316`），用 `LIMIT -1 OFFSET ?` 跳过前缀，仍然全表扫描。调用方是 `TeamKernel.#mirrorNow`（`team-kernel.ts:2459`），每次 `message_end` 都会通过 `onProgress`（`team-kernel.ts:1497`）触发。
-  - `segmentEntries`（`:1345`）、`#terminal`（`:1195`）、`usage()`（`:1365`）。
-  - `credits()`（`:1397`）：对每个 attempt 的 `LEFT JOIN … json_extract(e.body …)` 都要扫一遍全表，并逐条解析 JSON。
+    - `entries(sessionId, skip)`（`:1316`），用 `LIMIT -1 OFFSET ?` 跳过前缀，仍然全表扫描。调用方是 `TeamKernel.#mirrorNow`（`team-kernel.ts:2459`），每次 `message_end` 都会通过 `onProgress`（`team-kernel.ts:1497`）触发。
+    - `segmentEntries`（`:1345`）、`#terminal`（`:1195`）、`usage()`（`:1365`）。
+    - `credits()`（`:1397`）：对每个 attempt 的 `LEFT JOIN … json_extract(e.body …)` 都要扫一遍全表，并逐条解析 JSON。
 - 复现：`node docs/performance/review-2026-10-23/journal-query-bench.mjs`。审查时在 60 会话 × 600 条（共 3.6 万行，每行约 2 KB）的数据上测到：镜像后缀查询约 50–65 ms/次；`credits` 无 ANALYZE 时约 900 ms/次，有 ANALYZE 时 SQLite 每次临时建自动索引，约 44 ms/次。加索引并改用 rowid 游标后，镜像查询约 0.07 ms/次，`credits` 约 0.7 ms/次。
 
 **要求**
+
 1. 测量提交：在 `test/perf/` 里加一个大 journal 的 scenario，比如 `journal.large`：多会话、多条记录，测镜像后缀查询、`segmentEntries` 和 `credits`。计数器至少包括 `sql.rows` 或每次调用的毫秒数；按 PERFORMANCE.md 的做法注册为 candidate。
 2. 优化提交：
-   - 加 `kernel_entries(attempt_id)`、`kernel_entries(session_id)`、`kernel_usage(attempt_id)`、`kernel_child_usage(attempt_id)` 索引（遵守上面的 schema 规则）。
-   - 镜像不再用 `OFFSET`：`NativeMirrorDoc` 现在存的是条数 `count`，不能改成 rowid（它是已存储的数据）。可以在内存里记下每个会话最后一次镜像到的 `kernel_entries.rowid`，用 `e.rowid > ?` 增量读取；进程启动后的第一次镜像，用 `count` 找到对应的 rowid。必须保证镜像顺序、跳过 handoff、`count` 的语义都和现在完全一致。
-   - 检查 `entries` 的计划确实变成从 `kernel_attempts` 的 `conversation_id` 索引出发。
+    - 加 `kernel_entries(attempt_id)`、`kernel_entries(session_id)`、`kernel_usage(attempt_id)`、`kernel_child_usage(attempt_id)` 索引（遵守上面的 schema 规则）。
+    - 镜像不再用 `OFFSET`：`NativeMirrorDoc` 现在存的是条数 `count`，不能改成 rowid（它是已存储的数据）。可以在内存里记下每个会话最后一次镜像到的 `kernel_entries.rowid`，用 `e.rowid > ?` 增量读取；进程启动后的第一次镜像，用 `count` 找到对应的 rowid。必须保证镜像顺序、跳过 handoff、`count` 的语义都和现在完全一致。
+    - 检查 `entries` 的计划确实变成从 `kernel_attempts` 的 `conversation_id` 索引出发。
 
 **验收（审查方会做）**
+
 - 重新跑 bench（用 `--schema` 指向测试里由新代码创建的 journal），所有查询的计划里不再出现 `SCAN kernel_entries`。
 - 新 scenario 有前后两份报告，计数器下降。
 - 已有的镜像、恢复、fork、handoff 测试全部通过；再加一个测试：中途有 handoff、跨进程重启后，镜像出的条目序列和改动前完全一致。
@@ -67,16 +70,19 @@
 ### A2. 打开或切换会话时全量解析 segment 历史
 
 **证据**
+
 - `Room.pushAll` → `TeamKernel.roomInfo`（`team-kernel.ts:2315`）→
-  - `agentInfo` → `RotomExecutions.thinkingLevel` → 段内没有存活进程时调用 `RotomJournal.thinkingLevel`（`rotom-journal.ts:954`），它会对 `segmentEntries` 逐条 `JSON.parse`，只为找最近一条 `thinking_level_change`。
-  - `nativeGoal`（`team-kernel.ts:2295-2312`）：`#nativeGoal` 没有命中时也要读整段历史，而且算出的结果不写回缓存。
+    - `agentInfo` → `RotomExecutions.thinkingLevel` → 段内没有存活进程时调用 `RotomJournal.thinkingLevel`（`rotom-journal.ts:954`），它会对 `segmentEntries` 逐条 `JSON.parse`，只为找最近一条 `thinking_level_change`。
+    - `nativeGoal`（`team-kernel.ts:2295-2312`）：`#nativeGoal` 没有命中时也要读整段历史，而且算出的结果不写回缓存。
 - 同一次 `pushAll` 内部有复用，跨推送没有。每次打开、切换、重连，以及空闲会话里任何文档变化，都会重算一遍。
 
 **要求**
+
 - 测量提交：在现有的 `session.open.long`，或一个新的「重启后打开长会话」scenario 里，统计 `segmentEntries` 的调用次数和解析的字符数（`perf-channels.ts` 已经有 `journal-segments` 这个来源）。
 - 优化提交：thinking level 和 goal state 按 `(segmentId, 该 segment 最大的 kernel_entries rowid)` 缓存；`progress`、`finish`、`handoff`、`fork`、`upgradeKernel` 之后失效。也可以在入库时直接增量维护。缓存键必须包含所有会影响结果的输入。
 
 **验收**
+
 - 第二次及之后打开同一个空闲会话时，`segmentEntries` 调用次数为 0。
 - 改 thinking level、改模型、handoff、fork 之后，房间显示的 thinking level 和 goal 立刻正确（要有测试覆盖）。
 
@@ -91,10 +97,12 @@
 ### A4. Web 静态资源完全不缓存、不压缩
 
 **证据**
+
 - `src/server/http/assets.ts:147-168`：`serveFile` 每次请求都 `readFileSync`，响应头只有 `cache-control: no-cache`，没有 ETag，也不压缩。`serveApp`（`:130`）也一样。
 - `web/` 下的 JS/CSS 约 1.07 MB，加上 vendor 模块，每次打开都完整下载一遍。从 `web/app.js` 出发的静态 import 链大约 12 层，`index.html` 里没有 `modulepreload`，经过隧道时要串行等十几个往返。
 
 **要求**
+
 - 保留「编辑后刷新即生效」：仍然用 `no-cache`，但加上强 ETag（按内容哈希，或按 `mtime+size`；用哪种请写明理由），支持 `If-None-Match` 返回 304。
 - 支持 `Accept-Encoding: gzip`（有余力可加 br）。压缩结果按文件的 ETag 缓存在内存里并设上限；压缩不能在每次请求时同步执行。
 - `index.html` 在服务端注入 `<link rel="modulepreload">` 清单，内容由 `web/` 的 import 图生成，按 mtime 失效。注意不能破坏 CSP（`appPolicy`），也不能改变模块的加载顺序（architecture.md「Loading order matters」）。

@@ -13,11 +13,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const args = process.argv.slice(2);
+
 const option = (name, fallback) => {
     const at = args.indexOf(name);
 
     return at === -1 ? fallback : args[at + 1];
 };
+
 const CONVERSATIONS = Number(option("--conversations", 60));
 const ATTEMPTS = 50;
 const PER_ATTEMPT = 12;
@@ -91,7 +93,17 @@ try {
         session.run(`s${c}`, binding, `k${c}`, `${c}`);
 
         for (let a = 0; a < ATTEMPTS; a++) {
-            attempt.run(`a${c}-${a}`, `s${c}`, `r${a}`, "h", binding, "/h", "settled", `${c}`, "prompt");
+            attempt.run(
+                `a${c}-${a}`,
+                `s${c}`,
+                `r${a}`,
+                "h",
+                binding,
+                "/h",
+                "settled",
+                `${c}`,
+                "prompt",
+            );
 
             for (let e = 0; e < PER_ATTEMPT; e++) {
                 entry.run(`k${c}`, `e${a}-${e}`, `s${c}`, `a${c}-${a}`, body, "d");
