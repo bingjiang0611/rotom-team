@@ -231,6 +231,11 @@ export class TeamKernel {
     readonly #live = new Map<ConversationId, NativeLive>();
     readonly #commands = new Map<ConversationId, NativeCommandCatalog>();
     readonly #nativeGoal = new Map<ConversationId, unknown>();
+    // Bounded derived snapshots, including a known absent Goal; live command readback still takes precedence.
+    readonly #historicalGoals = new Map<
+        string,
+        { rowid: number; version: string; value: unknown }
+    >();
     readonly #branchedHistory = new Set<ConversationId>();
     readonly #mirrorHistoryLoaded = new Set<ConversationId>();
     readonly #mirrorCursors = new Map<ConversationId, { count: number; rowid: number }>();
@@ -2305,11 +2310,26 @@ export class TeamKernel {
             return undefined;
         }
 
-        const { segmentId } = this.executions.journal.session(String(id));
+        const journal = this.executions.journal;
+        const { segmentId, binding } = journal.session(String(id));
+        const rowid = journal.segmentRevision(segmentId);
+        const cached = this.#historicalGoals.get(segmentId);
+
+        if (cached?.rowid === rowid && cached.version === binding.kernelVersion) {
+            return cached.value;
+        }
 
         const entries = readEntries(segmentId);
+        const value = currentBranchGoalState({ entries, leafId: entries.at(-1)?.id });
 
-        return currentBranchGoalState({ entries, leafId: entries.at(-1)?.id });
+        this.#historicalGoals.delete(segmentId);
+        this.#historicalGoals.set(segmentId, { rowid, version: binding.kernelVersion, value });
+
+        if (this.#historicalGoals.size > 128) {
+            this.#historicalGoals.delete(this.#historicalGoals.keys().next().value!);
+        }
+
+        return value;
     }
 
     /** Room-wide public readback; share complete history only within this synchronous projection. */

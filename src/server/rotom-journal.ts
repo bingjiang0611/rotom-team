@@ -117,6 +117,11 @@ export class RotomJournal {
     readonly #lock: string;
     readonly #data: string;
     #closed = false;
+    // Only derived scalars, at most 128 recently read segments; history itself is never retained here.
+    readonly #thinking = new Map<
+        string,
+        { rowid: number; fallback: string; version: string; value: string }
+    >();
     constructor(data: string) {
         if (
             realpathSync(data) !== data ||
@@ -958,19 +963,44 @@ export class RotomJournal {
         return row ? this.#receipt(row) : undefined;
     }
 
+    /** Append-only history revision, using the segment index; empty history has revision zero. */
+    segmentRevision(segmentId: string): number {
+        return Number(
+            this.#db
+                .prepare(
+                    "SELECT COALESCE(MAX(rowid),0) AS revision FROM kernel_entries WHERE session_id=?",
+                )
+                .get(segmentId)!.revision,
+        );
+    }
+
     /** Thinking is mutable native session state; the receipt binding retains its initial value. */
     thinkingLevel(
         sessionId: string,
         readEntries: (segmentId: string) => KernelEntry[] = (id) => this.segmentEntries(id),
     ): string {
         const { segmentId, binding } = this.session(sessionId);
+        const rowid = this.segmentRevision(segmentId);
+        const fallback = binding.thinkingLevel ?? "off";
+        const cached = this.#thinking.get(segmentId);
+
+        if (
+            cached?.rowid === rowid &&
+            cached.fallback === fallback &&
+            cached.version === binding.kernelVersion
+        ) {
+            return cached.value;
+        }
+
         const entries = readEntries(segmentId);
         const byId = new Map(entries.map((entry) => [entry.id, entry]));
         let entry = entries.at(-1);
+        let value = fallback;
 
         while (entry) {
             if (entry.type === "thinking_level_change") {
-                return String(entry.thinkingLevel);
+                value = String(entry.thinkingLevel);
+                break;
             }
 
             // A model switch restarts Pi, which clamps silently; the binding holds that clamped level.
@@ -981,7 +1011,14 @@ export class RotomJournal {
             entry = typeof entry.parentId === "string" ? byId.get(entry.parentId) : undefined;
         }
 
-        return binding.thinkingLevel ?? "off";
+        this.#thinking.delete(segmentId);
+        this.#thinking.set(segmentId, { rowid, fallback, version: binding.kernelVersion, value });
+
+        if (this.#thinking.size > 128) {
+            this.#thinking.delete(this.#thinking.keys().next().value!);
+        }
+
+        return value;
     }
 
     /** Provisional ingestion while a prompt runs: records each persisted message once, never settles the attempt. */
@@ -1527,6 +1564,7 @@ export class RotomJournal {
         }
 
         this.#closed = true;
+        this.#thinking.clear();
         this.#db.close();
         rmSync(this.#lock);
     }
