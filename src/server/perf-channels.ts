@@ -205,6 +205,7 @@ export function scopedParseObject<T extends object>(scope: ParseWork, target: T)
                 // Nested calls retain their outer method's scope (methods run on the original receiver).
                 const journalScopes: Record<string, ParseWork> = {
                     entries: "journal-history",
+                    entriesAfter: "journal-history",
                     thinkingLevel: "journal-thinking",
                     segmentEntries: "journal-segments",
                 };
