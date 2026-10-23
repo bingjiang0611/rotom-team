@@ -468,6 +468,7 @@ export class PocketApp {
      */
     async #recover(storage: Storage): Promise<ConversationId[]> {
         this.#sessions = { ...((await this.harness.snapshot(SessionsDoc, context))?.items ?? {}) };
+        this.config.pruneFinishedSeen(Object.keys(this.#sessions));
         const conversations: ConversationId[] = [];
         const unrecorded = new Map<ConversationId, Missing[]>();
         let cursor: Cursor | undefined;
@@ -619,10 +620,16 @@ export class PocketApp {
 
             sessionsChanged = true;
         } else if (kind === SessionsDoc.definition.kind) {
+            const previous = this.#sessions;
+
             this.#sessions = {
                 ...((change.value as { items?: Record<string, SessionMeta> } | null)?.items ?? {}),
             };
             sessionsChanged = true;
+
+            if (Object.keys(previous).some((id) => this.#sessions[id] === undefined)) {
+                this.config.pruneFinishedSeen(Object.keys(this.#sessions));
+            }
 
             // Views show a session's title, limit, and worktree from here.
             for (const pending of this.#rooms.values()) {
@@ -2056,7 +2063,12 @@ export class PocketApp {
             } finally {
                 // After the harness: a browser call cut off by the stop resumes as interrupted, not as failed.
                 await this.browsers.closeAll({ final: true }).catch(() => {});
-                rmSync(this.#lockFile, { force: true });
+
+                try {
+                    this.config.flush();
+                } finally {
+                    rmSync(this.#lockFile, { force: true });
+                }
             }
         })();
 

@@ -145,6 +145,8 @@ test("a finished run stays unread independently for every member", async () => {
         true,
         "one member looking never marks another member's result viewed",
     );
+    // This fixture reopens only ConfigStore; real app shutdown performs this flush itself.
+    app.config.flush();
     const restartedConfig = new ConfigStore(app.dataDir);
 
     assert.equal(restartedConfig.userById(owner(app).id)?.finishedSeen?.[String(id)], finishedAt);

@@ -1,5 +1,15 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import {
+    chmodSync,
+    closeSync,
+    existsSync,
+    fsyncSync,
+    mkdirSync,
+    openSync,
+    readFileSync,
+    renameSync,
+    writeFileSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -99,6 +109,8 @@ export const MAX_DEVICES = 32;
 export class ConfigStore {
     readonly file: string;
     #config: PocketConfig;
+    #finishedDirty = false;
+    #finishedTimer: NodeJS.Timeout | undefined;
 
     constructor(directory: string) {
         mkdirSync(directory, { recursive: true, mode: 0o700 });
@@ -268,7 +280,42 @@ export class ConfigStore {
         }
 
         user.finishedSeen = { ...user.finishedSeen, [sessionId]: finishedAt };
-        this.save();
+        this.#finishedDirty = true;
+        this.#finishedTimer ??= setTimeout(() => {
+            try {
+                this.save();
+            } catch (error) {
+                // Keep dirty state for the explicit shutdown flush; do not silently lose a failed write.
+                process.emitWarning(error as Error);
+            }
+        }, 1000);
+        this.#finishedTimer.unref();
+    }
+
+    /** Remove acknowledgements for sessions no longer present in the authoritative catalogue. */
+    pruneFinishedSeen(sessionIds: readonly string[]): void {
+        const retained = new Set(sessionIds);
+        let changed = false;
+
+        for (const user of this.#config.users) {
+            for (const id of Object.keys(user.finishedSeen ?? {})) {
+                if (!retained.has(id)) {
+                    delete user.finishedSeen![id];
+                    changed = true;
+                }
+            }
+        }
+
+        if (changed) {
+            this.save();
+        }
+    }
+
+    /** Normal app shutdown must persist coalesced acknowledgements before releasing ownership. */
+    flush(): void {
+        if (this.#finishedDirty) {
+            this.save();
+        }
     }
 
     addUser(name: string, role: Role, sessions?: string[]): { user: User; token: string } {
@@ -421,11 +468,29 @@ export class ConfigStore {
     }
 
     save(): void {
+        clearTimeout(this.#finishedTimer);
+        this.#finishedTimer = undefined;
         mkdirSync(dirname(this.file), { recursive: true, mode: 0o700 });
         const temp = `${this.file}.${process.pid}.tmp`;
+        const fd = openSync(temp, "w", 0o600);
 
-        writeFileSync(temp, `${JSON.stringify(this.#config, null, "\t")}\n`, { mode: 0o600 });
+        try {
+            writeFileSync(fd, `${JSON.stringify(this.#config, null, "\t")}\n`);
+            fsyncSync(fd);
+        } finally {
+            closeSync(fd);
+        }
+
         renameSync(temp, this.file);
         chmodSync(this.file, 0o600);
+        const directory = openSync(dirname(this.file), "r");
+
+        try {
+            fsyncSync(directory);
+        } finally {
+            closeSync(directory);
+        }
+
+        this.#finishedDirty = false;
     }
 }
