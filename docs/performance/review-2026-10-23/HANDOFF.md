@@ -23,18 +23,18 @@
 
 ## 状态表（执行方维护）
 
-| 编号  | 批次 | 标题                                        | 状态   | 提交               |
-| ----- | ---- | ------------------------------------------- | ------ | ------------------ |
-| A1    | A    | journal 索引 + 镜像游标                     | 进行中 | 测量提交见执行记录 |
-| A2    | A    | thinking level / native goal 跨推送缓存     | 待做   |                    |
-| A3    | A    | 启动时不再全量解析历史                      | 待做   |                    |
-| A4    | A    | 静态资源 ETag / gzip / modulepreload        | 待做   |                    |
-| B1    | B    | `teamResourceRevision` 不在请求路径读大文件 | 待做   |                    |
-| B2    | B    | `finishedSeen` 写入与清理                   | 待做   |                    |
-| B3    | B    | 房间级字段每次推送只算一次                  | 待做   |                    |
-| B4    | B    | journal 预编译语句缓存                      | 待做   |                    |
-| B5    | B    | 长轮询队列字节上限                          | 待做   |                    |
-| C1–C6 | C    | 需要 owner 决策，只写方案                   | 待做   |                    |
+| 编号  | 批次 | 标题                                        | 状态         | 提交                            |
+| ----- | ---- | ------------------------------------------- | ------------ | ------------------------------- |
+| A1    | A    | journal 索引 + 镜像游标                     | 已推送待核验 | `2a2ac90`、`b44ca33`、`7c880fc` |
+| A2    | A    | thinking level / native goal 跨推送缓存     | 待做         |                                 |
+| A3    | A    | 启动时不再全量解析历史                      | 待做         |                                 |
+| A4    | A    | 静态资源 ETag / gzip / modulepreload        | 待做         |                                 |
+| B1    | B    | `teamResourceRevision` 不在请求路径读大文件 | 待做         |                                 |
+| B2    | B    | `finishedSeen` 写入与清理                   | 待做         |                                 |
+| B3    | B    | 房间级字段每次推送只算一次                  | 待做         |                                 |
+| B4    | B    | journal 预编译语句缓存                      | 待做         |                                 |
+| B5    | B    | 长轮询队列字节上限                          | 待做         |                                 |
+| C1–C6 | C    | 需要 owner 决策，只写方案                   | 待做         |                                 |
 
 状态取值：`待做` / `进行中` / `已推送待核验` / `核验通过` / `核验未通过` / `放弃（写明原因）`。
 
@@ -146,6 +146,22 @@
 - `check`、`lint`、`format:check`、`npm test` 均通过；560/560，无跳过。两次独立 `perf:measure --runs 1` 通过，darwin-arm64 / Node 24.18.0，highLoad=false；scenario 总耗时 153.0 / 120.3 ms。
 - 仅注册 `journal.large/sql.statements`、`journal.large/sql.rows` 两个 candidate，没有提高既有阈值。`sql.rows` 是返回行数，不是 SQLite 扫描行数；索引效果将用实际查询计划和每次查询耗时验证，不能声称返回相同数据的查询减少了返回行数。
 - 本地证据：`/tmp/rotom-review-A1/before-{1,2}.json` 及同目录检查日志。尚无生产优化；完整 perf:ci 和重启回归在优化阶段执行。未使用真实账号、未重启/部署服务。
+
+### A1 — 优化及验收
+
+- 测量提交 `2a2ac90`；新增 cursor 方法的 parse 来源补充单独提交 `b44ca33`；优化/回归提交 `7c880fc`。四个索引在 schema 6 的非版本化初始化中创建；旧版仍可打开。镜像按 conversation 的 attempts → entries 索引查 rowid 后缀，内存游标仅在 Durable 提交后推进；已存 `count`、handoff 排除和 metadata 保持不变。
+- `npm run format`、`check`、`lint`、`format:check`、`npm test` 全通过（563/563，无跳过）。新增 3 项回归覆盖索引/版本、跨会话及 handoff/fork 游标等价、真实子进程重启和提交失败重试。另跑 `npm run test:kernel:app`、`node test/native-commands-proof.ts`，均 passed，包含既有 handoff/fork/recovery/branch/unknown 检查，仅合成 loopback 账号。
+- 独立 bench `--schema /tmp/rotom-review-A1/schema/kernel.sqlite`：所有查询均使用索引，无 `SCAN kernel_entries` 或 `SCAN e`；cursor 从 `one_conversation_request` 出发，命中 `kernel_entries_attempt (attempt_id=? AND rowid>?)`。cursor 0.04 ms/call、credits 0.65 ms/call（该 bench 条件下，非生产延迟）。
+- `perf:ci -- origin/main` 三轮通过；修正新方法 parse 来源归属后，再以 `--runs 1` 完整复验通过。平台 darwin-arm64、Node 24.18.0，两次 highLoad=false，gating 和 ledger guard 均通过。最终报告在 `/tmp/rotom-review-A1/final-ci/{base,head}.json`。最终 journal.large：总耗时 152.9→13.9 ms，后缀 64.4→1.0 ms，segment 30.0→8.1 ms，credits 57.9→4.1 ms；前三轮方向相同。返回行数仍为 662、查询数仍为 3，不能将索引优化描述为返回行数下降。
+- 最终相对 origin/main 的变差计数器逐项解释：
+
+| 计数器                              | base→head     | 原因与证据                                                                                                                                                                                              |
+| ----------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| startup.restart/sql.statements      | 848→851       | 必要启动工作：索引初始化 exec、新进程从持久化 count 定位 rowid，以及保留的分叉历史读取；不在每次 warm mirror 重复定位。A3 将移除全历史解析。                                                            |
+| turn.prewarmed/json.stringify.chars | 120707→122634 | 同一采样中 view 推送 2→3，push.view.bytes 8567→9804；额外中间视图由原有 90 ms 合并窗口与原生完成时序决定。未改变 payload 格式或增加常驻序列化路径；前三轮比较该计数器未变差。保留原始结果，不放宽阈值。 |
+
+- 初次三轮中的 journal 来源归属变化来自新增方法未被测量代理标为 history，不是额外解析；已用独立测量提交修正，最终结果以上述复验为准。当前证据是受控查询加速/索引计划，不是线上 L3。原要求“计数器下降”对 sql.rows（返回行数）不适用于保持输出等价的索引优化；本项明确保留这一验收差异，交审查方核验，不伪造下降。
+- 服务未重启、未部署；用户原有两处文档改动逐字保留。日志位于 `/tmp/rotom-review-A1/`，不含真实账号数据。
 
 ## 核验记录（审查方追加）
 
