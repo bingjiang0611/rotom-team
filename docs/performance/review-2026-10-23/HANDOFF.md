@@ -29,7 +29,7 @@
 | A2    | A    | thinking level / native goal 跨推送缓存     | 已推送待核验 | `b8d63f4`、`c13245d`            |
 | A3    | A    | 启动时不再全量解析历史                      | 已推送待核验 | `0f39ea3`                       |
 | A4    | A    | 静态资源 ETag / gzip / modulepreload        | 已推送待核验 | `c8d7cbd`（测量见记录）         |
-| B1    | B    | `teamResourceRevision` 不在请求路径读大文件 | 待做         |                                 |
+| B1    | B    | `teamResourceRevision` 不在请求路径读大文件 | 已推送待核验 | `9ccc0aa`                       |
 | B2    | B    | `finishedSeen` 写入与清理                   | 待做         |                                 |
 | B3    | B    | 房间级字段每次推送只算一次                  | 待做         |                                 |
 | B4    | B    | journal 预编译语句缓存                      | 待做         |                                 |
@@ -271,6 +271,42 @@
 | projection.large.paced/sql.statements       | 572→574     | A2 indexed revision 标量查询/结果（R）                             |
 
 - 未做隧道限速时间承诺；真实 Chromium 功能测试通过，不等同线上或物理手机验收。没有部署/重启。
+
+### B1 — 配置指纹
+
+- 实现 `9ccc0aa`。每个文件先 stat 对比 dev/ino/size/mtimeNs/ctimeNs，再复用 SHA-256；缓存最多 256 个 digest，不缓存大文件正文。shared 路径仍逐次经过原 policy 校验；project 链接仍按原读取语义跟随目标 stat。配置新增、同大小编辑、原子替换、删除均立即改变 freshness。
+- 指纹现在组合文件 digest 而非正文，属于不透明 freshness hint 的格式变化；已有命令快照首次比较会显示 configuration-changed，显式刷新后稳定。未改变凭据/执行 configurationDigest 或 unknown 语义。
+- format/check/lint/format:check 全通过，npm test 568/568，无跳过。新测试真实 2 MiB lock 文件：连续两次 revision 只读一次；同大小修改、rename 和删除准确失效。已有配置/链接 policy 测试全部保留。
+- perf:ci origin/main --runs 1 passed；darwin-arm64、Node 24.18.0、highLoad=false，gating/guard passed；报告 `/tmp/rotom-review-B1/ci/`。全部 worse 如下，包含前序 A 项，未放宽阈值：
+
+| 计数器                                   | base→head   | 解释                                                      |
+| ---------------------------------------- | ----------- | --------------------------------------------------------- |
+| startup.restart/sql.statements           | 848→851     | A1 启动索引/游标工作                                      |
+| session.open/sql.statements              | 45→47       | A2 revision 查询及标量结果（R）                           |
+| session.open/sql.rows                    | 94→96       | A2 revision 查询及标量结果（R）                           |
+| turn.warm/sql.statements                 | 157→158     | A2 revision 查询及标量结果（R）                           |
+| turn.paced/sql.statements                | 286→288     | A2 revision 查询及标量结果（R）                           |
+| web.open/sql.statements                  | 31→32       | A2 revision 查询及标量结果（R）                           |
+| web.open/http.requests                   | 81→83       | A4 提前发起 preload 请求；完成采样窗口内请求数增加        |
+| web.open/cdp.Nodes                       | 996→1136    | A4 preload 元素/分隔文本增加 DOM 节点                     |
+| session.open.long/sql.statements         | 16→17       | A2 revision 查询及标量结果（R）                           |
+| session.open.long/sql.rows               | 47→49       | A2 revision 查询及标量结果（R）                           |
+| web.open.long/cdp.Nodes                  | 1585→1725   | A4 preload 元素/分隔文本增加 DOM 节点                     |
+| native.warm/sql.rows                     | 10→11       | A2 revision 查询及标量结果（R）                           |
+| web.reopen/cdp.Nodes                     | 1090→1230   | A4 preload 元素/分隔文本增加 DOM 节点                     |
+| web.paced/sql.statements                 | 306→308     | A2 revision 查询及标量结果（R）                           |
+| web.paced/cdp.Nodes                      | 1284→1425   | A4 preload 元素/分隔文本增加 DOM 节点                     |
+| web.send.poll/cdp.Nodes                  | 1450→1595   | A4 preload 元素/分隔文本增加 DOM 节点                     |
+| web.send.stream/sql.statements           | 384→386     | A2 revision 查询及标量结果（R）                           |
+| web.send.stream/cdp.Nodes                | 1490→1629   | A4 preload 元素/分隔文本增加 DOM 节点                     |
+| commands.discover.cold/sql.rows          | 78→81       | A2 revision 查询及标量结果（R）                           |
+| commands.discover.warm/sql.rows          | 64→66       | A2 revision 查询及标量结果（R）                           |
+| projection.large.open/sql.statements     | 98→99       | A2 revision 查询及标量结果（R）                           |
+| projection.large.paced/sql.statements    | 572→574     | A2 revision 查询及标量结果（R）                           |
+| changes.poll.images/json.stringify.chars | 20306→20338 | 动态元数据输出差异（D，未逐字归因）；此路径无 B1 代码改动 |
+| changes.poll.images/http.body.bytes      | 20272→20304 | 动态元数据输出差异（D，未逐字归因）；此路径无 B1 代码改动 |
+
+- 这是减少重复文件读取/哈希，不是完整文件监控保证；继承“深层资源修改需 reload”的合同。未部署/重启。
 
 ## 核验记录（审查方追加）
 
