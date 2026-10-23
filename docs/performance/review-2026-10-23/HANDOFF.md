@@ -406,7 +406,7 @@
 ### B4 — 预编译语句
 
 - 实现 `37cb733`。按 SQL 文本缓存连接所属 StatementSync；close 清空缓存再关连接。不缓存查询结果，不改变事务、绑定参数或 schema。SQL 只有有限 literal 和两个 usage 表名，没有用户输入增长的缓存键。
-- 接手时保留已有实现和正在运行的验证，没有重放。独立 TypeScript AST 比较确认前后 **64 个 literal/template SQL 调用文本完全一致**。新测试检查三个查询只 prepare 一次、后续写入立即可见、关闭后拒绝查询、重开不复用旧 statement。负控仅绕过 cache hit 后以 3≠1 失败；恢复后通过。
+- 接手时保留已有实现和正在运行的验证，没有重放。独立 TypeScript AST 比较确认前后 **66 个 literal/template SQL 调用文本完全一致**。新测试检查三个查询只 prepare 一次、后续写入立即可见、关闭后拒绝查询、重开不复用旧 statement。负控仅绕过 cache hit 后以 3≠1 失败；恢复后通过。
 - format/check/lint/format:check passed；npm test **572/572**、无跳过。perf:ci origin/main --runs 1 passed，darwin-arm64 / Node 24.18.0，highLoad=false，gating/guard passed，报告 `/tmp/rotom-review-B4/ci/`。现有 sql.statements 数的是执行次数，不数 prepare，故不把它不变伪称为编译工作未减少，也不凭单轮时间宣称加速。
 - 全部 worse（origin/main 比较包含 A1–B3；既有 D 的逐字归因限制保留）：
 
