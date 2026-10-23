@@ -23,18 +23,18 @@
 
 ## 状态表（执行方维护）
 
-| 编号  | 批次 | 标题                                        | 状态         | 提交                            |
-| ----- | ---- | ------------------------------------------- | ------------ | ------------------------------- |
-| A1    | A    | journal 索引 + 镜像游标                     | 已推送待核验 | `2a2ac90`、`b44ca33`、`7c880fc` |
-| A2    | A    | thinking level / native goal 跨推送缓存     | 已推送待核验 | `b8d63f4`、`c13245d`            |
-| A3    | A    | 启动时不再全量解析历史                      | 已推送待核验 | `0f39ea3`                       |
-| A4    | A    | 静态资源 ETag / gzip / modulepreload        | 已推送待核验 | `c8d7cbd`（测量见记录）         |
-| B1    | B    | `teamResourceRevision` 不在请求路径读大文件 | 已推送待核验 | `9ccc0aa`                       |
-| B2    | B    | `finishedSeen` 写入与清理                   | 已推送待核验 | `cc652cc`                       |
-| B3    | B    | 房间级字段每次推送只算一次                  | 已推送待核验 | `8d42e63`                       |
-| B4    | B    | journal 预编译语句缓存                      | 已推送待核验 | `37cb733`                       |
-| B5    | B    | 长轮询队列字节上限                          | 已推送待核验 | `5fb4bbe`                       |
-| C1–C6 | C    | 需要 owner 决策，只写方案                   | 已推送待核验 | `14caa83`（方案，未实现）       |
+| 编号  | 批次 | 标题                                        | 状态                      | 提交                            |
+| ----- | ---- | ------------------------------------------- | ------------------------- | ------------------------------- |
+| A1    | A    | journal 索引 + 镜像游标                     | 核验通过                  | `2a2ac90`、`b44ca33`、`7c880fc` |
+| A2    | A    | thinking level / native goal 跨推送缓存     | 核验通过                  | `b8d63f4`、`c13245d`            |
+| A3    | A    | 启动时不再全量解析历史                      | 核验通过                  | `0f39ea3`                       |
+| A4    | A    | 静态资源 ETag / gzip / modulepreload        | 核验未通过                | `c8d7cbd`（测量见记录）         |
+| B1    | B    | `teamResourceRevision` 不在请求路径读大文件 | 核验通过                  | `9ccc0aa`                       |
+| B2    | B    | `finishedSeen` 写入与清理                   | 核验通过                  | `cc652cc`                       |
+| B3    | B    | 房间级字段每次推送只算一次                  | 核验通过                  | `8d42e63`                       |
+| B4    | B    | journal 预编译语句缓存                      | 核验通过                  | `37cb733`                       |
+| B5    | B    | 长轮询队列字节上限                          | 核验通过                  | `5fb4bbe`                       |
+| C1–C6 | C    | 需要 owner 决策，只写方案                   | 方案已核验，待 owner 决策 | `14caa83`（方案，未实现）       |
 
 状态取值：`待做` / `进行中` / `已推送待核验` / `核验通过` / `核验未通过` / `放弃（写明原因）`。
 
@@ -516,6 +516,56 @@
 ## 核验记录（审查方追加）
 
 <!-- 每项一节：核验了什么、结论（通过 / 未通过）、未通过的原因。 -->
+
+### 第 1 轮核验(HEAD `dd41997`,2026-10-23)
+
+**环境**:linux-x64,Node 24.22.1,pinned rotom 0.1.26(`npm run install:kernel`)。本机以 root 运行,Chromium 需要 `--no-sandbox`,所以真实浏览器测试通过 `PI_POCKET_BROWSER` 指向一个加 `--no-sandbox` 的包装脚本来跑。下面凡是和 `main` 对比的,都是同一台机器、同一套设置下跑出来的。
+
+**全局检查**
+
+| 检查                                     | 结果                                                                                                                                                                                                                                                                                                                     |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `check` / `lint` / `format:check`        | 通过                                                                                                                                                                                                                                                                                                                     |
+| `npm test`(本分支)                       | 570 通过 / 2 失败 / 4 跳过。`a snap browser comes last…` 在 `main`(`e5df4bc`)上同样失败,是因为设了 `PI_POCKET_BROWSER`,属于环境问题。`the engine reads, clicks…` 在全量并发时超时一次,单独重跑 `test/browser.test.ts` 3 次都通过,而且这个测试不经过本分支改过的代码,判定为偶发                                           |
+| `npm test`(`main`,对照)                  | 555 通过 / 1 失败(同一个 snap 用例)/ 4 跳过                                                                                                                                                                                                                                                                              |
+| `perf:ci -- origin/main --runs 1`(linux) | 通过:Ratchet linux-x64 passed,Ledger guard passed,load 1.3→0.8/4 核。`startup.restart` 的 journalHistory 解析 132,281→0 字符;`session.open.native-long` 解析 2,370,165→0 字符;`journal.large` 162→10.6 ms;首次传输 1,142,870→405,839 B,再次 →0 B。`assets.first/ms` 慢了 36%(42→57 ms,单轮;第一次请求要现场 gzip),不阻塞 |
+
+**A1 — 通过**
+
+- 用本分支的 `RotomJournal` 新建 journal,再跑 `journal-query-bench.mjs --schema`(60 会话 × 600 条)。原有 6 条查询和新增的 `entryCursor`、`hasBranchedHistory`、`segmentRevision` 都已经不再出现 `SCAN kernel_entries`:`entriesAfter` 0.05 ms、`segmentEntries` 2.2 ms、`#terminal` 0.05 ms、`credits` 1.0 ms、`hasBranchedHistory` 0.9 ms、`entryCursor` 0.1 ms、`segmentRevision` 0.02 ms(单位都是每次调用)。
+- 回滚兼容:`user_version` 仍是 6;用 `e5df4bc` 的 `RotomJournal` 打开新代码建出的 journal,可以正常打开,4 个新索引都在。
+- 游标只在 Durable 提交成功后推进;`count` 和缓存不一致时会用 `entryCursor` 重新定位,和 `OFFSET` 的语义一致(同样排除 handoff、同样按 rowid 排序)。
+- 接受执行方的说明:`sql.rows` 统计的是返回行数,所以索引优化不会让它下降,这一点不算未达标。
+
+**A2 — 通过**
+
+- thinking level 和 goal 的缓存键是 segment、该 segment 的最大 rowid,以及 kernelVersion,thinking 还额外带上 fallback level。新增记录、切换 head、换模型、升级 kernel 都会改变缓存键。两个缓存各限 128 条,只存派生出来的值。
+- 每次投影多一条带索引的 `MAX(rowid)` 查询(实测 0.02 ms),换掉了整段历史的 `JSON.parse`,这个取舍合理。
+
+**A3 — 通过**
+
+- 已镜像的前缀改用 `hasBranchedHistory`(一条 `EXISTS`)判断,过滤条件和原来的 `rows.some(...)` 一致,也排除了 handoff。60 会话的启动成本从约 3.9 s 降到约 60 × 0.9 ms。SQLite 内部仍然要按会话对 body 跑 `json_extract`,但 JS 侧解析的字符数已经和历史长度无关。
+
+**A4 — 未通过(只有一处需要修,其余通过)**
+
+- 已通过的部分:用真实 HTTP 请求实测,首页带 gzip 和强 ETag,注入了 70 条 modulepreload;65 个 web 模块带上 `If-None-Match` 再请求时全部返回 304;首页再次请求也返回 304。
+- **需要修**:`appPage()` 扫描 import 图时,只要有一个目标文件读不到(`readAsset` 抛出 ENOENT,或者 `Unknown module preload`),整个 `serveApp` 就会失败,首页直接返回 500。复现方法:在 `web/app.js` 末尾加一个模板字符串,里面有一行 `import x from "./not-a-module.js"`。这是合法的 JS,浏览器也能正常运行,但首页从 200 变成了 500。改动前,首页不依赖任何模块能不能读到。
+- 要求:preload 清单改成尽力而为。扫描到读不到的目标就跳过(或者整份清单放弃,首页不带 preload 照常返回),绝不能因为它让首页失败。另外补一个回归测试:import 图里有一个不存在的目标时,首页仍然返回 200,并且 CSP 不变。
+- 小问题,顺手修即可:`index.html` 不存在时,原来返回 404,现在会抛异常,变成 500。
+
+**B1 — 通过**:按 `dev/ino/size/mtimeNs/ctimeNs` 的 stat 指纹复用哈希,最多缓存 256 个文件。`revision` 只在内存里和 `persistent.revision` 比较,`team-resource-view.json` 里存的值不会跨重启参与比较,所以哈希输入格式变了也不会让已有会话误报 `configuration-changed`。
+
+**B2 — 通过**:已读标记 1 s 内合并写入;正常退出时 `flush()` 写盘,并且放在释放锁之前。`save()` 先 fsync 临时文件,rename 后再 fsync 目录。会话从 SessionsDoc 消失时,以及启动恢复时,都会清理对应的 `finishedSeen`。
+
+**B3 — 通过**:`pushAll` 内部只算一次字段 JSON,各客户端只比较字符串;`roomState` 和各客户端各自的字段没有变。
+
+**B4 — 通过**:按 SQL 文本缓存语句,`close()` 时清空;代码里没有 `iterate()`,不存在复用同一条语句时互相打断的问题。
+
+**B5 — 通过**:入队时只序列化一次,8 MiB 字节上限,ACK 后释放字节,超限就断开连接,客户端重新拿完整视图。单个初始视图本身超过 8 MiB 时无法交付,这和 SSE 的现有行为一致,也已经写进 CONFIGURATION。
+
+**C1–C6 — 方案已读,未实现,符合要求**。等 owner 决策。
+
+**下一步**:执行方修 A4 的 preload 容错,单独提交,提交信息以 `A4:` 开头,然后在状态表里把 A4 改回「已推送待核验」。其余各项我已经在状态表里标为「核验通过」。
 
 ## C 方案（执行方追加）
 
