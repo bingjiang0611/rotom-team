@@ -12,7 +12,7 @@ import { serveFile, WEB } from "../../src/server/http/assets.ts";
 import { noInferenceModels, owner, root, until, work } from "../helpers.ts";
 
 export async function withAppPage<T>(
-    task: (evaluate: (expression: string) => Promise<any>) => Promise<T>,
+    task: (evaluate: (expression: string) => Promise<any>, app: PocketApp) => Promise<T>,
     transport: "stream" | "poll" = "stream",
 ) {
     const directory = mkdtempSync(join(root, "app-commits-"));
@@ -91,7 +91,7 @@ export async function withAppPage<T>(
         await evaluate("appCommitFixture.flush().then(() => true)");
         assert.equal(await evaluate("Boolean(appCommitFixture.state().view.kernel)"), true);
 
-        return await task(evaluate);
+        return await task(evaluate, app);
     } finally {
         await browsers.closeAll({ final: true });
         server.closeAllConnections();

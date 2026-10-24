@@ -954,6 +954,100 @@ const handlers = {
 };
 
 const TRANSPORT_KEY = "pocket.transport";
+const ROOM_EVENTS = new Set(["view", "missing", "chat", "notes", "browser", "presence", "changes"]);
+let subscriptionGeneration = 0;
+let subscriptionAck = null;
+let subscriptionTimer;
+
+/** An ACK orders the target's full snapshot before its deltas; old A→B→A events must not match by id alone. */
+function receive(connection, name, data) {
+    if (source !== connection) {
+        return false;
+    }
+
+    if (name === "hello") {
+        connection.subscriptionId = data.subscriptions === true ? data.connection : null;
+    } else if (name === "subscription") {
+        if (
+            connection.subscriptionId &&
+            data.generation === subscriptionGeneration &&
+            data.conversationId === store.state.conversationId
+        ) {
+            subscriptionAck = data.generation;
+
+            if (data.conversationId === null) {
+                clearTimeout(subscriptionTimer);
+
+                return true;
+            }
+        }
+
+        return false;
+    } else if (connection.subscriptionId && ROOM_EVENTS.has(name)) {
+        if (
+            data.generation !== subscriptionGeneration ||
+            subscriptionAck !== subscriptionGeneration
+        ) {
+            return false;
+        }
+
+        data = data.data;
+        const id = name === "view" ? data.conversation.id : data.conversationId;
+
+        if (id !== store.state.conversationId) {
+            return false;
+        }
+
+        if (name === "view" || name === "missing") {
+            clearTimeout(subscriptionTimer);
+        }
+    }
+
+    handlers[name]?.(data);
+
+    return true;
+}
+
+function requestSubscription() {
+    const connection = source;
+
+    if (!connection?.subscriptionId) {
+        connect();
+
+        return;
+    }
+
+    const generation = subscriptionGeneration;
+    const id = store.state.conversationId;
+
+    clearTimeout(subscriptionTimer);
+    // A lost POST/ACK does not prove failure. Recover only by replacing the read-only connection, never a user send.
+    subscriptionTimer = setTimeout(() => {
+        if (source === connection && subscriptionGeneration === generation) {
+            connect();
+        }
+    }, 6000);
+    api("subscribe", {
+        connection: connection.subscriptionId,
+        generation,
+        conversationId: id,
+        have: id === null ? null : claimOf(store.state.view, id),
+    }).catch((error) => {
+        if (source !== connection || subscriptionGeneration !== generation) {
+            return;
+        }
+
+        clearTimeout(subscriptionTimer);
+
+        if (error.status === 401) {
+            connection.close();
+            store.set({ me: null });
+        } else {
+            connect();
+        }
+    });
+}
+
 const local = /^(localhost|127\.\d+\.\d+\.\d+|\[::1\])$/.test(location.hostname);
 /** After an event stream stalls, poll for an hour, then actively try the stream again while visible and online. */
 const POLL_FOR_MS = 60 * 60_000;
@@ -983,6 +1077,9 @@ let connects = 0;
 
 export function connect() {
     connects++;
+    subscriptionGeneration++;
+    subscriptionAck = null;
+    clearTimeout(subscriptionTimer);
     source?.close();
     syncingSessions = null;
     store.set({ connection: "connecting", sessionListVersion: null });
@@ -990,8 +1087,8 @@ export function connect() {
     const claim = id === null || unclaimed ? null : claimOf(store.state.view, id);
 
     unclaimed = false;
-    const query = `tab=${encodeURIComponent(TAB)}&sessions=delta&live=delta${
-        id === null ? "" : `&c=${id}&tail=${TRANSCRIPT_TAIL}`
+    const query = `tab=${encodeURIComponent(TAB)}&sessions=delta&live=delta&subscriptions=1&generation=${subscriptionGeneration}&tail=${TRANSCRIPT_TAIL}${
+        id === null ? "" : `&c=${id}`
     }${claim === null ? "" : `&have=${encodeURIComponent(claim)}`}`;
 
     const polling = pollHere() && !local;
@@ -1017,11 +1114,18 @@ function streamEvents(query) {
     const events = new EventSource(`/api/events?${query}`);
     /** The first batch arrived whole: the session's view, or the session list when no session is open. */
     let settled = false;
+    let retry;
     const settles = query.includes("&c=") ? ["view", "missing"] : ["sessions"];
     const reprobing = (localStorage.getItem(TRANSPORT_KEY) ?? "").startsWith("poll");
     const connection = {
         close() {
+            if (source === connection) {
+                clearTimeout(subscriptionTimer);
+            }
+
             clearTimeout(fallback);
+            clearTimeout(retry);
+            connection.subscriptionId = null;
             events.close();
         },
     };
@@ -1040,20 +1144,10 @@ function streamEvents(query) {
               connect();
           }, 6000);
 
-    for (const [name, handler] of Object.entries(handlers)) {
+    for (const name of [...Object.keys(handlers), "subscription"]) {
         events.addEventListener(name, (event) => {
             if (source !== connection) {
                 return;
-            }
-
-            if (settles.includes(name) && !settled) {
-                settled = true;
-                clearTimeout(fallback);
-                localStorage.removeItem(TRANSPORT_KEY);
-
-                if (reprobing && !local) {
-                    reportTransport("stream-initial-complete", "poll", "stream");
-                }
             }
 
             const perf = window.__rotomPerf;
@@ -1066,7 +1160,21 @@ function streamEvents(query) {
                 perf.eventParseMs += performance.now() - started;
             }
 
-            handler(data);
+            if (
+                receive(connection, name, data) &&
+                source === connection &&
+                !settled &&
+                (settles.includes(name) ||
+                    (name === "subscription" && data.conversationId === null))
+            ) {
+                settled = true;
+                clearTimeout(fallback);
+                localStorage.removeItem(TRANSPORT_KEY);
+
+                if (reprobing && !local) {
+                    reportTransport("stream-initial-complete", "poll", "stream");
+                }
+            }
         });
     }
 
@@ -1079,36 +1187,27 @@ function streamEvents(query) {
         connected();
     };
 
-    events.onerror = async () => {
+    events.onerror = () => {
         if (source !== connection) {
             return;
         }
 
+        // The URL names the initial selection. Do not let EventSource reopen that obsolete selection by itself.
+        connection.close();
         store.set({ connection: "closed" });
 
-        // EventSource retries by itself after a network error; a 401 needs a sign-in instead.
-        try {
-            await api("me");
-        } catch (error) {
+        // Do not wait for a possibly stalled auth probe to reconnect. A current 401 cancels the retry.
+        streamRetries++;
+        retry = setTimeout(
+            () => source === connection && connect(),
+            Math.min(10_000, 1000 * streamRetries),
+        );
+        api("me").catch((error) => {
             if (error.status === 401 && source === connection) {
                 connection.close();
                 store.set({ me: null });
-
-                return;
             }
-        }
-
-        // It gives up for good when a retry gets an answer other than 200, such as a tunnel's 502 while the server
-        // restarts. Start a new stream after a pause that grows with each try.
-        if (events.readyState === EventSource.CLOSED && source === connection) {
-            // A stream that failed was not held back: no reason to switch this address to polling.
-            clearTimeout(fallback);
-            streamRetries++;
-            setTimeout(
-                () => source === connection && connect(),
-                Math.min(10_000, 1000 * streamRetries),
-            );
-        }
+        });
     };
 
     return connection;
@@ -1151,7 +1250,12 @@ function pollEvents(query) {
 
     const connection = {
         close() {
+            if (source === connection) {
+                clearTimeout(subscriptionTimer);
+            }
+
             stopped = true;
+            connection.subscriptionId = null;
             clearTimeout(probeTimer);
             document.removeEventListener("visibilitychange", probe);
             removeEventListener("online", probe);
@@ -1201,8 +1305,15 @@ function pollEvents(query) {
                     return;
                 }
 
+                if (session !== null && data.session !== session) {
+                    // Expiry/restart used the old URL. Discard that batch, close its new poller, and select afresh.
+                    session = data.session;
+                    connect();
+
+                    return;
+                }
+
                 if (data.session !== session) {
-                    // A new session (first poll, or the server restarted): it starts with hello and a full view.
                     session = data.session;
                     ack = 0;
                 }
@@ -1220,7 +1331,7 @@ function pollEvents(query) {
                     }
 
                     ack = item.seq;
-                    handlers[item.event]?.(item.data);
+                    receive(connection, item.event, item.data);
                 }
             } catch {
                 if (stopped) {
@@ -1346,18 +1457,25 @@ const SAVED_WAIT_MS = 150;
  */
 function connectSaved(id, reading) {
     const me = store.state.me;
+    const ticket = ++connects;
+
+    // Fence old events immediately, including during the asynchronous saved-copy read.
+    subscriptionGeneration++;
+    subscriptionAck = null;
+    clearTimeout(subscriptionTimer);
+
+    if (!source?.subscriptionId) {
+        source?.close();
+        source = null;
+    }
 
     if (id === null || !me) {
-        connect();
+        requestSubscription();
 
         return;
     }
 
-    const ticket = ++connects;
-
-    // The last session's stream stops now: none of its events may land on this session while its copy is read.
-    source?.close();
-    source = null;
+    const access = accessOf(me);
 
     Promise.race([
         loadView(id, me, reading).catch(() => null),
@@ -1367,11 +1485,20 @@ function connectSaved(id, reading) {
             return;
         }
 
-        if (record && store.state.conversationId === id && !store.state.view.conversation) {
+        if (!store.state.me) {
+            return;
+        }
+
+        if (
+            record &&
+            accessOf(store.state.me) === access &&
+            store.state.conversationId === id &&
+            !store.state.view.conversation
+        ) {
             store.set({ view: savedView(record) });
         }
 
-        connect();
+        requestSubscription();
     });
 }
 

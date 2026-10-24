@@ -34,6 +34,8 @@ import { serveImage } from "./assets.ts";
 import { browserRoutes } from "./browser-routes.ts";
 import { conversationRoutes } from "./conversation-routes.ts";
 import { createEventStreams } from "./events.ts";
+import { parseClaim } from "../view-claim.ts";
+import { SUBSCRIPTION_COPY } from "../constants/copy.ts";
 import { type ApiRequest, conversationId, type HttpOptions, json, readJson } from "./io.ts";
 import { pushRoutes } from "./push-routes.ts";
 
@@ -212,6 +214,47 @@ export function createApi(options: HttpOptions, auth: Auth) {
 
         if (first === "poll" && method === "GET") {
             return poll(request, response, url, user);
+        }
+
+        if (first === "subscribe" && method === "POST") {
+            const body = await readJson<{
+                connection?: unknown;
+                generation?: unknown;
+                conversationId?: unknown;
+                have?: unknown;
+            }>(request);
+
+            if (
+                !body ||
+                typeof body.connection !== "string" ||
+                body.connection.length > 64 ||
+                typeof body.generation !== "number" ||
+                !Number.isSafeInteger(body.generation) ||
+                body.generation < 1 ||
+                (body.conversationId !== null &&
+                    (typeof body.conversationId !== "number" ||
+                        !Number.isSafeInteger(body.conversationId) ||
+                        body.conversationId < 0)) ||
+                (body.have !== undefined &&
+                    body.have !== null &&
+                    (typeof body.have !== "string" || body.have.length > 160))
+            ) {
+                throw new HttpError(400, SUBSCRIPTION_COPY.invalidRequest);
+            }
+
+            return json(
+                response,
+                200,
+                await app.subscribe(
+                    user,
+                    body.connection,
+                    body.generation,
+                    body.conversationId === null
+                        ? undefined
+                        : conversationId(String(body.conversationId)),
+                    parseClaim(typeof body.have === "string" ? body.have : null),
+                ),
+            );
         }
 
         if (first === "me" && method === "GET") {

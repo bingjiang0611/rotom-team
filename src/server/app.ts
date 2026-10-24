@@ -83,6 +83,7 @@ import { PushStore } from "./push.ts";
 import { type ExtensionInfo, ExtensionLoader, prepareDropInFolder } from "./reload.ts";
 import { ResendTask } from "./resend.ts";
 import { type Client, Room, ROOM_DOCS } from "./room.ts";
+import { SUBSCRIPTION_COPY } from "./constants/copy.ts";
 import { Schedules } from "./schedules.ts";
 import { SessionLists } from "./session-lists.ts";
 import { Shell } from "./shell.ts";
@@ -172,6 +173,7 @@ export class PocketApp {
     /** Each conversation's browser page, which Pi and the people in the conversation share. */
     readonly browsers: Browsers;
     readonly #clients = new Set<Client>();
+    readonly #clientRooms = new WeakMap<Client, Room>();
     readonly #sessionLists = new SessionLists();
     readonly #rooms = new Map<ConversationId, Promise<Room>>();
     readonly #envs = new Map<string, NodeExecutionEnv>();
@@ -790,11 +792,69 @@ export class PocketApp {
             this.#peopleChanged(client.user.id);
         }
 
-        if (client.conversationId === undefined) {
+        await this.#joinRoom(client);
+    }
+
+    /** A read-only desired subscription; newer intents supersede pending room opens, without replaying any send. */
+    async subscribe(
+        clientUser: User,
+        connection: string,
+        generation: number,
+        id: ConversationId | undefined,
+        claim: Client["viewClaim"],
+    ) {
+        const client = [...this.#clients].find(
+            (each) =>
+                each.connection === connection &&
+                each.user.id === clientUser.id &&
+                each.subscriptionGeneration !== undefined,
+        );
+
+        if (!client) {
+            throw new HttpError(404, SUBSCRIPTION_COPY.unavailable);
+        }
+
+        if (generation <= client.subscriptionGeneration!) {
+            return { generation: client.subscriptionGeneration };
+        }
+
+        if (client.conversationId !== undefined) {
+            this.#leaveRoom(client, client.conversationId);
+        }
+
+        client.subscriptionGeneration = generation;
+        client.conversationId = id;
+        client.viewClaim = claim;
+        client.sentEntries.clear();
+        client.sentFields?.clear();
+        client.orderKey = "";
+        await this.#joinRoom(client);
+
+        return { generation: client.subscriptionGeneration };
+    }
+
+    async #joinRoom(client: Client): Promise<void> {
+        const id = client.conversationId;
+        const generation = client.subscriptionGeneration;
+        const current = () =>
+            this.#clients.has(client) &&
+            client.conversationId === id &&
+            client.subscriptionGeneration === generation;
+
+        const acknowledge = () => {
+            if (generation !== undefined) {
+                client.send("subscription", { generation, conversationId: id ?? null });
+            }
+        };
+
+        if (id === undefined) {
+            acknowledge();
+
             return;
         }
 
-        if (!this.canSee(client.user, client.conversationId)) {
+        if (!this.canSee(client.user, id)) {
+            acknowledge();
             client.send("missing", {
                 conversationId: client.conversationId,
                 message: "This session is not shared with you.",
@@ -806,17 +866,24 @@ export class PocketApp {
         }
 
         try {
-            const id = client.conversationId;
             const room = await this.room(id);
 
-            if (!this.#clients.has(client)) {
+            if (!current()) {
                 this.releaseRoom(room);
 
                 return;
             }
 
+            // Access can change while opening the room. Do not acknowledge or publish a stale grant.
+            if (!this.canSee(client.user, id)) {
+                this.releaseRoom(room);
+                this.requireSee(client.user, id);
+            }
+
             room.keepOpen();
+            this.#clientRooms.set(client, room);
             room.clients.add(client);
+            acknowledge();
             room.pushAll(client);
             room.sendChanges(client, room.watchChanges(this.cwdOf(id)), false);
             client.send("chat", { conversationId: room.id, full: true, messages: room.chat });
@@ -830,10 +897,12 @@ export class PocketApp {
             room.pushPresence();
             this.#scheduleSessions();
         } catch (error) {
-            client.send("missing", {
-                conversationId: client.conversationId,
-                message: describe(error),
-            });
+            if (current()) {
+                acknowledge();
+                client.send("missing", { conversationId: id, message: describe(error) });
+                client.conversationId = undefined;
+                this.#leaveRoom(client, id);
+            }
         }
     }
 
@@ -863,23 +932,23 @@ export class PocketApp {
 
     /** Take a tab out of a conversation's room: the others see it go, and the room closes once no tab is left. */
     #leaveRoom(client: Client, id: ConversationId): void {
-        void this.#rooms.get(id)?.then(
-            (room) => {
-                if (!room.clients.delete(client)) {
-                    return;
-                }
+        const room = this.#clientRooms.get(client);
 
-                if (!room.has(client.user.id)) {
-                    room.setTyping(client.user.id, null);
-                }
+        if (room?.id !== id) {
+            return;
+        }
 
-                room.pushPresence();
-                room.schedule();
-                this.#scheduleSessions();
-                this.releaseRoom(room);
-            },
-            () => {},
-        );
+        this.#clientRooms.delete(client);
+        room.clients.delete(client);
+
+        if (!room.has(client.user.id)) {
+            room.setTyping(client.user.id, null);
+        }
+
+        room.pushPresence();
+        room.schedule();
+        this.#scheduleSessions();
+        this.releaseRoom(room);
     }
 
     /**
@@ -1289,7 +1358,11 @@ export class PocketApp {
 
     /** A tab's hello: what everyone gets, and the id of its own connection, which its peek lists name. */
     #helloFor(client: Client, hello: Awaited<ReturnType<PocketApp["hello"]>>) {
-        return { ...hello, connection: client.connection };
+        return {
+            ...hello,
+            connection: client.connection,
+            ...(client.subscriptionGeneration === undefined ? {} : { subscriptions: true }),
+        };
     }
 
     /** A native conversation's live view or receipts changed: update the tabs watching it. */
@@ -1751,6 +1824,14 @@ export class PocketApp {
         }
 
         client.conversationId = undefined;
+
+        if (client.subscriptionGeneration !== undefined) {
+            client.send("subscription", {
+                generation: client.subscriptionGeneration,
+                conversationId: id,
+            });
+        }
+
         client.send("missing", { conversationId: id, message });
         this.#leaveRoom(client, id);
     }

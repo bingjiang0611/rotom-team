@@ -130,9 +130,22 @@ Commit listeners cannot reenter Harness session APIs; attribution writes are def
 sequence and live-delta state. This is not a cross-push cache of viewer permissions.
 
 `http/events.ts: createEventStreams` supplies SSE and long polling. On attach, `PocketApp.attach` sends
-hello/session state and opens a room for its full view. Poll overflow disconnects instead of reporting a partial
-view as success; `web/store.js: pollEvents` resets its ACK when the server assigns a new poll session.
-A normal session switch still creates a new subscription/connection through `connect`; D5 is not implemented.
+hello/session state and opens a room for its full view. New tabs negotiate subscription generations. Authenticated
+`POST /api/subscribe` calls `PocketApp.subscribe`: synchronously leave the previous joined room, advance the generation,
+then `#joinRoom` checks membership, generation and access after its asynchronous open. A WeakMap tracks actual joined
+rooms so a delayed leave cannot remove a newer A→B→A membership. Stale opens release their unused room and publish nothing.
+
+An ordered `subscription` ACK precedes the selected full view/missing result. `newClient.send` envelopes room events
+with the generation before SSE serialization or poll enqueue; global events and legacy tabs retain their old shapes.
+`web/store.js: connectSaved` fences old generations before reading a saved copy, then posts the new subscription without
+closing the transport. `receive` requires the matching ACK/generation and target before dispatching room data.
+Session-list versions and the poll sequence survive normal switches; no new hello/full list is needed.
+
+Poll overflow disconnects rather than reporting a partial view. Poll expiry/restart may create a poller from the old URL;
+the tab discards that batch, closes it and connects afresh to the latest route. SSE errors likewise disable automatic
+reopening of the obsolete URL. Missing ACK/view or an unknown subscription POST outcome recovers with a fresh read-only
+connection, never a replayed POST or user send. Old tabs and servers without negotiated support retain reconnect-on-switch.
+See [CONFIGURATION.md](CONFIGURATION.md#session-subscriptions) for the wire fields and six-second recovery bound.
 
 ## Shutdown and safe continuation
 

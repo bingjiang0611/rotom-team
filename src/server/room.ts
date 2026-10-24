@@ -148,6 +148,8 @@ export interface Client {
     readonly sessionDeltas?: boolean;
     /** This connection understands versioned append-only live text. Older tabs still receive full snapshots. */
     readonly liveDeltas?: boolean;
+    /** Opt-in session subscription generation; absent for legacy tabs. */
+    subscriptionGeneration?: number;
     /** Entries the tab says it holds from an earlier connection; checked and used up by its first full view. */
     viewClaim?: ViewClaim;
     /**

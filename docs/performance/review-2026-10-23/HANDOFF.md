@@ -885,6 +885,131 @@ owner 已批准把 C2–C6 从「只写方案」改为「实现」。C1(进程�
 - de036f7 基线：SSE **6 次新 stream、6 hello、6 完整 sessions**；poll **6 次新 poll session、6 hello、6 完整 sessions**；两者 /api/me 都为 0。结果 /tmp/rotom-review-D5/base.json。poll fixture 用仅解析到回环的 localhost.，避免生产 local 判断强制 SSE；原 D4 fixture 默认行为不变。
 - 实现计划：显式协商订阅能力；同一连接上 POST 只读订阅意图，单调 generation 与有序 ACK；取消旧房间、每次及 await 后重查权限；冻结事件所属 generation，丢弃旧代事件（包括 A→B→A）；SSE/poll 共用协议，旧 tab 保持原格式。断线/未知 POST 结果只重建只读连接，不重放用户 send。
 
+### D5 — 单连接订阅切换（已实现；待审查方核验）
+
+- 测量提交：`229bda2`。实现提交标题：`D5: reuse event connections with generation-acknowledged subscriptions`。本轮只做 D5，未开始 D6。
+- `POST /api/subscribe` 复用现有认证与 X-Pocket guard；按本人连接标识定位，验证 generation/id/claim 输入。生效的新意图先同步离开旧 room，再在打开前及 await 后检查权限；旧 generation/失效连接/晚到房间结果不能重新挂回。
+- 复用同一 Client 需要记录实际已加入的 Room；WeakMap 使 A→B→A 不会被旧异步 leave 删除。加入时 ACK 先于 full view/missing，home 只需 ACK；撤权也确认当前 generation 后发送 missing。
+- 仅协商的新 tab 包装七类房间事件为 { generation, data }。SSE 与 poll 入队前冻结代号；poll seq 不因切换重置，非法/超前 seq ACK 不删除队列。旧 tab 格式不变，新 UI 遇旧 server 仍走原重连路径。
+- web/store.js 在异步缓存读取前隔离旧代，验证匹配 ACK/generation/room 后才接收房间事件；账号/权限 key 变化不回填旧缓存。全局事件、session-list 版本与 peek 连接标识继续沿用。未知 POST、6s 未完成 ACK/view、SSE 错误和 poll 过期只重建只读连接，不重试原 POST 或用户 send；poll 过期时丢弃旧 URL 创建的临时 poller，再连接最新路由（该异常恢复可能多一次握手）。
+- 同步 CONFIGURATION、architecture、VERIFICATION；新增错误文案集中于 src/server/constants/copy.ts。未改个人凭据路由、native unknown fence、vendor/pin、Durable 文档合同、journal schema 或 ledger。
+
+#### 验证与 owner 批准的基线例外
+
+| 检查                                            | 结果                                                                                                                                                                                      | 证据                                                                                                                                              |
+| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| format / check / lint / format:check / web 语法 | 通过；用户原有两份文档逐字节保留                                                                                                                                                          | /tmp/rotom-review-D5/{format,check,lint,format-check}.log；node --check web/store.js                                                              |
+| D5 HTTP / 客户端状态机 / Chromium               | 4/4、13/13（含原 5 条）、2/2；SSE/poll 均覆盖                                                                                                                                             | session-subscriptions.test.ts、transport-reprobe.test.ts、session-subscriptions-ui.test.ts；server-tests.log、client-tests.log、browser-tests.log |
+| 负控                                            | 临时测试副本移除 generation 比较后，SSE/poll 两项均失败，旧 A / stale duplicate 被接收                                                                                                    | negative.log；生产文件未为负控改写；临时测试已删除                                                                                                |
+| 缓存旧测试修正                                  | 原探针假设每次导航新建 EventSource，第一次全量因此失败；改为先装探针再复用 home 连接、观察 POST claim 和包装内 full view。原 checking/无输入框/kept/缺失补齐/退出清缓存断言保留，单测通过 | test/view-cache-ui.test.ts；test-initial.log、cache-regression.log                                                                                |
+| 默认 npm test（并发 2）                         | 计时器最终修正前两次 620/621，均为 legacy dropins 的文件监听超时；未跳过、未增大超时、未改旧实现                                                                                          | test-watch-timeout.log、test.log                                                                                                                  |
+| D5 前基线的同命令                               | 229bda2 临时 checkout：606/608；复现同一 dropins 超时，另有既有 push 随机 key 异常断言失败                                                                                                | baseline-full.log；临时 checkout 已清理                                                                                                           |
+| 独立/并发小组核对                               | dropins 单独 4/4；与 docs-examples 并发 8/8。不能据此断言监听根因已修复                                                                                                                   | dropins-isolated.log、dropins-paired.log                                                                                                          |
+| 全套串行（断言、文件均不变）                    | **622/622，无跳过**，457235ms                                                                                                                                                             | node --test --test-concurrency=1 test/*.test.ts；final-test-serial.log                                                                            |
+| 性能护栏                                        | main 与 D5 基线两组 exit 0，ledger guard 均 passed                                                                                                                                        | final-perf.log、final-change-perf.log；final-ci/、final-change-ci/                                                                                |
+
+自审补充：把 SSE 当前 401 用例推进到订阅的 6s 截止后，修正前出现第二条连接（auth-timer-negative.log）。现已在两种传输关闭时取消其订阅计时器，并补 poll 401 回归；最终 13 条状态机及 622 条串行全套通过。早期 ci/、change-ci/ 和 621 条串行结果不是最终版本的完成证据。
+
+**owner 本轮明确选择「接受基线例外，移交 D5」**：以串行全量、D5 专项及性能护栏为证据，保留默认并行失败记录，提交推送后等待核验。这仅是本次移交例外，不修改 npm 脚本、测试断言或后续条目的验收门槛。旧监听问题没有在本次修复，不把默认 npm test 记成通过。
+
+#### 定向计数与成本
+
+- 真实 Chromium + 临时 Team 服务，两种传输各 6 次 A/B 顺序切换，等待目标非 checking 视图；无真实账号、无 inference/用户 send。最终 base.json/head.json：SSE 新 stream **6→0**，poll 新 session **6→0**；两者 hello **6→0**、完整 sessions **6→0**，订阅 POST **0→6**。/api/me 原本就是 0，不宣称认证请求从 6 变成 0。
+- 这里只证明正常切换的 L1 工作下降；初连、断线重连、权限刷新仍可发送 hello/完整列表。新 POST 仍检查 cookie/权限。默认 ledger 没有单独 session.switch 场景，本项用独立 session-switch-bench.mjs 度量，不伪称修改了现有 ledger scenario。
+- 首次静态资源 **407043→407732B（+689B）**，全部来自 store.js gzip **19104→19793B**；请求 53 不变，条件响应体 0。这是协议代码成本，没有放宽 ledger。
+- 正式对照沿用此前单轮方法：`npm run perf:ci -- origin/main --runs 1 --out /tmp/rotom-review-D5/final-ci`，负载 2.81→4.03；`npm run perf:ci -- 229bda2 --runs 1 --out /tmp/rotom-review-D5/final-change-ci`，4.66→3.74；Node 24.18.0 / darwin-arm64 / 8 cores。两组都不触发 high-load 阈值，但单轮 L2 不证明生产提速；slower 明细保留在 *-comparison.json。
+- 最初默认 3 runs 的 CI 在 600s 工具期限前已完成 base×3/head×2，进入最后 head 后被终止，不作为护栏通过证据。已检查无该测量进程，移除两个遗留临时 checkout；完整样本保留于 timed-out-samples/，改用有明确时限的单轮正式对照，未调整任何门槛。
+
+以下为最终两次 `compare(base, head, ledger)` 判 worse 的并集 **82 项**（main 39，D5 对照 58）。另一列也显示实际值，不把 ledger 旧候选基线的表混成此次前后对比。
+
+| 计数器                                         | origin/main → D5 | D5 基线 → D5  | 解释                                                                                                                                                                |
+| ---------------------------------------------- | ---------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| assets.first/http.body.bytes                   | 1142870→407732   | 407043→407732 | store.js 协议实现 gzip +689B；53 请求不变，条件响应体 0。                                                                                                           |
+| changes.poll.images/json.stringify.chars       | 20304→20346      | 20338→20354   | changes 未改；含 mtime 等动态版本字符串的字符量微差（两组 +42/+16）。未留正文，不把未测调用次数说成零。                                                             |
+| commands.discover.cold/sql.rows                | 78→81            | 81→81         | 相对主干既有工作/采样差；D5 对照此 SQL 指标未增，没有新增 journal 查询路径。                                                                                        |
+| commands.discover.warm/sql.rows                | 64→66            | 66→66         | 相对主干既有工作/采样差；D5 对照此 SQL 指标未增，没有新增 journal 查询路径。                                                                                        |
+| git.changes/json.stringify.chars               | 2538→3106        | 3105→2540     | 响应体仅 +1B，git/SQL 次数不变；同进程计数窗口含其他序列化，未留 callsite trace。D5 对照反而 3105→2540，不把 +568 当成该接口响应增量。                              |
+| native.warm/sql.rows                           | 10→11            | 11→11         | 相对主干既有工作/采样差；D5 对照此 SQL 指标未增，没有新增 journal 查询路径。                                                                                        |
+| projection.large.open/sql.statements           | 98→99            | 99→99         | 相对主干既有工作/采样差；D5 对照此 SQL 指标未增，没有新增 journal 查询路径。                                                                                        |
+| projection.large.paced/json.stringify.chars    | 556757→417966    | 422700→429931 | 未协商的合成 Client；44 view、132 次共同字段 stringify 不变。最终同版本两次 head 自身为 202856/214856B，快照采样量可变；未留正文，不伪造逐字段归因。                |
+| projection.large.paced/push.bytes              | 269548→244228    | 249028→256228 | 未协商的合成 Client；44 view、132 次共同字段 stringify 不变。最终同版本两次 head 自身为 202856/214856B，快照采样量可变；未留正文，不伪造逐字段归因。                |
+| projection.large.paced/push.view.bytes         | 228176→202856    | 207656→214856 | 未协商的合成 Client；44 view、132 次共同字段 stringify 不变。最终同版本两次 head 自身为 202856/214856B，快照采样量可变；未留正文，不伪造逐字段归因。                |
+| session.history.earlier/json.stringify.chars   | 243098→243132    | 243132→243098 | 历史页路径未改；两组 +34/-34，属动态输出长度变化，未留正文，不伪造字段归因。                                                                                        |
+| session.open.long/sql.rows                     | 47→49            | 49→49         | 相对主干既有工作/采样差；D5 对照此 SQL 指标未增，没有新增 journal 查询路径。                                                                                        |
+| session.open.long/sql.statements               | 16→17            | 17→17         | 相对主干既有工作/采样差；D5 对照此 SQL 指标未增，没有新增 journal 查询路径。                                                                                        |
+| session.open/sql.rows                          | 107→109          | 96→96         | 相对主干既有工作/采样差；D5 对照此 SQL 指标未增，没有新增 journal 查询路径。                                                                                        |
+| session.open/sql.statements                    | 46→48            | 47→47         | 相对主干既有工作/采样差；D5 对照此 SQL 指标未增，没有新增 journal 查询路径。                                                                                        |
+| startup.restart/sql.statements                 | 848→851          | 851→851       | 相对主干既有工作/采样差；D5 对照此 SQL 指标未增，没有新增 journal 查询路径。                                                                                        |
+| turn.paced/sql.statements                      | 286→288          | 288→288       | 相对主干既有工作/采样差；D5 对照此 SQL 指标未增，没有新增 journal 查询路径。                                                                                        |
+| turn.prepared/json.parse.durableStorage.calls  | 19→21            | 19→19         | 主干增加，D5 同分支对照未增；既有提交/延后工作窗口采样差。本项未改 Durable 解析或 prepared 路径。                                                                   |
+| turn.prepared/json.parse.durableStorage.chars  | 1412→1710        | 1412→1412     | 主干增加，D5 同分支对照未增；既有提交/延后工作窗口采样差。本项未改 Durable 解析或 prepared 路径。                                                                   |
+| turn.prepared/sql.statements                   | 185→215          | 201→201       | 主干增加，D5 同分支对照未增；既有提交/延后工作窗口采样差。本项未改 Durable 解析或 prepared 路径。                                                                   |
+| turn.warm/sql.statements                       | 157→158          | 188→158       | 相对主干既有工作/采样差；D5 对照此 SQL 指标未增，没有新增 journal 查询路径。                                                                                        |
+| web.open.long/cdp.Nodes                        | 1585→1701        | 1725→1701     | DOM/布局时间窗计数（含暂存节点），不等于持久节点增长；D5 未改模板。保留实际增量，不声称零成本或已证明泄漏。                                                         |
+| web.open.long/push.view.bytes                  | 165859→165883    | 165859→165883 | 所测 view 新增 generation 包装 24B；full-view 次数未增。                                                                                                            |
+| web.open.long/web.event.parse.calls            | 8→9              | 8→9           | 首次完整视图前增加 1 个有序 ACK；它不修改 store、不重发 hello/列表。                                                                                                |
+| web.open.long/web.event.parse.chars            | 173290→173492    | 173290→173492 | 能力协商、ACK、房间事件 generation 包装的必要网络成本；不对动态值差做虚假逐字段归因。                                                                               |
+| web.open/cdp.Nodes                             | 996→1112         | 1112→1112     | DOM/布局时间窗计数（含暂存节点），不等于持久节点增长；D5 未改模板。保留实际增量，不声称零成本或已证明泄漏。                                                         |
+| web.open/push.bytes                            | 83736→83964      | 83736→83964   | 能力协商、ACK、房间事件 generation 包装的必要网络成本；不对动态值差做虚假逐字段归因。                                                                               |
+| web.open/push.events                           | 10→11            | 10→11         | 首次完整视图前增加 1 个有序 ACK；它不修改 store、不重发 hello/列表。                                                                                                |
+| web.open/push.view.bytes                       | 76309→76333      | 76309→76333   | 所测 view 新增 generation 包装 24B；full-view 次数未增。                                                                                                            |
+| web.open/sql.statements                        | 31→32            | 32→32         | 相对主干既有工作/采样差；D5 对照此 SQL 指标未增，没有新增 journal 查询路径。                                                                                        |
+| web.open/web.event.parse.calls                 | 9→10             | 9→10          | 首次完整视图前增加 1 个有序 ACK；它不修改 store、不重发 hello/列表。                                                                                                |
+| web.open/web.event.parse.chars                 | 82941→83141      | 82941→83141   | 能力协商、ACK、房间事件 generation 包装的必要网络成本；不对动态值差做虚假逐字段归因。                                                                               |
+| web.paced/cdp.Nodes                            | 1294→1421        | 1420→1415     | DOM/布局时间窗计数（含暂存节点），不等于持久节点增长；D5 未改模板。保留实际增量，不声称零成本或已证明泄漏。                                                         |
+| web.paced/push.events                          | 15→15            | 15→16         | 主干 view 11→11；D5 对照 11→12，连带多一轮投影/SQL/解析。同一最终 head 自身也为 11/12，采样窗差已实测，不隐藏额外工作量。                                           |
+| web.paced/push.view.count                      | 11→11            | 11→12         | 主干 view 11→11；D5 对照 11→12，连带多一轮投影/SQL/解析。同一最终 head 自身也为 11/12，采样窗差已实测，不隐藏额外工作量。                                           |
+| web.paced/sql.rows                             | 560→311          | 311→323       | 主干 view 11→11；D5 对照 11→12，连带多一轮投影/SQL/解析。同一最终 head 自身也为 11/12，采样窗差已实测，不隐藏额外工作量。                                           |
+| web.paced/sql.statements                       | 306→308          | 308→322       | 主干 view 11→11；D5 对照 11→12，连带多一轮投影/SQL/解析。同一最终 head 自身也为 11/12，采样窗差已实测，不隐藏额外工作量。                                           |
+| web.paced/view.fields.stringify.calls          | 132→132          | 132→144       | 主干 view 11→11；D5 对照 11→12，连带多一轮投影/SQL/解析。同一最终 head 自身也为 11/12，采样窗差已实测，不隐藏额外工作量。                                           |
+| web.paced/view.fields.stringify.chars          | 7050→7050        | 7050→7695     | 主干 view 11→11；D5 对照 11→12，连带多一轮投影/SQL/解析。同一最终 head 自身也为 11/12，采样窗差已实测，不隐藏额外工作量。                                           |
+| web.paced/view.inbox.project.calls             | 11→11            | 11→12         | 主干 view 11→11；D5 对照 11→12，连带多一轮投影/SQL/解析。同一最终 head 自身也为 11/12，采样窗差已实测，不隐藏额外工作量。                                           |
+| web.paced/view.kernel.json.parse.calls         | 32→32            | 32→35         | 主干 view 11→11；D5 对照 11→12，连带多一轮投影/SQL/解析。同一最终 head 自身也为 11/12，采样窗差已实测，不隐藏额外工作量。                                           |
+| web.paced/view.kernel.json.parse.chars         | 17312→17312      | 17312→18935   | 主干 view 11→11；D5 对照 11→12，连带多一轮投影/SQL/解析。同一最终 head 自身也为 11/12，采样窗差已实测，不隐藏额外工作量。                                           |
+| web.paced/view.kernel.project.calls            | 11→11            | 11→12         | 主干 view 11→11；D5 对照 11→12，连带多一轮投影/SQL/解析。同一最终 head 自身也为 11/12，采样窗差已实测，不隐藏额外工作量。                                           |
+| web.paced/view.kernel.sql.attempts             | 22→22            | 22→24         | 主干 view 11→11；D5 对照 11→12，连带多一轮投影/SQL/解析。同一最终 head 自身也为 11/12，采样窗差已实测，不隐藏额外工作量。                                           |
+| web.paced/view.kernel.sql.command_inputs       | 21→21            | 21→23         | 主干 view 11→11；D5 对照 11→12，连带多一轮投影/SQL/解析。同一最终 head 自身也为 11/12，采样窗差已实测，不隐藏额外工作量。                                           |
+| web.paced/view.kernel.sql.heads                | 11→11            | 11→12         | 主干 view 11→11；D5 对照 11→12，连带多一轮投影/SQL/解析。同一最终 head 自身也为 11/12，采样窗差已实测，不隐藏额外工作量。                                           |
+| web.paced/view.kernel.sql.rows                 | 32→32            | 32→35         | 主干 view 11→11；D5 对照 11→12，连带多一轮投影/SQL/解析。同一最终 head 自身也为 11/12，采样窗差已实测，不隐藏额外工作量。                                           |
+| web.paced/view.kernel.sql.statements           | 54→54            | 54→59         | 主干 view 11→11；D5 对照 11→12，连带多一轮投影/SQL/解析。同一最终 head 自身也为 11/12，采样窗差已实测，不隐藏额外工作量。                                           |
+| web.paced/view.live.project.calls              | 11→11            | 11→12         | 主干 view 11→11；D5 对照 11→12，连带多一轮投影/SQL/解析。同一最终 head 自身也为 11/12，采样窗差已实测，不隐藏额外工作量。                                           |
+| web.paced/web.event.parse.calls                | 13→13            | 13→14         | 主干 view 11→11；D5 对照 11→12，连带多一轮投影/SQL/解析。同一最终 head 自身也为 11/12，采样窗差已实测，不隐藏额外工作量。                                           |
+| web.paced/web.view.apply.calls                 | 11→11            | 11→12         | 主干 view 11→11；D5 对照 11→12，连带多一轮投影/SQL/解析。同一最终 head 自身也为 11/12，采样窗差已实测，不隐藏额外工作量。                                           |
+| web.reopen/cdp.Nodes                           | 1090→1230        | 1230→1206     | DOM/布局时间窗计数（含暂存节点），不等于持久节点增长；D5 未改模板。保留实际增量，不声称零成本或已证明泄漏。                                                         |
+| web.reopen/push.bytes                          | 10313→10541      | 10313→10541   | 能力协商、ACK、房间事件 generation 包装的必要网络成本；不对动态值差做虚假逐字段归因。                                                                               |
+| web.reopen/push.events                         | 9→10             | 9→10          | 首次完整视图前增加 1 个有序 ACK；它不修改 store、不重发 hello/列表。                                                                                                |
+| web.reopen/push.view.bytes                     | 2001→2025        | 2001→2025     | 所测 view 新增 generation 包装 24B；full-view 次数未增。                                                                                                            |
+| web.reopen/web.event.parse.calls               | 8→9              | 8→9           | 首次完整视图前增加 1 个有序 ACK；它不修改 store、不重发 hello/列表。                                                                                                |
+| web.reopen/web.event.parse.chars               | 9527→9727        | 9527→9727     | 能力协商、ACK、房间事件 generation 包装的必要网络成本；不对动态值差做虚假逐字段归因。                                                                               |
+| web.send.poll/cdp.Nodes                        | 1477→1540        | 1541→1616     | DOM/布局时间窗计数（含暂存节点），不等于持久节点增长；D5 未改模板。保留实际增量，不声称零成本或已证明泄漏。                                                         |
+| web.send.poll/http.requests                    | 22→20            | 20→22         | 结束窗口多 2 次请求；D5 未加 send/写重试。未留逐路由 trace，不能精确归因具体请求，不抹掉差额。                                                                      |
+| web.send.stream/cdp.Nodes                      | 1474→1653        | 1652→1630     | DOM/布局时间窗计数（含暂存节点），不等于持久节点增长；D5 未改模板。保留实际增量，不声称零成本或已证明泄漏。                                                         |
+| web.send.stream/cdp.RecalcStyleCount           | 100→112          | 106→107       | DOM/布局时间窗计数（含暂存节点），不等于持久节点增长；D5 未改模板。保留实际增量，不声称零成本或已证明泄漏。                                                         |
+| web.send.stream/push.bytes                     | 100246→91804     | 91492→93768   | 主干 view 26→24；D5 对照 24→26（两个接收者各多一次，浏览器 apply 12→13），连带一轮投影/SQL/解析及 generation 包装字节。同版本 head 已见 24/26，非稳定新增推送路径。 |
+| web.send.stream/push.events                    | 32→30            | 30→32         | 主干 view 26→24；D5 对照 24→26（两个接收者各多一次，浏览器 apply 12→13），连带一轮投影/SQL/解析及 generation 包装字节。同版本 head 已见 24/26，非稳定新增推送路径。 |
+| web.send.stream/push.view.bytes                | 86452→77986      | 77698→79950   | 主干 view 26→24；D5 对照 24→26（两个接收者各多一次，浏览器 apply 12→13），连带一轮投影/SQL/解析及 generation 包装字节。同版本 head 已见 24/26，非稳定新增推送路径。 |
+| web.send.stream/push.view.count                | 26→24            | 24→26         | 主干 view 26→24；D5 对照 24→26（两个接收者各多一次，浏览器 apply 12→13），连带一轮投影/SQL/解析及 generation 包装字节。同版本 head 已见 24/26，非稳定新增推送路径。 |
+| web.send.stream/sql.rows                       | 754→379          | 379→390       | 主干 view 26→24；D5 对照 24→26（两个接收者各多一次，浏览器 apply 12→13），连带一轮投影/SQL/解析及 generation 包装字节。同版本 head 已见 24/26，非稳定新增推送路径。 |
+| web.send.stream/sql.statements                 | 403→386          | 386→401       | 主干 view 26→24；D5 对照 24→26（两个接收者各多一次，浏览器 apply 12→13），连带一轮投影/SQL/解析及 generation 包装字节。同版本 head 已见 24/26，非稳定新增推送路径。 |
+| web.send.stream/view.fields.stringify.calls    | 312→144          | 144→156       | 主干 view 26→24；D5 对照 24→26（两个接收者各多一次，浏览器 apply 12→13），连带一轮投影/SQL/解析及 generation 包装字节。同版本 head 已见 24/26，非稳定新增推送路径。 |
+| web.send.stream/view.fields.stringify.chars    | 19070→8798       | 8798→9535     | 主干 view 26→24；D5 对照 24→26（两个接收者各多一次，浏览器 apply 12→13），连带一轮投影/SQL/解析及 generation 包装字节。同版本 head 已见 24/26，非稳定新增推送路径。 |
+| web.send.stream/view.inbox.project.calls       | 26→24            | 24→26         | 主干 view 26→24；D5 对照 24→26（两个接收者各多一次，浏览器 apply 12→13），连带一轮投影/SQL/解析及 generation 包装字节。同版本 head 已见 24/26，非稳定新增推送路径。 |
+| web.send.stream/view.kernel.json.parse.calls   | 76→70            | 70→76         | 主干 view 26→24；D5 对照 24→26（两个接收者各多一次，浏览器 apply 12→13），连带一轮投影/SQL/解析及 generation 包装字节。同版本 head 已见 24/26，非稳定新增推送路径。 |
+| web.send.stream/view.kernel.json.parse.chars   | 41116→37870      | 37870→41116   | 主干 view 26→24；D5 对照 24→26（两个接收者各多一次，浏览器 apply 12→13），连带一轮投影/SQL/解析及 generation 包装字节。同版本 head 已见 24/26，非稳定新增推送路径。 |
+| web.send.stream/view.kernel.project.calls      | 26→24            | 24→26         | 主干 view 26→24；D5 对照 24→26（两个接收者各多一次，浏览器 apply 12→13），连带一轮投影/SQL/解析及 generation 包装字节。同版本 head 已见 24/26，非稳定新增推送路径。 |
+| web.send.stream/view.kernel.sql.attempts       | 52→48            | 48→52         | 主干 view 26→24；D5 对照 24→26（两个接收者各多一次，浏览器 apply 12→13），连带一轮投影/SQL/解析及 generation 包装字节。同版本 head 已见 24/26，非稳定新增推送路径。 |
+| web.send.stream/view.kernel.sql.command_inputs | 50→46            | 46→50         | 主干 view 26→24；D5 对照 24→26（两个接收者各多一次，浏览器 apply 12→13），连带一轮投影/SQL/解析及 generation 包装字节。同版本 head 已见 24/26，非稳定新增推送路径。 |
+| web.send.stream/view.kernel.sql.heads          | 26→24            | 24→26         | 主干 view 26→24；D5 对照 24→26（两个接收者各多一次，浏览器 apply 12→13），连带一轮投影/SQL/解析及 generation 包装字节。同版本 head 已见 24/26，非稳定新增推送路径。 |
+| web.send.stream/view.kernel.sql.rows           | 76→70            | 70→76         | 主干 view 26→24；D5 对照 24→26（两个接收者各多一次，浏览器 apply 12→13），连带一轮投影/SQL/解析及 generation 包装字节。同版本 head 已见 24/26，非稳定新增推送路径。 |
+| web.send.stream/view.kernel.sql.statements     | 128→118          | 118→128       | 主干 view 26→24；D5 对照 24→26（两个接收者各多一次，浏览器 apply 12→13），连带一轮投影/SQL/解析及 generation 包装字节。同版本 head 已见 24/26，非稳定新增推送路径。 |
+| web.send.stream/view.live.project.calls        | 26→24            | 24→26         | 主干 view 26→24；D5 对照 24→26（两个接收者各多一次，浏览器 apply 12→13），连带一轮投影/SQL/解析及 generation 包装字节。同版本 head 已见 24/26，非稳定新增推送路径。 |
+| web.send.stream/web.event.parse.calls          | 16→15            | 15→16         | 主干 view 26→24；D5 对照 24→26（两个接收者各多一次，浏览器 apply 12→13），连带一轮投影/SQL/解析及 generation 包装字节。同版本 head 已见 24/26，非稳定新增推送路径。 |
+| web.send.stream/web.event.parse.chars          | 31914→30445      | 30133→31528   | 主干 view 26→24；D5 对照 24→26（两个接收者各多一次，浏览器 apply 12→13），连带一轮投影/SQL/解析及 generation 包装字节。同版本 head 已见 24/26，非稳定新增推送路径。 |
+| web.send.stream/web.view.apply.calls           | 13→12            | 12→13         | 主干 view 26→24；D5 对照 24→26（两个接收者各多一次，浏览器 apply 12→13），连带一轮投影/SQL/解析及 generation 包装字节。同版本 head 已见 24/26，非稳定新增推送路径。 |
+
+- 采样限制：同一最终 head 的两个正式报告，web.paced 为 11/12 view、web.send.stream 为 24/26 view；projection.large.paced 均为 44 view / 132 次共同字段 stringify，但字节为 202856/214856。计数可随时间窗和动态快照量变化，保留必要协议成本，不把其余增量伪称固定开销或零回归。正文/逐路由 trace 未保存，无法进一步精确拆分；单轮 L2 不证明生产提速。
+- 最终自审覆盖 app 的 attach/leave/evict、HTTP 授权与输入、两种传输/重连、缓存和原生视图调用链；修正了实际复现的注销计时器问题。无新状态库、无协议写命令重放、无同步子进程进入请求路径。保留用户两处文档；未部署、未重启线上。下一步由审查方核验 D5；通过前不做 D6。
+
 ## 核验记录（审查方追加）
 
 <!-- 每项一节：核验了什么、结论（通过 / 未通过）、未通过的原因。 -->

@@ -369,6 +369,29 @@ the poller instead of returning a partial view; the next poll receives a new ses
 initial event larger than the limit cannot be delivered through that connection. Use the supported history tail/pages
 below; supporting an oversized single event requires a separately designed bounded event protocol.
 
+## Session subscriptions
+
+Each new web tab keeps one SSE connection or long-poll session while switching conversations, including Back/Forward
+and returning home. `subscriptions=1&generation=N` opts in on the initial GET; `hello.subscriptions` confirms support.
+`POST /api/subscribe` carries the authenticated connection id, a strictly newer safe-integer generation, a numeric
+`conversationId` (or `null` for home), and an optional saved-view `have` claim. It uses the normal authenticated,
+`X-Pocket: 1` write guard. It changes only the read subscription, not a user's send or native execution.
+
+The server checks connection ownership, removes the previous room synchronously, and checks access both before and
+after opening the new room. Older/equal generations cannot undo a newer selection. An ordered `subscription` event
+acknowledges the generation and target before its full view or missing result; home needs only the ACK. Room events
+(`view`, `missing`, `chat`, `notes`, `browser`, `presence`, `changes`) use `{ generation, data }` envelopes. The tab
+rejects events from another generation or room, including an old A snapshot after A→B→A. Global events remain unwrapped;
+normal switches do not repeat hello or reset the session-list version. Poll queues freeze the generation at enqueue,
+retain their transport sequence across switches, and reject invalid/future sequence ACKs without discarding data.
+
+Old tabs keep their original unwrapped format and reconnect behavior. A new tab also reconnects when an older server
+does not negotiate support. Saved-copy reads do not paint after the member/access key changes. A lost subscription
+response or six seconds without its completed view/ACK replaces only the read connection; the POST and user send are
+not replayed. SSE network errors reconnect with the latest route, not the original EventSource URL. After poll expiry
+or server restart, the client discards the replacement batch for the obsolete URL, closes that poller and opens a fresh
+connection for the current route. This exceptional recovery can require an extra handshake; normal switches do not.
+
 ## Session-list updates
 
 The web app opts into versioned session lists on its event stream or long-poll connection. It receives a full list

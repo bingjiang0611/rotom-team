@@ -21,6 +21,19 @@ For every check, record the exact source commit, exit status, inspected scope an
 
 `npm test` covers the ratchet, the journal, and the server's journal end to end. The benchmarks are separate: `npm run perf:measure` (real rotom processes, a loopback model, Chromium where present) and `npm run perf:ci -- <base-ref>` for before and after a change. A gating counter failing `perf:check` fails the change; millisecond numbers are evidence only with the machine's load recorded. See [PERFORMANCE.md](PERFORMANCE.md).
 
+## Event subscriptions
+
+`session-subscriptions.test.ts` exercises authenticated HTTP SSE/poll: connection ownership, ACK/full-view order,
+queued generation preservation, stale intents, home, legacy wire format, invalid input/sequence ACKs, and asynchronous
+open cancellation on A→B→A, revocation and disconnect. `transport-reprobe.test.ts` runs the production transport and
+saved-copy code with controlled network/time: stale/future ACKs, late views/missing, access-key changes, poll expiry,
+unknown POST results, stalled auth probes and older servers. It does not simulate native inference.
+
+`session-subscriptions-ui.test.ts` uses real Chromium and a temporary Team service for both transports: rapid switches,
+Back/Forward, home, actual server-side disconnection, current-route recovery and no user-send requests. These checks
+skip explicitly if Chromium is unavailable. `session-switch-bench.mjs` under the 2026-10-23 review measures six sequential
+switches after initial attach; handshake/full-list counts are work evidence, not production latency claims.
+
 ## Rotom 0.1.25 auxiliary inference
 
 `node test/rotom-reducer-proof.ts` launches the pinned product through Team with synthetic loopback models. It checks
