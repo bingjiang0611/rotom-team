@@ -16,7 +16,14 @@ if (option < 0) {
         JSON.parse(
             execFileSync(
                 process.execPath,
-                ["--expose-gc", fileURLToPath(import.meta.url), "--mib", String(mib)],
+                [
+                    "--expose-gc",
+                    "--import",
+                    fileURLToPath(new URL("./handoff-worker-probe.mjs", import.meta.url)),
+                    fileURLToPath(import.meta.url),
+                    "--mib",
+                    String(mib),
+                ],
                 { encoding: "utf8", maxBuffer: 1024 * 1024 * 4 },
             ),
         ),
