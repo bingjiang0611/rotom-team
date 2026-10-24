@@ -95,10 +95,16 @@ export async function withMarkdownPage<T>(
 
         return await task(evaluate);
     } finally {
-        browser?.kill();
-        await browser?.exited;
-        server.closeAllConnections();
-        await new Promise<void>((resolve) => server.close(() => resolve()));
-        rmSync(directory, { recursive: true, force: true });
+        try {
+            // Let Chromium stop its profile/cache writers before deleting the temporary directory.
+            await browser?.connection.send("Browser.close");
+            await browser?.exited;
+        } finally {
+            browser?.kill();
+            await browser?.exited;
+            server.closeAllConnections();
+            await new Promise<void>((resolve) => server.close(() => resolve()));
+            rmSync(directory, { recursive: true, force: true });
+        }
     }
 }
