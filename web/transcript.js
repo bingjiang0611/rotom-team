@@ -1084,6 +1084,25 @@ function windowStart(rows, from) {
 
 export function Transcript() {
     const { view, missing, history, transcriptFrom } = store.state;
+    const [, refreshLive] = useState(0);
+
+    useLayoutEffect(() => {
+        let seen = view.live;
+
+        const update = (state) => {
+            if (state.view.live !== seen) {
+                seen = state.view.live;
+                refreshLive((revision) => revision + 1);
+            }
+        };
+
+        const stop = store.subscribe(update);
+
+        // A child layout effect can update the store before this subscription mounts.
+        update(store.state);
+
+        return stop;
+    }, []);
     const scroller = useRef(null);
     const stick = useRef(true);
     /** Distance from the bottom to restore after rows are added above, so the reader stays in place. */

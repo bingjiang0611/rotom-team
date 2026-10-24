@@ -39,6 +39,7 @@ import {
     canSteer,
     dismiss,
     filesShown,
+    liveOnlyChange,
     navigate,
     notify,
     openSheet,
@@ -575,9 +576,14 @@ startSwipes((where) => {
 });
 const root = document.getElementById("app");
 let queued = false;
+let previous = store.state;
 
-store.subscribe(() => {
-    if (queued) {
+store.subscribe((state) => {
+    const local = !queued && liveOnlyChange(previous, state);
+
+    previous = state;
+
+    if (queued || local) {
         return;
     }
 

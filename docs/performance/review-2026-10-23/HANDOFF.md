@@ -38,7 +38,7 @@
 | D1    | D    | 文档纠偏(C6)                                | 核验通过                      | `0705511`（测量）；实现见执行记录 |
 | D2    | D    | notify 控制消息集中解码(C6)                 | 核验通过                      | `1b1228a`（测量）；实现见执行记录 |
 | D3    | D    | 流式 Markdown 解析(C6)                      | 核验通过                      | `b6d3842`（测量）；实现见执行记录 |
-| D4    | D    | App 局部订阅(C6)                            | 进行中                        |                                   |
+| D4    | D    | App 根渲染局部订阅(C6)                      | 已推送待核验                  | `58ddb47`（测量）；实现见执行记录 |
 | D5    | D    | 切换会话不重连(C6)                          | 待做                          |                                   |
 | D6    | D    | 大文件纯移动拆分(C5)                        | 待做                          |                                   |
 | D7    | D    | handoff 测量与异步化(C2)                    | 待做                          |                                   |
@@ -793,6 +793,91 @@ owner 已批准把 C2–C6 从「只写方案」改为「实现」。C1(进程�
 - 1245967 基线：text、thinking、tool 三组各 **20 个已刷新的 live 更新**，每组 App/Transcript/Topbar/SessionList/Composer/NativeBanner/Notices 均 **20 次提交**。每次对 room.ts 重发的 conversation/inbox/agent/stats/clients/viewers/approvals/kernel 作 JSON round-trip，不能靠引用碰巧没变伪造收益；entries/order/省略字段保留 applyView 的引用语义。结果 /tmp/rotom-review-D4/base.json。
 - 调用链检索确认：generation/tools/compactions 仅 Transcript 渲染，busy 还影响 App/favicon、Composer、菜单、NativeBanner 等；kernel 的状态/对话框/权限、费用/账号等并非 live-only，必须继续更新根。计划只跳过其它数据完全不变且 busy 不变的 live 更新，让 Transcript 局部订阅；原 store.set 和所有既有订阅顺序保持，不引入状态库、不移动副作用模块。
 - 这是确定性组件提交 L1，不代表整个 DOM 重建、真实 token 到达频率或生产毫秒收益。尚未实现或修改 ledger。
+
+### D4 — live 局部订阅实现与验证
+
+- 测量 `58ddb47`，工具样本修正 `c6b784d`，实现题名 `D4: subscribe Transcript locally to live-only updates`。初稿工具样本错用了 slot.args；按 ClientToolSlot 改为 output 并附真实 toolCall block，在原始 58ddb47 生产源码上重跑基线，再恢复实现重跑 head，三组提交计数均未变。测试另验证最后的工具输出实际显示，不把空工具区当优化。
+- store.js 新增只读 liveOnlyChange：必须 live 引用改变、busy 不变、所有非 live 字段不变才局部化。room.ts 每次重发的八个 JSON 字段按值及迭代顺序比较；entries Map、order、其它省略字段只比较既有引用，不遍历/拷贝历史。新字段/字段删除、权限/账号、pending unknown、原生 dialogs/statuses/widgets、费用/entries 等变化都保留根更新。
+- app.js 原位置的 listener 和 queueMicrotask 保留，已有根工作时不重复比较，并始终使用最新 store.state；没有过滤、重排原 store 通知。Transcript 追加挂载期 live 订阅，挂载时补读，卸载取消；没有新状态库、传输改动或模块副作用移动。
+- 自审确认 native statuses/widgets 按 Object.entries 顺序显示。初稿仅比值会漏掉重排：新增真实 UI 测试先复现 first/second 未变成 second/first，再修正比较器；取消“任意键顺序都可忽略”的错误测试假设，保留同值同序新 JSON 对象的阳性控制。初次通过的 perf 报告不是最终版本证据；以下均来自修正后的 final-ci/final-change-ci。
+- CONFIGURATION/architecture 已同步订阅边界。未来新增非 Transcript 的 live 消费者须重新审查此边界；没有为未来消费者创建框架或注册表。
+
+| 每组 20 次更新（三组分别 text / thinking / tool）        | base→head                                       |
+| -------------------------------------------------------- | ----------------------------------------------- |
+| App                                                      | **20→0**                                        |
+| Transcript                                               | **20→20**（最后文本/thinking/工具输出实际可见） |
+| Topbar / SessionList / Composer / NativeBanner / Notices | 各 **20→0**                                     |
+
+| 验证             | 结果/证据                                                                                                                                          |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 选择边界         | busy、权限、路由、missing、连接、通知、entries/order、费用、账号、原生状态/对话框/widget、unknown、JSON 键顺序等均不被忽略；显式空通知仍触发根刷新 |
+| 真实 UI          | busy/Stop 与 favicon 停止、权限降级、原生 status 顺序、标题、最终 entry 正确；同 tick 根更新+多次 live 保留最新值，根和 Transcript 各一次提交      |
+| 生命周期/顺序    | 原有 listener 引用相对顺序不变，两个观察者按原序收到每次通知；三轮卸载/重挂载每轮只减/增一个局部订阅，重挂后显示最新值                             |
+| 负控             | 禁用 root 跳过分支后，三组无关提交恢复 20 并使测试失败；忽略键顺序时实际 status 重排测试失败。最终恢复/修正后通过                                  |
+| 静态/语法        | format/check/lint/format:check passed；node --check 三个 web 文件 passed                                                                           |
+| 完整测试         | **608/608**，无失败/跳过；新增 Chromium 组 **8/8**，D3 Markdown/滚动测试也通过                                                                     |
+| origin/main 护栏 | perf:ci -- origin/main --runs 1 passed；ledger guard passed；Node 24.18.0 / darwin-arm64 / 8 核，highLoad=false（5.93→5.72）                       |
+| D4 隔离护栏      | perf:ci -- 58ddb47 --runs 1 passed；ledger guard passed；highLoad=false（5.72→3.34）                                                               |
+
+- 最终版本相对 origin/main=e649d9d 的全部 worse，并列 D4 隔离样本：
+
+| 计数器                                          | origin/main→head | D4 隔离 base→head | 解释                                                                                                       |
+| ----------------------------------------------- | ---------------- | ----------------- | ---------------------------------------------------------------------------------------------------------- |
+| startup.restart/sql.statements                  | 848→851          | 851→851           | 主分支差异含 A1/A2/A3 查询与异步收尾；D4 未改服务端 SQL。原生 HTTP/SSE 场景不执行新 selector               |
+| startup.restart/json.parse.durableStorage.calls | 458→459          | 458→458           | 启动取样多一个 19 字符 Durable 值；D4 未改恢复/存储，隔离值未增，未保存原值                                |
+| startup.restart/json.parse.durableStorage.chars | 51416→51435      | 51416→51416       | 启动取样多一个 19 字符 Durable 值；D4 未改恢复/存储，隔离值未增，未保存原值                                |
+| session.open/sql.statements                     | 45→47            | 47→48             | 原生 SSE watcher 窗口，不执行 App；隔离多一条 view（9→10），随之增加 readback/序列化和推送，服务端代码未改 |
+| session.open/sql.rows                           | 94→96            | 96→109            | 原生 SSE watcher 窗口，不执行 App；隔离多一条 view（9→10），随之增加 readback/序列化和推送，服务端代码未改 |
+| turn.warm/sql.statements                        | 157→158          | 158→158           | 主分支差异含 A1/A2/A3 查询与异步收尾；D4 未改服务端 SQL。原生 HTTP/SSE 场景不执行新 selector               |
+| turn.warm/json.stringify.chars                  | 85248→85250      | 85248→85248       | 异步收尾/90 ms 合并窗口或动态 payload 字节差异；原始正文未采集，不作逐字段来源断言                         |
+| turn.paced/sql.statements                       | 286→288          | 288→288           | 主分支差异含 A1/A2/A3 查询与异步收尾；D4 未改服务端 SQL。原生 HTTP/SSE 场景不执行新 selector               |
+| web.open/sql.statements                         | 31→32            | 32→32             | 主分支差异含 A1/A2/A3 查询与异步收尾；D4 未改服务端 SQL。原生 HTTP/SSE 场景不执行新 selector               |
+| web.open/cdp.Nodes                              | 996→1136         | 1136→1136         | 主分支差异含 A4 preload 节点；D4 隔离的节点取样见本列，组件提交/浏览器回收时点会影响计数，未新增 DOM 模板  |
+| session.open.long/sql.statements                | 16→17            | 17→17             | 主分支差异含 A1/A2/A3 查询与异步收尾；D4 未改服务端 SQL。原生 HTTP/SSE 场景不执行新 selector               |
+| session.open.long/sql.rows                      | 47→49            | 49→49             | 主分支差异含 A1/A2/A3 查询与异步收尾；D4 未改服务端 SQL。原生 HTTP/SSE 场景不执行新 selector               |
+| web.open.long/cdp.Nodes                         | 1561→1725        | 1725→1701         | 主分支差异含 A4 preload 节点；D4 隔离的节点取样见本列，组件提交/浏览器回收时点会影响计数，未新增 DOM 模板  |
+| native.warm/sql.rows                            | 10→11            | 11→11             | 主分支差异含 A1/A2/A3 查询与异步收尾；D4 未改服务端 SQL。原生 HTTP/SSE 场景不执行新 selector               |
+| turn.prewarmed/sql.statements                   | 204→220          | 205→205           | 主分支差异含 A1/A2/A3 查询与异步收尾；D4 未改服务端 SQL。原生 HTTP/SSE 场景不执行新 selector               |
+| turn.prewarmed/sql.rows                         | 124→143          | 136→136           | 主分支差异含 A1/A2/A3 查询与异步收尾；D4 未改服务端 SQL。原生 HTTP/SSE 场景不执行新 selector               |
+| turn.prewarmed/json.stringify.chars             | 120992→122919    | 122600→122600     | 异步收尾/90 ms 合并窗口或动态 payload 字节差异；原始正文未采集，不作逐字段来源断言                         |
+| web.reopen/cdp.Nodes                            | 1090→1206        | 1206→1206         | 主分支差异含 A4 preload 节点；D4 隔离的节点取样见本列，组件提交/浏览器回收时点会影响计数，未新增 DOM 模板  |
+| web.paced/sql.statements                        | 306→308          | 308→308           | 主分支差异含 A1/A2/A3 查询与异步收尾；D4 未改服务端 SQL。原生 HTTP/SSE 场景不执行新 selector               |
+| web.paced/cdp.Nodes                             | 1286→1420        | 1415→1419         | 主分支差异含 A4 preload 节点；D4 隔离的节点取样见本列，组件提交/浏览器回收时点会影响计数，未新增 DOM 模板  |
+| web.send.poll/http.requests                     | 21→23            | 22→22             | 长轮询/收尾窗口差异；D4 不改网络调用或传输协议，隔离值见本列，未保留逐路由采样                             |
+| web.send.poll/cdp.Nodes                         | 1409→1595        | 1592→1612         | 主分支差异含 A4 preload 节点；D4 隔离的节点取样见本列，组件提交/浏览器回收时点会影响计数，未新增 DOM 模板  |
+| web.send.stream/sql.statements                  | 384→386          | 386→386           | 主分支差异含 A1/A2/A3 查询与异步收尾；D4 未改服务端 SQL。原生 HTTP/SSE 场景不执行新 selector               |
+| web.send.stream/cdp.RecalcStyleCount            | 101→110          | 107→109           | 主分支比较含 D3 帧提交/高度跟随；D4 隔离未变差，不将样式计数当作组件提交次数                               |
+| web.send.stream/cdp.Nodes                       | 1491→1648        | 1650→1630         | 主分支差异含 A4 preload 节点；D4 隔离的节点取样见本列，组件提交/浏览器回收时点会影响计数，未新增 DOM 模板  |
+| commands.discover.cold/sql.rows                 | 78→81            | 81→81             | 主分支差异含 A1/A2/A3 查询与异步收尾；D4 未改服务端 SQL。原生 HTTP/SSE 场景不执行新 selector               |
+| commands.discover.cold/json.stringify.chars     | 33812→33846      | 33846→33846       | 异步收尾/90 ms 合并窗口或动态 payload 字节差异；原始正文未采集，不作逐字段来源断言                         |
+| commands.discover.warm/sql.rows                 | 64→66            | 66→66             | 主分支差异含 A1/A2/A3 查询与异步收尾；D4 未改服务端 SQL。原生 HTTP/SSE 场景不执行新 selector               |
+| projection.large.open/sql.statements            | 98→99            | 99→99             | 主分支差异含 A1/A2/A3 查询与异步收尾；D4 未改服务端 SQL。原生 HTTP/SSE 场景不执行新 selector               |
+| projection.large.paced/sql.statements           | 572→574          | 574→574           | 主分支差异含 A1/A2/A3 查询与异步收尾；D4 未改服务端 SQL。原生 HTTP/SSE 场景不执行新 selector               |
+
+- D4 隔离比较自身全部 worse，不能用此前分支收益遮盖：
+
+| D4 隔离 worse                                | base→head     | 解释                                                                                                           |
+| -------------------------------------------- | ------------- | -------------------------------------------------------------------------------------------------------------- |
+| session.open/sql.statements                  | 47→48         | 原生 SSE watcher 窗口，不执行 App；隔离多一条 view（9→10），随之增加 readback/序列化和推送，服务端代码未改     |
+| session.open/sql.rows                        | 96→109        | 原生 SSE watcher 窗口，不执行 App；隔离多一条 view（9→10），随之增加 readback/序列化和推送，服务端代码未改     |
+| session.open/json.stringify.chars            | 84622→88107   | 原生 SSE watcher 窗口，不执行 App；隔离多一条 view（9→10），随之增加 readback/序列化和推送，服务端代码未改     |
+| session.open/push.events                     | 9→10          | 原生 SSE watcher 窗口，不执行 App；隔离多一条 view（9→10），随之增加 readback/序列化和推送，服务端代码未改     |
+| session.open/push.bytes                      | 82236→86312   | 原生 SSE watcher 窗口，不执行 App；隔离多一条 view（9→10），随之增加 readback/序列化和推送，服务端代码未改     |
+| session.history.earlier/json.stringify.chars | 243098→243132 | 异步收尾/90 ms 合并窗口或动态 payload 字节差异；原始正文未采集，不作逐字段来源断言                             |
+| web.send.poll/cdp.Nodes                      | 1592→1612     | 主分支差异含 A4 preload 节点；D4 隔离的节点取样见本列，组件提交/浏览器回收时点会影响计数，未新增 DOM 模板      |
+| web.send.stream/push.bytes                   | 90889→91291   | 异步收尾/90 ms 合并窗口或动态 payload 字节差异；原始正文未采集，不作逐字段来源断言                             |
+| web.send.stream/push.view.bytes              | 77095→77497   | 异步收尾/90 ms 合并窗口或动态 payload 字节差异；原始正文未采集，不作逐字段来源断言                             |
+| web.send.stream/web.event.parse.chars        | 29932→30133   | 异步收尾/90 ms 合并窗口或动态 payload 字节差异；原始正文未采集，不作逐字段来源断言                             |
+| projection.large.open/json.stringify.chars   | 181858→181892 | 纯原生 SSE 投影场景，不执行 web 组件；90 ms 合并窗口/动态元数据差异，服务端及 workload 未改                    |
+| projection.large.paced/json.stringify.chars  | 422004→424401 | 纯原生 SSE 投影场景，不执行 web 组件；90 ms 合并窗口/动态元数据差异，服务端及 workload 未改                    |
+| projection.large.paced/push.bytes            | 248228→250628 | 纯原生 SSE 投影场景，不执行 web 组件；90 ms 合并窗口/动态元数据差异，服务端及 workload 未改                    |
+| projection.large.paced/push.view.bytes       | 206856→209256 | 纯原生 SSE 投影场景，不执行 web 组件；90 ms 合并窗口/动态元数据差异，服务端及 workload 未改                    |
+| assets.first/http.body.bytes                 | 406244→407043 | 必要新增 selector/局部订阅代码，gzip +799 B（app +49、store +606、transcript +144）；请求仍 53，条件响应体仍 0 |
+
+- 限制/成本：这是 L1 提交次数减少，不是“整个 DOM 重建减少”或生产端到端提速承诺。新增八个重发 JSON 字段的逐值比较，成本随其大小变化，没有另行计时（unavailable）；不扫描历史 Map/order，不序列化整份 state，不放宽 ledger。相对时间文案仍在相关组件提交时计算，未新增时钟轮询。真实模型账号/手机未验证、未使用。
+- 证据 /tmp/rotom-review-D4/：base.json/head.json、negative.log、order-negative.log、targeted.log、test.log、final-ci/、final-change-ci/；早期 ci/change-ci 是键顺序修正前样本，不作最终完成证据。
+- 最终自审：生产改动只在 web/app.js、web/store.js、web/transcript.js；src/server、vendor/pin、凭据、unknown、journal/Durable 合同、package 与 ledger 未改。两处用户原有文档改动逐字节保留。未部署/重启，未做 D5。
+- D4「已推送待核验」。下一步由审查方核验并写回，通过后执行方才开始 D5。
 
 ## 核验记录（审查方追加）
 

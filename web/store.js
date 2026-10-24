@@ -168,6 +168,85 @@ export const store = {
     },
 };
 
+// room.ts sends these JSON fields afresh even on token-only updates. Other view fields retain references in
+// applyView; in particular, entries is a Map and must never be compared as a JSON object.
+const REPEATED_VIEW_FIELDS = new Set([
+    "conversation",
+    "inbox",
+    "agent",
+    "stats",
+    "clients",
+    "viewers",
+    "approvals",
+    "kernel",
+]);
+
+function sameViewJson(before, after) {
+    if (before === after) {
+        return true;
+    }
+
+    if (
+        before === null ||
+        after === null ||
+        typeof before !== "object" ||
+        typeof after !== "object" ||
+        Array.isArray(before) !== Array.isArray(after)
+    ) {
+        return false;
+    }
+
+    const keys = Object.keys(after);
+    const previousKeys = Object.keys(before);
+
+    // Native statuses/widgets render in Object.entries order, so equal values alone are not enough.
+    return (
+        keys.length === previousKeys.length &&
+        keys.every(
+            (key, index) => key === previousKeys[index] && sameViewJson(before[key], after[key]),
+        )
+    );
+}
+
+/** Only Transcript reads generation/tools/compactions. Busy and every non-live change still need the root. */
+export function liveOnlyChange(before, after) {
+    if (before.view.live === after.view.live || before.view.live?.busy !== after.view.live?.busy) {
+        return false;
+    }
+
+    if (
+        Object.keys(before).length !== Object.keys(after).length ||
+        Object.keys(after).some(
+            (key) => !Object.hasOwn(before, key) || (key !== "view" && before[key] !== after[key]),
+        )
+    ) {
+        return false;
+    }
+
+    const left = before.view;
+    const right = after.view;
+
+    if (Object.keys(left).length !== Object.keys(right).length) {
+        return false;
+    }
+
+    for (const key of Object.keys(right)) {
+        if (!Object.hasOwn(left, key)) {
+            return false;
+        }
+
+        if (key === "live" || key === "liveVersion" || left[key] === right[key]) {
+            continue;
+        }
+
+        if (!REPEATED_VIEW_FIELDS.has(key) || !sameViewJson(left[key], right[key])) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 // Content-free timings of what people wait for here, for the server's performance journal (perf.js).
 store.subscribe(observe);
 

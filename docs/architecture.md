@@ -179,6 +179,15 @@ interrupted merely because the process is gone. Tests of closure and recovery ar
 
 Plain ES modules, served as they are, with no build. Editing a file under `web/` reloads every open tab, and a syntax error blanks the screen for everyone.
 
+**Root and live subscriptions.** `app.js` keeps its original ordered store listener and microtask coalescing.
+`store.js: liveOnlyChange` skips a root commit only when live changed, busy did not, and every other state/view field
+is unchanged. The eight JSON fields repeated by `room.ts` are compared by value and key iteration order (native
+statuses/widgets display that order); entries/order and omitted fields use their existing immutable references. This avoids copying/serializing history or changing store data. Other
+changes (including permissions, native dialogs/statuses, billing, completion and explicit empty notifications) still
+render the root. `Transcript` appends a mount-scoped live subscription, catches up at mount, and removes it on
+unmount. Existing store listeners are neither filtered nor reordered. Adding a live consumer outside Transcript
+requires revisiting this boundary; busy is already a root dependency.
+
 **Streaming Markdown (`ui.js: Markdown`).** Each mounted component keeps its rendered input/result and the
 latest pending input. A single animation-frame callback consumes the latest growing text; repeated parent commits
 with unchanged input do not parse again. First render, completion (`cache=true`), conversation and base-path changes

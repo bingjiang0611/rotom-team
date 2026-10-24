@@ -399,6 +399,10 @@ sign-out could read the copies. Where IndexedDB is unavailable, nothing is saved
 
 ## Streaming Markdown
 
+Live text/thinking/tool updates refresh the transcript locally when busy and all non-live data are unchanged.
+Busy, permission/account, native status/dialog/widget, cost and persisted-entry changes still refresh the whole UI.
+This does not filter store notifications, change subscription order or alter transport/authorization behavior.
+
 Growing Markdown text updates are combined per browser animation frame. The first text and completed result render
 without waiting for a frame; completion still uses the full parser and sanitizer, including final code folding.
 A paused/background frame may delay intermediate text, never the completed result's render. Conversation or document
