@@ -10,9 +10,14 @@ import { Browsers } from "../../src/server/browser.ts";
 import { createHandler } from "../../src/server/http.ts";
 import { serveFile, WEB } from "../../src/server/http/assets.ts";
 import { noInferenceModels, owner, root, until, work } from "../helpers.ts";
+import type { BrowserPage } from "../../src/server/browser/page.ts";
 
 export async function withAppPage<T>(
-    task: (evaluate: (expression: string) => Promise<any>, app: PocketApp) => Promise<T>,
+    task: (
+        evaluate: (expression: string) => Promise<any>,
+        app: PocketApp,
+        page: BrowserPage,
+    ) => Promise<T>,
     transport: "stream" | "poll" = "stream",
 ) {
     const directory = mkdtempSync(join(root, "app-commits-"));
@@ -91,7 +96,7 @@ export async function withAppPage<T>(
         await evaluate("appCommitFixture.flush().then(() => true)");
         assert.equal(await evaluate("Boolean(appCommitFixture.state().view.kernel)"), true);
 
-        return await task(evaluate, app);
+        return await task(evaluate, app, page);
     } finally {
         await browsers.closeAll({ final: true });
         server.closeAllConnections();

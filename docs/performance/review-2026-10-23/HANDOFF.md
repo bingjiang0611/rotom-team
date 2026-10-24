@@ -40,7 +40,7 @@
 | D3    | D    | 流式 Markdown 解析(C6)                      | 核验通过                      | `b6d3842`（测量）；实现见执行记录    |
 | D4    | D    | App 根渲染局部订阅(C6)                      | 核验通过                      | `58ddb47`（测量）；实现见执行记录    |
 | D5    | D    | 切换会话不重连(C6)                          | 核验通过                      | `229bda2`（测量）；`5acca07`（实现） |
-| D6    | D    | 大文件纯移动拆分(C5)                        | 待做                          |                                      |
+| D6    | D    | 大文件纯移动拆分(C5)                        | 进行中                        |                                      |
 | D7    | D    | handoff 测量与异步化(C2)                    | 待做                          |                                      |
 | D8    | D    | storage worker(C3)                          | 待做                          |                                      |
 | D9    | D    | 下线旧后端(C4,只读归档)                     | 待做                          |                                      |
@@ -1009,6 +1009,16 @@ owner 已批准把 C2–C6 从「只写方案」改为「实现」。C1(进程�
 
 - 采样限制：同一最终 head 的两个正式报告，web.paced 为 11/12 view、web.send.stream 为 24/26 view；projection.large.paced 均为 44 view / 132 次共同字段 stringify，但字节为 202856/214856。计数可随时间窗和动态快照量变化，保留必要协议成本，不把其余增量伪称固定开销或零回归。正文/逐路由 trace 未保存，无法进一步精确拆分；单轮 L2 不证明生产提速。
 - 最终自审覆盖 app 的 attach/leave/evict、HTTP 授权与输入、两种传输/重连、缓存和原生视图调用链；修正了实际复现的注销计时器问题。无新状态库、无协议写命令重放、无同步子进程进入请求路径。保留用户两处文档；未部署、未重启线上。下一步由审查方核验 D5；通过前不做 D6。
+
+### D6 — 移动前测量与边界（基线 5551a50）
+
+- 四步按 C5 顺序：① conversation-routes 的 upload 分支及紧随的 404 尾段 → conversation-routes/upload.ts，连同仅该段使用的 MAX_UPLOAD / safeName；原匹配位置、method/third 值、鉴权和错误分支不变。② team-kernel 尾部 publicEntry/applyUpdate → team-kernel/projection.ts，只带 type imports，不改私有状态。③ rotom-executions 尾部 readNativeSnapshot/readNativeEntries/NativeTail → rotom-executions/native-tail.ts，带走两个不变的边界常量，不动 #track/receipt/gate/close。④ style.css 末尾 native 区段 → 同目录 native.css，在 index 与 sign-in 的 style.css link 后相邻加载，保持 URL 基准/级联顺序；不使用中途无效的 @import。
+- move-equivalence.mjs + move-baseline.json 记录完整 owner 的实现/声明 SHA-256，逐步去掉声明级 import/export 胶水、反向重组原位置后比较。函数/分支/类内正文与注释逐字比较，不用 AST token 等价冒充正文一致；路由匹配条件和最终 404 包含在比较中。常量/文件名 helper 随依赖原样迁移，不改变值。模块只允许已知依赖，无 re-export barrel。
+- CSS 按 style.css + 一个原文件边界空行 + native.css 重组，校验全文件/后缀 SHA；index/sign-in 去掉新增 link 后必须等于基线。theme→prefs 与所有 JS 模块/订阅顺序不动。
+- style-move-bench.mjs 在真实 Chromium/临时 Team 页面比对 desktop/mobile × dark/light 共 4 组、每组 28 个受控样本节点的全部 computed-style 属性哈希（只规范化临时 origin，按属性名排序），包含 native tree/选择器/unknown/peek；另跑现有真实 UI/mobile/peek 回归。使用 reduced-motion、等待字体及相关 Web Animations 完成/取消后采样，不用 sleep 掩盖未完成。
+- 初版 computed-style 探针未稳定排序/等待，基线重复不一致；生产代码尚未移动时纠正采样后重建未提交的基线，连续两次一致。旧探针结果保留 /tmp/rotom-review-D6/，不作验收证据；冻结后的 golden 不再更新以迁就移动。
+- native-tail-memory 的测量适配提前独立提交：两版都先加载 execution owner，再从已知新布局的实际 helper owner 取 NativeTail，否则取原布局；不改 seed、计数、GC、边界或断言。步骤③只迁移擦除后的 type import，避免旧版比较失效，不保留兼容 barrel。
+- 纯移动不宣称 L1/L2 提速。CSS 若新增请求/压缩成本会单列；不改 ledger。每步独立提交、完整检查与 perf，证据在 /tmp/rotom-review-D6/。D5 的并行测试例外不自动延用到 D6；未做 D7。
 
 ## 核验记录（审查方追加）
 

@@ -1,9 +1,16 @@
 /** Measure NativeTail retained and peak parent memory in fresh, GC-enabled synthetic processes. No model accounts. */
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { appendFileSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import {
+    appendFileSync,
+    existsSync,
+    mkdtempSync,
+    realpathSync,
+    rmSync,
+    writeFileSync,
+} from "node:fs";
 import { cpus, loadavg, tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { prepareCheckout, removeCheckout } from "./checkout.ts";
 import { revision } from "./measure.ts";
@@ -22,7 +29,12 @@ type Sample = ReturnType<typeof process.memoryUsage> & {
 };
 
 export async function sampleTailMemory(modulePath: string, kind: keyof typeof MEMORY_CASES) {
-    const runtime = (await import(pathToFileURL(modulePath).href)) as {
+    // Always load the execution owner before sampling, on both layouts. D6 moves the tail without a re-export barrel.
+    const owner = await import(pathToFileURL(modulePath).href);
+    const tailModule = join(dirname(modulePath), "rotom-executions", "native-tail.ts");
+    const runtime = (
+        existsSync(tailModule) ? await import(pathToFileURL(tailModule).href) : owner
+    ) as {
         NativeTail: typeof NativeTail;
         readNativeSnapshot: typeof readNativeSnapshot;
     };
