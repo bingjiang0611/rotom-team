@@ -36,7 +36,7 @@
 | B5    | B    | 长轮询队列字节上限                          | 核验通过                      | `5fb4bbe`                         |
 | C1–C6 | C    | 需要 owner 决策，只写方案                   | C1 暂缓;C2–C6 已批准,见批次 D | `14caa83`（方案，未实现）         |
 | D1    | D    | 文档纠偏(C6)                                | 核验通过                      | `0705511`（测量）；实现见执行记录 |
-| D2    | D    | notify 控制消息集中解码(C6)                 | 待做                          |                                   |
+| D2    | D    | notify 控制消息集中解码(C6)                 | 进行中                        |                                   |
 | D3    | D    | 流式 Markdown 解析(C6)                      | 待做                          |                                   |
 | D4    | D    | App 局部订阅(C6)                            | 待做                          |                                   |
 | D5    | D    | 切换会话不重连(C6)                          | 待做                          |                                   |
@@ -168,6 +168,12 @@ owner 已批准把 C2–C6 从「只写方案」改为「实现」。C1(进程�
 ---
 
 ## 执行记录（执行方追加）
+
+### D2 — 测量基线
+
+- 基线 `8686fdd`。现有五种 Team notify envelope 为 children、policy、barrier、tree、context；发送端在 rotom-policy.mjs，接收端分散在 rotom-rpc.ts、rotom-kernel.ts、team-kernel.ts。字段/nonce 校验和 UI 过滤各自实现，children 同一事件会由 transport、等待器和 live view 重复解码。
+- 独立测量脚本 `node docs/performance/review-2026-10-23/notify-decode-bench.mjs` 使用现有 nativeReadback 计数器，不新增 ledger key、不改生产代码。100 个原格式 children 通知 × 3 个读者：JSON.parse **300 次 / 13,800 字符**。这是定向读者扇出检查，不冒充完整 RPC 或端到端耗时。
+- 后续实现集中解码/字段校验，按事件生命周期复用结果；独立测试覆盖正常通知、已知 envelope、未知/畸形保留消息及 RPC unknown 不重放。发送格式、原生 pin/vendor 均不修改。完成后跑全套检查和 perf:ci；D2 核验前不开始 D3。
 
 ### D1 — 测量提交：文档基线与适用范围
 
