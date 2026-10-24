@@ -257,8 +257,14 @@ branches. Navigation does not delete those records. A notice identifies this aft
 versus abandoned branch entries. Native JSONL export follows the selected branch. Compaction may further reduce the
 context sent to a model; branch membership is not a promise that every ancestor message is sent verbatim.
 
-Native status/widget events replace or clear keyed live slots; only real `notify` events create notices. A `handled`
-receipt means the handler completed, not that a requested navigation occurred: inspect its cancellation/result.
+Native status/widget events replace or clear keyed live slots. Ordinary `notify` text/JSON creates notices;
+Team's existing `team-kernel-*-v1` notify envelopes are private controls, not notices. The shared decoder validates
+children/policy/barrier/tree/context fields before dispatch to readers; command adapters still correlate their own
+nonce. Unknown reserved kinds, invalid fields or malformed reserved `{"kind":"team-kernel-` prefixes fence the RPC
+transport as unknown, without replay or payload logging. Other incomplete JSON remains ordinary notification text.
+The wire format and pinned native sender are unchanged.
+
+A `handled` receipt means the handler completed, not that a requested navigation occurred: inspect its cancellation/result.
 Side-effectful slash handlers use `command` receipts and are not automatically continued after unknown outcomes.
 Only native-discovered prompt templates/skills become ordinary recoverable `prompt` operations. Existing stored
 receipts stay readable and are not rewritten. Goal Stop may remain unknown; it does not certify external effects.

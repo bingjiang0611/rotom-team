@@ -45,7 +45,8 @@ import {
 } from "./rotom-executions.ts";
 import { attachmentImages, attachmentText } from "./attachments.ts";
 import type { Attachment } from "./commands.ts";
-import { childrenReport, RpcFailure, type RpcRecord } from "./rotom-rpc.ts";
+import { RpcFailure, type RpcRecord } from "./rotom-rpc.ts";
+import { decodeNativeControl } from "./rotom-control.ts";
 import { AuthorsDoc, SessionsDoc } from "./docs.ts";
 import { THINKING_LEVELS } from "./commands.ts";
 import { NATIVE_ENTRY, RESUME_PREFIX } from "./entry-format.ts";
@@ -1592,10 +1593,14 @@ export class TeamKernel {
                 break;
 
             case "extension_ui_request": {
-                const subagents = childrenReport(event);
+                const control = decodeNativeControl(event);
 
-                if (subagents !== undefined) {
-                    live.subagents = subagents;
+                if (control) {
+                    if (control.kind !== "team-kernel-children-v1") {
+                        return;
+                    }
+
+                    live.subagents = control.pending;
                     break;
                 }
 
@@ -1606,32 +1611,9 @@ export class TeamKernel {
                 // Native notifications are notices; statuses/widgets are keyed live replace/clear slots.
                 // Dialogs remain interactive live state for the paying member.
                 if (method === "notify") {
-                    if (
-                        typeof event.message === "string" &&
-                        event.message.startsWith('{"kind":"team-kernel-context-v1"')
-                    ) {
-                        return;
-                    }
-
                     const message = text(event.message);
 
                     if (message) {
-                        let control: { kind?: unknown } | undefined;
-
-                        try {
-                            control = JSON.parse(message) as { kind?: unknown };
-                        } catch {}
-
-                        if (
-                            [
-                                "team-kernel-barrier-v1",
-                                "team-kernel-tree-v1",
-                                "team-kernel-context-v1",
-                            ].includes(String(control?.kind))
-                        ) {
-                            return;
-                        }
-
                         const level = ["warning", "error"].includes(String(event.notifyType))
                             ? (String(event.notifyType) as "warning" | "error")
                             : "info";

@@ -36,7 +36,7 @@
 | B5    | B    | 长轮询队列字节上限                          | 核验通过                      | `5fb4bbe`                         |
 | C1–C6 | C    | 需要 owner 决策，只写方案                   | C1 暂缓;C2–C6 已批准,见批次 D | `14caa83`（方案，未实现）         |
 | D1    | D    | 文档纠偏(C6)                                | 核验通过                      | `0705511`（测量）；实现见执行记录 |
-| D2    | D    | notify 控制消息集中解码(C6)                 | 进行中                        |                                   |
+| D2    | D    | notify 控制消息集中解码(C6)                 | 已推送待核验                  | `1b1228a`（测量）；实现见执行记录 |
 | D3    | D    | 流式 Markdown 解析(C6)                      | 待做                          |                                   |
 | D4    | D    | App 局部订阅(C6)                            | 待做                          |                                   |
 | D5    | D    | 切换会话不重连(C6)                          | 待做                          |                                   |
@@ -622,6 +622,83 @@ owner 已批准把 C2–C6 从「只写方案」改为「实现」。C1(进程�
 | projection.large.paced/push.view.bytes | 200456→205256 | 既有 stream/paced live 推送字节差异；合并时序是可能来源，未采集原始 payload，无法逐字归因（延续 D 限制），不作为本轮性能收益证据 |
 
 - 状态改回「已推送待核验」，保留审查方第 1 轮原文；待审查方复核。不部署、不重启线上、不使用真实模型账号。
+
+### D2 — 集中解码、保留通知与拒绝畸形控制
+
+- 测量提交 `1b1228a`；实现提交题名 `D2: centralize native notify control decoding and validation`。这是集中解码/校验的行为修复，不是纯移动。新增 rotom-control.ts，五种 envelope 的 JSON 解码和字段校验只在此处定义；RPC、启动 policy probe、context/tree/barrier adapter、Team UI 共用结果。nonce 仍由发起操作的 adapter 对照，不把“形状正确”当作响应相关性或业务成功。
+- 同一只读 RPC event 用 WeakMap 共享结果，不保留历史事件或跨事件/成员内容缓存。合法发送格式、rotom-policy.mjs、pin/vendor、个人凭据路由、journal user_version、Durable 合同及 ledger 均不变。CONFIGURATION/architecture 已同步接收端行为。
+- 普通文本、普通 JSON、非保留的不完整 JSON 保留为通知；合法 Team controls 不显示成 notice。保留 kind 的未知版本、字段畸形、保留前缀的 JSON 语法错误，在任何订阅者消费前使 RPC 进入 unknown fence；不吞掉错误、泄漏 payload 或重放。这里保留的语法前缀是发送方现有的 `{"kind":"team-kernel-`（容许空白）；合法 JSON 可以调整字段顺序，任意普通文本不因包含这段文字而被当成控制消息。
+
+| 验证             | 结果                                                                                                                                    |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| 定向测量         | 原脚本/工作量未变：100 event × 3 readers，parse **300→100 次**、**13,800→4,600 字符**，均减少 2/3；只证明重复解码减少，不宣称端到端加速 |
+| 解码测试         | 普通通知、全部五种 envelope、空白/字段顺序、>16 KB context、事件级缓存、无事件修改、畸形/未知 kind/字段、错误不含正文                   |
+| RPC wire fixture | context/tree/barrier 成功及错误 nonce；畸形 JSON、未知 kind、负 children 计数均拒绝，后续写仍 unknown，不重派发                         |
+| 真实 native 集成 | 临时共享扩展通过 pinned rotom 发通知，Team tab 收到原始文本/JSON及 warning 级别；private controls 不进入 notice，无模型推理             |
+| 负控             | 仅移除 RPC 首次校验后，unknown-kind 用例因 Missing expected rejection 失败；恢复后通过                                                  |
+| 静态与完整测试   | format/check/lint/format:check passed；npm test **585/585**，无失败/跳过                                                                |
+| 性能             | `perf:ci -- origin/main --runs 1` passed；gating/ledger guard passed；darwin-arm64 / Node 24.18.0；highLoad=false（4.66→6.25/8 核）     |
+
+- 证据目录 `/tmp/rotom-review-D2/`：base.json/head.json、negative.log、test.log、ci/。相对 origin/main=e649d9d 的全部 worse（包含前序 A/B）：
+
+| 计数器                                 | base→head     | 解释                                                                                                                                  |
+| -------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| startup.restart/sql.statements         | 848→851       | 前序 A1/A3 索引、游标和恢复查询；D2 未改此路径                                                                                        |
+| session.open/sql.statements            | 46→47         | 前序 A2 indexed revision 查询及标量结果；D2 未改存储路径                                                                              |
+| turn.warm/sql.statements               | 157→158       | 前序 A2 indexed revision 查询及标量结果；D2 未改存储路径                                                                              |
+| turn.paced/sql.statements              | 286→288       | 前序 A2 indexed revision 查询及标量结果；D2 未改存储路径                                                                              |
+| web.open/sql.statements                | 31→32         | 前序 A2 indexed revision 查询及标量结果；D2 未改存储路径                                                                              |
+| web.open/cdp.Nodes                     | 996→1112      | 前序 A4 preload 的 link/文本节点成本，叠加浏览器取样时序；D2 不修改 DOM/CSS                                                           |
+| session.open.long/sql.statements       | 16→17         | 前序 A2 indexed revision 查询及标量结果；D2 未改存储路径                                                                              |
+| session.open.long/sql.rows             | 47→49         | 前序 A2 indexed revision 查询及标量结果；D2 未改存储路径                                                                              |
+| web.open.long/cdp.Nodes                | 1585→1725     | 前序 A4 preload 的 link/文本节点成本，叠加浏览器取样时序；D2 不修改 DOM/CSS                                                           |
+| native.warm/sql.rows                   | 10→11         | 前序 A2 indexed revision 查询及标量结果；D2 未改存储路径                                                                              |
+| web.reopen/cdp.Nodes                   | 1090→1230     | 前序 A4 preload 的 link/文本节点成本，叠加浏览器取样时序；D2 不修改 DOM/CSS                                                           |
+| web.paced/cdp.Nodes                    | 1269→1434     | 前序 A4 preload 的 link/文本节点成本，叠加浏览器取样时序；D2 不修改 DOM/CSS                                                           |
+| web.send.poll/cdp.LayoutCount          | 17→18         | 前序 A4 preload 的 link/文本节点成本，叠加浏览器取样时序；D2 不修改 DOM/CSS                                                           |
+| web.send.poll/cdp.Nodes                | 1434→1593     | 前序 A4 preload 的 link/文本节点成本，叠加浏览器取样时序；D2 不修改 DOM/CSS                                                           |
+| web.send.stream/http.requests          | 6→8           | 路由追踪复测同一 D2 基线为 8→8：submit/typing、gate/loopback 模型各一次，两轮 favicon 切换；无额外 send/推理，原 6→8 为该窗口采样差异 |
+| web.send.stream/cdp.Nodes              | 1448→1633     | 前序 A4 preload 的 link/文本节点成本，叠加浏览器取样时序；D2 不修改 DOM/CSS                                                           |
+| commands.discover.cold/sql.rows        | 78→81         | 前序 A2 indexed revision 查询及标量结果；D2 未改存储路径                                                                              |
+| commands.discover.warm/sql.rows        | 64→66         | 前序 A2 indexed revision 查询及标量结果；D2 未改存储路径                                                                              |
+| projection.large.open/sql.statements   | 98→99         | 前序 A2 indexed revision 查询及标量结果；D2 未改存储路径                                                                              |
+| projection.large.paced/sql.statements  | 572→574       | 前序 A2 indexed revision 查询及标量结果；D2 未改存储路径                                                                              |
+| projection.large.paced/push.bytes      | 244228→246628 | live 合并窗口或动态元数据字节差异；未采集原始 payload，延续已记录的 D 归因限制，不作为 D2 收益证据                                    |
+| projection.large.paced/push.view.bytes | 202856→205256 | live 合并窗口或动态元数据字节差异；未采集原始 payload，延续已记录的 D 归因限制，不作为 D2 收益证据                                    |
+
+- 为区分旧分支差异，另跑 `perf:ci -- 1b1228a --runs 1`，通过且 highLoad=false（3.27→4.30/8 核）。该隔离比较全部 worse：
+
+| 计数器                                          | base→head   | 解释                                                                                                                                  |
+| ----------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| startup.restart/json.parse.durableStorage.calls | 458→459     | 启动取样多一个 19 字符 Durable 值；未改恢复/存储逻辑，原始字段未采集，不作逐字来源断言                                                |
+| startup.restart/json.parse.durableStorage.chars | 51416→51435 | 启动取样多一个 19 字符 Durable 值；未改恢复/存储逻辑，原始字段未采集，不作逐字来源断言                                                |
+| web.paced/sql.statements                        | 308→322     | 本轮 view 11→12、push 15→16，带来对应投影、序列化、SQL/解析与浏览器应用；90 ms 合并窗口的收尾时序不同                                 |
+| web.paced/sql.rows                              | 311→323     | 本轮 view 11→12、push 15→16，带来对应投影、序列化、SQL/解析与浏览器应用；90 ms 合并窗口的收尾时序不同                                 |
+| web.paced/view.fields.stringify.calls           | 132→144     | 本轮 view 11→12、push 15→16，带来对应投影、序列化、SQL/解析与浏览器应用；90 ms 合并窗口的收尾时序不同                                 |
+| web.paced/view.fields.stringify.chars           | 7050→7695   | 本轮 view 11→12、push 15→16，带来对应投影、序列化、SQL/解析与浏览器应用；90 ms 合并窗口的收尾时序不同                                 |
+| web.paced/view.live.project.calls               | 11→12       | 本轮 view 11→12、push 15→16，带来对应投影、序列化、SQL/解析与浏览器应用；90 ms 合并窗口的收尾时序不同                                 |
+| web.paced/view.inbox.project.calls              | 11→12       | 本轮 view 11→12、push 15→16，带来对应投影、序列化、SQL/解析与浏览器应用；90 ms 合并窗口的收尾时序不同                                 |
+| web.paced/view.kernel.project.calls             | 11→12       | 本轮 view 11→12、push 15→16，带来对应投影、序列化、SQL/解析与浏览器应用；90 ms 合并窗口的收尾时序不同                                 |
+| web.paced/view.kernel.sql.statements            | 54→59       | 本轮 view 11→12、push 15→16，带来对应投影、序列化、SQL/解析与浏览器应用；90 ms 合并窗口的收尾时序不同                                 |
+| web.paced/view.kernel.sql.heads                 | 11→12       | 本轮 view 11→12、push 15→16，带来对应投影、序列化、SQL/解析与浏览器应用；90 ms 合并窗口的收尾时序不同                                 |
+| web.paced/view.kernel.sql.attempts              | 22→24       | 本轮 view 11→12、push 15→16，带来对应投影、序列化、SQL/解析与浏览器应用；90 ms 合并窗口的收尾时序不同                                 |
+| web.paced/view.kernel.sql.command_inputs        | 21→23       | 本轮 view 11→12、push 15→16，带来对应投影、序列化、SQL/解析与浏览器应用；90 ms 合并窗口的收尾时序不同                                 |
+| web.paced/view.kernel.sql.rows                  | 32→35       | 本轮 view 11→12、push 15→16，带来对应投影、序列化、SQL/解析与浏览器应用；90 ms 合并窗口的收尾时序不同                                 |
+| web.paced/view.kernel.json.parse.calls          | 32→35       | 本轮 view 11→12、push 15→16，带来对应投影、序列化、SQL/解析与浏览器应用；90 ms 合并窗口的收尾时序不同                                 |
+| web.paced/view.kernel.json.parse.chars          | 17312→18935 | 本轮 view 11→12、push 15→16，带来对应投影、序列化、SQL/解析与浏览器应用；90 ms 合并窗口的收尾时序不同                                 |
+| web.paced/push.events                           | 15→16       | 本轮 view 11→12、push 15→16，带来对应投影、序列化、SQL/解析与浏览器应用；90 ms 合并窗口的收尾时序不同                                 |
+| web.paced/push.view.count                       | 11→12       | 本轮 view 11→12、push 15→16，带来对应投影、序列化、SQL/解析与浏览器应用；90 ms 合并窗口的收尾时序不同                                 |
+| web.paced/cdp.LayoutCount                       | 13→15       | 浏览器布局/样式/节点生命周期取样变化；原生通知时序改变，未改 DOM/CSS；不作单轮毫秒结论                                                |
+| web.paced/web.event.parse.calls                 | 13→14       | 本轮 view 11→12、push 15→16，带来对应投影、序列化、SQL/解析与浏览器应用；90 ms 合并窗口的收尾时序不同                                 |
+| web.paced/web.view.apply.calls                  | 11→12       | 本轮 view 11→12、push 15→16，带来对应投影、序列化、SQL/解析与浏览器应用；90 ms 合并窗口的收尾时序不同                                 |
+| web.send.poll/cdp.RecalcStyleCount              | 110→118     | 浏览器布局/样式/节点生命周期取样变化；原生通知时序改变，未改 DOM/CSS；不作单轮毫秒结论                                                |
+| web.send.stream/http.requests                   | 6→8         | 路由追踪复测同一 D2 基线为 8→8：submit/typing、gate/loopback 模型各一次，两轮 favicon 切换；无额外 send/推理，原 6→8 为该窗口采样差异 |
+| web.send.stream/cdp.Nodes                       | 1587→1652   | 浏览器布局/样式/节点生命周期取样变化；原生通知时序改变，未改 DOM/CSS；不作单轮毫秒结论                                                |
+| image.concurrent/json.stringify.chars           | 1396→1464   | live 合并窗口或动态元数据字节差异；未采集原始 payload，延续已记录的 D 归因限制，不作为 D2 收益证据                                    |
+
+- 对重复出现的 stream HTTP 6→8 作了一次外部 diagnostics_channel 路由追踪（不改仓库测量代码、不记录 token/body）。同一对照变成 **8→8**，两侧 submit 后的八条路由完全一致，均只含一次 submit、一次 gate authorize、一次 loopback 模型调用；其余为 typing 和 favicon。报告 route-ci/、routes.log，highLoad=false（2.08→3.42/8 核）。该诊断不用于毫秒收益；不提高阈值、改 workload 或放宽断言。
+- 自审边界：唯一 notify JSON 解码入口为 decodeNativeControl；发送端、vendor/pin、存储文档/版本未动。未部署/重启、未使用真实账号。测试扩展只写入临时数据，首次 fixture 使用未被原生自动发现支持的 .mjs 导致命令 rejected；核对原生 loader 后改为它支持的 .js，未放宽产品准入。
+- D2 状态为「已推送待核验」；D3 仍待做。下一步由审查方核验 D2，通过后执行方再开始 D3。
 
 ## 核验记录（审查方追加）
 

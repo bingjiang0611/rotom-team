@@ -11,6 +11,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { RotomRpc } from "./rotom-rpc.ts";
+import { decodeNativeControl } from "./rotom-control.ts";
 import {
     nativeStartChannel,
     parseWithWork,
@@ -483,26 +484,12 @@ export async function startRotomKernel(options: {
             const nonce = randomUUID();
             let installed = false;
             const detach = client.onEvent((event) => {
-                if (
-                    event.type !== "extension_ui_request" ||
-                    event.method !== "notify" ||
-                    typeof event.message !== "string"
-                ) {
-                    return;
-                }
-
-                let value;
-
-                try {
-                    value = parseWithWork("native-rpc-notify", event.message);
-                } catch {
-                    return;
-                }
+                const control = decodeNativeControl(event);
 
                 if (
-                    value?.kind === "team-kernel-policy-v1" &&
-                    value.nonce === nonce &&
-                    value.ready === true
+                    control?.kind === "team-kernel-policy-v1" &&
+                    control.nonce === nonce &&
+                    control.ready
                 ) {
                     installed = true;
                 }

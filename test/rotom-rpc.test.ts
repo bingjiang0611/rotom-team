@@ -151,6 +151,9 @@ for (const [mode, reason] of [
     ["oversized", "RPC record exceeds 8 MiB"],
     ["hang", "kernel run deadline exceeded"],
     ["settled-corrupt", "invalid RPC JSONL"],
+    ["control-bad-json", "invalid native control notification"],
+    ["control-bad-kind", "invalid native control notification"],
+    ["control-bad-count", "invalid native control notification"],
 ] as const) {
     test(`RPC ${mode}: ambiguity fences future writes, never redispatches`, async () => {
         const rpc = await client(mode);
@@ -169,6 +172,42 @@ for (const [mode, reason] of [
         }
     });
 }
+
+test("control adapters share decoded notifications and retain nonce correlation", async () => {
+    const rpc = await client("control-views");
+    const messages: unknown[] = [];
+
+    rpc.onEvent((event) => messages.push(event.message));
+
+    try {
+        assert.deepEqual(await rpc.context("usage"), { text: "x".repeat(20_000) });
+        assert.deepEqual(await rpc.navigateTree("entry", false), {
+            cancelled: false,
+            editorText: "draft",
+        });
+        await rpc.barrier();
+        assert.equal(messages.filter((message) => message === "ordinary notification").length, 3);
+    } finally {
+        await rpc.close();
+    }
+
+    const wrong = await client("control-wrong-nonce");
+
+    try {
+        for (const call of [
+            () => wrong.context("usage"),
+            () => wrong.navigateTree("entry", false),
+            () => wrong.barrier(),
+        ]) {
+            await assert.rejects(
+                call(),
+                (error) => error instanceof RpcFailure && error.outcome === "unknown",
+            );
+        }
+    } finally {
+        await wrong.close();
+    }
+});
 
 test("raw prompt/queue/model/session mutations cannot bypass the runner", async () => {
     const rpc = await client("normal");

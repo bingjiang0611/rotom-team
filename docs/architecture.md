@@ -112,6 +112,13 @@ be running (`RotomJournal.constructor`). Recovery and backup must preserve that 
 
 ## Commit coordination and delivery
 
+`rotom-control.ts: decodeNativeControl` owns validation of the five existing Team notify envelopes.
+`RotomRpc.#consume` validates before any reader sees a control; adapters keep nonce correlation at their request
+boundary. A WeakMap shares decoding within one unchanged RPC event without retaining past events. TeamKernel routes
+ordinary notifications to notices, children reports to live state, and other controls only to their private readers.
+Reserved malformed/unknown controls fail the transport with an unknown outcome, never success or automatic replay;
+neither the wire format nor the native policy sender is changed.
+
 `PocketApp.#committed` processes usage first, then document/submission changes; `#documentCommitted`
 updates memory and schedules rooms/session lists. This shared coordinator remains relevant in kernel mode because
 native public entries are committed through the Harness. It does not run native inference or settle native receipts.
