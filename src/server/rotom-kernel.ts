@@ -19,7 +19,7 @@ import {
     type NativeStartSignal,
 } from "./perf-channels.ts";
 import { prepareTeamResources, sharedContextPaths } from "./rotom-resources.ts";
-import { canonical, product, verifyRotomKernel } from "./rotom-product.ts";
+import { canonical, product, verifyRotomKernel, nativeSessionDataApi } from "./rotom-product.ts";
 
 export { verifyRotomKernel };
 
@@ -61,21 +61,7 @@ export async function nativeBuiltinCommands(): Promise<
 }
 
 export async function nativeSessionManager() {
-    verifyRotomKernel();
-    const { resolveInstalledPi } = await import(
-        pathToFileURL(join(product, "runtime/resolve-installed-pi.mjs")).href
-    );
-
-    await withParseWork("native-resolver", () => resolveInstalledPi(product));
-    const entry = canonical(
-        join(
-            product,
-            "runtime/pi/node_modules/@earendil-works/pi-coding-agent/dist/core/session-manager.js",
-        ),
-        "file",
-    );
-
-    const manager = await import(pathToFileURL(entry).href);
+    const manager = await nativeSessionDataApi();
     const ai = await import(
         pathToFileURL(
             canonical(
