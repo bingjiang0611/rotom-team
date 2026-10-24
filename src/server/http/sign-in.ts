@@ -18,7 +18,7 @@ function localPath(next: string | null): string {
 }
 
 function page(title: string, body: string): string {
-    return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="dark"><title>${escapeHtml(title)}</title><link rel="stylesheet" href="/style.css"></head><body class="plain-page"><main class="plain">${body}</main></body></html>`;
+    return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="dark"><title>${escapeHtml(title)}</title><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/native.css"></head><body class="plain-page"><main class="plain">${body}</main></body></html>`;
 }
 
 /** `/login`: sign this browser in with a token from a link, after asking when it would switch accounts. */
