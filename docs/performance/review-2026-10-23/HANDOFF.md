@@ -35,7 +35,7 @@
 | B4    | B    | journal 预编译语句缓存                      | 核验通过                      | `37cb733`                       |
 | B5    | B    | 长轮询队列字节上限                          | 核验通过                      | `5fb4bbe`                       |
 | C1–C6 | C    | 需要 owner 决策，只写方案                   | C1 暂缓;C2–C6 已批准,见批次 D | `14caa83`（方案，未实现）       |
-| D1    | D    | 文档纠偏(C6)                                | 待做                          |                                 |
+| D1    | D    | 文档纠偏(C6)                                | 进行中                        |                                 |
 | D2    | D    | notify 控制消息集中解码(C6)                 | 待做                          |                                 |
 | D3    | D    | 流式 Markdown 解析(C6)                      | 待做                          |                                 |
 | D4    | D    | App 局部订阅(C6)                            | 待做                          |                                 |
@@ -168,6 +168,23 @@ owner 已批准把 C2–C6 从「只写方案」改为「实现」。C1(进程�
 ---
 
 ## 执行记录（执行方追加）
+
+### D1 — 测量提交：文档基线与适用范围
+
+- 基线 `8606886`。D1 只改文档，不改任何执行路径；不存在能衡量本项语义纠偏的运行时工作计数器。**性能增益 unavailable / 不适用（docs-only）**，不登记伪零值或新增 ledger 条目。此提交先记录源码对照，后续独立提交修改 architecture/map。
+- 当前文档的六处关键偏差及已读源码证据：
+
+| 偏差                                                         | 当前代码证据                                                                                              | 修订方向                                                                         |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| 以 Pi Pocket launcher/默认目录为主入口                       | `bin/rotom-team.js`、`main.ts` 的 options/启动段                                                          | Team 直接启动服务器，隔离资源，开发/测试始终显式 --data；旧 launcher 单列 legacy |
+| 把全部执行真相放在 pocket.sqlite                             | `RotomJournal.reserve/finish`、`TeamKernel.#mirrorNow`                                                    | 区分原生 journal/JSONL、共享 Durable 镜像与暂态 live                             |
+| 用最新消息作者解释所有付费路由                               | `TeamKernel.#check`、`RotomExecutions.#launch`、`TeamAccounts.kernelAuth`、`TeamExecution.authorize`      | 原生绑定固定 payer，每次推理过 gate；legacy 也受个人路由授权                     |
+| 启动步骤缺少 native 对账，关闭顺序未写清                     | `PocketApp.#open/close`、`TeamKernel.reconcile/resumeInterrupted/close`、`RotomExecutions.close`          | 明示恢复顺序、unknown 栅栏、先关闭 native 再释放存储锁                           |
+| 让服务端 drop-in、PocketHost 看起来是 Team 扩展机制          | `PocketApp.#open` 的 !kernel 分支、`main.ts` watcher、`startRotomKernel`                                  | service extensions/旧 browser 工具标 legacy；Team 用 native extensions           |
+| “Browsers only see committed state”及“其余 web 无测试”已过时 | `TeamKernel.#observe/clientLive`、`web/store.js actions.submit`、`test/native-*.test.ts`、`test/*ui.test.ts` | 区分 optimistic/live 与持久化确认，列出现有合成 native/Chromium 验证入口         |
+
+- 验收不以测试通过代替文档准确性：逐段对照文件/函数，检查相对链接和引用路径；实现提交后跑 format/check/lint/format:check/npm test 及用户要求的 perf:ci origin/main。perf 只是分支护栏，不作为文档收益证明。
+- 本轮遵守逐项核验门槛：D1 推送后等待审查方确认再开始 D2；不提前写 D2–D8、不做 C1，本次不扩展到 D9。
 
 <!-- 每项一节：做了什么、提交号、测试结果、perf:ci 摘要（平台、highLoad、每个变差计数器的解释）、遗留问题。 -->
 
