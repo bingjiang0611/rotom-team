@@ -42,7 +42,7 @@ import {
     nativeSessionManager,
 } from "./rotom-kernel.ts";
 import { publicNativeHistory } from "./rotom-history.ts";
-import { prepareSeed, persistSeed } from "./rotom-executions/seed-files.ts";
+import { materializeSeed } from "./rotom-executions/seed.ts";
 import { type RotomRpc, type RpcRecord, RpcFailure } from "./rotom-rpc.ts";
 import {
     readNativeSnapshot,
@@ -165,6 +165,7 @@ type Running = {
     kernel?: RotomRpc;
     snapshot?: () => Promise<{ entries: KernelEntry[]; leafId: string | null }>;
     thinkingChange?: Promise<string>;
+    seed?: ReturnType<typeof materializeSeed>;
     closureUnknown?: boolean;
     /** Its prompt was dispatched: messages may join it. */
     prompting?: boolean;
@@ -370,6 +371,10 @@ export class RotomExecutions {
         await Promise.all(
             [...(this.#running.get(sessionId) ?? [])].map(async (run) => {
                 run.aborted = true;
+
+                if (run.seed) {
+                    await run.seed.stop();
+                }
 
                 if (run.kernel) {
                     await run.kernel.abort();
@@ -675,7 +680,7 @@ export class RotomExecutions {
                 throw error;
             }
 
-            return this.#seed(receipt, messages, native.SessionManager, running);
+            return this.#seed(receipt, messages, running);
         });
     }
 
@@ -798,7 +803,7 @@ export class RotomExecutions {
                 }
             }
 
-            return this.#seed(receipt, messages, native.SessionManager, running, authorize);
+            return this.#seed(receipt, messages, running, authorize);
         });
     }
 
@@ -827,14 +832,13 @@ export class RotomExecutions {
             const messages = publicNativeHistory(native.buildSessionProjection(entries).messages);
             const receipt = this.journal.reserve(sessionId, requestId, identity, "fork");
 
-            return this.#seed(receipt, messages, native.SessionManager, running, authorize);
+            return this.#seed(receipt, messages, running, authorize);
         });
     }
 
     async #seed(
         receipt: KernelReceipt,
         messages: ReturnType<typeof publicNativeHistory>,
-        SessionManager: Awaited<ReturnType<typeof nativeSessionManager>>["SessionManager"],
         running: Running,
         authorize = () => this.#authorize(receipt.binding, "admission", receipt.sessionId),
     ): Promise<KernelReceipt> {
@@ -853,13 +857,23 @@ export class RotomExecutions {
 
             if (messages.length) {
                 materializing = true;
-                const { session, folder } = prepareSeed(receipt.binding, SessionManager);
-                const attached = seedPhases();
+                const seed = materializeSeed(receipt.binding, messages, (path, sessionId) => {
+                    const attached = seedPhases();
 
-                // Attach the intended file before appending; an interrupted partial seed remains inspectable.
-                this.journal.attach(receipt.id, session.getSessionFile(), session.getSessionId());
-                attached("attach");
-                entries = persistSeed(session, folder, receipt.binding.workspace, messages);
+                    // The worker waits for this durable attach before it can append.
+                    this.journal.attach(receipt.id, path, sessionId);
+                    attached("attach");
+                });
+
+                running.seed = seed;
+
+                try {
+                    // The result settles only after worker exit, including errors and stop.
+                    entries = await seed.result;
+                } finally {
+                    running.seed = undefined;
+                }
+
                 mark = seedPhases();
             }
 

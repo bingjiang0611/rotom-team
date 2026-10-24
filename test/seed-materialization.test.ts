@@ -1,0 +1,404 @@
+import assert from "node:assert/strict";
+import { test, type TestContext } from "node:test";
+import {
+    existsSync,
+    mkdtempSync,
+    mkdirSync,
+    readFileSync,
+    realpathSync,
+    rmSync,
+    statSync,
+    chmodSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { RotomExecutions } from "../src/server/rotom-executions.ts";
+import { verifyRotomKernel, nativeSessionManager } from "../src/server/rotom-kernel.ts";
+import {
+    KernelRequestConflict,
+    type KernelBinding,
+    type KernelEntry,
+} from "../src/server/rotom-journal.ts";
+import { seedPhaseChannel, type SeedPhaseSignal } from "../src/server/perf-channels.ts";
+import { prepareSeed, persistSeed } from "../src/server/rotom-executions/seed-files.ts";
+import { publicNativeHistory } from "../src/server/rotom-history.ts";
+
+function fixture(
+    t: TestContext,
+    authorize: (call: number) => Promise<void> = async () => {},
+    chars = 128,
+    empty = false,
+) {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "seed-materialization-")));
+    const workspace = join(root, "workspace");
+    const data = join(root, "data");
+
+    mkdirSync(workspace);
+    mkdirSync(data, { mode: 0o700 });
+    let calls = 0;
+    const executions = new RotomExecutions(data, async () => authorize(++calls));
+    const journal = executions.journal;
+
+    t.after(async () => {
+        await executions.close();
+        rmSync(root, { recursive: true, force: true });
+    });
+
+    const member = (name: string): KernelBinding => {
+        const home = join(data, "kernel-homes", name);
+
+        mkdirSync(home, { recursive: true, mode: 0o700 });
+
+        return {
+            memberId: name,
+            home,
+            workspace,
+            provider: name === "alice" ? "ALICE_PRIVATE_PROVIDER" : "fixture",
+            model: "fixture",
+            accountGeneration: name,
+            configurationDigest: "fixture",
+            kernelVersion: verifyRotomKernel().version,
+        };
+    };
+
+    const alice = member("alice"),
+        bob = member("bob");
+
+    journal.bind("shared", alice);
+    const messages = [
+        { role: "user", content: [{ type: "text", text: "hello" }], timestamp: 1 },
+        {
+            role: "assistant",
+            provider: "ALICE_PRIVATE_PROVIDER",
+            model: "fixture",
+            api: "openai-completions",
+            content: [
+                { type: "text", text: "x".repeat(chars) },
+                {
+                    type: "thinking",
+                    thinking: "ALICE_PRIVATE_REASONING",
+                    signature: "ALICE_PRIVATE_SIGNATURE",
+                },
+            ],
+            stopReason: "stop",
+            timestamp: 2,
+            usage: {
+                input: 1,
+                output: 1,
+                cacheRead: 0,
+                cacheWrite: 0,
+                totalTokens: 2,
+                cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+            },
+        },
+    ];
+    const entries: KernelEntry[] = empty
+        ? []
+        : messages.map((message, index) => ({
+              type: "message",
+              id: `entry-${index}`,
+              parentId: index ? "entry-0" : null,
+              timestamp: new Date(index).toISOString(),
+              message,
+          }));
+
+    if (!empty) {
+        const source = journal.reserve("shared", "source", "source", "command");
+
+        journal.attach(source.id, join(root, "source.jsonl"), "source");
+        journal.finish(source.id, "handled", entries);
+    }
+
+    return {
+        root,
+        data,
+        executions,
+        journal,
+        alice,
+        bob,
+        messages,
+        entries,
+        calls: () => calls,
+        handoff: (request = "handoff") => executions.handoff("shared", request, "shared", bob),
+    };
+}
+
+function observe(t: TestContext, listener: (signal: SeedPhaseSignal) => void) {
+    const callback = (value: unknown) => listener(value as SeedPhaseSignal);
+
+    seedPhaseChannel.subscribe(callback);
+    t.after(() => seedPhaseChannel.unsubscribe(callback));
+}
+
+test("handoff materialization uses worker phases and lets the event loop run before committing", async (t) => {
+    const f = fixture(t, undefined, 8 * 1024 * 1024);
+    const phases: SeedPhaseSignal[] = [];
+    let ticks = 0;
+    const timer = setInterval(() => ticks++, 1);
+
+    t.after(() => clearInterval(timer));
+    observe(t, (signal) => {
+        phases.push(signal);
+
+        if (signal.phase === "authorize") {
+            ticks = 0;
+        }
+    });
+    const originalAttach = f.journal.attach.bind(f.journal);
+    let attached = 0;
+
+    f.journal.attach = (id, path, sessionId, pid) => {
+        assert.ok(
+            !existsSync(path) || !readFileSync(path, "utf8").includes('"type":"message"'),
+            "attach precedes the first append",
+        );
+        originalAttach(id, path, sessionId, pid);
+        attached++;
+    };
+
+    const before = f.journal.usage("shared");
+    const result = await f.handoff();
+
+    assert.equal(result.status, "settled");
+    assert.ok(
+        ticks > 0,
+        "the materialization boundary must yield, not wrap synchronous work in a Promise",
+    );
+    const worker = phases.filter((p) =>
+        ["prepare", "append", "persist", "readback", "compare"].includes(p.phase),
+    );
+
+    assert.deepEqual(
+        worker.map((p) => p.phase),
+        ["prepare", "append", "persist", "readback", "compare"],
+    );
+    assert.ok(
+        worker.every((p) => p.thread === "worker"),
+        "file and comparison CPU must actually run off the parent thread",
+    );
+    assert.equal(attached, 1);
+    assert.equal(f.calls(), 3, "authorization is repeated after durable readback");
+    const target = f.journal.session("shared");
+    const file = target.sessionFile!;
+
+    assert.notEqual(target.segmentId, "shared");
+    assert.ok(file.startsWith(f.bob.home));
+    assert.equal(statSync(file).mode & 0o777, 0o600);
+    assert.equal(statSync(join(f.bob.home, ".pi/agent/sessions/team-seeds")).mode & 0o777, 0o700);
+    assert.ok(!readFileSync(file, "utf8").includes("ALICE_PRIVATE"));
+    assert.deepEqual(f.journal.usage("shared"), before);
+    assert.equal(f.journal.entries("shared").length, 2, "seed is not mirrored again");
+    assert.equal((await f.handoff()).id, result.id);
+    assert.equal(attached, 1, "same request must not materialize again");
+});
+
+test("final authorization retains the writer lease and old head; duplicate intent does not replay", async (t) => {
+    const reached = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const f = fixture(t, async (call) => {
+        if (call === 3) {
+            reached.resolve();
+            await release.promise;
+        }
+    });
+    const pending = f.handoff();
+
+    await reached.promise;
+
+    try {
+        assert.throws(() => f.executions.close(), /still active/);
+        assert.equal(f.journal.session("shared").segmentId, "shared");
+        const duplicate = await f.handoff();
+
+        assert.equal(duplicate.id, f.journal.request("shared", "handoff")!.id);
+        await assert.rejects(f.handoff("different"), KernelRequestConflict);
+    } finally {
+        release.resolve();
+    }
+
+    assert.equal((await pending).status, "settled");
+});
+
+for (const point of ["before-attach", "after-attach", "after-readback"] as const) {
+    test(`Stop ${point} joins the worker, keeps unknown and ignores late results`, async (t) => {
+        const f = fixture(t);
+        let stopping: Promise<void> | undefined;
+        const originalAttach = f.journal.attach.bind(f.journal);
+
+        f.journal.attach = (id, path, sessionId, pid) => {
+            originalAttach(id, path, sessionId, pid);
+
+            if (point === "after-attach") {
+                stopping = f.executions.abort("shared");
+            }
+        };
+
+        observe(t, (signal) => {
+            if (
+                signal.thread === "worker" &&
+                signal.phase === (point === "before-attach" ? "prepare" : "compare") &&
+                point !== "after-attach"
+            ) {
+                stopping = f.executions.abort("shared");
+            }
+        });
+        const result = await f.handoff();
+
+        await stopping;
+        assert.ok(stopping);
+        assert.equal(result.status, "unknown");
+        assert.equal(f.journal.session("shared").segmentId, "shared");
+        assert.equal((await f.handoff()).id, result.id);
+        await assert.rejects(f.handoff("different"), KernelRequestConflict);
+        await f.executions.close();
+    });
+}
+
+for (const fault of ["attach", "worker-write", "private-directory"] as const) {
+    test(`${fault} failure never commits or replays the seed`, async (t) => {
+        const f = fixture(t);
+        const originalAttach = f.journal.attach.bind(f.journal);
+
+        if (fault === "private-directory") {
+            const folder = join(f.bob.home, ".pi/agent/sessions/team-seeds");
+
+            mkdirSync(folder, { recursive: true });
+            chmodSync(folder, 0o755);
+        }
+
+        f.journal.attach = (id, path, sessionId, pid) => {
+            originalAttach(id, path, sessionId, pid);
+
+            if (fault === "attach") {
+                throw new Error("lost attach acknowledgement");
+            }
+
+            if (fault === "worker-write") {
+                rmSync(path, { force: true });
+                mkdirSync(path);
+            }
+        };
+
+        const result = await f.handoff();
+
+        assert.equal(result.status, "unknown");
+        assert.equal(f.journal.session("shared").segmentId, "shared");
+        assert.equal((await f.handoff()).id, result.id);
+        await assert.rejects(f.handoff("different"), KernelRequestConflict);
+        await f.executions.close();
+    });
+}
+
+for (const call of [2, 3]) {
+    test(`authorization rejection at seed stage ${call} preserves outcome classification`, async (t) => {
+        const f = fixture(t, async (current) => {
+            if (current === call) {
+                throw new Error("revoked");
+            }
+        });
+        const result = await f.handoff();
+
+        assert.equal(result.status, call === 2 ? "rejected" : "unknown");
+        assert.equal(f.journal.session("shared").segmentId, "shared");
+        assert.equal(f.journal.segment(result.segmentId).sessionFile !== undefined, call === 3);
+    });
+}
+
+test("empty handoff keeps the zero-file path and still authorizes before finish", async (t) => {
+    const f = fixture(t, undefined, 0, true);
+    const phases: SeedPhaseSignal[] = [];
+
+    observe(t, (s) => phases.push(s));
+    assert.equal((await f.handoff()).status, "settled");
+    assert.equal(f.calls(), 3);
+    assert.equal(f.journal.session("shared").sessionFile, undefined);
+    assert.ok(phases.every((s) => s.thread === "main"));
+    assert.ok(!existsSync(join(f.bob.home, ".pi/agent/sessions/team-seeds")));
+});
+
+test("the shared persistence helper refuses a mismatched readback without weakening comparison", async (t) => {
+    const f = fixture(t);
+    const native = await nativeSessionManager();
+    const { session, folder } = prepareSeed(f.bob, native.SessionManager);
+    const append = session.appendMessage.bind(session);
+
+    session.appendMessage = (message: unknown) =>
+        append({ ...(message as object), content: [{ type: "text", text: "tampered" }] });
+    assert.throws(
+        () => persistSeed(session, folder, f.bob.workspace, publicNativeHistory(f.messages)),
+        /readback mismatch/,
+    );
+});
+
+test("public fork and import share the worker but preserve independent target authorization", async (t) => {
+    const f = fixture(t);
+
+    f.journal.bind("forked", f.bob);
+    f.journal.bind("imported", f.bob);
+    const phases: SeedPhaseSignal[] = [];
+
+    observe(t, (s) => phases.push(s));
+    assert.equal((await f.executions.fork("shared", "forked", "fork", "shared")).status, "settled");
+    assert.equal(
+        (await f.executions.importHistory("imported", "import", "digest", f.entries)).status,
+        "settled",
+    );
+    assert.equal(f.journal.session("shared").segmentId, "shared");
+    assert.ok(phases.filter((s) => s.phase === "compare").every((s) => s.thread === "worker"));
+    assert.equal(phases.filter((s) => s.phase === "compare").length, 2);
+    assert.equal(
+        f.calls(),
+        9,
+        "fork checks both source and target in each phase; import checks its target",
+    );
+});
+
+test("Stop during final authorization cannot commit an already read-back seed", async (t) => {
+    const reached = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const f = fixture(t, async (call) => {
+        if (call === 3) {
+            reached.resolve();
+            await release.promise;
+        }
+    });
+    const pending = f.handoff();
+
+    await reached.promise;
+    await f.executions.abort("shared");
+    assert.throws(() => f.executions.close(), /still active/);
+    release.resolve();
+    assert.equal((await pending).status, "unknown");
+    assert.equal(f.journal.session("shared").segmentId, "shared");
+});
+
+test("a failed materialization remains fenced after journal reopen and cannot be replayed", async (t) => {
+    const f = fixture(t);
+    const attach = f.journal.attach.bind(f.journal);
+
+    f.journal.attach = (...args) => {
+        attach(...args);
+
+        throw new Error("lost attach acknowledgement");
+    };
+
+    const result = await f.handoff();
+
+    assert.equal(result.status, "unknown");
+    await f.executions.close();
+    const reopened = new RotomExecutions(f.data, async () => {});
+
+    try {
+        assert.equal(
+            (await reopened.handoff("shared", "handoff", "shared", f.bob)).status,
+            "unknown",
+        );
+        await assert.rejects(
+            reopened.handoff("shared", "different", "shared", f.bob),
+            KernelRequestConflict,
+        );
+        assert.equal(reopened.journal.session("shared").segmentId, "shared");
+    } finally {
+        await reopened.close();
+    }
+});
