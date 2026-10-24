@@ -41,7 +41,7 @@
 | D4    | D    | App 根渲染局部订阅(C6)                      | 核验通过                      | `58ddb47`（测量）；实现见执行记录    |
 | D5    | D    | 切换会话不重连(C6)                          | 核验通过                      | `229bda2`（测量）；`5acca07`（实现） |
 | D6    | D    | 大文件纯移动拆分(C5)                        | 核验通过                      | `3768653`（测量）；实现见执行记录    |
-| D7    | D    | handoff 测量与异步化(C2)                    | 待做                          |                                      |
+| D7    | D    | handoff 测量与异步化(C2)                    | 进行中                        |                                      |
 | D8    | D    | storage worker(C3)                          | 待做                          |                                      |
 | D9    | D    | 下线旧后端(C4,只读归档)                     | 待做                          |                                      |
 
@@ -1028,6 +1028,14 @@ owner 已批准把 C2–C6 从「只写方案」改为「实现」。C1(进程�
 - 五组单轮 perf 均 exit 0/ledger guard 通过。CSS 必需成本为首次/条件请求 **53→54**，静态 bundle gzip **407732→408346 B（+614）**，条件响应正文仍为 0；两个相邻 HTML link 不引入 @import 串行链，不承诺生产首屏/冷加载性能等价。
 - [D6 完整验证记录](d6-validation.md) 列出版本、每步测试、失败日志、CSS 成本、全部 **54 个 worse 并集**和同代码对照；事件正文未留存的细分字节来源保留 unknown。证据根目录 `/tmp/rotom-review-D6/`。
 - 已同步 map/architecture/VERIFICATION 的实际 owner 与加载顺序。保留用户两处文档，不部署、不重启线上。**下一步由审查方核验 D6；通过前不做 D7。**
+
+### D7 — 测量基线（7671c97 + 独立测量改动）
+
+- 新增仅供 benchmark 订阅、无内容的 seed-phase 信号，区分 main/worker；不写入性能 journal、不改 ledger。handoff-bench.mjs 在独立子进程分别做 1/10/100 MiB、每档连续三次真实 handoff，记录阶段、主线程 timer lag、parent/process RSS、SQLite DB/WAL/正文及 seed 字节。每次验证新 segment 64 条、共享镜像仍 64 条；随后真实 native warm，第三次之后做一个 loopback 合成首轮。不是生产模型时延，没有真实账号。
+- 初版 RSS 取样落在额外 readback/warm 之后，实施前改为 handoff 返回立即记录；原日志保留 base-pre-rss-scope-fix.log，正式证据为 /tmp/rotom-review-D7/base.log 与 base.json。计时锁 highLoad=false（4.27→7.06/8 核），整体 34.8 s。
+- 100 MiB 三次 handoff 1084/1110/1092 ms，主线程最长延迟 1047/990/971 ms；materialization 的 append/readback/compare 占主要可迁移 CPU，finish 仍需 441/499/526 ms，projection 含 journal 读取约 78/79/78 ms。D7 不把 D8 的同步 DB writer 偷搬进 worker，也不声称可消除这些剩余阻塞。
+- 实现边界：仅将 #seed 的文件构建、持久化、读回及完整比较放进本次 operation 拥有的短生命周期 worker；parent 保留唯一 journal writer、attach 与最终授权/finish。worker 必须等 attach 完成的 ACK 才能 append；worker 完整退出后才允许 finish 或释放 #track。停止、worker 失败/丢结果、readback 不符、最终撤权仍 unknown，不重试，不复用 seed，不跨付费人去重。不做 C1、D8 或 D9。
+- 每个正在 materialize 的既有执行至多一个 worker，无独立后台队列/常驻池；保留现有执行并发模型。需要同时测量 structured-clone、worker 生命周期的额外时延/RSS，而非把移出的工作记成消失。
 
 ## 核验记录（审查方追加）
 

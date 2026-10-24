@@ -2,6 +2,7 @@
 import { createServer } from "node:http";
 import {
     kernelRunChannel,
+    seedPhases,
     parseWithWork,
     scopedParseObject,
     type KernelRunSignal,
@@ -659,9 +660,12 @@ export class RotomExecutions {
                 );
             }
 
+            const mark = seedPhases();
             const messages = publicNativeHistory(
                 native.buildSessionProjection(this.journal.segmentEntries(expectedHead)).messages,
             );
+
+            mark("projection");
             // Reserve before awaiting closure so no new prompt can reuse the retiring process.
             const receipt = this.journal.handoff(sessionId, requestId, expectedHead, binding);
 
@@ -838,9 +842,11 @@ export class RotomExecutions {
         authorize = () => this.#authorize(receipt.binding, "admission", receipt.sessionId),
     ): Promise<KernelReceipt> {
         let materializing = false;
+        const mark = seedPhases();
 
         try {
             await authorize();
+            mark("authorize");
 
             if (running.aborted) {
                 throw new Error("Seed stopped before materialization");
@@ -862,13 +868,16 @@ export class RotomExecutions {
 
                 const session = SessionManager.create(receipt.binding.workspace, folder);
 
+                mark("prepare");
                 // Attach the intended file before appending; an interrupted partial seed remains inspectable.
                 this.journal.attach(receipt.id, session.getSessionFile(), session.getSessionId());
+                mark("attach");
 
                 for (const message of messages) {
                     session.appendMessage(message);
                 }
 
+                mark("append");
                 const path = session.getSessionFile();
 
                 chmodSync(path, 0o600);
@@ -883,11 +892,13 @@ export class RotomExecutions {
                     }
                 }
 
+                mark("persist");
                 entries = readNativeEntries(
                     path,
                     session.getSessionId(),
                     receipt.binding.workspace,
                 );
+                mark("readback");
                 const persisted = entries
                     .filter((entry) => entry.type === "message")
                     .map((entry) => entry.message);
@@ -895,15 +906,22 @@ export class RotomExecutions {
                 if (JSON.stringify(persisted) !== JSON.stringify(messages)) {
                     throw new Error("Native seed readback mismatch");
                 }
+
+                mark("compare");
             }
 
             await authorize();
+            mark("reauthorize");
 
             if (running.aborted) {
                 throw new Error("Seed stopped before commit");
             }
 
-            return this.journal.finish(receipt.id, "settled", entries);
+            const finished = this.journal.finish(receipt.id, "settled", entries);
+
+            mark("finish");
+
+            return finished;
         } catch {
             return this.journal.fail(receipt.id, materializing ? "unknown" : "rejected");
         }

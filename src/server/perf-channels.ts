@@ -5,6 +5,42 @@
  */
 import { AsyncLocalStorage } from "node:async_hooks";
 import { channel } from "node:diagnostics_channel";
+import { isMainThread } from "node:worker_threads";
+
+/** Seed phase timings are benchmark-only, content-free, and include work moved off the main thread. */
+export const seedPhaseChannel = channel("rotom-team:seed-phase");
+export type SeedPhase =
+    | "projection"
+    | "authorize"
+    | "prepare"
+    | "attach"
+    | "append"
+    | "persist"
+    | "readback"
+    | "compare"
+    | "reauthorize"
+    | "finish";
+export type SeedPhaseSignal = { phase: SeedPhase; ms: number; thread: "main" | "worker" };
+
+export function seedPhases(): (phase: SeedPhase) => void {
+    const enabled = seedPhaseChannel.hasSubscribers;
+    let previous = enabled ? performance.now() : 0;
+
+    return (phase) => {
+        if (!enabled) {
+            return;
+        }
+
+        const now = performance.now();
+
+        seedPhaseChannel.publish({
+            phase,
+            ms: now - previous,
+            thread: isMainThread ? "main" : "worker",
+        } satisfies SeedPhaseSignal);
+        previous = now;
+    };
+}
 
 /** One event written to one browser tab. `bytes` is null where the transport does not size each event (long polling). */
 export type PushSignal = { event: string; bytes: number | null; transport: "stream" | "poll" };
