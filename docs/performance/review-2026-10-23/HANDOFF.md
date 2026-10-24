@@ -37,7 +37,7 @@
 | C1–C6 | C    | 需要 owner 决策，只写方案                   | C1 暂缓;C2–C6 已批准,见批次 D | `14caa83`（方案，未实现）         |
 | D1    | D    | 文档纠偏(C6)                                | 核验通过                      | `0705511`（测量）；实现见执行记录 |
 | D2    | D    | notify 控制消息集中解码(C6)                 | 核验通过                      | `1b1228a`（测量）；实现见执行记录 |
-| D3    | D    | 流式 Markdown 解析(C6)                      | 待做                          |                                   |
+| D3    | D    | 流式 Markdown 解析(C6)                      | 进行中                        |                                   |
 | D4    | D    | App 局部订阅(C6)                            | 待做                          |                                   |
 | D5    | D    | 切换会话不重连(C6)                          | 待做                          |                                   |
 | D6    | D    | 大文件纯移动拆分(C5)                        | 待做                          |                                   |
@@ -699,6 +699,14 @@ owner 已批准把 C2–C6 从「只写方案」改为「实现」。C1(进程�
 - 对重复出现的 stream HTTP 6→8 作了一次外部 diagnostics_channel 路由追踪（不改仓库测量代码、不记录 token/body）。同一对照变成 **8→8**，两侧 submit 后的八条路由完全一致，均只含一次 submit、一次 gate authorize、一次 loopback 模型调用；其余为 typing 和 favicon。报告 route-ci/、routes.log，highLoad=false（2.08→3.42/8 核）。该诊断不用于毫秒收益；不提高阈值、改 workload 或放宽断言。
 - 自审边界：唯一 notify JSON 解码入口为 decodeNativeControl；发送端、vendor/pin、存储文档/版本未动。未部署/重启、未使用真实账号。测试扩展只写入临时数据，首次 fixture 使用未被原生自动发现支持的 .mjs 导致命令 rejected；核对原生 loader 后改为它支持的 .js，未放宽产品准入。
 - D2 状态为「已推送待核验」；D3 仍待做。下一步由审查方核验 D2，通过后执行方再开始 D3。
+
+### D3 — 测量基线（实现前）
+
+- 新增 markdown-bench.mjs 和共用 Chromium fixture。使用真实 web/ui.js Markdown、Preact、marked、DOMPurify；只替换帧时钟并计数真实 parse/sanitize 调用，无账号、无模型调用。
+- 20 个固定帧：burst 每帧 8 次增长、每次再同值渲染一次；paced 每帧增长一次；unchanged 每帧同值渲染一次。均含首次渲染和结束 cache=true，结束后的工作不移出计数窗口。
+- a587a23 实现基线：burst **322 次 parse / 2,756,978 字符 / 322 次 sanitize**，最终文本 17,049 字符；paced **22 / 24,643 / 22**；unchanged **22 / 286 / 22**。每组最终都没有待执行帧。结果 /tmp/rotom-review-D3/base.json。
+- 同时由未修改的 Markdown 生成 markdown-golden.json：8 组固定输入的最终 DOM HTML（未闭合/闭合 fence、跨块引用/列表/表格、整页 HTML、XSS、长代码折叠、文件路径、rich blocks）。实现后的测试必须逐字对照这份基线，不从新实现重生成期望值。
+- 这是增长块与同值父组件提交的定向 L1 测量，不是实际 90 ms 推送频率或毫秒收益。逐帧一次的路径是无收益对照，不能为了数字变小跳过最终解析或 DOMPurify。实现计划：组件内保留最近解析输入，同一帧只解析最新增长值，完成/上下文改变立即刷新，卸载取消 pending frame；不做增量 Markdown 语法解析。
 
 ## 核验记录（审查方追加）
 
