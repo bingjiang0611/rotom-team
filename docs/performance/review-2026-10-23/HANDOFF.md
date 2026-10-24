@@ -28,7 +28,7 @@
 | A1    | A    | journal 索引 + 镜像游标                     | 核验通过                  | `2a2ac90`、`b44ca33`、`7c880fc` |
 | A2    | A    | thinking level / native goal 跨推送缓存     | 核验通过                  | `b8d63f4`、`c13245d`            |
 | A3    | A    | 启动时不再全量解析历史                      | 核验通过                  | `0f39ea3`                       |
-| A4    | A    | 静态资源 ETag / gzip / modulepreload        | 核验未通过                | `c8d7cbd`（测量见记录）         |
+| A4    | A    | 静态资源 ETag / gzip / modulepreload        | 已推送待核验              | `c8d7cbd`（测量见记录）         |
 | B1    | B    | `teamResourceRevision` 不在请求路径读大文件 | 核验通过                  | `9ccc0aa`                       |
 | B2    | B    | `finishedSeen` 写入与清理                   | 核验通过                  | `cc652cc`                       |
 | B3    | B    | 房间级字段每次推送只算一次                  | 核验通过                  | `8d42e63`                       |
@@ -512,6 +512,43 @@
 - B4 AST 等价核对实际是 **66** 个 SQL literal/template（不是先前记录的 64）；`6b654f5` 只修正记录，证据 `/tmp/rotom-review-B4/sql-equivalence.json`。
 - 最终范围核对：vendor/qoder、docs.ts 无 diff；journal user_version 写入未变。ledger 的 **1749 个既有条目全部原样保留，仅新增 9 个测量条目**，未放宽阈值/基线。
 - 用户原有 opportunities.md 与未跟踪的 2026-10-21-proposals.md 均与开工备份逐字节相同，未暂存/提交。只追加本分支提交，不合并 main、不强推。A/B 与 C 方案均标为「已推送待核验」，不代审查方填写「核验通过」。
+
+### A4 — 第 1 轮核验修复：preload 尽力而为
+
+- 单独提交：`A4: keep preload failures from breaking the app page`。仅修复 assets.ts、补静态资源回归测试并更新本记录；其余核验状态不变。
+- 缓存图校验和重新扫描都在可放弃的 preload 边界内。缺失目标、未知 vendor 目标、已缓存模块消失时，丢弃整份 preload 清单，原始 index 仍返回 200，脚本内容/顺序和 CSP 不变。失败不缓存为永久降级，后续请求恢复正常图时重新生成 preload。首页自身缺失按原文件路由语义返回 404，而不是 500；其他非 not-found 的首页读取错误仍上报。
+- 回归使用进程内文件读取重定向到临时 web 副本，未编辑运行中的 web/。覆盖模板字符串中的假 import（普通路径和未知 vendor）、已缓存文件删除、随后恢复 preload、原始 HTML/CSP、降级响应的 ETag/304，以及 index 删除/恢复。修复前模板假 import 的测试为 500≠200；404 子修复前为 500≠404；修复后均通过。
+- format/check/lint/format:check passed；静态资源定向测试 **4/4**；最终 npm test **577/577**、无跳过。证据：`/tmp/rotom-review-A4-round1/{negative,negative-index,test}.log`。
+- `perf:ci -- origin/main --runs 1` passed，gating/ledger guard passed。基线 `origin/main=e649d9d`，darwin-arm64 / Node 24.18.0，highLoad=false（3.65→3.56/8 核），报告 `/tmp/rotom-review-A4-round1/ci/`。健康路径的首次资源字节 1,142,870→405,839、条件请求→0，与前轮优化结果一致。本轮是正确性修复，不作单轮耗时加速承诺；未改 ledger。
+- 相对 origin/main 的所有 worse 如下；比较包含整条审查分支的前序优化，不是本轮修复独有的增量：
+
+| 计数器                                 | base→head     | 解释                                                                                                                             |
+| -------------------------------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| startup.restart/sql.statements         | 848→851       | 前序 A1/A3 的启动索引、游标及恢复查询；本轮未改存储路径                                                                          |
+| session.open/sql.statements            | 46→47         | 前序 A2 的 indexed revision 查询及其返回标量；本轮未改该路径                                                                     |
+| turn.warm/sql.statements               | 157→158       | 前序 A2 的 indexed revision 查询及其返回标量；本轮未改该路径                                                                     |
+| turn.paced/sql.statements              | 286→288       | 前序 A2 的 indexed revision 查询及其返回标量；本轮未改该路径                                                                     |
+| web.open/sql.statements                | 31→32         | 前序 A2 的 indexed revision 查询及其返回标量；本轮未改该路径                                                                     |
+| web.open/cdp.Nodes                     | 996→1112      | 前序 A4 的 modulepreload link/文本节点成本，另有浏览器采样生命周期差异；本轮成功路径不增删节点                                   |
+| session.open.long/sql.statements       | 16→17         | 前序 A2 的 indexed revision 查询及其返回标量；本轮未改该路径                                                                     |
+| session.open.long/sql.rows             | 47→49         | 前序 A2 的 indexed revision 查询及其返回标量；本轮未改该路径                                                                     |
+| web.open.long/cdp.Nodes                | 1561→1701     | 前序 A4 的 modulepreload link/文本节点成本，另有浏览器采样生命周期差异；本轮成功路径不增删节点                                   |
+| native.warm/sql.rows                   | 10→11         | 前序 A2 的 indexed revision 查询及其返回标量；本轮未改该路径                                                                     |
+| web.reopen/cdp.Nodes                   | 1090→1230     | 前序 A4 的 modulepreload link/文本节点成本，另有浏览器采样生命周期差异；本轮成功路径不增删节点                                   |
+| web.paced/cdp.Nodes                    | 1269→1433     | 前序 A4 的 modulepreload link/文本节点成本，另有浏览器采样生命周期差异；本轮成功路径不增删节点                                   |
+| web.send.poll/cdp.Nodes                | 1452→1618     | 前序 A4 的 modulepreload link/文本节点成本，另有浏览器采样生命周期差异；本轮成功路径不增删节点                                   |
+| web.send.stream/sql.statements         | 384→386       | 前序 A2 的 indexed revision 查询及其返回标量；本轮未改该路径                                                                     |
+| web.send.stream/push.bytes             | 91492→91693   | 既有 stream/paced live 推送字节差异；合并时序是可能来源，未采集原始 payload，无法逐字归因（延续 D 限制），不作为本轮性能收益证据 |
+| web.send.stream/push.view.bytes        | 77698→77899   | 既有 stream/paced live 推送字节差异；合并时序是可能来源，未采集原始 payload，无法逐字归因（延续 D 限制），不作为本轮性能收益证据 |
+| web.send.stream/cdp.Nodes              | 1515→1634     | 前序 A4 的 modulepreload link/文本节点成本，另有浏览器采样生命周期差异；本轮成功路径不增删节点                                   |
+| commands.discover.cold/sql.rows        | 78→81         | 前序 A2 的 indexed revision 查询及其返回标量；本轮未改该路径                                                                     |
+| commands.discover.warm/sql.rows        | 64→66         | 前序 A2 的 indexed revision 查询及其返回标量；本轮未改该路径                                                                     |
+| projection.large.open/sql.statements   | 98→99         | 前序 A2 的 indexed revision 查询及其返回标量；本轮未改该路径                                                                     |
+| projection.large.paced/sql.statements  | 572→574       | 前序 A2 的 indexed revision 查询及其返回标量；本轮未改该路径                                                                     |
+| projection.large.paced/push.bytes      | 241828→246628 | 既有 stream/paced live 推送字节差异；合并时序是可能来源，未采集原始 payload，无法逐字归因（延续 D 限制），不作为本轮性能收益证据 |
+| projection.large.paced/push.view.bytes | 200456→205256 | 既有 stream/paced live 推送字节差异；合并时序是可能来源，未采集原始 payload，无法逐字归因（延续 D 限制），不作为本轮性能收益证据 |
+
+- 状态改回「已推送待核验」，保留审查方第 1 轮原文；待审查方复核。不部署、不重启线上、不使用真实模型账号。
 
 ## 核验记录（审查方追加）
 

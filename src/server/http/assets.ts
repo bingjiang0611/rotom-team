@@ -129,79 +129,93 @@ function appPolicy(html: string): string {
 
 let page:
     { sources: Map<string, string>; value: ReturnType<typeof asset>; policy: string } | undefined;
-let preparingPage: Promise<NonNullable<typeof page>> | undefined;
+let preparingPage: Promise<Awaited<ReturnType<typeof appPage>>> | undefined;
 
 /** Static imports only. Preloads fetch modules; the original script/import order still controls evaluation. */
 async function appPage() {
-    if (page) {
-        const unchanged = await Promise.all(
-            [...page.sources].map(async ([file, etag]) => (await readAsset(file)).etag === etag),
-        );
-
-        if (unchanged.every(Boolean)) {
-            return page;
-        }
-    }
-
     const index = join(WEB, "index.html");
     const original = await readAsset(index);
-    const html = original.body.toString("utf8");
-    const importMap = /<script type="importmap">([\s\S]*?)<\/script>/.exec(html);
-    const imports = importMap
-        ? (JSON.parse(importMap[1]!) as { imports: Record<string, string> }).imports
-        : {};
-    const sources = new Map([[index, original.etag]]);
-    const urls = new Set<string>();
 
-    const visit = async (url: string): Promise<void> => {
-        if (urls.has(url)) {
-            return;
-        }
+    try {
+        if (page) {
+            const unchanged = await Promise.all(
+                [...page.sources].map(
+                    async ([file, etag]) =>
+                        (file === index ? original.etag : (await readAsset(file)).etag) === etag,
+                ),
+            );
 
-        urls.add(url);
-        const file = url.startsWith("/vendor/") ? VENDOR[url.slice(8)] : join(WEB, url.slice(1));
-
-        if (!file) {
-            throw new Error(`Unknown module preload: ${url}`);
-        }
-
-        const module = await readAsset(file);
-
-        sources.set(file, module.etag);
-
-        // The repository uses literal static ESM imports; dynamic imports remain lazy. If the
-        // module syntax changes, replace this scanner with a parser, not speculative extra links.
-        for (const match of module.body
-            .toString("utf8")
-            .matchAll(
-                /(?:^|\n)\s*(?:import\s*(?:[^'";]*?\sfrom\s*)?|export\s+[^'";]*?\sfrom\s*)["']([^"']+)["']/g,
-            )) {
-            const name = match[1]!;
-            const target =
-                imports[name] ??
-                (name.startsWith(".") || name.startsWith("/")
-                    ? new URL(name, `http://app.local${url}`).pathname
-                    : undefined);
-
-            if (target?.startsWith("/") && !target.startsWith("//")) {
-                await visit(target);
+            if (unchanged.every(Boolean)) {
+                return page;
             }
         }
-    };
 
-    for (const match of html.matchAll(/<script\s+type="module"\s+src="([^"]+)"/g)) {
-        await visit(match[1]!);
+        const html = original.body.toString("utf8");
+        const importMap = /<script type="importmap">([\s\S]*?)<\/script>/.exec(html);
+        const imports = importMap
+            ? (JSON.parse(importMap[1]!) as { imports: Record<string, string> }).imports
+            : {};
+        const sources = new Map([[index, original.etag]]);
+        const urls = new Set<string>();
+
+        const visit = async (url: string): Promise<void> => {
+            if (urls.has(url)) {
+                return;
+            }
+
+            urls.add(url);
+            const file = url.startsWith("/vendor/")
+                ? VENDOR[url.slice(8)]
+                : join(WEB, url.slice(1));
+
+            if (!file) {
+                throw new Error(`Unknown module preload: ${url}`);
+            }
+
+            const module = await readAsset(file);
+
+            sources.set(file, module.etag);
+
+            // The repository uses literal static ESM imports; dynamic imports remain lazy. If the
+            // module syntax changes, replace this scanner with a parser, not speculative extra links.
+            for (const match of module.body
+                .toString("utf8")
+                .matchAll(
+                    /(?:^|\n)\s*(?:import\s*(?:[^'";]*?\sfrom\s*)?|export\s+[^'";]*?\sfrom\s*)["']([^"']+)["']/g,
+                )) {
+                const name = match[1]!;
+                const target =
+                    imports[name] ??
+                    (name.startsWith(".") || name.startsWith("/")
+                        ? new URL(name, `http://app.local${url}`).pathname
+                        : undefined);
+
+                if (target?.startsWith("/") && !target.startsWith("//")) {
+                    await visit(target);
+                }
+            }
+        };
+
+        for (const match of html.matchAll(/<script\s+type="module"\s+src="([^"]+)"/g)) {
+            await visit(match[1]!);
+        }
+
+        // After the import map, before the body. No script text or execution order is changed.
+        const body = html.replace(
+            "</head>",
+            `${[...urls].map((url) => `<link rel="modulepreload" href="${url}" />`).join("\n")}\n</head>`,
+        );
+
+        page = { sources, value: asset(Buffer.from(body)), policy: appPolicy(body) };
+
+        return page;
+    } catch {
+        // Preloads are optional hints: even a scanner false positive or a disappearing
+        // cached source must not break the page. Retry discovery on the next request.
+        page = undefined;
+
+        return { value: original, policy: appPolicy(original.body.toString("utf8")) };
     }
-
-    // After the import map, before the body. No script text or execution order is changed.
-    const body = html.replace(
-        "</head>",
-        `${[...urls].map((url) => `<link rel="modulepreload" href="${url}" />`).join("\n")}\n</head>`,
-    );
-
-    page = { sources, value: asset(Buffer.from(body)), policy: appPolicy(body) };
-
-    return page;
 }
 
 /** The app page with a revalidated import graph and its unchanged script policy. */
@@ -209,7 +223,21 @@ export async function serveApp(request: IncomingMessage, response: ServerRespons
     preparingPage ??= appPage().finally(() => {
         preparingPage = undefined;
     });
-    const current = await preparingPage;
+    let current: Awaited<ReturnType<typeof appPage>>;
+
+    try {
+        current = await preparingPage;
+    } catch (error) {
+        if (
+            !["ENOENT", "ENOTDIR", "EISDIR"].includes((error as NodeJS.ErrnoException).code ?? "")
+        ) {
+            throw error;
+        }
+
+        send(response, 404, "Not found");
+
+        return;
+    }
 
     await sendAsset(request, response, current.value, "text/html; charset=utf-8", {
         "content-security-policy": current.policy,

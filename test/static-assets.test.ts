@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import { createServer } from "node:http";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import fsPromises from "node:fs/promises";
+import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { gunzipSync } from "node:zlib";
@@ -71,6 +73,119 @@ test("static assets revalidate actual gzip bytes, edits, concurrent reads and bo
         server.close();
         await once(server, "close");
         rmSync(folder, { recursive: true, force: true });
+    }
+});
+
+test("preload failures preserve the original page and CSP, then recover on later requests", async (t) => {
+    const folder = mkdtempSync(join(tmpdir(), "preload-failure-"));
+
+    t.after(() => {
+        t.mock.restoreAll();
+        syncBuiltinESMExports();
+        rmSync(folder, { recursive: true, force: true });
+    });
+    cpSync(WEB, folder, { recursive: true });
+    // Redirect only this process's asset reads: never edit the live web directory.
+    const stat = fsPromises.stat;
+    const readFile = fsPromises.readFile;
+
+    t.mock.method(fsPromises, "stat", (...args: Parameters<typeof stat>) => {
+        if (typeof args[0] === "string" && args[0].startsWith(`${WEB}/`)) {
+            args[0] = join(folder, args[0].slice(WEB.length + 1));
+        }
+
+        return stat(...args);
+    });
+    t.mock.method(fsPromises, "readFile", (...args: Parameters<typeof readFile>) => {
+        if (typeof args[0] === "string" && args[0].startsWith(`${WEB}/`)) {
+            args[0] = join(folder, args[0].slice(WEB.length + 1));
+        }
+
+        return readFile(...args);
+    });
+    syncBuiltinESMExports();
+    const server = createServer((request, response) => {
+        void serveApp(request, response).catch((error) => {
+            response.writeHead(500);
+            response.end(String(error));
+        });
+    });
+
+    server.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+
+    try {
+        const first = await fetch(base);
+        const preloaded = await first.text();
+        const policy = first.headers.get("content-security-policy");
+        const original = readFileSync(join(folder, "index.html"), "utf8");
+        const app = join(folder, "app.js");
+        const script = readFileSync(app, "utf8");
+
+        const fallback = async () => {
+            const response = await fetch(base);
+
+            assert.equal(response.status, 200);
+            assert.equal(
+                await response.text(),
+                original,
+                "omit hints, not scripts or page content",
+            );
+            assert.equal(response.headers.get("content-security-policy"), policy);
+            const again = await fetch(base, {
+                headers: { "if-none-match": response.headers.get("etag")! },
+            });
+
+            assert.equal(again.status, 304, "fallback still supports conditional requests");
+            assert.equal(again.headers.get("content-security-policy"), policy);
+        };
+
+        const recovered = async () => {
+            const response = await fetch(base);
+
+            assert.equal(response.status, 200);
+            assert.equal(
+                await response.text(),
+                preloaded,
+                "a failure must not disable future preloads",
+            );
+            assert.equal(response.headers.get("content-security-policy"), policy);
+        };
+
+        assert.equal(first.status, 200);
+        assert.match(preloaded, /rel="modulepreload"/);
+        assert.ok(policy);
+
+        for (const target of ["./not-a-module.js", "/vendor/not-a-module.mjs"]) {
+            // Valid JS: the regex sees an import inside text that is not an import declaration.
+            writeFileSync(app, `${script}\nconst example = \`\nimport x from "${target}"\n\`;\n`);
+            await fallback();
+            writeFileSync(app, script);
+            await recovered();
+        }
+
+        const theme = join(folder, "theme.js");
+        const themeSource = readFileSync(theme);
+
+        rmSync(theme);
+        await fallback(); // A previously cached graph must tolerate a source disappearing too.
+        writeFileSync(theme, themeSource);
+        await recovered();
+        rmSync(join(folder, "index.html"));
+        const missingPage = await fetch(base);
+
+        assert.equal(
+            missingPage.status,
+            404,
+            "a missing index keeps the original not-found response",
+        );
+        await missingPage.text();
+        writeFileSync(join(folder, "index.html"), original);
+        await recovered();
+    } finally {
+        server.close();
+        await once(server, "close");
     }
 });
 
