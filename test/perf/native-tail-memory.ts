@@ -14,7 +14,10 @@ import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { prepareCheckout, removeCheckout } from "./checkout.ts";
 import { revision } from "./measure.ts";
-import type { NativeTail, readNativeSnapshot } from "../../src/server/rotom-executions.ts";
+import type {
+    NativeTail,
+    readNativeSnapshot,
+} from "../../src/server/rotom-executions/native-tail.ts";
 
 export const MEMORY_CASES = {
     small: { entries: 128, chars: 120 },

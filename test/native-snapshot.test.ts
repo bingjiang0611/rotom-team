@@ -11,11 +11,8 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-    readNativeSnapshot,
-    currentBranchGoalState,
-    NativeTail,
-} from "../src/server/rotom-executions.ts";
+import { currentBranchGoalState } from "../src/server/rotom-executions.ts";
+import { readNativeSnapshot, NativeTail } from "../src/server/rotom-executions/native-tail.ts";
 import { RotomRpc, RpcFailure } from "../src/server/rotom-rpc.ts";
 import type { KernelEntry } from "../src/server/rotom-journal.ts";
 
