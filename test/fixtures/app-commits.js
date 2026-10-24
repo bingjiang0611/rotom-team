@@ -101,12 +101,25 @@ const fixture = (window.appCommitFixture = {
                 busy: true,
                 ...(kind === "tool"
                     ? {
+                          generation: {
+                              attempt: 1,
+                              message: {
+                                  blocks: [
+                                      {
+                                          type: "toolCall",
+                                          id: "d4-tool",
+                                          name: "bash",
+                                          args: { command: "echo fixture" },
+                                      },
+                                  ],
+                              },
+                          },
                           tools: [
                               {
                                   callId: "d4-tool",
                                   name: "bash",
                                   status: "running",
-                                  args: { command: text },
+                                  output: text,
                               },
                           ],
                       }
