@@ -35,7 +35,7 @@ export async function withMarkdownPage<T>(
                 ? fileURLToPath(new URL("./markdown-page.js", import.meta.url))
                 : path.startsWith("/vendor/")
                   ? VENDOR[path.slice(8)]
-                  : /^\/[\w-]+\.js$/.test(path)
+                  : /^\/(?:[\w-]+\/)*[\w-]+\.js$/.test(path)
                     ? join(WEB, path.slice(1))
                     : undefined;
 
