@@ -105,7 +105,7 @@ export async function nativeResourcePolicyApi() {
     };
 }
 
-/** Pinned session-file operations only, without the process client or the model-provider library. */
+/** Pinned session-file API without the process client. The SDK still imports pi-ai transitively. */
 export async function nativeSessionDataApi() {
     verifyRotomKernel();
     const { resolveInstalledPi } = await import(

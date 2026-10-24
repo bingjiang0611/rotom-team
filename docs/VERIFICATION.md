@@ -36,6 +36,16 @@ make a move pass. `test/mobile-ui.test.ts` and `test/peeks-ui.test.ts` additiona
 See [the D6 record](performance/review-2026-10-23/d6-validation.md) for source revisions, full-suite results,
 negative controls, stylesheet network cost and every worse performance counter.
 
+## D7 seed-worker evidence
+
+`test/seed-materialization.test.ts` covers real worker placement, attach-before-append, private modes/public-only
+history, lease retention, Stop before/after attach and readback, final revocation, worker write failure, readback
+mismatch, restart fencing, empty history, fork/import and no replay.
+[handoff-bench.mjs](performance/review-2026-10-23/handoff-bench.mjs) measures three 1/10/100 MiB handoffs per
+fresh process with synthetic native inference; its benchmark-only preload measures actual copy/closure intervals.
+[The D7 record](performance/review-2026-10-23/d7-validation.md) reports increased total latency/RSS alongside
+reduced parent stalls. It is not a production or multi-room capacity claim.
+
 ## Event subscriptions
 
 `session-subscriptions.test.ts` exercises authenticated HTTP SSE/poll: connection ownership, ACK/full-view order,

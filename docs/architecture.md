@@ -23,9 +23,10 @@ flowchart LR
     Gate --> Native
 ```
 
-The diagram describes the current native path, not a worker design. Its entry points are
+The diagram describes the inference path. Its entry points are
 `http/conversation-routes.ts: conversationRoutes`, `TeamKernel.submit/#submit/#check`,
 `RotomExecutions.run/#launch`, and `rotom-kernel.ts: startRotomKernel`.
+The seed-file worker described below does not perform inference.
 A native session cannot fall back to Durable execution when the kernel is disabled: the route rejects it;
 `TeamExecution.admit/authorize` also reject native sessions.
 
@@ -55,6 +56,28 @@ untrusted team members safe to host. Do not remove their checks on the assumptio
   `TeamAccounts`, not a shared owner account. `attribution.ts: requesterOf` and `requests.ts` retain
   authorship and legacy workflow attribution; they are not the native payer authority.
 
+## Public-history materialization
+
+For non-empty handoff, public fork and import history, each tracked execution owns one short-lived Node worker.
+The parent owns authorization and the only journal connection. The worker loads the verified pinned session-data
+API, not an agent loop, account resolver or extension runtime. Handoff follows this sequence;
+public fork/import reuse the seed boundary after their own admission/reservation:
+
+```text
+parent: authorize → project public history → reserve → retire old process → authorize
+worker: prepare private destination → request attach
+parent: journal.attach → ACK with public messages
+worker: append → chmod → file/directory fsync → read back → full comparison → result → exit
+parent: wait for exit → authorize again → check Stop → journal.finish
+```
+
+`rotom-executions/seed.ts` owns the worker protocol; `seed-worker.ts` runs the unchanged stages in
+`seed-files.ts`. A result alone cannot release the tracked execution or commit its head. Stop terminates and joins
+the worker; failure, missing completion or revocation after materialization starts remains unknown, never a replay.
+Empty histories still need no file/worker. There is no pool, background queue, cross-payer seed reuse or global
+memory admission cap. Large concurrent materializations need separate capacity validation.
+Projection and synchronous journal writes remain on the parent; this is not the D8 storage worker.
+
 ## Persistent truth, mirror and live state
 
 ```mermaid
@@ -77,11 +100,11 @@ flowchart LR
 | Live view          | Streaming text/tools, dialogs, statuses and widgets are provisional; tabs may also show their own optimistic send                                          | `TeamKernel.#observe/clientLive/roomState`, `web/store.js: actions.submit/applyView` |
 
 Handoff seeds are excluded from mirrored entry enumeration by `RotomJournal.entriesAfter`, so copied history
-is not appended twice. `team-kernel.ts: publicEntry` strips private assistant
+is not appended twice. `team-kernel/projection.ts: publicEntry` strips private assistant
 parts from the shared mirror. Do not treat live text, HTTP acceptance or a missing PID as a settled receipt.
 Changing stored document kind/scope/history/fork semantics is not a documentation cleanup.
 
-Both stores currently run in the server process; `RotomJournal` uses synchronous SQLite.
+Both stores remain parent-owned; `RotomJournal` uses synchronous SQLite. The seed worker opens neither store.
 The D8 worker is a future change, not an existing ownership boundary.
 See [map.md](map.md#data) for file ownership and [CONFIGURATION.md](CONFIGURATION.md) for retention/configuration.
 

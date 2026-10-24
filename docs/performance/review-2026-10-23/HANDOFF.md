@@ -41,7 +41,7 @@
 | D4    | D    | App 根渲染局部订阅(C6)                      | 核验通过                      | `58ddb47`（测量）；实现见执行记录    |
 | D5    | D    | 切换会话不重连(C6)                          | 核验通过                      | `229bda2`（测量）；`5acca07`（实现） |
 | D6    | D    | 大文件纯移动拆分(C5)                        | 核验通过                      | `3768653`（测量）；实现见执行记录    |
-| D7    | D    | handoff 测量与异步化(C2)                    | 进行中                        |                                      |
+| D7    | D    | handoff 测量与异步化(C2)                    | 已推送待核验                  | `9e6412d`（测量）；`acb36e5`（实现） |
 | D8    | D    | storage worker(C3)                          | 待做                          |                                      |
 | D9    | D    | 下线旧后端(C4,只读归档)                     | 待做                          |                                      |
 
@@ -1037,6 +1037,37 @@ owner 已批准把 C2–C6 从「只写方案」改为「实现」。C1(进程�
 - 实现边界：仅将 #seed 的文件构建、持久化、读回及完整比较放进本次 operation 拥有的短生命周期 worker；parent 保留唯一 journal writer、attach 与最终授权/finish。worker 必须等 attach 完成的 ACK 才能 append；worker 完整退出后才允许 finish 或释放 #track。停止、worker 失败/丢结果、readback 不符、最终撤权仍 unknown，不重试，不复用 seed，不跨付费人去重。不做 C1、D8 或 D9。
 - 每个正在 materialize 的既有执行至多一个 worker，无独立后台队列/常驻池；保留现有执行并发模型。需要同时测量 structured-clone、worker 生命周期的额外时延/RSS，而非把移出的工作记成消失。
 
+### D7 — 已实现，提交审查
+
+- 测量 `9e6412d`；同步文件阶段提取 `da1068c`；固定 session-data loader 提取 `d71fd8d`；
+  benchmark-only worker copy/closure 探针 `fa269fc`；行为实现及 15 项回归 `acb36e5`。
+- 每个 materializing 执行持有一个短生命周期 worker。父线程仍是唯一 journal writer，先 attach 才 ACK
+  允许 append；worker 保留文件/目录 fsync、readback 与完整比较。成功结果必须等 worker 退出，再最终授权、
+  检查 Stop、finish。Stop/失败/丢结果/最终撤权保持 unknown，不重放；空历史仍无 worker/file。
+- 实现阶段默认 `npm test` **637/637**、0 skip；format/check/lint/format:check 通过，无串行例外。
+  最终文档/源码注释校验后的默认全量为 **636/637**：`settings-ui.test.ts:312` 的 recovery 用例
+  在 `:401` 恢复 owner 时报 `Failed to resolve module specifier "preact/hooks"`。未自动重跑全量。
+  独立该文件 7/7；未改的 D6 基线加 150 ms POST 延迟诊断没有复现（1/1），不能宣称基线已有相同失败。
+  测试/浏览器/UI 路径对 `7671c97` 无 diff，fixture 是 legacy 路径；导航就绪竞态只是代码阅读推断。
+  证据：final-test.log、settings-alone.log、settings-base-delay.log；没有用旧通过覆盖失败。
+  随后 owner 明确授权仅重跑一次默认全量，`test-owner-retry.log` 为 **637/637**、0 fail/skip，237830 ms。
+  未改该测试、未跳过或使用串行例外；失败记录保留，重跑通过不代表其根因已修复。
+  同步 Promise 包装负控在 worker-thread 断言失败；15 项专项含 fork/import 与重开 journal 的 unknown fence。
+- 100 MiB 最长主线程 lag **1047/990/971→412/476/480 ms**，但 handoff 总耗时
+  **1084/1110/1092→1362/1388/1380 ms**，截至三次返回的进程累计 peak RSS **1335→1626 MiB**。
+  1 MiB 总耗时 **40/56/60→301/286/276 ms**。明确保留启动/复制成本，不声称交接更快或完全无阻塞。
+- 连续三次的 DB/WAL/正文/seed 字节量前后一致；不去重、不压缩、不跨付费人复用。projection 与 journal finish
+  仍同步；并发大历史容量、真实模型与生产 L3 未验证。
+- 对 main 和 D7 测量基线两组 perf 护栏均通过；worse 为 58/6 项，62 项并集逐项记录。
+  D7 中五项增量由一次 400 ms 延迟 sessions 广播解释：额外 1 SQL/13 rows/4076 wire B/3485 stringify chars；
+  独立 trace 在旧/新代码中反向重现，且两者都未创建 worker。history stringify +34 字符未重现，保留 unknown。
+- 完整阶段、copy/exit、RSS/存储、48 项 slower 并集及限制见 [D7 核验材料](d7-validation.md)；
+  原始证据在 `/tmp/rotom-review-D7/`。已同步架构/map/配置/验证文档，未改 ledger/schema/vendor/pin。
+- **下一步：审查方核验 D7；owner 批准的一次默认全量重跑已通过。**
+  settings 恢复登录失败的根因仍未修复；若要继续调查，由 owner 另案授权采集失败页面上下文。
+  审查时需评估“小历史额外启动延迟/大历史 RSS”取舍；核验通过前不做 D8。
+  未做 C1/D8/D9，未部署或重启；用户两份文档保持不变。
+
 ## 核验记录（审查方追加）
 
 <!-- 每项一节：核验了什么、结论（通过 / 未通过）、未通过的原因。 -->
@@ -1189,7 +1220,7 @@ D6 核验通过,执行方可以开始 D7。
 
 ### 边界与建议顺序
 
-本节是待 owner 决策的方案，**C1–C6 均未实现**。A/B 没有顺带引入进程淘汰、worker、旧后端下线、新订阅协议或大文件拆分。建议先补当前架构文档与基线，再做可证明的纯移动；C1、C2、C3 分别审批，C4 是独立产品决策。所有方案保留个人凭据路由、unknown 不重放、可信原生边界和既有文档存储合同。
+本节保留提出 D 批之前的方案快照，不是当前实现状态；当前状态以上方 D 状态表为准。当时 **C1–C6 均未实现**。A/B 没有顺带引入进程淘汰、worker、旧后端下线、新订阅协议或大文件拆分。建议先补当前架构文档与基线，再做可证明的纯移动；C1、C2、C3 分别审批，C4 是独立产品决策。所有方案保留个人凭据路由、unknown 不重放、可信原生边界和既有文档存储合同。
 
 ### C1 — 已用原生进程的预算与空闲回收
 

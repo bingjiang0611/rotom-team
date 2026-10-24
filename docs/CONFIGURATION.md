@@ -95,6 +95,13 @@ idle. Failures/unknown outcomes retire the process, and handoff retires the old 
 transport. Server shutdown awaits closure of retained processes before releasing its journal lock. No idle eviction or
 cross-restart in-memory restoration is claimed; reopening after restart uses the persisted native session.
 
+Non-empty public-history seeds (handoff, public fork and import) use one operation-owned, short-lived Node worker.
+It waits for the parent's durable journal attach before appending, then fsyncs and verifies the full readback.
+The parent waits for worker exit and rechecks authorization before committing the new head. Stop joins the worker;
+an uncertain materialization is not retried or reused. An active execution still prevents journal closure.
+This is not a storage worker, agent process or shared pool. No new configuration setting or global memory cap is
+introduced; large parallel materializations require capacity validation.
+
 Opening an idle native session that runs on one's own account asks the server to start its process after the first
 authoritative full view, before composer focus or the first send. Hidden tabs defer until visible; cached/checking
 views, other members' sessions, initializing/busy sessions and non-steering members do not ask. Composer focus remains
