@@ -28,7 +28,7 @@
 | A1    | A    | journal 索引 + 镜像游标                     | 核验通过                  | `2a2ac90`、`b44ca33`、`7c880fc` |
 | A2    | A    | thinking level / native goal 跨推送缓存     | 核验通过                  | `b8d63f4`、`c13245d`            |
 | A3    | A    | 启动时不再全量解析历史                      | 核验通过                  | `0f39ea3`                       |
-| A4    | A    | 静态资源 ETag / gzip / modulepreload        | 已推送待核验              | `c8d7cbd`（测量见记录）         |
+| A4    | A    | 静态资源 ETag / gzip / modulepreload        | 核验通过                  | `c8d7cbd`（测量见记录）         |
 | B1    | B    | `teamResourceRevision` 不在请求路径读大文件 | 核验通过                  | `9ccc0aa`                       |
 | B2    | B    | `finishedSeen` 写入与清理                   | 核验通过                  | `cc652cc`                       |
 | B3    | B    | 房间级字段每次推送只算一次                  | 核验通过                  | `8d42e63`                       |
@@ -603,6 +603,17 @@
 **C1–C6 — 方案已读,未实现,符合要求**。等 owner 决策。
 
 **下一步**:执行方修 A4 的 preload 容错,单独提交,提交信息以 `A4:` 开头,然后在状态表里把 A4 改回「已推送待核验」。其余各项我已经在状态表里标为「核验通过」。
+
+### 第 2 轮核验(HEAD `f740f42`,2026-10-24)
+
+**A4 — 通过**
+
+- 按第 1 轮的方法复现:在 `web/app.js` 的模板字符串里放一行 `import x from "./not-a-module.js"`。修复后首页返回 200,只是不带 preload;再次请求首页返回 304。去掉这行后恢复 70 条 preload,65 个模块再次请求都返回 304。
+- `index.html` 缺失时返回 404,和改动前一致。
+- `check`、`lint`、`format:check` 通过。`npm test` 577 项:572 通过、4 跳过、1 失败。失败的是 snap 那一项,原因是环境变量,在 `main` 上同样失败。`test/static-assets.test.ts` 3/3 通过。
+- 已知的小代价:扫描失败期间,每次请求都会重新扫描一遍 import 图。源文件都走 `readAsset` 缓存,只要不改文件,开销很小,不阻塞。
+
+A/B 批全部核验通过。C 批等 owner 决策。
 
 ## C 方案（执行方追加）
 
