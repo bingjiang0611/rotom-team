@@ -41,7 +41,7 @@
 | D4    | D    | App 根渲染局部订阅(C6)                      | 核验通过                      | `58ddb47`（测量）；实现见执行记录    |
 | D5    | D    | 切换会话不重连(C6)                          | 核验通过                      | `229bda2`（测量）；`5acca07`（实现） |
 | D6    | D    | 大文件纯移动拆分(C5)                        | 核验通过                      | `3768653`（测量）；实现见执行记录    |
-| D7    | D    | handoff 测量与异步化(C2)                    | 已推送待核验                  | `9e6412d`（测量）；`acb36e5`（实现） |
+| D7    | D    | handoff 测量与异步化(C2)                    | 核验未通过                    | `9e6412d`（测量）；`acb36e5`（实现） |
 | D8    | D    | storage worker(C3)                          | 待做                          |                                      |
 | D9    | D    | 下线旧后端(C4,只读归档)                     | 待做                          |                                      |
 
@@ -1215,6 +1215,36 @@ D5 核验通过,执行方可以开始 D6。
 - 接受执行方记录的代价:CSS 多 1 个请求、首次 gzip 多 614 B。
 
 D6 核验通过,执行方可以开始 D7。
+
+### 第 9 轮核验:D7(HEAD `cc10114`,2026-10-24)
+
+**D7 — 核验未通过:正确性没有问题,需要补一个大小阈值**
+
+**正确性:通过**
+
+- `check`、`lint`、`format:check` 通过。默认并行的 `npm test` 共 637 项:632 通过、4 跳过、1 失败,失败的仍是环境相关的 snap 那一项。`npm run test:kernel:app` 也通过,其中 `apiHandoffAndCompaction`、`handoffHistoricalUsagePreserved`、`forkGapAndUnknownSourceNotReplayed`、`crashedKernelRemainsUnknownWithoutContinuation` 都是 true。
+- 执行顺序没有变:先授权,接着 worker 准备文件,然后**父线程同步 `journal.attach`**,之后 worker 才开始 append、fsync 和读回比较,最后父线程再次授权并 `finish`。journal 只有父线程一个写入方。
+- unknown 语义没有变:`materializing = true` 在创建 worker 之前就设置好了,所以 worker 出错、attach 失败、被 stop 或退出码不为 0,结果都是 `unknown`,不是 `rejected`。`stop()` 会等 worker 真正退出;`result` 也只在 worker 退出后才 settle。abort 时会先停 seed。
+
+**取舍:不接受当前形态**
+
+执行方的测量(`d7-validation.md:51-55`)显示:
+
+| 历史大小 | handoff 总耗时 | 主线程最大停顿 |
+| -------- | -------------- | -------------- |
+| 1 MiB    | ~50 → ~290 ms  | ~22 → ~7 ms    |
+| 10 MiB   | ~150 → ~435 ms | ~118 → ~46 ms  |
+| 100 MiB  | ~1.1 → ~1.38 s | ~1.0 → ~0.45 s |
+
+最常见的是小历史。对小历史来说,每次接力都要多付约 240 ms 的 worker 启动开销,换来的只是把 20 ms 的停顿去掉,不划算。到了 10 MiB 以上,主线程停顿才明显到需要处理,这时 worker 才值得用。
+
+**要求(只在 D7 上追加提交,提交信息以 `D7:` 开头):**
+
+1. 按 `publicNativeHistory` 结果序列化后的字节数设一个阈值。阈值以下,在父线程里直接调用已经抽出来的 `prepareSeed` / `persistSeed`,顺序和 unknown 语义与 worker 路径完全相同;阈值以上走 worker。阈值根据现有 bench 的交叉点来定,例如 4–8 MiB,并在记录里写明依据。
+2. 两条路径都要有测试,至少覆盖:attach 先于 append、materialize 中途失败结果是 unknown、abort/stop。阈值的选择本身也要有测试。
+3. 用 1、10、100 MiB 重跑 `handoff-bench`。期望 1 MiB 的总耗时回到基线附近,10 和 100 MiB 的停顿保持现在的水平。
+
+D8 暂不开始。
 
 ## C 方案（执行方追加）
 
