@@ -39,7 +39,7 @@
 | D2    | D    | notify 控制消息集中解码(C6)                 | 核验通过                      | `1b1228a`（测量）；实现见执行记录 |
 | D3    | D    | 流式 Markdown 解析(C6)                      | 核验通过                      | `b6d3842`（测量）；实现见执行记录 |
 | D4    | D    | App 根渲染局部订阅(C6)                      | 核验通过                      | `58ddb47`（测量）；实现见执行记录 |
-| D5    | D    | 切换会话不重连(C6)                          | 待做                          |                                   |
+| D5    | D    | 切换会话不重连(C6)                          | 进行中                        |                                   |
 | D6    | D    | 大文件纯移动拆分(C5)                        | 待做                          |                                   |
 | D7    | D    | handoff 测量与异步化(C2)                    | 待做                          |                                   |
 | D8    | D    | storage worker(C3)                          | 待做                          |                                   |
@@ -878,6 +878,12 @@ owner 已批准把 C2–C6 从「只写方案」改为「实现」。C1(进程�
 - 证据 /tmp/rotom-review-D4/：base.json/head.json、negative.log、order-negative.log、targeted.log、test.log、final-ci/、final-change-ci/；早期 ci/change-ci 是键顺序修正前样本，不作最终完成证据。
 - 最终自审：生产改动只在 web/app.js、web/store.js、web/transcript.js；src/server、vendor/pin、凭据、unknown、journal/Durable 合同、package 与 ledger 未改。两处用户原有文档改动逐字节保留。未部署/重启，未做 D5。
 - D4「已推送待核验」。下一步由审查方核验并写回，通过后执行方才开始 D5。
+
+### D5 — 切换会话测量（实现前）
+
+- 新增 session-switch-bench.mjs：真实 Chromium、真实认证 Team 服务，两种传输各连续 A/B 切换 6 次，等目标非 checking 视图，不发送用户 prompt，不使用真实账号。HTTP diagnostics 与 pushChannel 计数在初始连接之后开始，未改变 perf ledger/workload。
+- de036f7 基线：SSE **6 次新 stream、6 hello、6 完整 sessions**；poll **6 次新 poll session、6 hello、6 完整 sessions**；两者 /api/me 都为 0。结果 /tmp/rotom-review-D5/base.json。poll fixture 用仅解析到回环的 localhost.，避免生产 local 判断强制 SSE；原 D4 fixture 默认行为不变。
+- 实现计划：显式协商订阅能力；同一连接上 POST 只读订阅意图，单调 generation 与有序 ACK；取消旧房间、每次及 await 后重查权限；冻结事件所属 generation，丢弃旧代事件（包括 A→B→A）；SSE/poll 共用协议，旧 tab 保持原格式。断线/未知 POST 结果只重建只读连接，不重放用户 send。
 
 ## 核验记录（审查方追加）
 

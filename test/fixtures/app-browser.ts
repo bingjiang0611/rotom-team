@@ -13,6 +13,7 @@ import { noInferenceModels, owner, root, until, work } from "../helpers.ts";
 
 export async function withAppPage<T>(
     task: (evaluate: (expression: string) => Promise<any>) => Promise<T>,
+    transport: "stream" | "poll" = "stream",
 ) {
     const directory = mkdtempSync(join(root, "app-commits-"));
     const app = await PocketApp.open({
@@ -62,13 +63,20 @@ export async function withAppPage<T>(
 
         server.listen(0, "127.0.0.1");
         await once(server, "listening");
-        const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+        const base = `http://${transport === "poll" ? "localhost." : "127.0.0.1"}:${(server.address() as { port: number }).port}`;
         const page = await browsers.open(1);
         const evaluate = async (expression: string) =>
             JSON.parse(await page.evaluate(`JSON.stringify(await (${expression}))`));
 
         await page.navigate(`${base}/login?token=${encodeURIComponent(app.config.ownerToken)}`);
         await page.navigate(`${base}/s/${id}`);
+
+        if (transport === "poll") {
+            await evaluate(
+                "(localStorage.setItem('pocket.transport', 'poll:' + Date.now()), true)",
+            );
+        }
+
         await evaluate("import('/commit-fixture.js').then(() => true)");
         await evaluate("import('/app.js').then(() => appCommitFixture.attach()).then(() => true)");
         await until(
