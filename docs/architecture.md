@@ -1,128 +1,172 @@
 # Architecture
 
-Local Markdown file links use `/api/c/:id/download`, not relative session-page routes. The route checks session
-visibility and `workspace.readableFile` before streaming regular files. PDFs are inline; all other types use
-attachment/octet-stream responses with a sandbox policy. The image route remains image-only. For steering members,
-ordinary non-PDF link clicks open the existing file viewer; new-tab links and viewers use the download href.
+This is the current **rotom team** architecture. [PRODUCT.md](PRODUCT.md) and
+[CONFIGURATION.md](CONFIGURATION.md) define the product contract; [map.md](map.md) locates the code.
+Pi Durable remains shared storage infrastructure. Its legacy agent execution path is separate from the default
+rotom execution path. Neither the proposed storage worker nor used-process idle eviction is implemented here.
 
-Native skill loading is project-only: the parent and child CLIs use `--no-skills`, then `rotom-skills.mjs` supplies
-project resources using the pinned package resolver. Bundled parent skills and explicit frozen skills still load.
-Personal skill directories and personal `skills` settings are ignored, not removed; other personal configuration
-continues to fail closed. This is a loading policy, not an OS restriction on reading skill files.
+## Execution and trust boundary
 
-**rotom team fork:** [PRODUCT.md](PRODUCT.md) supersedes the shared-provider and last-author billing assumptions below. `TeamAccounts` supplies personal model routes; `TeamExecution` persists ownership and authorizes provider dispatch. Its owner/provider-session indexes are restored before spend recovery and Harness resume. The upstream mechanics below remain reference material.
+`bin/rotom-team.js` isolates the data/agent directories before loading `src/server/main.ts`.
+The server defaults to kernel mode. `PocketApp.#open` opens the shared Harness and creates `TeamKernel`;
+it does **not** load service extension modules in kernel mode.
 
-How Pi Pocket's parts depend on each other, and the orderings the code relies on. [map.md](map.md) says where things are; this says what to keep when changing them.
+```mermaid
+flowchart LR
+    Tab[Browser tab] --> API[conversationRoutes: authenticated native submit]
+    API --> Team[TeamKernel: access, identity, fixed payer]
+    Team --> Exec[RotomExecutions: reserve receipt and own lifecycle]
+    Exec --> Native[Pinned rotom RPC process and tools]
+    Native --> Gate[Parent loopback auth gate: active receipt]
+    Gate --> Account[TeamAccounts.kernelAuth: payer's current account]
+    Account --> Gate
+    Gate --> Native
+```
 
-## Durable truth and what memory keeps
+The diagram describes the current native path, not a worker design. Its entry points are
+`http/conversation-routes.ts: conversationRoutes`, `TeamKernel.submit/#submit/#check`,
+`RotomExecutions.run/#launch`, and `rotom-kernel.ts: startRotomKernel`.
+A native session cannot fall back to Durable execution when the kernel is disabled: the route rejects it;
+`TeamExecution.admit/authorize` also reject native sessions.
 
-Pi Durable owns the lasting state of conversations: conversations, entries, tasks, and Pi Pocket's documents (`docs.ts`), in `pocket.sqlite`. People and settings, push subscriptions, uploads, and worktrees are files beside it ([map.md](map.md#data-pi-pocket-or-pi_pocket_dir)). What `PocketApp` keeps in memory about conversations is read back from storage:
+A native process runs with the trusted host user's privileges. A member HOME, environment filtering and an auth
+gate enforce product routing, **not an OS sandbox**. Native extensions and tools remain trusted code.
+`rotom-kernel.ts: startRotomKernel` and `rotom-resource-policy.ts` enforce launch policy; they do not make
+untrusted team members safe to host. Do not remove their checks on the assumption that HOME is isolation.
 
-- At startup, `#recover` reads each conversation's run, agent, chat, subagents, and who Pi works for in it.
-- After that, every commit goes through `#committed`, which keeps the memory up to date.
+## Personal credentials and who pays
 
-Some state lives in this process alone, and a restart forgets it. For example:
+- `team-accounts.ts: createRuntime` disables ambient credential lookup. `TeamAccounts.#open` owns each
+  member's `people/<id>/auth.json`, `profile.json`, `models-store.json` and refresh coordination.
+  `credential-store.ts: FileCredentials` is the credential-store adapter. The native broker HOME is **not**
+  another OAuth refresh writer.
+- `TeamKernel.binding/#ref/#check` bind the member, account generation, model, workspace, configuration and
+  kernel version. Membership, visibility, driving permission and account/model identity are checked again at
+  inference. The request's author does not silently replace an active run's payer.
+- `RotomExecutions.#launch` owns the loopback gate and its secret file. It checks the active receipt, bearer
+  token, provider/model and abortion state before and after async authorization.
+  `rotom-policy.mjs` calls this gate for native inference; `TeamAccounts.kernelAuth` returns request-scoped
+  auth, not a refresh-capable stored grant. Native refresh requests are rejected by the TeamKernel callback.
+- `TeamKernel.handoff` and `RotomExecutions.handoff/#seed` are explicit ownership/history transitions.
+  Public history is copied; private reasoning/signatures do not become another member's prompt.
+  `TeamKernel.snapshot` reports native cost status as unknown; shared transcript attribution is not proof
+  of provider billing.
+- Legacy Durable dispatch also uses personal routes: `TeamExecution.admit/authorize`, `TeamRunDoc` and
+  `TeamAccounts`, not a shared owner account. `attribution.ts: requesterOf` and `requests.ts` retain
+  authorship and legacy workflow attribution; they are not the native payer authority.
 
-- who is connected, typing, or away;
-- which tool calls wait for approval;
-- the browser's pages;
-- when each run ended, which peek tiles use;
-- provider sign-ins in progress.
+## Persistent truth, mirror and live state
 
-## Who owns what
+```mermaid
+flowchart LR
+    Native[Native session JSONL and RPC events] --> Journal[RotomJournal: receipts, entries and raw usage]
+    Journal --> Mirror[TeamKernel.mirror / #mirrorNow]
+    Mirror --> Durable[Harness commit: public native entries and NativeMirrorDoc count]
+    Durable --> Room[Room shared view]
+    Native -. provisional events via TeamKernel.#observe .-> Live[In-memory clientLive / roomState]
+    Live -.-> Room
+    Room --> Tab[Browser]
+```
 
-`PocketApp` (`app.ts`) creates the app's parts and hands each one the app.
+| Owner              | Durable state and invariant                                                                                                                                | Code                                                                                 |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Native process     | Native JSONL/session identity; acknowledged state and finalization must be read back                                                                       | `RotomExecutions.#execute`, `readNativeSnapshot`, `rotom-rpc.ts: RotomRpc`           |
+| Kernel journal     | `kernel.sqlite`: immutable attempt binding, receipts, segments/heads, entries, usage and resume plans; a pending/unknown operation fences its conversation | `RotomJournal.reserve/attach/progress/finish`                                        |
+| Shared Harness     | `pocket.sqlite`: conversations, collaborative documents, tasks and public native-entry mirrors; not the engine executing native tools                      | `PocketApp.#open`, `docs.ts`, `team-kernel.ts: NativeMirrorDoc`                      |
+| Mirror coordinator | Serializes mirrors per conversation; the stored count is an entry count, not a rowid; in-memory cursor advances only after a successful Durable commit     | `TeamKernel.mirror/#mirrorNow`, `RotomJournal.entryCursor/entriesAfter`              |
+| Live view          | Streaming text/tools, dialogs, statuses and widgets are provisional; tabs may also show their own optimistic send                                          | `TeamKernel.#observe/clientLive/roomState`, `web/store.js: actions.submit/applyView` |
 
-**Its parts:**
+Handoff seeds are excluded from mirrored entry enumeration by `RotomJournal.entriesAfter`, so copied history
+is not appended twice. `team-kernel.ts: publicEntry` strips private assistant
+parts from the shared mirror. Do not treat live text, HTTP acceptance or a missing PID as a settled receipt.
+Changing stored document kind/scope/history/fork semantics is not a documentation cleanup.
 
-- `commands`, `collab`, `alerts`, `providers`, `schedules`, `goals`, `shell`, `spend`
-- `workspace`, `transcripts`, `attribution`
-- `browsers`
+Both stores currently run in the server process; `RotomJournal` uses synchronous SQLite.
+The D8 worker is a future change, not an existing ownership boundary.
+See [map.md](map.md#data) for file ownership and [CONFIGURATION.md](CONFIGURATION.md) for retention/configuration.
 
-**What stays on `PocketApp`** (the parts call these rather than keeping copies):
+## Startup and recovery order
 
-- **Access:** `canSee`, `requireSee`, `requireSteer`, `requireDriver`.
-- **The conversation tree:** `rootOf`, `parentOf`, `conversationsOf`.
-- **Where a conversation works:** `cwdOf`, `agentState`, `sessionMeta`, `isBusy`.
-- **Live views:** `room`, `openRoom`, `releaseRoom`.
-- **Tabs and peek tiles:** `attach`, `detach`, `setPeeks`.
-- **The app's lifecycle:** `open` and `close`.
+The normal path in `PocketApp.#open` is:
 
-The harness, models, and settings exist only once `#open` has set them up, after the parts are made. So a part made with the app must not read them in its constructor; it reads them when it is called.
+1. Verify the native pin in kernel mode; take `harness.lock`. In non-kernel mode,
+   `requireNoPendingKernel` checks that native work is not being bypassed.
+2. Initialize push/settings/HTTP and `TeamAccounts`. Install core tasks and the identity extension.
+   Only non-kernel mode creates `ExtensionLoader` and loads service extensions.
+3. Open `pocket.sqlite` and `Harness`; then create `TeamKernel`/`RotomExecutions`.
+   `RotomJournal` takes `kernel.lock`, opens its own store and marks unfinished dispatch intents unknown.
+4. `PocketApp.#recover` rebuilds shared session/agent/chat/profile/subagent indexes and repairs authors.
+   `TeamKernel.reconcile` reconciles native metadata and catches mirrors up; it does not replay provider work.
+5. `TeamExecution.recover` rebuilds legacy owner/provider-session indexes, then `spend.load` restores
+   the shared spend view.
+6. Subscribe to commits, approvals and browser events. Warm the legacy guard only when enabled.
+7. Call `harness.resume()`, then schedule `TeamKernel.resumeInterrupted()`.
 
-Extensions never see `PocketApp`. They get `PocketHost` (`host.ts`), whose functions call into the app lazily. The HTTP layer parses a request, checks it, calls a part, and writes the answer; it holds no state of its own beyond invites and the event streams' pollers.
+The last method's name is **not** permission to replay an unknown result. It requires a persisted pending plan
+and an eligible **settled** prompt receipt, rechecks the member, and submits a new continuation with the existing
+chain limit. Unknown/interrupted receipts and unresolved command inputs stay fenced.
+See `TeamKernel.resumeInterrupted` and `RotomJournal.canResume/planResume`.
 
-## Startup
+A stale kernel lock is not broken just because its parent PID disappeared. Native/tool descendants may still
+be running (`RotomJournal.constructor`). Recovery and backup must preserve that uncertainty.
 
-`PocketApp.#open` runs in this order, and the order matters:
+## Commit coordination and delivery
 
-1. Take the data folder's lock. Set up push, Pi's settings, and the HTTP settings for provider streams.
-2. Load the models, and register the core tasks and every extension module that is on.
-3. Open the storage and the harness.
-4. `#recover`:
-    - read the session list;
-    - for each conversation, in turn: its run, agent, chat, who Pi works for (`attribution.recover`), and its subagents;
-    - then write back, in one commit, the authors that a crash kept out of the authors documents (`attribution.repair`).
-5. Load spend.
-6. Subscribe to commits, approvals, and browser pages.
-7. Warm Lancet Guard.
-8. Resume the work the last process left unfinished.
+`PocketApp.#committed` processes usage first, then document/submission changes; `#documentCommitted`
+updates memory and schedules rooms/session lists. This shared coordinator remains relevant in kernel mode because
+native public entries are committed through the Harness. It does not run native inference or settle native receipts.
+Commit listeners cannot reenter Harness session APIs; attribution writes are deferred.
 
-Work resumes last, so that everything that follows commits is listening before the first one comes.
+`Room.schedule/pushAll` coalesce room work (90 ms), and `schedulePeek` coalesces peeks (1 s).
+`PocketApp.#scheduleSessions` coalesces session-list updates (400 ms).
+`Room.pushAll` shares field projection/serialization for one fanout; each client retains its own full/delta,
+sequence and live-delta state. This is not a cross-push cache of viewer permissions.
 
-## The commit coordinator
+`http/events.ts: createEventStreams` supplies SSE and long polling. On attach, `PocketApp.attach` sends
+hello/session state and opens a room for its full view. Poll overflow disconnects instead of reporting a partial
+view as success; `web/store.js: pollEvents` resets its ACK when the server assigns a new poll session.
+A normal session switch still creates a new subscription/connection through `connect`; D5 is not implemented.
 
-Pi Durable publishes each commit's changes in no set order. `#committed` handles them in two passes:
+## Shutdown and safe continuation
 
-1. **Usage first** (`spend.usageChanged`): what a commit's usage cost belongs to whoever Pi worked for before a message in the same commit changes that.
-2. **Then each change:**
-    - Document changes go to `#documentCommitted`. It tracks busy and ended runs, agents, the session list, and the documents the rooms show (`ROOM_DOCS`).
-    - Submissions go to `attribution.submissionCommitted`.
+Normal shutdown has two layers:
 
-Everything here is synchronous. A commit listener may not call the harness's session APIs, so a write it causes (noting a message's author) runs in `setImmediate`. Keep this one coordinator: separate listeners would make their registration order a billing rule nobody can see.
+1. `main.ts: stop` stops watchers, closes the HTTP listener/connections and awaits `PocketApp.close`
+   with a bounded deadline; it then stops the performance journal and exits.
+2. `PocketApp.close` stops app timers/subscriptions and the legacy loader, tells clients it is closing,
+   closes room/provider UI state, then awaits `TeamKernel.close`.
+3. `TeamKernel.close` stops admission/MCP sign-ins, plans continuations only for eligible active prompts,
+   aborts active runs and waits for their settlement, then calls `RotomExecutions.close`.
+4. `RotomExecutions.close` refuses an active execution, waits for warming, retires native processes and their
+   auth gates, then closes `RotomJournal` (database and kernel lock). This is not an idle-eviction policy.
+5. Only after native closure does `PocketApp.close` close the Harness, clean environments/browser resources,
+   flush coalesced configuration writes and release `harness.lock`.
 
-Updates to tabs are coalesced:
+These are the successful ordering guarantees, not proof that an error or deadline closed every descendant.
+A failed close does not authorize deleting a kernel lock, replaying an unknown tool request, or calling the result
+interrupted merely because the process is gone. Tests of closure and recovery are listed in
+[VERIFICATION.md](VERIFICATION.md).
 
-| What             | How often, at most |
-| ---------------- | ------------------ |
-| A room's changes | Every 90 ms        |
-| Peek tiles       | Once a second      |
-| The session list | Every 400 ms       |
+## Requests, resources and legacy boundaries
 
-## Who Pi works for
-
-A message to Pi names its person in its request id (`requests.ts`):
-
-- `u:<user>:<key>` is a person's own message.
-- `p:<user>:<key>` is one sent for a person, such as a scheduled message or a subagent's task.
-
-`attribution.ts` notes each one in the conversation's authors document. Pi works for whoever wrote the newest message (`requesterOf`). A subagent works for whoever its parent worked for when it sent the subagent its last message. Spend, approvals (the "someone else must allow" rule), schedules, and subagents all ask `requesterOf`. A message sent for someone must carry that person in its request id. One that names nobody does not change whom Pi works for: Pi goes on working for whoever it worked for before. Spend, when nobody is known, falls back to whoever started the session, then the owner.
-
-## A request
-
-`http.ts` routes by the first path segment, and turns whatever a route throws into an answer: an `HttpError`'s status and message, or a logged 500.
-
-`/api` (`http/api.ts`) checks, in this order:
-
-1. who is signed in (the cookie, or a bearer token);
-2. it notes the quick tunnel a guest came through;
-3. the `X-Pocket` header, on everything but GET.
-
-A conversation's routes (`/api/c/:id`) run only after `requireSee`.
-
-Where the other checks live:
-
-- **Commands and collaboration** check steering and driving themselves (`requireSteer`, `requireDriver`). They are called from routes, from tasks, and from each other.
-- **Owner-only settings** are checked in `http/api.ts`: extension modules, provider sign-ins, restart. Changing people's access and the approval rule is checked in `app.ts`.
-- **Invites** are checked in `http/api.ts` too: viewers and people invited to one session cannot create them, and only the owner makes an owner invite. An invite lasts one of `INVITE_MINUTES` (`auth.ts`; an owner invite, always 15) and is kept in `config.json` by its code's hash, so a day's or a week's outlives a restart. Only whoever made one ends it early (`POST /api/invite/cancel`), as the invite sheet does with the one it showed when its settings change, and with one that answers after it closed. One person keeps at most `MAX_INVITES` (`config.ts`) live, their oldest ending first; removing someone ends theirs, and a new owner token ends owner invites not yet used.
-- **The workspace's path helpers** (`conversationFile`, `readableFile`) leave seeing the conversation to their caller.
-
-Each browser tab is a `Client` (`room.ts`), fed by an event stream or by long polling (`http/events.ts`). On connecting, a tab gets:
-
-1. `hello`;
-2. the session list;
-3. then, when it shows a conversation, the room's full view;
-4. then only what changed.
+- `http.ts: createHandler` owns the HTTP error boundary; `http/api.ts: createApi` authenticates and
+  checks the X-Pocket guard before conversation routing. `PocketApp.requireSee/requireSteer/requireDriver`
+  and TeamKernel perform the operation-specific access checks. Personal sign-in routes call `Providers` with
+  the acting user; they are not an owner-only shared credential panel.
+- Local Markdown download links use `/api/c/:id/download`. `conversationRoutes` checks visibility and
+  `Workspace.readableFile` before `serveDownload`; PDFs are inline, other files are attachments with a sandbox
+  policy. `serveImage` remains image-only. UI handling is in `web/ui.js`.
+- `rotom-kernel.ts: startRotomKernel` and `rotom-child.sh` disable default skill discovery.
+  `rotom-skills.mjs` supplies project resources through the pinned resolver; bundled parent and explicit frozen
+  skills still load. Personal skill settings/files are ignored, not removed. Other personal configuration remains
+  policy-checked. `rotom-child.ts` validates each child before launch.
+- **Legacy service extensions only:** `src/server/extensions/`, data-folder drop-ins, `PocketHost`,
+  `ExtensionLoader`, Lancet Guard and the service browser tool belong to the non-kernel branch.
+  `PocketApp.#open` and `main.ts` do not load/watch that extension directory in kernel mode.
+  Team uses native Agent Extensions; see [AGENT-CONFIGURATION.md](AGENT-CONFIGURATION.md).
+- `Commands.submit` and Durable generation/task replay remain the legacy execution path.
+  Legacy sessions have not yet been switched to read-only archival by D9. Shared storage, author records and
+  document definitions remain necessary even if that execution path is later retired.
 
 ## The web app
 

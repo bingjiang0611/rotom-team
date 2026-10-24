@@ -1,43 +1,88 @@
 # Project map
 
-Native skills: `rotom-kernel.ts` and `rotom-child.sh` disable default skill discovery. The
-`rotom-skills.mjs` extension reuses the pinned resolver to load project skills only. Personal skill files may remain
-in a member HOME without blocking runs. `TeamKernel.skillCommands` likewise excludes personal defaults. Each subagent
-start runs the validator `rotom-child.ts` first; it imports only `rotom-resource-policy.ts` and `rotom-product.ts` (the
-pin check and the few native loaders the policy needs), never `rotom-kernel.ts`.
+Where to change **rotom team**. [PRODUCT.md](PRODUCT.md) and [CONFIGURATION.md](CONFIGURATION.md) are the current
+contracts; [architecture.md](architecture.md) explains ownership and lifecycle order. Read [AGENTS.md](../AGENTS.md)
+and [self-editing.md](self-editing.md) before editing a running checkout.
 
-**rotom team additions:** `bin/rotom-team.js` isolates deployment resources; `src/server/team-accounts.ts`, `credential-store.ts`, and `team-execution.ts` implement personal provider routing, private storage and durable authorization; `vendor/qoder/` pins the Qoder provider. `test/team.test.ts` and `test/team-serve.ts` validate/demo this fork. [PRODUCT.md](PRODUCT.md) is the current product contract; the inherited map below documents upstream components, including features not enabled for personal accounts.
-
-Where things are in Pi Pocket, for agents working on it. [index.md](index.md) lists every guide; [AGENTS.md](../AGENTS.md) and [self-editing.md](self-editing.md) have the rules for editing it while it runs; [architecture.md](architecture.md) explains how the parts depend on each other and the orderings they rely on; [features.md](features.md) says what each feature does.
+The Team entry points and native execution owners come first. The retained Pi Pocket modules below are a source
+navigation map, **not a list of capabilities enabled in kernel mode**. Legacy service extensions and Durable agent
+execution are explicitly marked. Native extensions use [AGENT-CONFIGURATION.md](AGENT-CONFIGURATION.md).
 
 ## Processes
 
-`bin/pi-pocket.js` checks Node, then runs `src/launcher/main.ts`. The launcher reads its options (`options.ts`), asks how devices connect (`access.ts`: this device, LAN, Cloudflare quick tunnel, Tailscale), runs the server (`src/server/main.ts`) as a child, restarts it on exit code 75 or a crash, and keeps the tunnel up. `term.ts` draws its menu, panel, and QR code in the terminal. The server takes the data folder's lock, opens one `PocketApp`, and serves it with `http.ts`.
+- **Team:** [bin/rotom-team.js](../bin/rotom-team.js) checks Node, sets private permissions and the data/agent
+  environment, prepares the pinned runtime, then imports `src/server/main.ts` directly. It does not run the
+  Pocket launcher or create its tunnel/menu process. Always pass `--data` for development and tests.
+- `src/server/main.ts` parses options (kernel enabled by default), opens `PocketApp`, creates the HTTP handler,
+  starts the performance journal and installs watchers/signals. Its `stop` function owns the outer shutdown
+  deadline. `PocketApp.#open/close` own app resources; `TeamKernel` owns native admission and closure.
+- **Legacy launcher:** `bin/pi-pocket.js` → `src/launcher/main.ts`, with `options.ts`, `access.ts` and
+  `term.ts`, provides the inherited interactive launcher/tunnel/restart UI. Do not use it to describe the
+  default Team process tree.
+- A deployed Team service may be owned by launchd and run from an immutable release directory, not this checkout.
+  See [DEPLOYMENT.md](DEPLOYMENT.md); a source edit is not a deployment or permission to restart it.
 
-## Data (`~/.pi-pocket/`, or `PI_POCKET_DIR`)
+## Data
 
-- `pocket.sqlite`: Pi Durable's storage: conversations, entries, tasks, and Pi Pocket's documents.
-- `config.json`: people, roles, hashed tokens, settings. `push.json`: VAPID keys and push subscriptions.
-- `uploads/<conversation>/`, `worktrees/` (sessions' git worktrees), `extensions/` (the owner's drop-ins), `browser/profile/` (the built-in browser's profile; each session's cookies live in memory only).
+Team's CLI resolves `--data`, then `ROTOM_TEAM_DIR`, then `~/.rotom-team`; it exports `PI_POCKET_DIR` and
+sets `PI_CODING_AGENT_DIR=<data>/agent` before imports. The inherited `~/.pi-pocket` default is **not** the Team
+deployment folder. Use an explicit throwaway data directory when testing.
+
+| Location under data                          | Owner / purpose                                                                                                                         |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `pocket.sqlite`, `harness.lock`              | `PocketApp.#open/close`: shared Durable documents, conversations/tasks and public native mirrors                                        |
+| `kernel.sqlite`, `kernel.lock`               | `RotomJournal.constructor/close`: native receipts, bindings, entries/usage and writer fence; stale kernel locks are not auto-broken     |
+| `people/<member>/`                           | `TeamAccounts.#open`: private credentials, model catalog, profile/generation and refresh coordination                                   |
+| `kernel-homes/<member>/`                     | `TeamKernel.#home`: native broker HOME and native session files; not the canonical personal credential store                            |
+| `kernel-gates/`                              | `RotomExecutions.#launch/#retire`: short-lived loopback-gate secret/context files                                                       |
+| `team-agent/`, `agent/`                      | `prepareTeamResources` and CLI bootstrap: shared native configuration/resources and isolated service agent resources; see CONFIGURATION |
+| `config.json`, `push.json`                   | `ConfigStore`, `PushStore`: people/settings/finished markers and Web Push state                                                         |
+| `uploads/`, `worktrees/`, `browser/profile/` | Shared workspace helpers and legacy service browser resources                                                                           |
+| `performance/`                               | `startPerformanceJournal`: bounded local timing/work observations, not request content                                                  |
+
+`scripts/data.mjs` owns offline backup/restore checks. Neither a live SQLite copy nor a deleted lock is a safe
+substitute for its ownership checks.
 
 ## Server: `src/server/`
 
 A module split into parts keeps its name for the part others import, with the rest in a folder of the same name beside it (`http.ts` and `http/`, `browser.ts` and `browser/`). Modules import what they use from the module that owns it; there are no barrels. `PocketApp` creates the app's parts and hands each one the app; callers use them as fields (`app.workspace.viewFile(…)`, `app.attribution.requesterOf(…)`).
 
-### The core
+### Team execution owners
 
-| File                    | Owns                                                                                                                                                                                                                                                                  |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `main.ts`               | The server process: options, the port, signals, then `PocketApp.open` and `createHandler`                                                                                                                                                                             |
-| `app.ts`                | `PocketApp`: opening the harness, reading state back at startup (`#recover`), the commit coordinator (`#committed`), connected tabs and their peek tiles, access checks (`canSee`, `requireSteer`, `requireDriver`), the session list, `hello`, extensions on and off |
-| `attribution.ts`        | Who Pi works for: who wrote each message to Pi or whose work it is (authors documents, from request ids), who queued each submission; read back at startup                                                                                                            |
-| `room.ts`               | One conversation's live view for its tabs: Pi Durable's view plus `ROOM_DOCS`, sent every 90 ms as changes; its peek tile (`peek`, at most once a second) for the tabs that show it (`PocketApp.setPeeks`)                                                            |
-| `projection.ts`         | Entries as compact JSON for browsers; `usageCost`                                                                                                                                                                                                                     |
-| `entry-format.ts`       | The kinds of Pi Pocket's own entries, and the markers it writes into message text (`[from: …]`, attached files). Stored data and the web app depend on their exact values                                                                                             |
-| `docs.ts`               | Every durable document Pi Pocket defines                                                                                                                                                                                                                              |
-| `host.ts`, `reload.ts`  | `PocketHost` (what extensions get) and `Approvals`; the extension loader: built-ins in `ORDER`, drop-ins (never with a name Pi Pocket keeps, `BUILT_IN_TOOLS`), live reload                                                                                           |
-| `lock.ts`               | One process per data folder                                                                                                                                                                                                                                           |
-| `errors.ts`, `paths.ts` | `HttpError`, `describe`, and input checks; `~` paths                                                                                                                                                                                                                  |
+Paths here are under `src/server/`. Start at these functions before changing an upstream helper.
+
+| File                                                     | Main entry points and ownership                                                                                                                                                                                        |
+| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `team-kernel.ts`                                         | `TeamKernel.submit/#submit/#check`: native authorization and fixed payer; `reconcile/mirror/#mirrorNow`: shared mirror recovery; `#observe/clientLive/roomState`: provisional UI; `close/resumeInterrupted`: lifecycle |
+| `rotom-executions.ts`                                    | `RotomExecutions.run/#execute/#launch`: receipt-owned process and auth gate; `handoff/#seed`: history materialization; `close`: stop native resources before closing journal                                           |
+| `rotom-journal.ts`                                       | `RotomJournal.reserve/attach/progress/finish`, `entriesAfter/entryCursor`, `canResume/planResume`: native persistence and fences; not a display-only cache                                                             |
+| `rotom-kernel.ts`, `rotom-product.ts`, `rotom-rpc.ts`    | `startRotomKernel`, `verifyRotomKernel`, `RotomRpc.request/close`: pinned launch, resource admission and bounded RPC                                                                                                   |
+| `rotom-policy.mjs`, `rotom-relay.mjs`, `rotom-qoder.mjs` | `rotom-policy` is the native gate extension; `rotom-relay` is a NODE_OPTIONS preload redirecting the member's browser relay socket; `qoderRequestProvider` supplies request-scoped Qoder auth                          |
+| `team-accounts.ts`, `credential-store.ts`                | `TeamAccounts.#open/kernelModel/kernelAuth`, `FileCredentials`: personal identity and the sole refresh-capable credential store                                                                                        |
+| `team-execution.ts`                                      | `TeamExecution.admit/authorize/recover`, `TeamRunDoc`: legacy Durable payer admission/recovery; explicitly rejects native execution                                                                                    |
+| `team-profiles.ts`, `team-projects.ts`                   | `TeamProfiles.capture/verify`, `TeamProjects.require`: frozen configuration snapshots and project grants                                                                                                               |
+| `rotom-resources.ts`, `rotom-resource-policy.ts`         | `prepareTeamResources/teamResourceRevision` and policy checks: installed resources and freshness, not a package installer in request paths                                                                             |
+| `rotom-history.ts`                                       | `publicNativeHistory`: public handoff history, without private reasoning/signatures                                                                                                                                    |
+
+Native skills: `startRotomKernel` and `rotom-child.sh` disable default discovery; `rotom-skills.mjs` supplies
+project resources through the pinned resolver. Each native child first runs `rotom-child.ts`; its light validator
+imports `rotom-resource-policy.ts` and `rotom-product.ts`, not the full kernel launch graph.
+This is resource-loading policy, not an OS restriction on reading files.
+
+### The shared app core
+
+| File                    | Owns                                                                                                                                                                                                                            |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `main.ts`               | The server process: options, the port, signals, then `PocketApp.open` and `createHandler`                                                                                                                                       |
+| `app.ts`                | `PocketApp`: shared Harness and optional TeamKernel lifecycle, recovery (`#recover`), commit coordinator (`#committed`), tabs/rooms and access checks; service extension loader exists only outside kernel mode                 |
+| `attribution.ts`        | `Attribution.requesterOf/recover`: message authors and legacy workflow attribution; not the native fixed payer or per-inference credential gate                                                                                 |
+| `room.ts`               | `Room.open/schedule/pushAll`: shared Durable view plus native `clientLive/roomState`, projected for each viewer; `pushAll` shares common serialization within one fanout. `schedulePeek/pushPeek` deliver peek state            |
+| `projection.ts`         | Entries as compact JSON for browsers; `usageCost`                                                                                                                                                                               |
+| `entry-format.ts`       | The kinds of Pi Pocket's own entries, and the markers it writes into message text (`[from: …]`, attached files). Stored data and the web app depend on their exact values                                                       |
+| `docs.ts`               | Shared collaborative documents; additional stored contracts include TeamRunDoc (`team-execution.ts`), configuration docs and native mirror/setup docs (`team-kernel.ts`). Preserve every stored kind/scope/history/fork setting |
+| `host.ts`, `reload.ts`  | Legacy `PocketHost` and service `ExtensionLoader`: built-ins/drop-ins and live reload. Kernel mode does not instantiate this loader                                                                                             |
+| `lock.ts`               | One process per data folder                                                                                                                                                                                                     |
+| `errors.ts`, `paths.ts` | `HttpError`, `describe`, and input checks; `~` paths                                                                                                                                                                            |
 
 ### People
 
@@ -49,19 +94,22 @@ A module split into parts keeps its name for the part others import, with the re
 | `alerts.ts`, `push.ts` | Push notifications: who hears about what; Web Push without dependencies (RFC 8291, 8292)         |
 | `spend.ts`             | Cost per conversation and person; limits                                                         |
 
-### What people ask of Pi
+### Shared UI helpers and legacy execution wrappers
 
-| File                      | Owns                                                                                                                                                                                                                 |
-| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `commands.ts`             | What people ask of Pi: sessions, messages (with skills, templates, and mentioned files expanded), forks and resends, model and folder, reset, instructions, plan mode, goals, schedules, worktrees, notes Pi is told |
-| `resend.ts`               | A message sent again: the task made with its fork that sends it                                                                                                                                                      |
-| `shell.ts`                | `!` and `!!` commands: a background task per command that runs it and writes a `pocket.shell` entry; a restart cuts it off rather than running it again                                                              |
-| `schedules.ts`, `when.ts` | Scheduled messages (a durable task) and their time grammar                                                                                                                                                           |
-| `goals.ts`                | "Done when" checks                                                                                                                                                                                                   |
-| `titles.ts`               | A short title for a session with a long first message, from a small model of its provider                                                                                                                            |
-| `prompts.ts`              | Pi's prompt templates and skills (`/skill:name`) as slash commands                                                                                                                                                   |
-| `models.ts`               | The models people can pick, the one a conversation runs with, and finding one by name                                                                                                                                |
-| `running.ts`              | Running now, from Pi Durable's task graph                                                                                                                                                                            |
+These files also serve retained Durable sessions. Their presence does not enable every old command in native mode;
+`conversationRoutes`, `TeamKernel` and `team-command-policy.ts` select the native adapters.
+
+| File                      | Owns                                                                                                                                                                                    |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `commands.ts`             | `Commands.createSession` creates the requested backend; `Commands.submit` is legacy Durable submission. Native submit is routed directly to `TeamKernel.submit` by `conversationRoutes` |
+| `resend.ts`               | A message sent again: the task made with its fork that sends it                                                                                                                         |
+| `shell.ts`                | `!` and `!!` commands: a background task per command that runs it and writes a `pocket.shell` entry; a restart cuts it off rather than running it again                                 |
+| `schedules.ts`, `when.ts` | Scheduled messages (a durable task) and their time grammar                                                                                                                              |
+| `goals.ts`                | "Done when" checks                                                                                                                                                                      |
+| `titles.ts`               | A short title for a session with a long first message, from a small model of its provider                                                                                               |
+| `prompts.ts`              | Pi's prompt templates and skills (`/skill:name`) as slash commands                                                                                                                      |
+| `models.ts`               | The models people can pick, the one a conversation runs with, and finding one by name                                                                                                   |
+| `running.ts`              | Running now, from Pi Durable's task graph                                                                                                                                               |
 
 ### A conversation's folder and history
 
@@ -76,20 +124,22 @@ A module split into parts keeps its name for the part others import, with the re
 
 ### HTTP: `http.ts` and `http/`
 
-| File                          | Owns                                                                                                                                                            |
-| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `http.ts`                     | The one request handler: which part answers a path, and the error boundary that turns what it throws into a status                                              |
-| `http/api.ts`                 | `/api`: signing in, the `X-Pocket` header, and the app-wide routes (people, sessions, peeks, spend, folders, settings, extensions, providers, invites, restart) |
-| `http/conversation-routes.ts` | `/api/c/:id`: one conversation's routes, after the API checked that the person may see it                                                                       |
-| `http/browser-routes.ts`      | `/api/c/:id/browser`: the Browser panel's frames, console, and input                                                                                            |
-| `http/push-routes.ts`         | `/api/push`: this device's subscription, what to notify about, a test                                                                                           |
-| `http/events.ts`              | Each tab's events: the event stream (`/api/events`), or long polling (`/api/poll`) where a tunnel holds streams back                                            |
-| `http/assets.ts`              | The web app's files, vendored modules, content security policies, images and streamed delivery downloads                                                        |
-| `http/sign-in.ts`             | `/login`, `/join/:code`, and `/share` before the service worker takes shares                                                                                    |
-| `http/artifacts.ts`           | `/a/…`: an artifact as its own page, in a sandbox; `/a/frame`, the page a reply's HTML runs in once someone taps Run                                            |
-| `http/io.ts`                  | What every route uses: reading a body, writing JSON, `ApiRequest`                                                                                               |
+| File                          | Owns                                                                                                                                                                           |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `http.ts`                     | The one request handler: which part answers a path, and the error boundary that turns what it throws into a status                                                             |
+| `http/api.ts`                 | `/api`: signing in, the `X-Pocket` header, and the app-wide routes (people, sessions, peeks, spend, folders, settings, extensions, providers, invites, restart)                |
+| `http/conversation-routes.ts` | `/api/c/:id`: one conversation's routes, after the API checked that the person may see it                                                                                      |
+| `http/browser-routes.ts`      | `/api/c/:id/browser`: the Browser panel's frames, console, and input                                                                                                           |
+| `http/push-routes.ts`         | `/api/push`: this device's subscription, what to notify about, a test                                                                                                          |
+| `http/events.ts`              | Each tab's events: the event stream (`/api/events`), or long polling (`/api/poll`) where a tunnel holds streams back                                                           |
+| `http/assets.ts`              | `serveApp/serveFile/serveDownload/serveImage`: app CSP, best-effort modulepreload, file/download/image delivery; `http/static-cache.ts` owns bounded content/gzip/ETag caching |
+| `http/sign-in.ts`             | `/login`, `/join/:code`, and `/share` before the service worker takes shares                                                                                                   |
+| `http/artifacts.ts`           | `/a/…`: an artifact as its own page, in a sandbox; `/a/frame`, the page a reply's HTML runs in once someone taps Run                                                           |
+| `http/io.ts`                  | What every route uses: reading a body, writing JSON, `ApiRequest`                                                                                                              |
 
-### The built-in browser: `browser.ts` and `browser/`
+### Legacy service browser: `browser.ts` and `browser/`
+
+This is the browser behind the Pocket service extension (`PocketApp.browserOn`), not a replacement for native tools.
 
 | File                                     | Owns                                                                                                                                       |
 | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -110,9 +160,10 @@ A module split into parts keeps its name for the part others import, with the re
 | `lancet.ts`              | Loads Lancet Guard from Pi's install                                                            |
 | `omarchy.ts`             | The Omarchy desktop's current theme and wallpaper, read-only, for Follow desktop (`/api/theme`) |
 
-## Extensions: `src/server/extensions/`
+## Legacy service extensions: `src/server/extensions/`
 
-Each default-exports `(host: PocketHost) => Extension | Extension[]` and is installed in this order: `prompt` (system prompt, with where Pi Pocket's docs are), `artifacts` (artifact tool), `browser` (browser tool and its prompt section; through `host.browsers`), `subagents` (subagent tool and its tasks), `schedules` (schedule tool; installs the schedule task), `goals` (hook after each answer), `plan` (tool hook and prompt section), `guard` (tool hook that asks for approval), `codemode` (codemode tool; a script's calls go through the same hooks).
+`PocketApp.#open` loads these only outside kernel mode; `main.ts` watches them only through the optional loader.
+They are not Team native Agent Extensions. In the legacy loader, each default-exports `(host: PocketHost) => Extension | Extension[]` and is installed in this order: `prompt` (system prompt, with where Pi Pocket's docs are), `artifacts` (artifact tool), `browser` (browser tool and its prompt section; through `host.browsers`), `subagents` (subagent tool and its tasks), `schedules` (schedule tool; installs the schedule task), `goals` (hook after each answer), `plan` (tool hook and prompt section), `guard` (tool hook that asks for approval), `codemode` (codemode tool; a script's calls go through the same hooks).
 
 ## Web: `web/` (Preact and htm, no build)
 
@@ -152,32 +203,67 @@ Plain ES modules, loaded as they are. `store.js` holds the shared state, and not
 | `run-frame.js`         | `RunFrame`: a reply's HTML run on a tap, in the server's sandboxed `/a/frame` page, sized to fit it                                                                                                                                                                                                                                                                              |
 | `highlight.js`         | Syntax colors without dependencies: `highlightLines` gives escaped HTML with flat `hl-` spans per line, which `diff.js` marks changed words in                                                                                                                                                                                                                                   |
 
-## How a message travels
+## How a native message travels
 
-1. `POST /api/c/:id/submit` → `commands.submit`: checks access, turns, and spend, expands a template, then `conversation.submit()` with request id `u:<userId>:<clientId>`. The request id makes a retry a no-op and names the author.
-2. Pi Durable runs the generation and tool tasks, committing each step to `pocket.sqlite`. Extension hooks run inside those tasks.
-3. `app.ts`'s commit coordinator (`#committed`) hears every commit: spend counts usage first, then each document change updates what the app keeps in memory and the rooms that show it, and `attribution.ts` notes who each message is for.
-4. Each room sends its tabs what changed. `store.js` applies it, and Preact renders.
+1. `web/store.js: actions.submit` posts a stable request id to `/api/c/:id/submit`.
+   `conversationRoutes` selects the stored backend; native requests go to `TeamKernel.submit`, not `Commands.submit`.
+2. `TeamKernel.#operation/#submit/#check` checks access and payer identity and owns request identity.
+   `RotomExecutions.run/#execute` reserves a journal receipt before native dispatch. An accepted request is not
+   proof that a tool or provider operation succeeded.
+3. `RotomExecutions.#execute` reuses an admitted process or starts one through `#launch`/`startRotomKernel`.
+   The launch owns its auth gate. Every model request goes through personal authorization; active work does not
+   inherit a later speaker's account.
+4. `RotomJournal.progress/finish` records native entries/receipts. `TeamKernel.#mirrorNow` commits public
+   entries and the mirror count to Durable; only then does the in-memory cursor advance.
+5. `PocketApp.#committed` updates shared projections. `Room.pushAll` sends changed fields; `store.js: applyView`
+   applies them. Native live events and a tab's optimistic send may appear before persistence, visibly separate
+   from confirmed history.
+
+**Legacy Durable path:** the same HTTP route selects `Commands.submit` for the old backend, followed by
+`TeamExecution.admit` and Durable generation/tool tasks. `TeamExecution.authorize` still checks the personal
+payer. Do not transfer its task-replay or service-hook assumptions to native receipts.
+For startup, clean closure and permitted continuation, follow [architecture.md](architecture.md#startup-and-recovery-order).
 
 ## Adding things
 
 - **A document:** define it in `docs.ts`. To show it live, add it to `ROOM_DOCS` and the view in `room.ts`, and read it in `store.js`.
-- **A command:** a method in `commands.ts` (check access first), a route in `http/conversation-routes.ts` (or `http/api.ts` for one that is not about a conversation), an action in `store.js`, then the UI.
+- **A command:** choose the backend first. Native adapters belong with `TeamKernel` and `team-command-policy.ts`; legacy/shared wrappers may use `commands.ts`. Route through `conversationRoutes`/`createApi`, enforce access and request identity, then add the store action/UI.
 - **A sheet:** a component in `web/sheets/`, a case in `sheetBody` (`web/sheets.js`), and `openSheet({ type })` where it opens. An app-wide one also goes in `SETTINGS_PAGES` and the list in `web/sheets/settings.js`, so it opens as a page of the settings window.
 - **Something back should close** (a screen over the conversation, a view that takes another's place on a phone): `useBack(open, close)` from `web/back.js` in the component that shows it. Sheets already have it.
-- **A built-in extension:** a file in `extensions/` (its extension named `pocket-…`), its place in `ORDER`, its title in `TITLES`, and its tools in `BUILT_IN_TOOLS` (`reload.ts`), and the order asserted in `test/app.test.ts`.
+- **A Team native extension:** follow [AGENT-CONFIGURATION.md](AGENT-CONFIGURATION.md) and the admitted shared/project configuration. Only for a **legacy service extension**, use `extensions/`, `reload.ts`'s `ORDER`/`TITLES`/`BUILT_IN_TOOLS`, and its loader tests.
 - **A slash command:** `web/commands.js`.
 
 ## Rules that are easy to break
 
-- Browsers only see committed state. Nothing is shown before it is stored.
-- Document kinds, scopes, and fork settings are stored data: never change them.
-- Hooks get only `memo` and `snapshot`. Anything a replay must not repeat goes in a memo or behind an idempotent request id.
-- Whose work Pi does comes from request ids (`requests.ts`): a message sent for someone needs their id in its request id; one without it leaves Pi working for whoever it worked for before. At startup, what a crash kept out of the authors document is read back from Pi Durable's records.
-- A tool is `replay: "safe"` only if running it twice is harmless.
-- Extensions reach the app only through `PocketHost`.
-- Server code is erasable TypeScript with `.ts` imports. Comments are plain sentences.
+- Shared committed history, provisional native live output and tab-local optimistic sends are different states.
+  Use `TeamKernel.clientLive`, `#mirrorNow` and `web/store.js: applyView` as their boundaries.
+- Document kind/scope/history/fork settings are stored data: never change them as a refactor.
+- Native unknown outcomes are not replayable; `RotomJournal.reserve/canResume` and
+  `TeamKernel.resumeInterrupted` enforce fences and limited continuation. A missing PID proves no outcome.
+- Native payer identity comes from the binding and gate, not the newest author or `Attribution.requesterOf`.
+- **Legacy Durable only:** task hooks use memo/snapshot and replay-safe tool declarations. Do not assume those
+  guarantees wrap native tools or MCP side effects.
+- **Legacy service extensions only:** reach the app through `PocketHost`. Native Agent Extensions are admitted
+  trusted native code, not an OS sandbox.
+- Server code remains erasable TypeScript with `.ts` imports. Pure moves preserve code and module/subscription
+  order; see [architecture.md](architecture.md#the-web-app).
 
 ## Tests: `test/`
 
-`npm test` runs every `*.test.ts` with Node's test runner. `helpers.ts` provides a scripted model (`scriptedModel(route)`: `faux-1`, `faux-2`, `faux-vision`), `openApp` (the same data folder again is a restart; `now` moves the clock), `newSession`, `say`, `until`, and `fakeTab`. The scripted model costs nothing: spend tests write `pi.usage` themselves. `browser.test.ts` drives a real Chromium, where one is installed, for the built-in browser, and `peeks-ui.test.ts` and `mobile-ui.test.ts` load the whole web app in it and test peek tiles, and the app at phone size, there. `docs-examples.test.ts` loads the example extensions in `docs/examples/` as drop-ins, and checks the docs' links and the prompt's paths to them. The rest of the web app has no tests: check a change to it in a browser, on a copy (`node test/serve.ts`: this folder's code, its own temporary data, a scripted model).
+`npm test` runs `*.test.ts` using Node's test runner. `helpers.ts` supplies temporary data, scripted/no-inference
+models, `openApp`, `until` and `fakeTab`; do not point these checks at real accounts or deployment data.
+
+- `team.test.ts`, `rotom-lifecycle.test.ts`, `native-recovery.test.ts`: personal identity, receipts, restart
+  and uncertain outcomes.
+- `native-mirror.test.ts`: real cross-process mirror recovery, including failed mirror retries.
+- `native-service-extensions.test.ts`: kernel mode does not enable the legacy service loader.
+- `native-room-info.test.ts`, `room-projection.test.ts`: native projections and per-client delivery.
+- `static-assets.test.ts`: HTTP validators, preload success/failure and CSP.
+- `*ui.test.ts` plus the browser/native fixtures exercise the web app in real Chromium where available.
+  The web app is not untested merely because it uses plain modules.
+- `docs-examples.test.ts` validates the **legacy** drop-in examples; passing it does not prove a Team native
+  extension is admitted. `test/perf/` is the separate controlled performance loop.
+
+Use [VERIFICATION.md](VERIFICATION.md) to choose the required native, UI and policy proofs.
+`node test/serve.ts` is the inherited temporary-data fixture, not a production deployment command;
+for native-specific work use the fixtures described in that verification guide.

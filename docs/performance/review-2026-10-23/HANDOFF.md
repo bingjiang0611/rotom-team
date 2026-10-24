@@ -23,27 +23,27 @@
 
 ## 状态表（执行方维护）
 
-| 编号  | 批次 | 标题                                        | 状态                          | 提交                            |
-| ----- | ---- | ------------------------------------------- | ----------------------------- | ------------------------------- |
-| A1    | A    | journal 索引 + 镜像游标                     | 核验通过                      | `2a2ac90`、`b44ca33`、`7c880fc` |
-| A2    | A    | thinking level / native goal 跨推送缓存     | 核验通过                      | `b8d63f4`、`c13245d`            |
-| A3    | A    | 启动时不再全量解析历史                      | 核验通过                      | `0f39ea3`                       |
-| A4    | A    | 静态资源 ETag / gzip / modulepreload        | 核验通过                      | `c8d7cbd`（测量见记录）         |
-| B1    | B    | `teamResourceRevision` 不在请求路径读大文件 | 核验通过                      | `9ccc0aa`                       |
-| B2    | B    | `finishedSeen` 写入与清理                   | 核验通过                      | `cc652cc`                       |
-| B3    | B    | 房间级字段每次推送只算一次                  | 核验通过                      | `8d42e63`                       |
-| B4    | B    | journal 预编译语句缓存                      | 核验通过                      | `37cb733`                       |
-| B5    | B    | 长轮询队列字节上限                          | 核验通过                      | `5fb4bbe`                       |
-| C1–C6 | C    | 需要 owner 决策，只写方案                   | C1 暂缓;C2–C6 已批准,见批次 D | `14caa83`（方案，未实现）       |
-| D1    | D    | 文档纠偏(C6)                                | 进行中                        |                                 |
-| D2    | D    | notify 控制消息集中解码(C6)                 | 待做                          |                                 |
-| D3    | D    | 流式 Markdown 解析(C6)                      | 待做                          |                                 |
-| D4    | D    | App 局部订阅(C6)                            | 待做                          |                                 |
-| D5    | D    | 切换会话不重连(C6)                          | 待做                          |                                 |
-| D6    | D    | 大文件纯移动拆分(C5)                        | 待做                          |                                 |
-| D7    | D    | handoff 测量与异步化(C2)                    | 待做                          |                                 |
-| D8    | D    | storage worker(C3)                          | 待做                          |                                 |
-| D9    | D    | 下线旧后端(C4,只读归档)                     | 待做                          |                                 |
+| 编号  | 批次 | 标题                                        | 状态                          | 提交                              |
+| ----- | ---- | ------------------------------------------- | ----------------------------- | --------------------------------- |
+| A1    | A    | journal 索引 + 镜像游标                     | 核验通过                      | `2a2ac90`、`b44ca33`、`7c880fc`   |
+| A2    | A    | thinking level / native goal 跨推送缓存     | 核验通过                      | `b8d63f4`、`c13245d`              |
+| A3    | A    | 启动时不再全量解析历史                      | 核验通过                      | `0f39ea3`                         |
+| A4    | A    | 静态资源 ETag / gzip / modulepreload        | 核验通过                      | `c8d7cbd`（测量见记录）           |
+| B1    | B    | `teamResourceRevision` 不在请求路径读大文件 | 核验通过                      | `9ccc0aa`                         |
+| B2    | B    | `finishedSeen` 写入与清理                   | 核验通过                      | `cc652cc`                         |
+| B3    | B    | 房间级字段每次推送只算一次                  | 核验通过                      | `8d42e63`                         |
+| B4    | B    | journal 预编译语句缓存                      | 核验通过                      | `37cb733`                         |
+| B5    | B    | 长轮询队列字节上限                          | 核验通过                      | `5fb4bbe`                         |
+| C1–C6 | C    | 需要 owner 决策，只写方案                   | C1 暂缓;C2–C6 已批准,见批次 D | `14caa83`（方案，未实现）         |
+| D1    | D    | 文档纠偏(C6)                                | 已推送待核验                  | `0705511`（测量）；实现见执行记录 |
+| D2    | D    | notify 控制消息集中解码(C6)                 | 待做                          |                                   |
+| D3    | D    | 流式 Markdown 解析(C6)                      | 待做                          |                                   |
+| D4    | D    | App 局部订阅(C6)                            | 待做                          |                                   |
+| D5    | D    | 切换会话不重连(C6)                          | 待做                          |                                   |
+| D6    | D    | 大文件纯移动拆分(C5)                        | 待做                          |                                   |
+| D7    | D    | handoff 测量与异步化(C2)                    | 待做                          |                                   |
+| D8    | D    | storage worker(C3)                          | 待做                          |                                   |
+| D9    | D    | 下线旧后端(C4,只读归档)                     | 待做                          |                                   |
 
 状态取值：`待做` / `进行中` / `已推送待核验` / `核验通过` / `核验未通过` / `放弃（写明原因）`。
 
@@ -174,17 +174,35 @@ owner 已批准把 C2–C6 从「只写方案」改为「实现」。C1(进程�
 - 基线 `8606886`。D1 只改文档，不改任何执行路径；不存在能衡量本项语义纠偏的运行时工作计数器。**性能增益 unavailable / 不适用（docs-only）**，不登记伪零值或新增 ledger 条目。此提交先记录源码对照，后续独立提交修改 architecture/map。
 - 当前文档的六处关键偏差及已读源码证据：
 
-| 偏差                                                         | 当前代码证据                                                                                              | 修订方向                                                                         |
-| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| 以 Pi Pocket launcher/默认目录为主入口                       | `bin/rotom-team.js`、`main.ts` 的 options/启动段                                                          | Team 直接启动服务器，隔离资源，开发/测试始终显式 --data；旧 launcher 单列 legacy |
-| 把全部执行真相放在 pocket.sqlite                             | `RotomJournal.reserve/finish`、`TeamKernel.#mirrorNow`                                                    | 区分原生 journal/JSONL、共享 Durable 镜像与暂态 live                             |
-| 用最新消息作者解释所有付费路由                               | `TeamKernel.#check`、`RotomExecutions.#launch`、`TeamAccounts.kernelAuth`、`TeamExecution.authorize`      | 原生绑定固定 payer，每次推理过 gate；legacy 也受个人路由授权                     |
-| 启动步骤缺少 native 对账，关闭顺序未写清                     | `PocketApp.#open/close`、`TeamKernel.reconcile/resumeInterrupted/close`、`RotomExecutions.close`          | 明示恢复顺序、unknown 栅栏、先关闭 native 再释放存储锁                           |
-| 让服务端 drop-in、PocketHost 看起来是 Team 扩展机制          | `PocketApp.#open` 的 !kernel 分支、`main.ts` watcher、`startRotomKernel`                                  | service extensions/旧 browser 工具标 legacy；Team 用 native extensions           |
+| 偏差                                                         | 当前代码证据                                                                                                 | 修订方向                                                                         |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| 以 Pi Pocket launcher/默认目录为主入口                       | `bin/rotom-team.js`、`main.ts` 的 options/启动段                                                             | Team 直接启动服务器，隔离资源，开发/测试始终显式 --data；旧 launcher 单列 legacy |
+| 把全部执行真相放在 pocket.sqlite                             | `RotomJournal.reserve/finish`、`TeamKernel.#mirrorNow`                                                       | 区分原生 journal/JSONL、共享 Durable 镜像与暂态 live                             |
+| 用最新消息作者解释所有付费路由                               | `TeamKernel.#check`、`RotomExecutions.#launch`、`TeamAccounts.kernelAuth`、`TeamExecution.authorize`         | 原生绑定固定 payer，每次推理过 gate；legacy 也受个人路由授权                     |
+| 启动步骤缺少 native 对账，关闭顺序未写清                     | `PocketApp.#open/close`、`TeamKernel.reconcile/resumeInterrupted/close`、`RotomExecutions.close`             | 明示恢复顺序、unknown 栅栏、先关闭 native 再释放存储锁                           |
+| 让服务端 drop-in、PocketHost 看起来是 Team 扩展机制          | `PocketApp.#open` 的 !kernel 分支、`main.ts` watcher、`startRotomKernel`                                     | service extensions/旧 browser 工具标 legacy；Team 用 native extensions           |
 | “Browsers only see committed state”及“其余 web 无测试”已过时 | `TeamKernel.#observe/clientLive`、`web/store.js actions.submit`、`test/native-*.test.ts`、`test/*ui.test.ts` | 区分 optimistic/live 与持久化确认，列出现有合成 native/Chromium 验证入口         |
 
 - 验收不以测试通过代替文档准确性：逐段对照文件/函数，检查相对链接和引用路径；实现提交后跑 format/check/lint/format:check/npm test 及用户要求的 perf:ci origin/main。perf 只是分支护栏，不作为文档收益证明。
 - 本轮遵守逐项核验门槛：D1 推送后等待审查方确认再开始 D2；不提前写 D2–D8、不做 C1，本次不扩展到 D9。
+
+### D1 — 实现与验证：Team 主体、数据归属和恢复顺序
+
+- 测量提交 `0705511`；实现提交题名 `D1: document Team ownership and separate legacy execution`。只修改 architecture.md、map.md 和本交接记录，未实现 C1/D2–D9。
+- architecture 以 Team/native 调用链为主体，新增执行/个人授权图、journal→Durable 公共镜像→暂态 live 图，逐步说明启动、正常关闭和允许续跑的条件；明确 unknown 不重放、原生权限不是 OS 沙箱、单 worker/已用进程回收尚未实现。
+- map 修正直接启动入口和 data 所有权，新增 Team 核心文件/函数导航；保留共享 UI/工具导航，把 service extensions、PocketHost、Durable Agent 执行和 service browser 标为 legacy。纠正“浏览器只看已提交状态”和“其余 web 无测试”。native auth gate、Chrome relay preload、Qoder request provider 分别注明真实职责。
+- 对照当前 PRODUCT/CONFIGURATION 纠偏，不改变其中的产品合同，故不改这两份权威合同。保留 legacy 现行执行路径的说明；D9 的只读归档还没有实施。
+
+| 检查               | 结果与范围                                                                                                                                                                 |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 文档引用与源码声明 | 临时检查 `/tmp/rotom-review-D1/check-docs.mjs` 通过：20 个相对链接/锚点，23 个源码文件中的 86 个函数/方法声明；这是引用检查，核心权限/启动/镜像/关闭语义另已逐段读源码核对 |
+| 静态验证           | format、check、lint、format:check 全通过                                                                                                                                   |
+| 完整测试           | npm test **577/577**，无失败/跳过；没有新增产品逻辑或测试替身来制造“文档收益”                                                                                              |
+| 性能护栏           | `perf:ci -- origin/main --runs 1` passed，gating/ledger guard passed；darwin-arm64、Node 24.18.0；highLoad=false（4.48→4.22/8 核）；报告 `/tmp/rotom-review-D1/ci/`        |
+| 变更边界           | 相对 D1 基线 `8606886`，src/web/test/vendor/runtime/package 文件无 diff；ledger 未改；原有两份用户文档与开工备份逐字节一致，未暂存                                         |
+
+- perf 基线是 `origin/main=e649d9d`，包含此前 A/B 分支差异。D1 没有修改等待路径，不把整条分支的更好/更差计数归因于文档，也不宣称性能加速。完整验证日志保留在 `/tmp/rotom-review-D1/`。
+- 下一步 owner/审查方：核验 D1 并在本分支写回结论。按批次 D 的门槛，核验通过前执行方不开始 D2；D2–D8 仍待做。未部署、未重启服务，未使用真实模型账号。
 
 <!-- 每项一节：做了什么、提交号、测试结果、perf:ci 摘要（平台、highLoad、每个变差计数器的解释）、遗留问题。 -->
 
