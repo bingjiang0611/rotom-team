@@ -35,7 +35,7 @@
 | B4    | B    | journal 预编译语句缓存                      | 核验通过                      | `37cb733`                         |
 | B5    | B    | 长轮询队列字节上限                          | 核验通过                      | `5fb4bbe`                         |
 | C1–C6 | C    | 需要 owner 决策，只写方案                   | C1 暂缓;C2–C6 已批准,见批次 D | `14caa83`（方案，未实现）         |
-| D1    | D    | 文档纠偏(C6)                                | 已推送待核验                  | `0705511`（测量）；实现见执行记录 |
+| D1    | D    | 文档纠偏(C6)                                | 核验通过                      | `0705511`（测量）；实现见执行记录 |
 | D2    | D    | notify 控制消息集中解码(C6)                 | 待做                          |                                   |
 | D3    | D    | 流式 Markdown 解析(C6)                      | 待做                          |                                   |
 | D4    | D    | App 局部订阅(C6)                            | 待做                          |                                   |
@@ -681,6 +681,22 @@ owner 已批准把 C2–C6 从「只写方案」改为「实现」。C1(进程�
 - 已知的小代价:扫描失败期间,每次请求都会重新扫描一遍 import 图。源文件都走 `readAsset` 缓存,只要不改文件,开销很小,不阻塞。
 
 A/B 批全部核验通过。C 批等 owner 决策。
+
+### 第 3 轮核验:D1(HEAD `16123a5`,2026-10-24)
+
+**D1 — 通过**
+
+- 改动范围:相对 `8606886`,`src/`、`web/`、`test/` 都没有 diff,只改了 `architecture.md`、`map.md` 和本文件。
+- 引用检查:我另写了一个脚本,抽出两份文档里所有 `Class.method` 和 `file.ts: fn` 形式的引用,逐个在 `src/server`、`web`、`bin` 里查找,全部能找到。
+- 语义抽查,对照源码逐条看过,都和代码一致:
+    - `PocketApp.#open` 的顺序:verify pin → lock → 只有非 kernel 模式才建 `ExtensionLoader` → 打开 storage → `#recover` → `kernel.reconcile` → `execution.recover` → `spend.load` → 订阅 → guard → `harness.resume` → `resumeInterrupted`。
+    - 原生会话在 kernel 关闭时不会落到 Durable 上执行:`conversation-routes.ts:49` 会拒绝,`TeamExecution.admit/authorize`(`:116`、`:216`)也会拒绝。
+    - 原生 OAuth refresh 会被拒绝(`team-kernel.ts:275`)。
+    - 关闭时先 flush 配置,再释放 `harness.lock`。
+    - 文档明确写了 D5、D8、D9 尚未实现,没有提前宣称。
+- 提醒(不阻塞):`origin/main` 在本分支之后又多了一个提交 `e649d9d`(pre-commit 文件大小检查)。本分支还没有合入它,将来合并前需要同步一次。
+
+D1 核验通过,执行方可以开始 D2。
 
 ## C 方案（执行方追加）
 
