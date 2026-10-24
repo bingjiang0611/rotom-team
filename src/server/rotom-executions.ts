@@ -17,14 +17,10 @@ import type { ImageContent } from "@earendil-works/pi-ai";
 import { once } from "node:events";
 import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import {
-    constants,
-    closeSync,
     chmodSync,
-    fsyncSync,
     existsSync,
     lstatSync,
     mkdirSync,
-    openSync,
     realpathSync,
     rmSync,
     writeFileSync,
@@ -46,6 +42,7 @@ import {
     nativeSessionManager,
 } from "./rotom-kernel.ts";
 import { publicNativeHistory } from "./rotom-history.ts";
+import { prepareSeed, persistSeed } from "./rotom-executions/seed-files.ts";
 import { type RotomRpc, type RpcRecord, RpcFailure } from "./rotom-rpc.ts";
 import {
     readNativeSnapshot,
@@ -842,7 +839,7 @@ export class RotomExecutions {
         authorize = () => this.#authorize(receipt.binding, "admission", receipt.sessionId),
     ): Promise<KernelReceipt> {
         let materializing = false;
-        const mark = seedPhases();
+        let mark = seedPhases();
 
         try {
             await authorize();
@@ -856,58 +853,14 @@ export class RotomExecutions {
 
             if (messages.length) {
                 materializing = true;
-                // Native Pi may create its sessions container as 0755 inside the private HOME.
-                // Own a private seed subdirectory rather than changing or trusting that container's mode.
-                const folder = join(receipt.binding.home, ".pi/agent/sessions/team-seeds");
+                const { session, folder } = prepareSeed(receipt.binding, SessionManager);
+                const attached = seedPhases();
 
-                mkdirSync(folder, { recursive: true, mode: 0o700 });
-
-                if (realpathSync(folder) !== folder || lstatSync(folder).mode & 0o077) {
-                    throw new Error("Native seed directory must be canonical and private");
-                }
-
-                const session = SessionManager.create(receipt.binding.workspace, folder);
-
-                mark("prepare");
                 // Attach the intended file before appending; an interrupted partial seed remains inspectable.
                 this.journal.attach(receipt.id, session.getSessionFile(), session.getSessionId());
-                mark("attach");
-
-                for (const message of messages) {
-                    session.appendMessage(message);
-                }
-
-                mark("append");
-                const path = session.getSessionFile();
-
-                chmodSync(path, 0o600);
-
-                for (const pathToSync of [path, folder]) {
-                    const fd = openSync(pathToSync, constants.O_RDONLY | constants.O_NOFOLLOW);
-
-                    try {
-                        fsyncSync(fd);
-                    } finally {
-                        closeSync(fd);
-                    }
-                }
-
-                mark("persist");
-                entries = readNativeEntries(
-                    path,
-                    session.getSessionId(),
-                    receipt.binding.workspace,
-                );
-                mark("readback");
-                const persisted = entries
-                    .filter((entry) => entry.type === "message")
-                    .map((entry) => entry.message);
-
-                if (JSON.stringify(persisted) !== JSON.stringify(messages)) {
-                    throw new Error("Native seed readback mismatch");
-                }
-
-                mark("compare");
+                attached("attach");
+                entries = persistSeed(session, folder, receipt.binding.workspace, messages);
+                mark = seedPhases();
             }
 
             await authorize();
