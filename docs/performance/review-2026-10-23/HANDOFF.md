@@ -38,7 +38,7 @@
 | D1    | D    | 文档纠偏(C6)                                | 核验通过                      | `0705511`（测量）；实现见执行记录 |
 | D2    | D    | notify 控制消息集中解码(C6)                 | 核验通过                      | `1b1228a`（测量）；实现见执行记录 |
 | D3    | D    | 流式 Markdown 解析(C6)                      | 核验通过                      | `b6d3842`（测量）；实现见执行记录 |
-| D4    | D    | App 局部订阅(C6)                            | 待做                          |                                   |
+| D4    | D    | App 局部订阅(C6)                            | 进行中                        |                                   |
 | D5    | D    | 切换会话不重连(C6)                          | 待做                          |                                   |
 | D6    | D    | 大文件纯移动拆分(C5)                        | 待做                          |                                   |
 | D7    | D    | handoff 测量与异步化(C2)                    | 待做                          |                                   |
@@ -786,6 +786,13 @@ owner 已批准把 C2–C6 从「只写方案」改为「实现」。C1(进程�
 - 证据在 /tmp/rotom-review-D3/：base.json、head.json、targeted.log、coalescing-negative.log、scroll-negative.log、test.log、ci/、change-ci/。一次测量正常结束后旧 SIGTERM 清理遇到 profile ENOTEMPTY；已单独修正为 graceful Browser.close，未重试/弱化测试断言，遗留 fixture profile 已删除，完整验证随后通过。
 - 最终自审：生产改动只有 web/ui.js、web/transcript.js；发送协议、服务端、vendor/pin、凭据、unknown、journal/Durable 合同和 ledger 都未改。用户两处原有文档改动保留。未部署、未重启、未使用真实账号。
 - D3「已推送待核验」；由审查方核验并写回结论，通过后执行方再开始 D4。本轮不做 D4。
+
+### D4 — 根组件提交测量（实现前）
+
+- 新增 app-commits-bench.mjs / app-browser.ts / app-commits.js：真实 Chromium、生产 App/Transcript、临时 Team 服务与禁止推理的合成账号。先装 Preact 探针再加载原 app.js；其它模块/订阅仍按生产入口顺序加载。只计 render→diff→commit 完成的指定组件（单独 diffed 会包含 Preact 11 的 SCU bailout，不能当成真实渲染）。
+- 1245967 基线：text、thinking、tool 三组各 **20 个已刷新的 live 更新**，每组 App/Transcript/Topbar/SessionList/Composer/NativeBanner/Notices 均 **20 次提交**。每次对 room.ts 重发的 conversation/inbox/agent/stats/clients/viewers/approvals/kernel 作 JSON round-trip，不能靠引用碰巧没变伪造收益；entries/order/省略字段保留 applyView 的引用语义。结果 /tmp/rotom-review-D4/base.json。
+- 调用链检索确认：generation/tools/compactions 仅 Transcript 渲染，busy 还影响 App/favicon、Composer、菜单、NativeBanner 等；kernel 的状态/对话框/权限、费用/账号等并非 live-only，必须继续更新根。计划只跳过其它数据完全不变且 busy 不变的 live 更新，让 Transcript 局部订阅；原 store.set 和所有既有订阅顺序保持，不引入状态库、不移动副作用模块。
+- 这是确定性组件提交 L1，不代表整个 DOM 重建、真实 token 到达频率或生产毫秒收益。尚未实现或修改 ledger。
 
 ## 核验记录（审查方追加）
 
