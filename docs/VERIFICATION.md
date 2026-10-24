@@ -21,6 +21,21 @@ For every check, record the exact source commit, exit status, inspected scope an
 
 `npm test` covers the ratchet, the journal, and the server's journal end to end. The benchmarks are separate: `npm run perf:measure` (real rotom processes, a loopback model, Chromium where present) and `npm run perf:ci -- <base-ref>` for before and after a change. A gating counter failing `perf:check` fails the change; millisecond numbers are evidence only with the machine's load recorded. See [PERFORMANCE.md](PERFORMANCE.md).
 
+## D6 move-only review evidence
+
+The review-local `docs/performance/review-2026-10-23/move-equivalence.mjs` reconstructs the original
+owners against frozen hashes from `5551a50`, excluding only import/local-export linkage and declared move
+boundaries. It also rejoins the two stylesheets in their original order. This is evidence for D6, not a
+permanent prohibition on later authorized behavior changes.
+
+`style-move-bench.mjs` in the same directory checks all computed-style properties of controlled native/peek
+samples in real Chromium, across desktop/mobile and dark/light states. The frozen golden is scoped to the
+recorded macOS/Chromium environment, not a cross-platform visual standard. On a different environment,
+collect paired baseline/head traces with `D6_STYLE_TRACE` and compare them; do not overwrite the golden to
+make a move pass. `test/mobile-ui.test.ts` and `test/peeks-ui.test.ts` additionally exercise real app interactions.
+See [the D6 record](performance/review-2026-10-23/d6-validation.md) for source revisions, full-suite results,
+negative controls, stylesheet network cost and every worse performance counter.
+
 ## Event subscriptions
 
 `session-subscriptions.test.ts` exercises authenticated HTTP SSE/poll: connection ownership, ACK/full-view order,

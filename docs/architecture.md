@@ -211,6 +211,12 @@ height to keep following deferred text and loaded images, but does not move a re
 
 **Loading order matters.** `store.js` is the root, and a few modules do work when they load (listed in [map.md](map.md#web-web-preact-and-htm-no-build)). `theme.js` must load before anything that reads `prefs()` as it loads. `store.set` calls subscribers in the order they subscribed. When moving code between modules, keep both orders. `back.js` sits under `store.js` and imports nothing of the app's, so anything may use it.
 
+**Stylesheet order matters too.** Both the app and sign-in pages load `style.css`, then the adjacent
+`native.css` link. The latter is the original contiguous native-UI suffix, not a regrouping of selectors.
+Both files stay directly under `web/`, so relative URLs keep their base. Keep link order; do not replace it
+with a late `@import` or reorder rules by component. The split adds one request (also on revalidation) and
+some gzip overhead; it is an ownership change, not a loading-speed optimization.
+
 **History is the back stack (`back.js`).** Only `back.js` writes history. Each route (`/s/12`) and each layer over it (a sheet, the drawer, the launcher, the Files tile or Browser panel where they cover the screen, a file over the tile's tree) is an entry, and each entry says how many layers it stands for and how many steps back the session list's entry is. The app's state is the truth and history follows it a moment later: opening a layer pushes an entry, closing one with a tap goes back past it, and a new route first goes back past the layers above the current one. Back that the person makes closes the layers above the entry it lands on; back to another route reaches `store.js` through `onRoute`. Traversals `back.js` makes itself reach no one. So:
 
 - Navigate with `navigate()` (which calls `pushRoute`); do not call `history.pushState` or `history.back()` elsewhere. To drop a query from the address, use `replaceAddress`, which keeps the entry's marks.

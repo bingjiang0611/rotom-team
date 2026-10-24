@@ -40,7 +40,7 @@
 | D3    | D    | 流式 Markdown 解析(C6)                      | 核验通过                      | `b6d3842`（测量）；实现见执行记录    |
 | D4    | D    | App 根渲染局部订阅(C6)                      | 核验通过                      | `58ddb47`（测量）；实现见执行记录    |
 | D5    | D    | 切换会话不重连(C6)                          | 核验通过                      | `229bda2`（测量）；`5acca07`（实现） |
-| D6    | D    | 大文件纯移动拆分(C5)                        | 进行中                        |                                      |
+| D6    | D    | 大文件纯移动拆分(C5)                        | 已推送待核验                  | `3768653`（测量）；实现见执行记录    |
 | D7    | D    | handoff 测量与异步化(C2)                    | 待做                          |                                      |
 | D8    | D    | storage worker(C3)                          | 待做                          |                                      |
 | D9    | D    | 下线旧后端(C4,只读归档)                     | 待做                          |                                      |
@@ -1019,6 +1019,15 @@ owner 已批准把 C2–C6 从「只写方案」改为「实现」。C1(进程�
 - 初版 computed-style 探针未稳定排序/等待，基线重复不一致；生产代码尚未移动时纠正采样后重建未提交的基线，连续两次一致。旧探针结果保留 /tmp/rotom-review-D6/，不作验收证据；冻结后的 golden 不再更新以迁就移动。
 - native-tail-memory 的测量适配提前独立提交：两版都先加载 execution owner，再从已知新布局的实际 helper owner 取 NativeTail，否则取原布局；不改 seed、计数、GC、边界或断言。步骤③只迁移擦除后的 type import，避免旧版比较失效，不保留兼容 barrel。
 - 纯移动不宣称 L1/L2 提速。CSS 若新增请求/压缩成本会单列；不改 ledger。每步独立提交、完整检查与 perf，证据在 /tmp/rotom-review-D6/。D5 的并行测试例外不自动延用到 D6；未做 D7。
+
+### D6 — 执行完成，等待核验
+
+- 测量 `3768653`；按顺序四个纯移动提交：upload 尾段 `d9f7afd`、公开投影 helper `27c3f7e`、JSONL/readback `54387bd`、native CSS 连续后缀 `8506d3d`。无私有状态/鉴权/条件重排、barrel、schema/vendor/pin 或 ledger 改动。
+- 每步 format/check/lint/format:check、默认全量及 perf 护栏通过，四步最终均 **622/622、0 skip**。步骤②首次是同一 legacy dropins reload 超时；独立 4/4，owner 只授权重跑默认全量一次，重跑 622/622。没有启用 D5 例外或放宽测试，也未声称 watcher 根因修复。
+- 完整 owner 反向重组、移动正文/常量和 CSS 重组 SHA 全部一致。真实 Chromium 4×28 computed-style 样本一致；最终真实 mobile/peek + native snapshot/notify 专项 **59/59**。漏载 CSS 与改动 64 MiB 限制的负控都按预期失败，未改生产文件或冻结 golden。
+- 五组单轮 perf 均 exit 0/ledger guard 通过。CSS 必需成本为首次/条件请求 **53→54**，静态 bundle gzip **407732→408346 B（+614）**，条件响应正文仍为 0；两个相邻 HTML link 不引入 @import 串行链，不承诺生产首屏/冷加载性能等价。
+- [D6 完整验证记录](d6-validation.md) 列出版本、每步测试、失败日志、CSS 成本、全部 **54 个 worse 并集**和同代码对照；事件正文未留存的细分字节来源保留 unknown。证据根目录 `/tmp/rotom-review-D6/`。
+- 已同步 map/architecture/VERIFICATION 的实际 owner 与加载顺序。保留用户两处文档，不部署、不重启线上。**下一步由审查方核验 D6；通过前不做 D7。**
 
 ## 核验记录（审查方追加）
 
