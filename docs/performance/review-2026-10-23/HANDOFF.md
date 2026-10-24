@@ -37,7 +37,7 @@
 | C1–C6 | C    | 需要 owner 决策，只写方案                   | C1 暂缓;C2–C6 已批准,见批次 D | `14caa83`（方案，未实现）         |
 | D1    | D    | 文档纠偏(C6)                                | 核验通过                      | `0705511`（测量）；实现见执行记录 |
 | D2    | D    | notify 控制消息集中解码(C6)                 | 核验通过                      | `1b1228a`（测量）；实现见执行记录 |
-| D3    | D    | 流式 Markdown 解析(C6)                      | 进行中                        |                                   |
+| D3    | D    | 流式 Markdown 解析(C6)                      | 已推送待核验                  | `b6d3842`（测量）；实现见执行记录 |
 | D4    | D    | App 局部订阅(C6)                            | 待做                          |                                   |
 | D5    | D    | 切换会话不重连(C6)                          | 待做                          |                                   |
 | D6    | D    | 大文件纯移动拆分(C5)                        | 待做                          |                                   |
@@ -707,6 +707,85 @@ owner 已批准把 C2–C6 从「只写方案」改为「实现」。C1(进程�
 - a587a23 实现基线：burst **322 次 parse / 2,756,978 字符 / 322 次 sanitize**，最终文本 17,049 字符；paced **22 / 24,643 / 22**；unchanged **22 / 286 / 22**。每组最终都没有待执行帧。结果 /tmp/rotom-review-D3/base.json。
 - 同时由未修改的 Markdown 生成 markdown-golden.json：8 组固定输入的最终 DOM HTML（未闭合/闭合 fence、跨块引用/列表/表格、整页 HTML、XSS、长代码折叠、文件路径、rich blocks）。实现后的测试必须逐字对照这份基线，不从新实现重生成期望值。
 - 这是增长块与同值父组件提交的定向 L1 测量，不是实际 90 ms 推送频率或毫秒收益。逐帧一次的路径是无收益对照，不能为了数字变小跳过最终解析或 DOMPurify。实现计划：组件内保留最近解析输入，同一帧只解析最新增长值，完成/上下文改变立即刷新，卸载取消 pending frame；不做增量 Markdown 语法解析。
+
+### D3 — 帧合并实现与验证
+
+- 测量提交 `b6d3842`；fixture 独立补丁 `c311666`（支持 Transcript 的嵌套模块）、`d6e57f6`（Browser.close 后等待退出再删 profile）。计数脚本、固定输入和 golden HTML 均未修改。实现提交题名 `D3: coalesce streaming Markdown per frame and flush completion`。
+- web/ui.js 的 Markdown 组件内合并增长更新，保留单个 pending frame，不因每次输入替换回调而饿死渲染；useMemo 避免同值重解析。首次、完成、会话/basePath 改变立即渲染，结束/卸载取消 pending。仅保留已渲染及最新输入，没有跨组件流式缓存，原 500 条成品 LRU 不变。marked→DOMPurify→partsOf 全文解析链不变，未尝试破坏跨块语义的增量解析。
+- 自审实际调用链发现：延后子提交会绕过 Transcript 父级 layout effect 的滚动跟随。真实 Chromium 测试先复现距底部 **760 px** 的回归，再把 image-load 专用监听替换为内容 ResizeObserver；仍遵循 stick/keepPlace，读者向上滚动不被拉回。观察器随会话/缺失状态清理，卸载断开；未增加 UI 文案或 CSS。
+- CONFIGURATION/architecture 已同步帧等待、立即完成和高度跟随的行为。
+
+| 定向工作量（20 帧，包含完成）    | parse 次数 base→head | parse 字符 base→head  | sanitize 次数 base→head |
+| -------------------------------- | -------------------- | --------------------- | ----------------------- |
+| burst：每帧 8 次增长并同值再提交 | **322→22**           | **2,756,978→195,758** | **322→22**              |
+| paced：每帧一次增长              | **22→22**            | **24,643→24,643**     | **22→22**               |
+| unchanged：每帧同值提交          | **22→2**             | **286→26**            | **22→2**                |
+
+| 检查           | 结果/证据                                                                                                                                       |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| 固定 HTML 基线 | 8 组与实现前 golden 逐字一致；覆盖未闭合/跨块 fence、引用/列表/表格、整页 HTML、长代码最终折叠、路径和 rich blocks                              |
+| 生命周期与安全 | 完成前保留未执行帧，完成立即对照最终 HTML；验证最新值、取消/卸载、上下文失效、rich streaming 标志；每次解析都有 sanitize，危险 DOM/脚本执行为 0 |
+| 负控           | 强制每次立即解析（绕过合并）使 burst 变为 162 而非 22，计数和 pending 用例失败；未修复跟随时滚动用例因 760≠0 失败。恢复最终实现后通过           |
+| 语法与静态检查 | node --check 两个 web 文件；format/check/lint/format:check 全通过                                                                               |
+| 完整测试       | **600/600**，无失败/跳过；新增 Markdown 浏览器组 **15/15**                                                                                      |
+| 性能护栏       | perf:ci -- origin/main --runs 1 通过，ledger guard 通过；Node 24.18.0 / darwin-arm64 / 8 核，highLoad=false（4.10→3.66）                        |
+| D3 隔离比较    | perf:ci -- b6d3842 --runs 1 通过，ledger guard 通过；highLoad=false（2.76→2.98）                                                                |
+
+- 相对 origin/main=e649d9d 的全部 worse 如下；并列 D3 隔离样本以区分既有 A/B 差异和本项成本：
+
+| 计数器                                          | origin/main→head | D3 隔离 base→head | 解释                                                                                                             |
+| ----------------------------------------------- | ---------------- | ----------------- | ---------------------------------------------------------------------------------------------------------------- |
+| startup.restart/sql.statements                  | 848→851          | 851→851           | 主分支差异含 A1/A2/A3 查询和异步窗口；D3 未改 SQL/服务端，隔离复测不增                                           |
+| startup.restart/json.parse.durableStorage.calls | 458→459          | 458→458           | 启动窗口多一个 19 字符 Durable 值；D3 没有存储改动，隔离复测不增；未保存原值，不作字段级归因                     |
+| startup.restart/json.parse.durableStorage.chars | 51416→51435      | 51416→51416       | 启动窗口多一个 19 字符 Durable 值；D3 没有存储改动，隔离复测不增；未保存原值，不作字段级归因                     |
+| session.open/sql.statements                     | 45→48            | 47→47             | 主分支差异含 A1/A2/A3 查询和异步窗口；D3 未改 SQL/服务端，隔离复测不增                                           |
+| session.open/sql.rows                           | 94→109           | 96→96             | 主分支差异含 A1/A2/A3 查询和异步窗口；D3 未改 SQL/服务端，隔离复测不增                                           |
+| session.open/json.stringify.chars               | 84622→88107      | 84622→84622       | 收尾/90 ms 合并窗口的事件与动态 payload 字节差异；D3 隔离不增。未保存原始 payload，不作逐字段归因                |
+| session.open/push.events                        | 9→10             | 9→9               | 收尾/90 ms 合并窗口的事件与动态 payload 字节差异；D3 隔离不增。未保存原始 payload，不作逐字段归因                |
+| session.open/push.bytes                         | 82236→86312      | 82236→82236       | 收尾/90 ms 合并窗口的事件与动态 payload 字节差异；D3 隔离不增。未保存原始 payload，不作逐字段归因                |
+| turn.cold/sql.statements                        | 209→226          | 226→211           | 主分支差异含 A1/A2/A3 查询和异步窗口；D3 未改 SQL/服务端，隔离复测不增                                           |
+| turn.cold/sql.rows                              | 141→153          | 153→146           | 主分支差异含 A1/A2/A3 查询和异步窗口；D3 未改 SQL/服务端，隔离复测不增                                           |
+| turn.warm/sql.statements                        | 157→158          | 158→158           | 主分支差异含 A1/A2/A3 查询和异步窗口；D3 未改 SQL/服务端，隔离复测不增                                           |
+| turn.paced/sql.statements                       | 286→288          | 288→288           | 主分支差异含 A1/A2/A3 查询和异步窗口；D3 未改 SQL/服务端，隔离复测不增                                           |
+| web.open/sql.statements                         | 31→32            | 32→32             | 主分支差异含 A1/A2/A3 查询和异步窗口；D3 未改 SQL/服务端，隔离复测不增                                           |
+| web.open/cdp.Nodes                              | 996→1112         | 1112→1112         | 主分支比较含 A4 preload 节点；D3 隔离仍有节点分配/回收取样差异（见下表），最终 DOM 基线不变                      |
+| session.open.long/sql.statements                | 16→17            | 17→17             | 主分支差异含 A1/A2/A3 查询和异步窗口；D3 未改 SQL/服务端，隔离复测不增                                           |
+| session.open.long/sql.rows                      | 47→49            | 49→49             | 主分支差异含 A1/A2/A3 查询和异步窗口；D3 未改 SQL/服务端，隔离复测不增                                           |
+| web.open.long/cdp.Nodes                         | 1585→1701        | 1725→1701         | 主分支比较含 A4 preload 节点；D3 隔离仍有节点分配/回收取样差异（见下表），最终 DOM 基线不变                      |
+| native.warm/sql.rows                            | 10→11            | 11→11             | 主分支差异含 A1/A2/A3 查询和异步窗口；D3 未改 SQL/服务端，隔离复测不增                                           |
+| web.reopen/cdp.Nodes                            | 1090→1230        | 1206→1230         | 主分支比较含 A4 preload 节点；D3 隔离仍有节点分配/回收取样差异（见下表），最终 DOM 基线不变                      |
+| web.paced/sql.statements                        | 306→308          | 308→308           | 主分支差异含 A1/A2/A3 查询和异步窗口；D3 未改 SQL/服务端，隔离复测不增                                           |
+| web.paced/cdp.Nodes                             | 1294→1417        | 1433→1425         | 主分支比较含 A4 preload 节点；D3 隔离仍有节点分配/回收取样差异（见下表），最终 DOM 基线不变                      |
+| web.send.poll/cdp.RecalcStyleCount              | 112→123          | 111→115           | 独立帧提交和实际高度跟随的样式重算成本；隔离 stream 为 100→110，view 24→24、Layout 18→18。不把这项开销声称为收益 |
+| web.send.poll/cdp.Nodes                         | 1452→1620        | 1594→1615         | 主分支比较含 A4 preload 节点；D3 隔离仍有节点分配/回收取样差异（见下表），最终 DOM 基线不变                      |
+| web.send.stream/sql.statements                  | 384→386          | 386→386           | 主分支差异含 A1/A2/A3 查询和异步窗口；D3 未改 SQL/服务端，隔离复测不增                                           |
+| web.send.stream/push.bytes                      | 91291→91492      | 91291→91291       | 收尾/90 ms 合并窗口的事件与动态 payload 字节差异；D3 隔离不增。未保存原始 payload，不作逐字段归因                |
+| web.send.stream/push.view.bytes                 | 77497→77698      | 77497→77497       | 收尾/90 ms 合并窗口的事件与动态 payload 字节差异；D3 隔离不增。未保存原始 payload，不作逐字段归因                |
+| web.send.stream/cdp.RecalcStyleCount            | 102→109          | 100→110           | 独立帧提交和实际高度跟随的样式重算成本；隔离 stream 为 100→110，view 24→24、Layout 18→18。不把这项开销声称为收益 |
+| web.send.stream/cdp.Nodes                       | 1516→1629        | 1631→1648         | 主分支比较含 A4 preload 节点；D3 隔离仍有节点分配/回收取样差异（见下表），最终 DOM 基线不变                      |
+| commands.discover.cold/sql.rows                 | 78→81            | 81→81             | 主分支差异含 A1/A2/A3 查询和异步窗口；D3 未改 SQL/服务端，隔离复测不增                                           |
+| commands.discover.warm/sql.rows                 | 64→66            | 66→66             | 主分支差异含 A1/A2/A3 查询和异步窗口；D3 未改 SQL/服务端，隔离复测不增                                           |
+| projection.large.open/sql.statements            | 98→99            | 99→99             | 主分支差异含 A1/A2/A3 查询和异步窗口；D3 未改 SQL/服务端，隔离复测不增                                           |
+| projection.large.paced/sql.statements           | 572→574          | 574→574           | 主分支差异含 A1/A2/A3 查询和异步窗口；D3 未改 SQL/服务端，隔离复测不增                                           |
+| projection.large.paced/push.bytes               | 245828→251428    | 248228→245828     | 收尾/90 ms 合并窗口的事件与动态 payload 字节差异；D3 隔离不增。未保存原始 payload，不作逐字段归因                |
+| projection.large.paced/push.view.bytes          | 204456→210056    | 206856→204456     | 收尾/90 ms 合并窗口的事件与动态 payload 字节差异；D3 隔离不增。未保存原始 payload，不作逐字段归因                |
+
+- D3 隔离比较自身全部 worse（不能用主分支已有收益遮盖本项成本）：
+
+| D3 隔离 worse                                | base→head     | 解释                                                                                                                |
+| -------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------- |
+| session.history.earlier/json.stringify.chars | 243098→243132 | 动态序列化结果 +34 字符；后端/投影代码未动，原始值未记录，不冒充已证明的字段归因                                    |
+| web.reopen/cdp.Nodes                         | 1206→1230     | 独立子提交后节点分配/浏览器回收时点的取样成本；未增加最终 DOM，8 组固定结果逐字一致；不宣称节点指标改善             |
+| web.send.poll/cdp.Nodes                      | 1594→1615     | 独立子提交后节点分配/浏览器回收时点的取样成本；未增加最终 DOM，8 组固定结果逐字一致；不宣称节点指标改善             |
+| web.send.stream/cdp.RecalcStyleCount         | 100→110       | 独立帧提交和实际高度跟随的样式重算成本；隔离 stream 为 100→110，view 24→24、Layout 18→18。不把这项开销声称为收益    |
+| web.send.stream/cdp.Nodes                    | 1631→1648     | 独立子提交后节点分配/浏览器回收时点的取样成本；未增加最终 DOM，8 组固定结果逐字一致；不宣称节点指标改善             |
+| projection.large.open/json.stringify.chars   | 181858→181892 | 动态序列化结果 +34 字符；后端/投影代码未动，原始值未记录，不冒充已证明的字段归因                                    |
+| assets.first/http.body.bytes                 | 405839→406244 | 新增帧合并、上下文失效和高度跟随的实现代码；gzip +405 B（ui.js +382，transcript.js +23），请求仍 53、条件响应体仍 0 |
+
+- 取舍/限制：这里只证实 L1 重复解析减少。逐帧一次没有解析收益；一般推送已合并到 90 ms，不能把 burst 的 322→22 外推为生产提速。帧合并可能把中间文本延后到下一帧，且增加独立提交的样式工作；保留初次/最终立即渲染，并付出高度跟随成本来保持行为。不放宽 ledger，不声称单轮毫秒/所有 Markdown/真实手机均已证明。
+- 证据在 /tmp/rotom-review-D3/：base.json、head.json、targeted.log、coalescing-negative.log、scroll-negative.log、test.log、ci/、change-ci/。一次测量正常结束后旧 SIGTERM 清理遇到 profile ENOTEMPTY；已单独修正为 graceful Browser.close，未重试/弱化测试断言，遗留 fixture profile 已删除，完整验证随后通过。
+- 最终自审：生产改动只有 web/ui.js、web/transcript.js；发送协议、服务端、vendor/pin、凭据、unknown、journal/Durable 合同和 ledger 都未改。用户两处原有文档改动保留。未部署、未重启、未使用真实账号。
+- D3「已推送待核验」；由审查方核验并写回结论，通过后执行方再开始 D4。本轮不做 D4。
 
 ## 核验记录（审查方追加）
 

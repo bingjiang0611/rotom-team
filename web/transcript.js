@@ -1148,24 +1148,25 @@ export function Transcript() {
         return () => clearTimeout(timer);
     }, [conversationId, hasRows]);
 
-    // Images finish loading after the transcript renders and make it taller: stay at the bottom if we were there.
-    useEffect(() => {
+    // Deferred Markdown and loaded images can grow without a Transcript commit. Follow actual content height,
+    // not just parent renders, and never pull a reader who has scrolled up back to the bottom.
+    useLayoutEffect(() => {
         const element = scroller.current;
 
         if (!element) {
             return;
         }
 
-        const onLoad = (event) => {
-            if (event.target?.tagName === "IMG" && stick.current) {
+        const observer = new ResizeObserver(() => {
+            if (stick.current) {
                 element.scrollTop = element.scrollHeight;
             }
-        };
+        });
 
-        element.addEventListener("load", onLoad, true);
+        observer.observe(element.firstElementChild);
 
-        return () => element.removeEventListener("load", onLoad, true);
-    }, [view.conversation?.id]);
+        return () => observer.disconnect();
+    }, [view.conversation?.id, missing]);
 
     // A message whose entry arrived, or that its sender put away, is no longer kept (other sessions' stay, few).
     useEffect(() => {

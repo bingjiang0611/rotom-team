@@ -4,7 +4,7 @@ import DOMPurify from "dompurify";
 import htm from "htm";
 import { marked } from "marked";
 import { Component, createContext, h } from "preact";
-import { useContext, useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
+import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
 import { useDragToClose } from "./gestures.js";
 import { highlight, langOf } from "./highlight.js";
 import { actions, filesShown, notify, openSheet, store } from "./store.js";
@@ -469,7 +469,59 @@ export function setRichBlock(component) {
  * diffs show as code until it is whole.
  */
 export function Markdown({ text, class: className = "", cache = true, basePath = null }) {
-    const parts = markdownParts(text, undefined, cache, basePath);
+    const conversationId = currentConversation();
+    const shown = useRef(null);
+    const latest = useRef(null);
+    const frame = useRef(null);
+    const [, refresh] = useState(0);
+
+    latest.current = { text, cache, basePath, conversationId };
+
+    // First text, completion, and a different path/session must not wait for a frame (or show old file links).
+    if (
+        shown.current === null ||
+        cache ||
+        shown.current.cache ||
+        shown.current.basePath !== basePath ||
+        shown.current.conversationId !== conversationId
+    ) {
+        shown.current = latest.current;
+    }
+
+    useLayoutEffect(() => {
+        if (shown.current.text === text) {
+            if (frame.current !== null) {
+                cancelAnimationFrame(frame.current);
+                frame.current = null;
+            }
+        } else if (frame.current === null) {
+            // Keep this request across intervening updates: replacing it each time could starve a busy stream.
+            frame.current = requestAnimationFrame(() => {
+                frame.current = null;
+                shown.current = latest.current;
+                refresh((revision) => revision + 1);
+            });
+        }
+    });
+    useLayoutEffect(
+        () => () => {
+            if (frame.current !== null) {
+                cancelAnimationFrame(frame.current);
+            }
+        },
+        [],
+    );
+    const rendered = shown.current;
+    const parts = useMemo(
+        () =>
+            markdownParts(
+                rendered.text,
+                rendered.conversationId,
+                rendered.cache,
+                rendered.basePath,
+            ),
+        [rendered.text, rendered.conversationId, rendered.cache, rendered.basePath],
+    );
 
     if (parts.length === 1 && parts[0].kind === undefined) {
         return html`<div

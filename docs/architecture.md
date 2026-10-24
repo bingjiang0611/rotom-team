@@ -179,6 +179,14 @@ interrupted merely because the process is gone. Tests of closure and recovery ar
 
 Plain ES modules, served as they are, with no build. Editing a file under `web/` reloads every open tab, and a syntax error blanks the screen for everyone.
 
+**Streaming Markdown (`ui.js: Markdown`).** Each mounted component keeps its rendered input/result and the
+latest pending input. A single animation-frame callback consumes the latest growing text; repeated parent commits
+with unchanged input do not parse again. First render, completion (`cache=true`), conversation and base-path changes
+render immediately; completion/unmount cancels pending work. Parsing still runs the full text through marked,
+DOMPurify and the existing parts renderer, so references, fences and final folding keep their original semantics.
+The 500-entry finished-text LRU is unchanged; no stream versions are added to it. `Transcript` observes content
+height to keep following deferred text and loaded images, but does not move a reader who has scrolled up.
+
 **Loading order matters.** `store.js` is the root, and a few modules do work when they load (listed in [map.md](map.md#web-web-preact-and-htm-no-build)). `theme.js` must load before anything that reads `prefs()` as it loads. `store.set` calls subscribers in the order they subscribed. When moving code between modules, keep both orders. `back.js` sits under `store.js` and imports nothing of the app's, so anything may use it.
 
 **History is the back stack (`back.js`).** Only `back.js` writes history. Each route (`/s/12`) and each layer over it (a sheet, the drawer, the launcher, the Files tile or Browser panel where they cover the screen, a file over the tile's tree) is an entry, and each entry says how many layers it stands for and how many steps back the session list's entry is. The app's state is the truth and history follows it a moment later: opening a layer pushes an entry, closing one with a tap goes back past it, and a new route first goes back past the layers above the current one. Back that the person makes closes the layers above the entry it lands on; back to another route reaches `store.js` through `onRoute`. Traversals `back.js` makes itself reach no one. So:

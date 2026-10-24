@@ -397,6 +397,14 @@ So does a change of the signed-in person, role or session grants. A session the 
 and copies of sessions no longer in the person's list are dropped. Anyone using the same browser profile before
 sign-out could read the copies. Where IndexedDB is unavailable, nothing is saved.
 
+## Streaming Markdown
+
+Growing Markdown text updates are combined per browser animation frame. The first text and completed result render
+without waiting for a frame; completion still uses the full parser and sanitizer, including final code folding.
+A paused/background frame may delay intermediate text, never the completed result's render. Conversation or document
+base-path changes invalidate immediately, and unmounting cancels pending work. No stream versions are persisted.
+The transcript keeps following content height while the reader is at the bottom; scrolling up still stops following.
+
 ## Long sessions
 
 Opening a session, the web app asks for its newest 240 entries (`tail=240` on the event connection). The view still
