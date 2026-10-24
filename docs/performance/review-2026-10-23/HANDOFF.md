@@ -23,27 +23,27 @@
 
 ## 状态表（执行方维护）
 
-| 编号  | 批次 | 标题                                        | 状态                          | 提交                              |
-| ----- | ---- | ------------------------------------------- | ----------------------------- | --------------------------------- |
-| A1    | A    | journal 索引 + 镜像游标                     | 核验通过                      | `2a2ac90`、`b44ca33`、`7c880fc`   |
-| A2    | A    | thinking level / native goal 跨推送缓存     | 核验通过                      | `b8d63f4`、`c13245d`              |
-| A3    | A    | 启动时不再全量解析历史                      | 核验通过                      | `0f39ea3`                         |
-| A4    | A    | 静态资源 ETag / gzip / modulepreload        | 核验通过                      | `c8d7cbd`（测量见记录）           |
-| B1    | B    | `teamResourceRevision` 不在请求路径读大文件 | 核验通过                      | `9ccc0aa`                         |
-| B2    | B    | `finishedSeen` 写入与清理                   | 核验通过                      | `cc652cc`                         |
-| B3    | B    | 房间级字段每次推送只算一次                  | 核验通过                      | `8d42e63`                         |
-| B4    | B    | journal 预编译语句缓存                      | 核验通过                      | `37cb733`                         |
-| B5    | B    | 长轮询队列字节上限                          | 核验通过                      | `5fb4bbe`                         |
-| C1–C6 | C    | 需要 owner 决策，只写方案                   | C1 暂缓;C2–C6 已批准,见批次 D | `14caa83`（方案，未实现）         |
-| D1    | D    | 文档纠偏(C6)                                | 核验通过                      | `0705511`（测量）；实现见执行记录 |
-| D2    | D    | notify 控制消息集中解码(C6)                 | 核验通过                      | `1b1228a`（测量）；实现见执行记录 |
-| D3    | D    | 流式 Markdown 解析(C6)                      | 核验通过                      | `b6d3842`（测量）；实现见执行记录 |
-| D4    | D    | App 根渲染局部订阅(C6)                      | 核验通过                      | `58ddb47`（测量）；实现见执行记录 |
-| D5    | D    | 切换会话不重连(C6)                          | 进行中                        |                                   |
-| D6    | D    | 大文件纯移动拆分(C5)                        | 待做                          |                                   |
-| D7    | D    | handoff 测量与异步化(C2)                    | 待做                          |                                   |
-| D8    | D    | storage worker(C3)                          | 待做                          |                                   |
-| D9    | D    | 下线旧后端(C4,只读归档)                     | 待做                          |                                   |
+| 编号  | 批次 | 标题                                        | 状态                          | 提交                                 |
+| ----- | ---- | ------------------------------------------- | ----------------------------- | ------------------------------------ |
+| A1    | A    | journal 索引 + 镜像游标                     | 核验通过                      | `2a2ac90`、`b44ca33`、`7c880fc`      |
+| A2    | A    | thinking level / native goal 跨推送缓存     | 核验通过                      | `b8d63f4`、`c13245d`                 |
+| A3    | A    | 启动时不再全量解析历史                      | 核验通过                      | `0f39ea3`                            |
+| A4    | A    | 静态资源 ETag / gzip / modulepreload        | 核验通过                      | `c8d7cbd`（测量见记录）              |
+| B1    | B    | `teamResourceRevision` 不在请求路径读大文件 | 核验通过                      | `9ccc0aa`                            |
+| B2    | B    | `finishedSeen` 写入与清理                   | 核验通过                      | `cc652cc`                            |
+| B3    | B    | 房间级字段每次推送只算一次                  | 核验通过                      | `8d42e63`                            |
+| B4    | B    | journal 预编译语句缓存                      | 核验通过                      | `37cb733`                            |
+| B5    | B    | 长轮询队列字节上限                          | 核验通过                      | `5fb4bbe`                            |
+| C1–C6 | C    | 需要 owner 决策，只写方案                   | C1 暂缓;C2–C6 已批准,见批次 D | `14caa83`（方案，未实现）            |
+| D1    | D    | 文档纠偏(C6)                                | 核验通过                      | `0705511`（测量）；实现见执行记录    |
+| D2    | D    | notify 控制消息集中解码(C6)                 | 核验通过                      | `1b1228a`（测量）；实现见执行记录    |
+| D3    | D    | 流式 Markdown 解析(C6)                      | 核验通过                      | `b6d3842`（测量）；实现见执行记录    |
+| D4    | D    | App 根渲染局部订阅(C6)                      | 核验通过                      | `58ddb47`（测量）；实现见执行记录    |
+| D5    | D    | 切换会话不重连(C6)                          | 已推送待核验                  | `229bda2`（测量）；`5acca07`（实现） |
+| D6    | D    | 大文件纯移动拆分(C5)                        | 待做                          |                                      |
+| D7    | D    | handoff 测量与异步化(C2)                    | 待做                          |                                      |
+| D8    | D    | storage worker(C3)                          | 待做                          |                                      |
+| D9    | D    | 下线旧后端(C4,只读归档)                     | 待做                          |                                      |
 
 状态取值：`待做` / `进行中` / `已推送待核验` / `核验通过` / `核验未通过` / `放弃（写明原因）`。
 
@@ -887,7 +887,7 @@ owner 已批准把 C2–C6 从「只写方案」改为「实现」。C1(进程�
 
 ### D5 — 单连接订阅切换（已实现；待审查方核验）
 
-- 测量提交：`229bda2`。实现提交标题：`D5: reuse event connections with generation-acknowledged subscriptions`。本轮只做 D5，未开始 D6。
+- 测量提交：`229bda2`。实现提交：`5acca07`（`D5: reuse event connections with generation-acknowledged subscriptions`）。本轮只做 D5，未开始 D6。
 - `POST /api/subscribe` 复用现有认证与 X-Pocket guard；按本人连接标识定位，验证 generation/id/claim 输入。生效的新意图先同步离开旧 room，再在打开前及 await 后检查权限；旧 generation/失效连接/晚到房间结果不能重新挂回。
 - 复用同一 Client 需要记录实际已加入的 Room；WeakMap 使 A→B→A 不会被旧异步 leave 删除。加入时 ACK 先于 full view/missing，home 只需 ACK；撤权也确认当前 generation 后发送 missing。
 - 仅协商的新 tab 包装七类房间事件为 { generation, data }。SSE 与 poll 入队前冻结代号；poll seq 不因切换重置，非法/超前 seq ACK 不删除队列。旧 tab 格式不变，新 UI 遇旧 server 仍走原重连路径。
