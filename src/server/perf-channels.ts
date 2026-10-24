@@ -12,6 +12,7 @@ export const seedPhaseChannel = channel("rotom-team:seed-phase");
 export type SeedPhase =
     | "projection"
     | "authorize"
+    | "select"
     | "prepare"
     | "attach"
     | "append"

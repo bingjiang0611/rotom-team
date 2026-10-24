@@ -857,6 +857,7 @@ export class RotomExecutions {
 
             if (messages.length) {
                 materializing = true;
+                mark("select");
                 const seed = materializeSeed(receipt.binding, messages, (path, sessionId) => {
                     const attached = seedPhases();
 
