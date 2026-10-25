@@ -368,13 +368,18 @@ test(
         await until(() => present('form button[type="submit"]'), "confirmation page");
         assert.ok((await bodyText()).includes("Continuing switches it"));
         assert.equal(app.config.devices(member.user.id).length, 0, "GET does not sign in");
-        await tap('form button[type="submit"]');
         const signedIn = () =>
             inPage<string | null>(`
+        // A form click starts navigation; the old confirmation page has no import map.
+        if (document.readyState === 'loading' || !document.querySelector('script[type="importmap"]')) {
+            return JSON.stringify(null);
+        }
         const { store } = await import('/store.js');
         return JSON.stringify(store.state.me?.id ?? null);
     `);
 
+        assert.equal(await signedIn(), null, "the confirmation page is not the signed-in app");
+        await tap('form button[type="submit"]');
         await until(
             async () => (await signedIn()) === member.user.id,
             "signed in as original member",
