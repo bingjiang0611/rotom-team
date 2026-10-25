@@ -42,7 +42,7 @@
 | D5    | D    | 切换会话不重连(C6)                          | 核验通过                      | `229bda2`（测量）；`5acca07`（实现） |
 | D6    | D    | 大文件纯移动拆分(C5)                        | 核验通过                      | `3768653`（测量）；实现见执行记录    |
 | D7    | D    | handoff 测量与异步化(C2)                    | 核验通过                      | `2af9690`（测量）；`859c283`（阈值） |
-| D8    | D    | storage worker(C3)                          | 待做                          |                                      |
+| D8    | D    | storage worker(C3)                          | 进行中                        | 测量与边界修订见执行记录             |
 | D9    | D    | 下线旧后端(C4,只读归档)                     | 待做                          |                                      |
 
 状态取值：`待做` / `进行中` / `已推送待核验` / `核验通过` / `核验未通过` / `放弃（写明原因）`。
@@ -1092,6 +1092,19 @@ owner 已批准把 C2–C6 从「只写方案」改为「实现」。C1(进程�
   保留无法精确归因的字节/布局差异，不改 ledger、不以单轮 L2 承诺生产 L3。
 - 原始证据 `/tmp/rotom-review-D7-threshold/`；用户两份文档保持不变，无部署或重启。
   **D7 改回已推送待核验，由审查方检查第 9 轮要求；D8 不开始。**
+
+### D8 — 测量开始；owner 修订为公开 Storage 边界
+
+- 基于 D7 核验提交 `2e92cbd`。核对 installed pi-durable 1.0.2 后确认公开 Storage 已全部异步；
+  原 C3 的完整 Harness 迁移另需事务回调、registry、观察订阅和旧后端服务桥接，不是简单换 SQLite。
+- Owner 本轮明确选择 **“调整为 Storage 边界”**：单 worker 承担 RotomJournal 与公开 Durable Storage；
+  **Harness、mutation queue、镜像协调、权限及个人凭据仍在父线程**。此项覆盖旧 C3 的线程归属图，
+  不代表完整 Harness 已移入 worker。D8a 主线程显式异步 → D8b 默认关闭的 worker 两步仍保留。
+- 仍要求单 writer、完整操作/事务、durable ACK、unknown 不重放、有界传输、镜像顺序、权限隔离、
+  严格关闭与故障注入；不得提前归档旧后端。D9 未开始。
+- 首先运行现有 `perf:measure --runs 1`，计时锁 highLoad=false、load 2.38→3.38/8 核，exit=0。
+  证据 `/tmp/rotom-review-D8/base.{log,json}`；无 workload/ledger 更改。当前没有性能收益结论。
+- 详细边界及后续验证记录：[D8 记录](d8-validation.md)。当前仅测量/合同修订，产品实现尚未提交。
 
 ## 核验记录（审查方追加）
 
