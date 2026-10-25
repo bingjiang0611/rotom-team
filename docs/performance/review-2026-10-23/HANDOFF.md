@@ -42,7 +42,7 @@
 | D5    | D    | 切换会话不重连(C6)                          | 核验通过                      | `229bda2`（测量）；`5acca07`（实现） |
 | D6    | D    | 大文件纯移动拆分(C5)                        | 核验通过                      | `3768653`（测量）；实现见执行记录    |
 | D7    | D    | handoff 测量与异步化(C2)                    | 核验通过                      | `2af9690`（测量）；`859c283`（阈值） |
-| D8    | D    | storage worker(C3)                          | D8a 核验未通过(第 12 轮)      | 按第 11 轮提交；D8b 等 owner 核验    |
+| D8    | D    | storage worker(C3)                          | D8a 第12轮修复待推送          | 原子性修复已验证；D8b 等 owner 核验  |
 | D9    | D    | 下线旧后端(C4,只读归档)                     | 待做                          |                                      |
 
 状态取值：`待做` / `进行中` / `已推送待核验` / `核验通过` / `核验未通过` / `放弃（写明原因）`。
@@ -1106,7 +1106,7 @@ owner 已批准把 C2–C6 从「只写方案」改为「实现」。C1(进程�
   证据 `/tmp/rotom-review-D8/base.{log,json}`；无 workload/ledger 更改。当前没有性能收益结论。
 - 详细边界及后续验证记录：[D8 记录](d8-validation.md)。本条最初仅记录测量/合同修订；后续状态如下。
 
-### D8a — 已推送待核验
+### D8a — 第11轮交付记录（第12轮追加修复见下）
 
 - 已拉取 `c6947a8` 并将五个未推送提交 rebase 到它之上，产品/test 内容逐字节保留。
   异步 journal / consumers、投影失效检查与关闭 drain、attach/progress/usage ACK 顺序已实现。
@@ -1129,6 +1129,21 @@ owner 已批准把 C2–C6 从「只写方案」改为「实现」。C1(进程�
   [逐项性能记录](d8-performance-review.md)覆盖 25 项隔离 worse 和 52 项 main worse；
   [机器可读证据](d8-performance-evidence.json)保留数值和既有诊断，详情与日志索引见 [D8 记录](d8-validation.md)。
   D8b 等 owner 核验 D8a 后再开始；D9 未开始。用户两份文档保留，不部署、不重启、不使用真实账号。
+
+### D8a — 第12轮追加修复，待推送
+
+- 已拉取 `ba8892e`，保留第12轮原文和旧调度复现脚本。`reserve` 在单次核心事务内检查预期head/绑定再写intent；
+  fork/handoff的历史捕获与预留合并，clone加载后核对源revision，不从后来增长的源文件取标签/leaf。
+- thinking的phase/fence检查与输入准入合并，准入+修改的drain在首次yield前发布；关闭计划合并为单次core判断。
+  授权后不再await journal，使用finish/fail前关闭的active latch与Stop状态检查。修复snapshot receipts未等待Promise的问题。
+- [逐条审计和验证](d8a-round12-validation.md)覆盖run、fork/forkSeed、import、handoff、thinking/queued input、mirror及相邻生命周期。
+  确定性回归把真实handoff finish排在检查与reserve之间：冲突且不生成新receipt；去掉预期条件的负控会到达测试停止器。
+- 最终check/lint/format:check、默认全量 **677/677，0 skip**，kernel/app/commands三组proof通过；无真实模型账号。
+  commands proof原先拦截旧的sessionIfPresent，已修正为实际roomSnapshot且保留一次读取/精确binding断言。
+- 最终`perf:ci -- origin/main --runs 1` gating/guard通过，highLoad=false；main 34 worse /17 slower，旧D8a五轮→最终单轮4 worse /5 slower。
+  discovery的+2 SQL是事务成本；单轮采样不当作稳定延迟收益/回归。见[逐项性能记录](d8a-round12-performance.md)及[数据](d8a-round12-performance.json)。
+  首版验证后修正了授权后的存储等待，最终版重新验证；没有为采样数字重跑，没有新增被否决的对照实验。
+- 本轮提交信息均以`D8a:`开头；推送后等待owner核验。D8b/D9未开始，用户两份文档不提交，不部署、不重启。
 
 ## 核验记录（审查方追加）
 

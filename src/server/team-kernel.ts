@@ -597,10 +597,12 @@ export class TeamKernel {
             configurationDigest: binding.configurationDigest,
             thinkingLevel: await this.executions.thinkingLevel(String(id)),
             messages: publicMessages,
-            receipts: (await journal.receipts(String(id))).map(async (receipt) => ({
-                ...(await this.#receipt(receipt)),
-                memberId: receipt.binding.memberId,
-            })),
+            receipts: await Promise.all(
+                (await journal.receipts(String(id))).map(async (receipt) => ({
+                    ...(await this.#receipt(receipt)),
+                    memberId: receipt.binding.memberId,
+                })),
+            ),
             receiptsLimit: 100,
             usage: await journal.usage(String(id)),
             credits: await journal.credits(String(id)),
@@ -3211,14 +3213,7 @@ export class TeamKernel {
 
         // A stop cuts prompts off mid-work: plan their continuation before stopping them.
         for (const id of new Set([...this.#active].map((run) => run.id))) {
-            const pending = await this.executions.journal.pendingConversation(String(id));
-
-            if (
-                pending?.operation === "prompt" &&
-                (await this.executions.journal.canResume(pending.id))
-            ) {
-                await this.executions.journal.planResume(pending.id);
-            }
+            await this.executions.journal.planPendingResume(String(id));
         }
 
         for (const id of new Set([...this.#active].map((run) => run.id))) {

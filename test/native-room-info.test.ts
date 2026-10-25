@@ -351,6 +351,17 @@ test("real TeamKernel caches idle native readback without stale segment state", 
             readsBeforeUpgrade + 1,
             "kernel version invalidation refreshes historical projections",
         );
+        const snapshot = await app.kernel!.snapshot(session.id, member);
+        const serialized = JSON.parse(JSON.stringify(snapshot));
+
+        assert.ok(serialized.receipts.length > 0);
+        assert.ok(
+            serialized.receipts.every(
+                (receipt: { status?: string; memberId?: string }) =>
+                    typeof receipt.status === "string" && typeof receipt.memberId === "string",
+            ),
+            "snapshot awaits receipt projections before JSON serialization",
+        );
     } finally {
         await app.close();
     }

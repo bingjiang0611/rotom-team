@@ -2,11 +2,13 @@ import assert from "node:assert/strict";
 import { test, type TestContext } from "node:test";
 import { DatabaseSync } from "node:sqlite";
 import { RotomExecutions } from "../src/server/rotom-executions.ts";
+import { verifyRotomKernel } from "../src/server/rotom-kernel.ts";
 import { mkdtempSync, mkdirSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
     RotomJournal,
+    createAsyncRotomJournal,
     KernelRequestConflict,
     requireNoPendingKernel,
     type KernelBinding,
@@ -131,6 +133,232 @@ for (const operation of ["prompt", "compact", "handoff", "fork"] as const) {
         await executions.close();
     });
 }
+
+test("queued handoff finish between run's check and reserve cannot launch Alice on Bob's receipt", async (t) => {
+    const f = setup(t);
+    const version = verifyRotomKernel().version;
+    const alice = { ...f.member("alice"), kernelVersion: version };
+    const bob = { ...f.member("bob"), kernelVersion: version };
+
+    f.journal.close();
+    const executions = new RotomExecutions(f.data, async () => {});
+    const journal = executions.journal;
+
+    f.close = () => executions.close();
+    await journal.bind("shared", alice);
+    const handoff = await journal.handoff("shared", "takeover", "shared", bob);
+    const session = journal.session.bind(journal);
+    let reads = 0;
+    let finished: Promise<unknown> | undefined;
+
+    t.mock.method(journal, "session", (...args: Parameters<typeof session>) => {
+        const checked = session(...args);
+
+        if (++reads === 2) {
+            // Exact FIFO interleaving from the review: read A, finish B, then reserve.
+            finished = journal.finish(handoff.id, "settled", []);
+        }
+
+        return checked;
+    });
+    await assert.rejects(
+        executions.run("shared", "stale", "must not dispatch", {
+            onReserved: () => assert.fail("stale admission reached native dispatch"),
+        }),
+        KernelRequestConflict,
+    );
+    await finished;
+    assert.equal(reads, 2);
+    assert.equal((await session("shared")).binding.memberId, "bob");
+    assert.equal(await journal.request("shared", "stale"), undefined);
+    assert.equal((await journal.receipts("shared")).length, 1);
+});
+
+test("reservation also rejects an in-place binding change on the same head", async (t) => {
+    const f = setup(t);
+    const j = createAsyncRotomJournal(f.journal);
+
+    await j.bind("shared", f.member("alice"));
+    const checked = j.session("shared");
+    const upgraded = j.upgradeKernel("shared", "shared", "new-version");
+    const admitted = await checked;
+
+    await assert.rejects(
+        j.reserve(
+            "shared",
+            "stale",
+            "work",
+            "prompt",
+            undefined,
+            admitted.segmentId,
+            admitted.binding,
+        ),
+        /binding changed during admission/,
+    );
+    await upgraded;
+    assert.equal((await j.session("shared")).segmentId, admitted.segmentId);
+    assert.equal(await j.request("shared", "stale"), undefined);
+});
+
+test("atomic fork capture rejects a source that starts after a stale pending read", async (t) => {
+    const f = setup(t);
+    const j = createAsyncRotomJournal(f.journal);
+
+    await j.bind("source", f.member("alice"));
+    await j.bind("target", f.member("bob"));
+    const checked = j.pendingConversation("source");
+    const started = j.reserve("source", "new-run", "work");
+
+    assert.equal(await checked, undefined);
+    await assert.rejects(
+        j.forkSeed("target", "fork", "identity", "target", {
+            sessionId: "source",
+            expectedHead: "source",
+        }),
+        KernelRequestConflict,
+    );
+    assert.equal(await j.request("target", "fork"), undefined);
+    await j.fail((await started).id, "rejected");
+    const captured = await j.forkSeed("target", "fork", "identity", "target", {
+        sessionId: "source",
+        expectedHead: "source",
+    });
+
+    assert.deepEqual(captured.seed?.entries, []);
+    const later = await j.reserve("source", "later", "later");
+
+    await j.attach(later.id, "source.jsonl", "native-source");
+    await j.finish(later.id, "settled", [response("after-capture")]);
+    assert.deepEqual(
+        captured.seed?.entries,
+        [],
+        "later source growth cannot change the captured prefix",
+    );
+    await assert.rejects(
+        j.forkSource("source", "source", captured.seed!.source.revision),
+        /Source history changed/,
+    );
+    assert.equal(
+        (
+            await j.forkSeed("target", "fork", "identity", "target", {
+                sessionId: "source",
+                expectedHead: "source",
+            })
+        ).seed,
+        undefined,
+        "an existing request never rematerializes the seed",
+    );
+    await j.bind("invalid-target", f.member("bob"));
+    await assert.rejects(
+        j.forkSeed("invalid-target", "invalid", "identity", "invalid-target", {
+            sessionId: "source",
+            expectedHead: "source",
+            entryId: "missing",
+        }),
+        KernelRequestConflict,
+    );
+    assert.equal(await j.request("invalid-target", "invalid"), undefined);
+});
+
+test("fork and imported-seed reservations recheck the admitted target head", async (t) => {
+    const f = setup(t);
+    const j = createAsyncRotomJournal(f.journal);
+    const alice = f.member("alice");
+    const bob = f.member("bob");
+
+    await j.bind("source", alice);
+    await j.bind("target", alice);
+    const handoff = await j.handoff("target", "handoff", "target", bob);
+    const checked = j.session("target");
+    const finished = j.finish(handoff.id, "settled", []);
+    const admitted = await checked;
+
+    await assert.rejects(
+        j.reserve("target", "import", "identity", "fork", undefined, admitted.segmentId),
+        KernelRequestConflict,
+    );
+    await assert.rejects(
+        j.forkSeed("target", "fork", "identity", admitted.segmentId, {
+            sessionId: "source",
+            expectedHead: "source",
+        }),
+        KernelRequestConflict,
+    );
+    await finished;
+    assert.equal(await j.request("target", "import"), undefined);
+    assert.equal(await j.request("target", "fork"), undefined);
+});
+
+test("handoff capture includes the final entries of an earlier queued finish", async (t) => {
+    const f = setup(t);
+    const j = createAsyncRotomJournal(f.journal);
+    const alice = f.member("alice");
+    const bob = f.member("bob");
+
+    await j.bind("shared", alice);
+    const run = await j.reserve("shared", "run", "work");
+
+    await j.attach(run.id, "source.jsonl", "native-source");
+    const oldEntries = j.segmentEntries("shared");
+    const finished = j.finish(run.id, "settled", [response("last-reply")]);
+
+    assert.deepEqual(await oldEntries, []);
+    const capture = await j.handoffSeed("shared", "handoff", "shared", bob);
+
+    await finished;
+    assert.deepEqual(capture.entries, [response("last-reply")]);
+    await assert.rejects(j.reserve("shared", "too-late", "work"), KernelRequestConflict);
+    assert.equal((await j.handoffSeed("shared", "handoff", "shared", bob)).entries, undefined);
+});
+
+test("thinking admission checks phase and unresolved input in the same core call", async (t) => {
+    const f = setup(t);
+    const j = createAsyncRotomJournal(f.journal);
+
+    await j.bind("shared", f.member("alice"));
+    const run = await j.reserve("shared", "run", "work");
+
+    await j.setPhase(run.id, "execution");
+    const checked = j.receipt(run.id);
+    const finalizing = j.setPhase(run.id, "finalization");
+
+    assert.equal((await checked).phase, "execution");
+    await assert.rejects(
+        j.beginCommandInput(run.id, "/thinking high", "execution"),
+        KernelRequestConflict,
+    );
+    await finalizing;
+    assert.equal(await j.hasUnresolvedCommandInput(run.id), false);
+    await j.setPhase(run.id, "execution");
+    const first = j.beginCommandInput(run.id, "/thinking low", "execution");
+    const second = j.beginCommandInput(run.id, "/thinking high", "execution");
+
+    await assert.rejects(second, KernelRequestConflict);
+    await j.completeCommandInput(await first);
+});
+
+test("shutdown planning skips a newly finalizing prompt without hiding storage errors", async (t) => {
+    const f = setup(t);
+    const j = createAsyncRotomJournal(f.journal);
+
+    await j.bind("shared", f.member("alice"));
+    const run = await j.reserve("shared", "run", "work");
+
+    await j.setPhase(run.id, "execution");
+    const eligible = j.canResume(run.id);
+    const finalizing = j.setPhase(run.id, "finalization");
+
+    assert.equal(await eligible, true);
+    assert.equal(await j.planPendingResume("shared"), undefined);
+    await finalizing;
+    assert.equal(await j.resume(run.id), undefined);
+    await j.setPhase(run.id, "execution");
+    assert.equal((await j.planPendingResume("shared"))?.attemptId, run.id);
+    t.mock.method(f.journal, "planResume", () => {
+        throw new Error("storage failure");
+    });
+    await assert.rejects(j.planPendingResume("shared"), /storage failure/);
+});
 
 test("busy and unknown fences reject a new identity as a known conflict without allocating it", (t) => {
     const f = setup(t);

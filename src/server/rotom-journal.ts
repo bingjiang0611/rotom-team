@@ -14,6 +14,7 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { createRequire } from "node:module";
+import { isDeepStrictEqual } from "node:util";
 
 // Reuse the hash-recorded Qoder reducer without requiring the optional installed kernel at module load.
 const { creditSummary, CREDIT_ENTRY } = createRequire(import.meta.url)(
@@ -562,13 +563,16 @@ export class RotomJournal {
     }
 
     /** Durable before queued side-effect dispatch; only a confirmed handled response clears this fence. */
-    beginCommandInput(attemptId: string, command: string): string {
+    beginCommandInput(attemptId: string, command: string, phase?: "execution"): string {
+        const attempt = this.receipt(attemptId);
+
         if (
-            this.receipt(attemptId).status !== "dispatch-intent" ||
-            this.hasUnresolvedCommandInput(attemptId)
+            attempt.status !== "dispatch-intent" ||
+            (phase !== undefined && attempt.phase !== phase) ||
+            attempt.unresolvedCommandInput
         ) {
             throw new KernelRequestConflict(
-                "The owning attempt is finished or has an unresolved queued command",
+                "The owning attempt is finished, outside execution or has an unresolved queued command",
             );
         }
 
@@ -634,6 +638,8 @@ export class RotomJournal {
         prompt: string,
         operation: "prompt" | "compact" | "fork" | "discover" | "command" = "prompt",
         rebind?: KernelRebind,
+        expectedHead?: string,
+        expectedBinding?: KernelBinding,
     ): KernelReceipt {
         const existing = this.existing(sessionId, requestId, prompt, operation);
 
@@ -646,18 +652,133 @@ export class RotomJournal {
         }
 
         if (rebind) {
-            return this.#rebind(sessionId, requestId, prompt, rebind);
+            if (expectedHead !== undefined && expectedHead !== rebind.expectedHead) {
+                throw new KernelRequestConflict("Conversation head changed during admission");
+            }
+
+            return this.#rebind(sessionId, requestId, prompt, rebind, expectedBinding);
         }
 
-        const { binding, segmentId, sessionFile } = this.session(sessionId);
+        this.#db.exec("BEGIN IMMEDIATE");
 
-        if (operation === "fork" && sessionFile) {
-            throw new Error("Fork seed requires a fresh native segment");
+        try {
+            const { binding, segmentId, sessionFile } = this.session(sessionId);
+
+            if (expectedHead !== undefined && segmentId !== expectedHead) {
+                throw new KernelRequestConflict("Conversation head changed during admission");
+            }
+
+            if (expectedBinding && !isDeepStrictEqual(binding, expectedBinding)) {
+                throw new KernelRequestConflict("Conversation binding changed during admission");
+            }
+
+            if (operation === "fork" && sessionFile) {
+                throw new Error("Fork seed requires a fresh native segment");
+            }
+
+            this.#unblocked(sessionId);
+            const receipt = this.#intent(
+                sessionId,
+                segmentId,
+                requestId,
+                prompt,
+                binding,
+                operation,
+            );
+
+            this.#db.exec("COMMIT");
+
+            return receipt;
+        } catch (error) {
+            this.#db.exec("ROLLBACK");
+
+            throw error;
+        }
+    }
+
+    /** Validate a clone's loaded native snapshot against the journal revision captured at reservation. */
+    forkSource(sessionId: string, expectedHead: string, expectedRevision?: number) {
+        const source = this.session(sessionId);
+
+        if (source.segmentId !== expectedHead) {
+            throw new KernelRequestConflict("Source head changed; refresh before fork");
         }
 
         this.#unblocked(sessionId);
+        const revision = this.segmentRevision(expectedHead);
 
-        return this.#intent(sessionId, segmentId, requestId, prompt, binding, operation);
+        if (expectedRevision !== undefined && revision !== expectedRevision) {
+            throw new KernelRequestConflict("Source history changed; refresh before fork");
+        }
+
+        return { ...source, revision };
+    }
+
+    /** Check the source, capture its immutable prefix and reserve the target in one FIFO operation. */
+    forkSeed(
+        sessionId: string,
+        requestId: string,
+        identity: string,
+        expectedHead: string,
+        source: { sessionId: string; expectedHead: string; entryId?: string },
+        expectedBinding?: KernelBinding,
+    ) {
+        const existing = this.existing(sessionId, requestId, identity, "fork");
+
+        if (existing) {
+            return { receipt: existing };
+        }
+
+        const head = this.forkSource(source.sessionId, source.expectedHead);
+        const entries = this.segmentEntries(head.segmentId);
+        const selected = source.entryId
+            ? entries.find((entry) => entry.id === source.entryId)
+            : undefined;
+
+        if (
+            source.entryId &&
+            (!selected ||
+                selected.type !== "message" ||
+                (selected.message as { role?: unknown } | undefined)?.role !== "user")
+        ) {
+            throw new KernelRequestConflict(
+                "Fork requires a selected user message in this segment",
+            );
+        }
+
+        // No await or external writer can intervene between source reads and this target transaction.
+        const receipt = this.reserve(
+            sessionId,
+            requestId,
+            identity,
+            "fork",
+            undefined,
+            expectedHead,
+            expectedBinding,
+        );
+
+        return { receipt, seed: { source: head, entries, parentId: selected?.parentId } };
+    }
+
+    /** Capture handoff history and reserve against that exact source state without yielding. */
+    handoffSeed(
+        sessionId: string,
+        requestId: string,
+        expectedHead: string,
+        binding: KernelBinding,
+    ) {
+        if (this.request(sessionId, requestId)) {
+            return { receipt: this.handoff(sessionId, requestId, expectedHead, binding) };
+        }
+
+        if (this.session(sessionId).segmentId !== expectedHead) {
+            throw new KernelRequestConflict("Conversation head changed; refresh before handoff");
+        }
+
+        const entries = this.segmentEntries(expectedHead);
+        const receipt = this.handoff(sessionId, requestId, expectedHead, binding);
+
+        return { receipt, entries };
     }
 
     /**
@@ -670,6 +791,7 @@ export class RotomJournal {
         requestId: string,
         prompt: string,
         { expectedHead, binding }: KernelRebind,
+        expectedBinding?: KernelBinding,
     ): KernelReceipt {
         const normalized = this.#binding(binding);
 
@@ -682,6 +804,10 @@ export class RotomJournal {
                 throw new KernelRequestConflict(
                     "Conversation head changed; refresh before switching the model",
                 );
+            }
+
+            if (expectedBinding && !isDeepStrictEqual(head.binding, expectedBinding)) {
+                throw new KernelRequestConflict("Conversation binding changed during admission");
             }
 
             for (const key of [
@@ -938,6 +1064,15 @@ export class RotomJournal {
         );
 
         return this.resume(attemptId)!;
+    }
+
+    /** A clean shutdown skips a prompt that became ineligible, but never swallows a storage failure. */
+    planPendingResume(sessionId: string): KernelResume | undefined {
+        const pending = this.pendingConversation(sessionId);
+
+        return pending?.operation === "prompt" && this.canResume(pending.id)
+            ? this.planResume(pending.id)
+            : undefined;
     }
 
     resume(attemptId: string): KernelResume | undefined {
