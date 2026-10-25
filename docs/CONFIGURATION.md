@@ -95,10 +95,13 @@ idle. Failures/unknown outcomes retire the process, and handoff retires the old 
 transport. Server shutdown awaits closure of retained processes before releasing its journal lock. No idle eviction or
 cross-restart in-memory restoration is claimed; reopening after restart uses the persisted native session.
 
-Non-empty public-history seeds (handoff, public fork and import) use one operation-owned, short-lived Node worker.
-It waits for the parent's durable journal attach before appending, then fsyncs and verifies the full readback.
-The parent waits for worker exit and rechecks authorization before committing the new head. Stop joins the worker;
-an uncertain materialization is not retried or reused. An active execution still prevents journal closure.
+Public-history seeds (handoff, public fork and import) are sized by the UTF-8 bytes of the serialized
+`publicNativeHistory` result. Below 8 MiB, the parent runs the existing file helpers directly; at or above
+8 MiB, one operation-owned, short-lived Node worker runs them. Empty history still needs no file or worker.
+Both paths durably attach before appending, fsync the file/directory, verify the full readback, and recheck
+authorization and Stop before committing the head. The worker path also waits for worker exit; Stop joins it.
+Small synchronous file operations cannot be preempted by a queued HTTP Stop; an observed Stop prevents commit.
+An uncertain materialization is not retried or reused. An active execution still prevents journal closure.
 This is not a storage worker, agent process or shared pool. No new configuration setting or global memory cap is
 introduced; large parallel materializations require capacity validation.
 

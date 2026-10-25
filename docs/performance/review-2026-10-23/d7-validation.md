@@ -1,5 +1,8 @@
 # D7 — public-history seed worker：验证与取舍
 
+> 本文保留 `cc10114` 全量 worker 方案的历史证据。第 9 轮要求增加阈值；当前实现与新测量见
+> [8 MiB 分流补充记录](d7-threshold-validation.md)，不再对所有非空历史创建 worker。
+
 ## 范围与版本
 
 D6 审查通过后从 `7671c97` 开始。测量 `9e6412d`；同步文件阶段提取 `da1068c`；

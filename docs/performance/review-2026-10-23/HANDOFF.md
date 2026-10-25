@@ -41,7 +41,7 @@
 | D4    | D    | App 根渲染局部订阅(C6)                      | 核验通过                      | `58ddb47`（测量）；实现见执行记录    |
 | D5    | D    | 切换会话不重连(C6)                          | 核验通过                      | `229bda2`（测量）；`5acca07`（实现） |
 | D6    | D    | 大文件纯移动拆分(C5)                        | 核验通过                      | `3768653`（测量）；实现见执行记录    |
-| D7    | D    | handoff 测量与异步化(C2)                    | 核验未通过                    | `9e6412d`（测量）；`acb36e5`（实现） |
+| D7    | D    | handoff 测量与异步化(C2)                    | 已推送待核验                  | `2af9690`（测量）；`859c283`（阈值） |
 | D8    | D    | storage worker(C3)                          | 待做                          |                                      |
 | D9    | D    | 下线旧后端(C4,只读归档)                     | 待做                          |                                      |
 
@@ -1037,7 +1037,7 @@ owner 已批准把 C2–C6 从「只写方案」改为「实现」。C1(进程�
 - 实现边界：仅将 #seed 的文件构建、持久化、读回及完整比较放进本次 operation 拥有的短生命周期 worker；parent 保留唯一 journal writer、attach 与最终授权/finish。worker 必须等 attach 完成的 ACK 才能 append；worker 完整退出后才允许 finish 或释放 #track。停止、worker 失败/丢结果、readback 不符、最终撤权仍 unknown，不重试，不复用 seed，不跨付费人去重。不做 C1、D8 或 D9。
 - 每个正在 materialize 的既有执行至多一个 worker，无独立后台队列/常驻池；保留现有执行并发模型。需要同时测量 structured-clone、worker 生命周期的额外时延/RSS，而非把移出的工作记成消失。
 
-### D7 — 已实现，提交审查
+### D7 — 初版全量 worker（第 9 轮要求补阈值）
 
 - 测量 `9e6412d`；同步文件阶段提取 `da1068c`；固定 session-data loader 提取 `d71fd8d`；
   benchmark-only worker copy/closure 探针 `fa269fc`；行为实现及 15 项回归 `acb36e5`。
@@ -1067,6 +1067,31 @@ owner 已批准把 C2–C6 从「只写方案」改为「实现」。C1(进程�
   settings 恢复登录失败的根因仍未修复；若要继续调查，由 owner 另案授权采集失败页面上下文。
   审查时需评估“小历史额外启动延迟/大历史 RSS”取舍；核验通过前不做 D8。
   未做 C1/D8/D9，未部署或重启；用户两份文档保持不变。
+
+### D7 — 第 9 轮补充：8 MiB 分流，重新提交核验
+
+- 在 `0573ad1` 上追加，测量提交 `2af9690`，实现及两路径测试 `859c283`。按公开历史 JSON 的
+  UTF-8 字节数选择：**<8 MiB 直接调用 prepareSeed/persistSeed；≥8 MiB 走现有 worker**。
+  等号、JSON 转义、Unicode 与 private reasoning 不计入公共大小均有测试。没有新增配置或 pool。
+- 依据原 1 MiB 约 22 ms 停顿与 10 MiB 约 118 ms 停顿，选审查允许区间上端 8 MiB，避免中小历史
+  固定启动税；不声称测得精确交叉点或最优阈值。大小判定的完整序列化成本也计入 handoff。
+- 两路径保留 prepare→父线程 attach→append→fsync→readback/完整比较→最终授权/Stop→finish。
+  大路径仍等待 exit，父线程仍唯一 journal writer；材料化后失败/Stop 仍 unknown、不重放。
+  小路径不能在同步 I/O 中处理排队的 HTTP Stop；已观测的 Stop 在相应边界阻止 append/commit。
+- 31 项专项通过；总是 worker 与 JS 字符长度两条负控分别按预期失败 1/2 项。默认全量首次
+  652/653（dropins 文件监听 reload 超时），独立 4/4；暂停后 owner 明确授权本轮一次默认重跑，
+  **653/653、0 fail/skip，237897 ms**。未修改监听测试、串行化或放宽门槛，根因未修复。
+- format/check/lint/format:check 通过；`test:kernel:app` status=passed、realProvider=false，
+  handoff/历史计费/fork/unknown 不续跑等检查仍 true。没有使用真实模型账号。
+- 同仪器前后 1/10/100 MiB、每档三次 handoff：1 MiB worker 次数 **3→0**，总耗时
+  **300/284/347→42/60/78 ms**；10 MiB lag **47/47/50→45/48/51 ms**；100 MiB lag
+  **423/471/488→421/452/497 ms**。10/100 MiB 仍走 worker。100 MiB select 新增约 119–136 ms，
+  不宣称大历史总耗时下降。九次 DB/WAL/正文/seed 字节对照一致。
+- 两组 perf 护栏通过：对 main 42 worse/23 slower；对 `2af9690` 25 worse/15 slower。
+  65 项 worse、34 项 slower 并集和同代码窗口变化对照见 [阈值验证记录](d7-threshold-validation.md)。
+  保留无法精确归因的字节/布局差异，不改 ledger、不以单轮 L2 承诺生产 L3。
+- 原始证据 `/tmp/rotom-review-D7-threshold/`；用户两份文档保持不变，无部署或重启。
+  **D7 改回已推送待核验，由审查方检查第 9 轮要求；D8 不开始。**
 
 ## 核验记录（审查方追加）
 

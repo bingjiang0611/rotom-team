@@ -38,13 +38,16 @@ negative controls, stylesheet network cost and every worse performance counter.
 
 ## D7 seed-worker evidence
 
-`test/seed-materialization.test.ts` covers real worker placement, attach-before-append, private modes/public-only
-history, lease retention, Stop before/after attach and readback, final revocation, worker write failure, readback
-mismatch, restart fencing, empty history, fork/import and no replay.
+`test/seed-materialization.test.ts` checks both parent/worker paths: attach-before-append, private modes/public-only
+history, lease retention, Stop before/after attach and readback, final revocation, file write failure, readback
+mismatch, restart fencing, empty history, fork/import and no replay. Exact 8 MiB ±1-byte tests use Unicode,
+JSON escapes and oversized private reasoning to distinguish public UTF-8 byte size from raw input or JS length.
 [handoff-bench.mjs](performance/review-2026-10-23/handoff-bench.mjs) measures three 1/10/100 MiB handoffs per
 fresh process with synthetic native inference; its benchmark-only preload measures actual copy/closure intervals.
-[The D7 record](performance/review-2026-10-23/d7-validation.md) reports increased total latency/RSS alongside
-reduced parent stalls. It is not a production or multi-room capacity claim.
+[The original D7 record](performance/review-2026-10-23/d7-validation.md) preserves the all-worker measurements.
+[The threshold follow-up](performance/review-2026-10-23/d7-threshold-validation.md) records the 8 MiB policy,
+both-path tests, size-selection cost and repeated 1/10/100 MiB measurements. Neither is a production or
+multi-room capacity claim.
 
 ## Event subscriptions
 
