@@ -12,8 +12,10 @@
  * uses `raw` for its own JSON so that its bookkeeping is not counted as the server's work.
  */
 import childProcess from "node:child_process";
-import { subscribe } from "node:diagnostics_channel";
+import { AsyncLocalStorage } from "node:async_hooks";
+import { channel, subscribe } from "node:diagnostics_channel";
 import fs from "node:fs";
+import v8 from "node:v8";
 import { syncBuiltinESMExports } from "node:module";
 import { basename } from "node:path";
 import { DatabaseSync, StatementSync } from "node:sqlite";
@@ -23,8 +25,6 @@ import {
     parseWorkChannel,
     pushChannel,
     roomPartChannel,
-    roomPartScope as roomScope,
-    storageWorkerChannel,
     type StorageWorkerSignal,
     viewProjectionChannel,
     type NativeStartSignal,
@@ -32,6 +32,14 @@ import {
     type RoomPartSignal,
     type ViewProjectionSignal,
 } from "../../src/server/perf-channels.ts";
+import * as perfChannels from "../../src/server/perf-channels.ts";
+
+// The same instrument measures pre-worker revisions, which have no exported shared scope.
+const roomScope =
+    "roomPartScope" in perfChannels
+        ? perfChannels.roomPartScope
+        : new AsyncLocalStorage<RoomPartSignal["part"]>();
+const storageWorkerChannel = channel("rotom-team:storage-worker");
 
 export type Counts = Record<string, number>;
 
@@ -65,21 +73,52 @@ storageWorkerChannel.subscribe((message) => {
         }
     }
 
-    for (const key of [
-        "workerMs",
-        "replyBytes",
-        "requestBytes",
-        "encodeMs",
-        "queueMs",
-        "roundTripMs",
-    ] as const) {
+    for (const key of ["replyBytes", "requestBytes"] as const) {
         const name = `storage.worker.${key}`;
 
         counts[name] = (counts[name] ?? 0) + sample[key];
     }
+
+    for (const key of ["workerMs", "encodeMs", "queueMs", "roundTripMs"] as const) {
+        const name = `storage${key[0]!.toUpperCase()}${key.slice(1)}`;
+
+        nativeTimings[name] = (nativeTimings[name] ?? 0) + sample[key];
+    }
+
+    for (const [key, ms] of Object.entries(sample.timings ?? {})) {
+        const name = `storageWorker${key[0]!.toUpperCase()}${key.slice(1)}`;
+
+        nativeTimings[name] = (nativeTimings[name] ?? 0) + ms;
+    }
 });
 
 export const raw = { parse: JSON.parse, stringify: JSON.stringify };
+
+const serialize = v8.serialize;
+const deserialize = v8.deserialize;
+
+v8.serialize = (value) => {
+    const started = performance.now();
+    const encoded = serialize(value);
+
+    add("v8.serialize.calls");
+    add("v8.serialize.bytes", encoded.byteLength);
+    nativeTimings.v8SerializeMs = (nativeTimings.v8SerializeMs ?? 0) + performance.now() - started;
+
+    return encoded;
+};
+
+v8.deserialize = (buffer) => {
+    const started = performance.now();
+    const decoded = deserialize(buffer);
+
+    add("v8.deserialize.calls");
+    add("v8.deserialize.bytes", buffer.byteLength);
+    nativeTimings.v8DeserializeMs =
+        (nativeTimings.v8DeserializeMs ?? 0) + performance.now() - started;
+
+    return decoded;
+};
 
 // Subscription enables AsyncLocalStorage scopes only in controlled benchmarks, never in the running product.
 parseWorkChannel.subscribe(() => undefined);
@@ -184,6 +223,13 @@ for (const method of ["run", "get", "all", "iterate"] as StatementMethod[]) {
         ...args: unknown[]
     ) {
         add("sql.statements");
+
+        if (
+            method === "all" &&
+            this.sourceSQL === "SELECT body FROM kernel_entries WHERE session_id=? ORDER BY rowid"
+        ) {
+            add("journal.segmentEntries.calls");
+        }
 
         if ((roomScope.getStore() ?? synchronousRoomPart) === "kernel") {
             const table =

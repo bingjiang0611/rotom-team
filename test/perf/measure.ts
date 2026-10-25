@@ -121,10 +121,18 @@ export function buildReport(
 
 /** One run, in a fresh process, of the prepared checkout at `repo` (`checkout.ts`). */
 export async function runOnce(file: string, repo: string): Promise<ScenarioResult[]> {
-    const child = spawn(process.execPath, [join(repo, "test", "perf", "scenarios.ts"), file], {
-        cwd: repo,
-        stdio: ["ignore", "inherit", "inherit"],
-    });
+    const preload =
+        process.env.ROTOM_PERF_STORAGE_WORKER === "1"
+            ? ["--import", join(repo, "test", "perf", "storage-worker-preload.ts")]
+            : [];
+    const child = spawn(
+        process.execPath,
+        [...preload, join(repo, "test", "perf", "scenarios.ts"), file],
+        {
+            cwd: repo,
+            stdio: ["ignore", "inherit", "inherit"],
+        },
+    );
     const code = await new Promise<number | null>((resolve) => child.once("exit", resolve));
 
     if (code !== 0) {

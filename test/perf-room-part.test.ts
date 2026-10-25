@@ -1,4 +1,4 @@
-import { snapshot, since } from "./perf/counters.ts";
+import { snapshot, since, nativeTimingSnapshot, nativeTimingSince } from "./perf/counters.ts";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { DatabaseSync } from "node:sqlite";
@@ -74,6 +74,7 @@ test("splitting the thinking snapshot preserves parse attribution and total work
 
 test("worker work is counted once with its original room attribution", () => {
     const before = snapshot();
+    const timingBefore = nativeTimingSnapshot();
 
     roomPartChannel.runStores({ part: "kernel" }, () =>
         storageWorkerChannel.publish({
@@ -82,6 +83,7 @@ test("worker work is counted once with its original room attribution", () => {
                 "view.kernel.sql.statements": 2,
                 "view.kernel.sql.heads": 1,
             },
+            timings: { v8SerializeMs: 2 },
             workerMs: 3,
             replyBytes: 128,
             requestBytes: 64,
@@ -96,7 +98,13 @@ test("worker work is counted once with its original room attribution", () => {
     assert.equal(work["view.kernel.sql.statements"], 2);
     assert.equal(work["view.kernel.sql.heads"], 1);
     assert.equal(work["storage.worker.replyBytes"], 128);
-    assert.equal(work["storage.worker.queueMs"], 2);
+    assert.equal(
+        work["storage.worker.queueMs"],
+        undefined,
+        "time is not a deterministic work counter",
+    );
+    assert.equal(nativeTimingSince(timingBefore).storageQueueMs, 2);
+    assert.equal(nativeTimingSince(timingBefore).storageWorkerV8SerializeMs, 2);
 });
 
 test("the same counter driver still measures older synchronous room spans", () => {

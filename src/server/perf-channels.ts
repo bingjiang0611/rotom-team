@@ -193,7 +193,10 @@ export type RoomPartSignal = {
 export const roomPartChannel = channel("rotom-team:room-part");
 /** Bound only by the controlled counter driver; optional context follows storage work across threads. */
 export const roomPartScope = new AsyncLocalStorage<RoomPartSignal["part"]>();
-export type StorageWorkSignal = { counters?: Record<string, number> };
+export type StorageWorkSignal = {
+    counters?: Record<string, number>;
+    timings?: Record<string, number>;
+};
 export type StorageWorkerMetrics = StorageWorkSignal & { workerMs: number; replyBytes: number };
 export type StorageWorkerSignal = StorageWorkerMetrics & {
     requestBytes: number;

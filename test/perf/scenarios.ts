@@ -19,7 +19,6 @@ import { cleanUp, owner, root, work } from "../helpers.ts";
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { StatementSync } from "node:sqlite";
 import { once } from "node:events";
 import { mkdirSync, realpathSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
@@ -334,11 +333,23 @@ for (let index = 0; index < WORKLOAD.extraSessions; index++) {
 
 // ─── Scenarios.
 
-await scenario("startup.restart", async () => {
-    await app.close();
-    app = await open();
-    handler = createHandler({ app, listen: { host: "127.0.0.1", port: 0 }, restart: () => {} });
-});
+let appCloseMs = 0;
+let appOpenMs = 0;
+
+await scenario(
+    "startup.restart",
+    async () => {
+        let started = performance.now();
+
+        await app.close();
+        appCloseMs = performance.now() - started;
+        started = performance.now();
+        app = await open();
+        appOpenMs = performance.now() - started;
+        handler = createHandler({ app, listen: { host: "127.0.0.1", port: 0 }, restart: () => {} });
+    },
+    () => ({ appCloseMs, appOpenMs }),
+);
 await app.hello(owner(app));
 
 await scenario("sessions.list", async () => ({
@@ -1147,31 +1158,17 @@ assert.deepEqual(nativeLongReference.goal, {
 assert.equal(nativeLongReference.agent.thinkingLevel, "high");
 
 await scenario("session.open.native-long", async () => {
-    let segmentEntriesCalls = 0;
-    const originalAll = StatementSync.prototype.all;
+    const before = snapshot();
 
-    StatementSync.prototype.all = function (...args) {
-        if (
-            this.sourceSQL === "SELECT body FROM kernel_entries WHERE session_id=? ORDER BY rowid"
-        ) {
-            segmentEntriesCalls++;
-        }
+    for (let projection = 0; projection < 3; projection++) {
+        const info = await app.kernel!.roomInfo(nativeLong);
 
-        return Reflect.apply(originalAll, this, args);
-    };
-
-    try {
-        for (let projection = 0; projection < 3; projection++) {
-            const info = await app.kernel!.roomInfo(nativeLong);
-
-            assert.deepEqual(info.goal, nativeLongReference.goal);
-            assert.equal(info.agent.thinkingLevel, nativeLongReference.agent.thinkingLevel);
-        }
-    } finally {
-        StatementSync.prototype.all = originalAll;
+        assert.deepEqual(info.goal, nativeLongReference.goal);
+        assert.equal(info.agent.thinkingLevel, nativeLongReference.agent.thinkingLevel);
     }
 
-    return { "roomInfo.segmentEntries.calls": segmentEntriesCalls };
+    // This observer lives with each database, including the worker; a parent-only monkeypatch would report false zero.
+    return { "roomInfo.segmentEntries.calls": since(before)["journal.segmentEntries.calls"] ?? 0 };
 });
 
 // Append the named static bundle workload after every existing scenario. It is an explicit asset transport probe,
