@@ -103,6 +103,37 @@ export function buildReport(
             continue;
         }
 
+        // Preserve transport/serialization work without changing the workload or its ratcheted keys.
+        const storageMetrics = new Set(
+            measured
+                .flatMap((result) => Object.keys(result.counts))
+                .filter(
+                    (metric) => metric.startsWith("storage.worker.") || metric.startsWith("v8."),
+                ),
+        );
+
+        for (const metric of storageMetrics) {
+            const values = measured.map((result) => result.counts[metric]);
+            const base = {
+                scenario,
+                metric,
+                layer: "cpu",
+                unit: metric.toLowerCase().endsWith("bytes") ? "bytes" : "count",
+                source: "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+                workload,
+            };
+
+            observations.push(
+                values.every((value) => value !== undefined)
+                    ? { ...base, availability: "measured", runs: values }
+                    : {
+                          ...base,
+                          availability: "unavailable",
+                          reason: "counter missing from a run",
+                      },
+            );
+        }
+
         const ms = measured.map((result) => round(result.ms));
 
         timings.push({ scenario, metric: "ms", runs: ms, median: median(ms) });
