@@ -2,7 +2,11 @@ import { snapshot, since } from "./perf/counters.ts";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { DatabaseSync } from "node:sqlite";
-import { roomPartChannel, type RoomPartSignal } from "../src/server/perf-channels.ts";
+import {
+    roomPartChannel,
+    scopedParseObject,
+    type RoomPartSignal,
+} from "../src/server/perf-channels.ts";
 
 test("async room counters attribute only their own work across overlapping waits", async () => {
     const db = new DatabaseSync(":memory:");
@@ -46,6 +50,25 @@ test("async room counters attribute only their own work across overlapping waits
         b.resolve();
         db.close();
     }
+});
+
+test("splitting the thinking snapshot preserves parse attribution and total work", () => {
+    const text = '{"scoped":true}';
+    const journal = scopedParseObject("journal", {
+        thinkingLevel: () => JSON.parse(text),
+        thinkingSnapshot: () => JSON.parse(text),
+    });
+    const start = snapshot();
+
+    journal.thinkingLevel();
+    journal.thinkingSnapshot();
+    const work = since(start);
+
+    assert.equal(work["json.parse.calls"], 2);
+    assert.equal(work["json.parse.chars"], 2 * text.length);
+    assert.equal(work["json.parse.journalThinking.calls"], 2);
+    assert.equal(work["json.parse.journalThinking.chars"], 2 * text.length);
+    assert.equal(work["json.parse.journal.calls"] ?? 0, 0);
 });
 
 test("the same counter driver still measures older synchronous room spans", () => {

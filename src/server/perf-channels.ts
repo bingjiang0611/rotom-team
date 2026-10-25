@@ -244,6 +244,7 @@ export function scopedParseObject<T extends object>(scope: ParseWork, target: T)
                     entries: "journal-history",
                     entriesAfter: "journal-history",
                     thinkingLevel: "journal-thinking",
+                    thinkingSnapshot: "journal-thinking",
                     segmentEntries: "journal-segments",
                 };
                 const methodScope =
