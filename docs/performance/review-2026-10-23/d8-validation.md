@@ -3,7 +3,7 @@
 ## 当前状态
 
 **第12轮追加修复**：已拉取 `ba8892e`，完成原子准入/历史捕获修复、逐条审计及确定性负控；最终677/677、
-三组pinned proof与perf gating/guard通过，待推送核验。见[本轮验证](d8a-round12-validation.md)及[逐项性能记录](d8a-round12-performance.md)。
+三组pinned proof与perf gating/guard通过，已推送待核验（实现`bac6976`，证据边界`de62bbe`）。见[本轮验证](d8a-round12-validation.md)及[逐项性能记录](d8a-round12-performance.md)。
 D8b仍等待owner核验，不因本轮修复自动开工。下面保留第11轮及更早的交付证据，不代替第12轮结果。
 
 ### 第11轮历史交付

@@ -74,7 +74,7 @@
 | format / check / lint / format:check                 | 最终源码通过                                                                    | `final-format.log`、`delivery-{check,lint,format-check}.log`      |
 | journal / lifecycle / room-info / mirror / seed 专项 | 90/90，0 skip；最终默认全量也覆盖这些测试                                       | `focused-final.log`                                               |
 | 默认 `npm test`，concurrency=2                       | **最终 677/677，0 skip，248706 ms**                                             | `full-test-final.log`；首次同为677/677，保留 `full-test.log`      |
-| 负控                                                 | 预期失败；去掉 admission 条件即错误分配 intent                                  | `negative-reserve.log`                                            |
+| 负控                                                 | 预期失败；去掉 admission 条件即错误分配 intent                                  | `negative-reserve.log`、`negative-final-queued.log`               |
 | `npm run test:kernel`                                | 最终 passed，realProvider=false，async ACK顺序仍通过                            | `final-kernel-proof.log`                                          |
 | `npm run test:kernel:app`                            | 最终 passed，realProvider=false；含 clean restart、handoff/fork、权限及 unknown | `final-app-proof.log`；配置staging抛错是fixture故障注入           |
 | `node test/native-commands-proof.ts`                 | 最终 passed，realAccounts=false；含 live thinking、clone、隐私和 unknown fence  | `final-commands-proof.log`；旧观察点失败保留 `commands-proof.log` |
@@ -100,4 +100,4 @@
 - [本轮逐项性能记录](d8a-round12-performance.md)和[机器可读差异](d8a-round12-performance.json)列出最终main的34项worse，
   以及旧五轮D8a报告到最终单轮的4项worse /5项slower。后一组不是同时间交错实验；未精确定位的采样项仍标未归因。
   最终源码diff的SHA256与 `verified-source.sha` 相同，随后只整理文档；不把前一版验证冒充最终版。
-- 没有验证 D8b worker、真实付费模型或部署环境。完成推送后等待 owner 核验 D8a，D8b 不开始。
+- 已推送实现`bac6976`及证据`de62bbe`，等待owner核验D8a。没有验证D8b worker、真实付费模型或部署环境；D8b不开始。
