@@ -42,7 +42,7 @@
 | D5    | D    | 切换会话不重连(C6)                          | 核验通过                      | `229bda2`（测量）；`5acca07`（实现） |
 | D6    | D    | 大文件纯移动拆分(C5)                        | 核验通过                      | `3768653`（测量）；实现见执行记录    |
 | D7    | D    | handoff 测量与异步化(C2)                    | 核验通过                      | `2af9690`（测量）；`859c283`（阈值） |
-| D8    | D    | storage worker(C3)                          | D8a 已推送待核验              | 按第 11 轮提交；D8b 等 owner 核验    |
+| D8    | D    | storage worker(C3)                          | D8a 核验未通过(第 12 轮)      | 按第 11 轮提交；D8b 等 owner 核验    |
 | D9    | D    | 下线旧后端(C4,只读归档)                     | 待做                          |                                      |
 
 状态取值：`待做` / `进行中` / `已推送待核验` / `核验通过` / `核验未通过` / `放弃（写明原因）`。
@@ -1328,6 +1328,44 @@ D7 核验通过,执行方可以开始 D8。
 3. 变差的计数器逐条列出并说明原因。确定性的计数器(SQL 次数、解析字符数、请求数)如果变差,必须讲清楚来源;采样性的计数器(view 次数、Layout、毫秒数)如果多轮受控重跑都不能稳定复现,标为「采样差异,未归因」即可,不阻塞。
 
 不需要另做 JSONL 分批追加、浏览器帧边界交付的对照实验。请把 D8a 现有的产品改动按「测量提交 + 实现提交」提交并推送,附上已有的诊断结论,然后把 D8a 状态改为「已推送待核验」。D8b 等 D8a 核验通过后再开始。
+
+### 第 12 轮核验:D8a(HEAD `198ee52`,2026-10-25)
+
+**D8a — 核验未通过:测试全部通过,但「先检查、后操作」的原子性被拆开了**
+
+**通过的部分**
+
+- `check`、`lint`、`format:check` 通过。默认并行 `npm test` 共 670 项:665 通过、4 跳过、1 失败,失败的仍是环境相关的 snap 那一项。`test:kernel:app` 和 `test:kernel` 都通过。
+- `createAsyncRotomJournal` 只是把一次完整的同步核心调用放进 FIFO 队列执行,事务内部不会 await,单条 SQL 事务仍然是连续的。
+
+**问题:原来同步、连续的「检查 → 操作」,中间现在多了 await**
+
+改动前,`RotomExecutions.run` 里的这一段在同一个同步片段里执行(不带 rebind 时),中间没有 await:
+
+```ts
+if (this.journal.session(sessionId).segmentId !== admitted.segmentId) throw ...; // 检查
+const receipt = this.journal.reserve(sessionId, ...);                             // 操作
+```
+
+现在检查和 `reserve` 是两次独立的 `await`。如果有一次接力(handoff)的 `finish` 已经排在队列里,它会**插在检查和 reserve 之间执行**。结果是:检查时 head 还是 A,reserve 时 head 已经变成了 B。这正好违反了代码注释里写明要防止的情况:"A concurrent completed handoff must not reserve the new payer while launching this previously admitted binding"——receipt 绑定的是新付费人,而启动进程用的仍是旧的 `binding`。
+
+最小复现:`docs/performance/review-2026-10-23/d8a-check-then-act.mjs`。它用和 `createAsyncRotomJournal` 完全相同的调度方式,运行输出是:
+
+```
+check passed on A
+handoff finish -> head B
+reserve on head B
+```
+
+`fork` 也有同类问题:`existing` → 源 head 检查 → `pendingConversation` → `segmentEntries` → `reserve`,原来是连续执行的,现在每一步之间都有 await。源会话可能在「pending 检查」之后开始一次新运行,fork 就会拿到一份正在增长的历史。
+
+**要求(只在 D8a 上追加提交,提交信息以 `D8a:` 开头)**
+
+1. 把「检查 + 操作」合并进**一次**核心调用。例如给 `reserve` 增加 `expectedHead` 参数,在同步事务里检查 head 是否一致,不一致就抛出 `KernelRequestConflict`。fork 那一串也同样合并成一个核心方法。异步 facade 只负责调度这一次调用。
+2. 排查所有在 D8a 之前是同步连续执行、现在被 `await` 隔开的 journal 「读 → 判断 → 写」序列(至少包括 `run`、`fork`、`forkSeed`、`handoff`、`setThinkingLevel`/`hasUnresolvedCommandInput`、mirror),在执行记录里逐条列出处理结果:合并了,或者说明为什么拆开是安全的。
+3. 为第 1 条补一个确定性的回归测试:用排队的 handoff finish 插进检查和 reserve 之间,断言结果是冲突,而不是在新 head 上完成 reserve。
+
+D8b 暂不开始。
 
 ## C 方案（执行方追加）
 
