@@ -69,13 +69,30 @@ function roomPart<T>(part: RoomPartSignal["part"], project: () => T): T {
         return project();
     }
 
-    roomPartChannel.publish({ part } satisfies RoomPartSignal);
-    const started = performance.now();
-    const result = project();
+    return roomPartChannel.runStores({ part } satisfies RoomPartSignal, () => {
+        const started = performance.now();
+        const finished = () =>
+            roomPartChannel.publish({
+                part,
+                ms: performance.now() - started,
+            } satisfies RoomPartSignal);
 
-    roomPartChannel.publish({ part, ms: performance.now() - started } satisfies RoomPartSignal);
+        try {
+            const result = project();
 
-    return result;
+            if (result instanceof Promise) {
+                return result.finally(finished) as T;
+            }
+
+            finished();
+
+            return result;
+        } catch (error) {
+            finished();
+
+            throw error;
+        }
+    });
 }
 
 const context = BACKGROUND_CONTEXT;

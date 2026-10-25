@@ -12,6 +12,7 @@
  * uses `raw` for its own JSON so that its bookkeeping is not counted as the server's work.
  */
 import childProcess from "node:child_process";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { subscribe } from "node:diagnostics_channel";
 import fs from "node:fs";
 import { syncBuiltinESMExports } from "node:module";
@@ -34,10 +35,21 @@ export type Counts = Record<string, number>;
 
 const counts: Counts = {};
 const nativeTimings: Counts = {};
-let kernelRoomActive = false;
+const roomScope = new AsyncLocalStorage<RoomPartSignal["part"]>();
+let synchronousRoomPart: RoomPartSignal["part"] | undefined;
+const roomMetrics = new Set(["sql.statements", "sql.rows", "json.parse.calls", "json.parse.chars"]);
+
+roomPartChannel.bindStore(roomScope, (message) => (message as RoomPartSignal).part);
 
 const add = (name: string, amount = 1) => {
     counts[name] = (counts[name] ?? 0) + amount;
+    const part = roomScope.getStore() ?? synchronousRoomPart;
+
+    if (part && roomMetrics.has(name)) {
+        const key = `view.${part}.${name}`;
+
+        counts[key] = (counts[key] ?? 0) + amount;
+    }
 };
 
 export const raw = { parse: JSON.parse, stringify: JSON.stringify };
@@ -146,7 +158,7 @@ for (const method of ["run", "get", "all", "iterate"] as StatementMethod[]) {
     ) {
         add("sql.statements");
 
-        if (kernelRoomActive) {
+        if ((roomScope.getStore() ?? synchronousRoomPart) === "kernel") {
             const table =
                 /\bFROM (kernel_heads|kernel_sessions|kernel_attempts|kernel_command_inputs|kernel_resume)\b/i
                     .exec(this.sourceSQL)?.[1]
@@ -302,33 +314,30 @@ viewProjectionChannel.subscribe((message) => {
     }
 });
 
-const roomPartStarts = new Map<RoomPartSignal["part"], Counts>();
-
 roomPartChannel.subscribe((message) => {
     const { part, ms } = message as RoomPartSignal;
 
     if (ms === undefined) {
         add(`view.${part}.project.calls`);
-        roomPartStarts.set(part, snapshot());
 
-        if (part === "kernel") {
-            kernelRoomActive = true;
+        // Older comparison revisions publish synchronous start/end pairs without runStores.
+        if (roomScope.getStore() === undefined) {
+            synchronousRoomPart = part;
         }
 
         return;
     }
 
-    if (part === "kernel") {
-        kernelRoomActive = false;
+    if (roomScope.getStore() === undefined) {
+        synchronousRoomPart = undefined;
     }
 
     const name = `room${part[0]!.toUpperCase()}${part.slice(1)}ProjectMs`;
 
     nativeTimings[name] = (nativeTimings[name] ?? 0) + ms;
-    const work = since(roomPartStarts.get(part) ?? {});
 
-    for (const metric of ["sql.statements", "sql.rows", "json.parse.calls", "json.parse.chars"]) {
-        add(`view.${part}.${metric}`, work[metric] ?? 0);
+    for (const metric of roomMetrics) {
+        counts[`view.${part}.${metric}`] ??= 0;
     }
 });
 
