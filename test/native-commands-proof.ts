@@ -412,14 +412,14 @@ try {
         null,
     );
     const projectionJournal = app.kernel!.executions.journal;
-    const originalSessionIfPresent = projectionJournal.sessionIfPresent;
+    const originalRoomSnapshot = projectionJournal.roomSnapshot;
     let projectionReads = 0;
 
     try {
-        projectionJournal.sessionIfPresent = async function (sessionId) {
+        projectionJournal.roomSnapshot = async function (sessionId) {
             projectionReads++;
 
-            return await originalSessionIfPresent.call(this, sessionId);
+            return await originalRoomSnapshot.call(this, sessionId);
         };
 
         assert.notEqual(
@@ -430,11 +430,11 @@ try {
         assert.equal(
             projectionReads,
             1,
-            "one roomState performs exactly one fresh head/session read",
+            "one roomState performs exactly one fresh room snapshot read",
         );
 
-        projectionJournal.sessionIfPresent = async function (sessionId) {
-            const session = (await originalSessionIfPresent.call(this, sessionId))!;
+        projectionJournal.roomSnapshot = async function (sessionId) {
+            const session = (await originalRoomSnapshot.call(this, sessionId))!;
 
             return {
                 ...session,
@@ -449,7 +449,7 @@ try {
             "even the same member and segment need exact full binding equality",
         );
     } finally {
-        projectionJournal.sessionIfPresent = originalSessionIfPresent;
+        projectionJournal.roomSnapshot = originalRoomSnapshot;
     }
 
     const projectionRoom = await app.room(id);
