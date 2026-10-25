@@ -15,6 +15,7 @@ import { TeamAccounts, type Runtime } from "./team-accounts.ts";
 import { TeamExecution, TeamRunDoc } from "./team-execution.ts";
 import { ConfigurationDoc, TeamProfiles, type ConfigurationSnapshot } from "./team-profiles.ts";
 import { TeamKernel } from "./team-kernel.ts";
+import { StorageWorker } from "./storage-worker.ts";
 import { scopedParseObject } from "./perf-channels.ts";
 import { requireNoPendingKernel } from "./rotom-journal.ts";
 import { verifyRotomKernel } from "./rotom-kernel.ts";
@@ -117,6 +118,8 @@ export interface OpenOptions {
     supervised: boolean;
     /** Explicit new-session-only native backend. Never changes existing sessions or copies grants. */
     kernel?: boolean;
+    /** Opt-in single owner of native journal + public Durable Storage. Default: false. */
+    storageWorker?: boolean;
     log?: (line: string) => void;
     /** Tests register scripted providers here. */
     configureModels?: (models: Runtime) => void;
@@ -147,6 +150,8 @@ export class PocketApp {
     readonly profiles: TeamProfiles;
     kernel: TeamKernel | undefined;
     readonly #kernelEnabled: boolean;
+    readonly #storageWorkerEnabled: boolean;
+    #storageWorker?: StorageWorker;
     readonly projects: TeamProjects;
     readonly execution = new TeamExecution(this);
     settings!: SettingsManager;
@@ -208,6 +213,12 @@ export class PocketApp {
     private constructor(options: OpenOptions) {
         this.#configureModels = options.configureModels;
         this.#kernelEnabled = options.kernel === true;
+        this.#storageWorkerEnabled = options.storageWorker === true;
+
+        if (this.#storageWorkerEnabled && !this.#kernelEnabled) {
+            throw new Error("Storage worker requires native kernel mode");
+        }
+
         this.now = options.now ?? Date.now;
         this.dataDir = options.dataDir;
         this.media = new MediaStore(
@@ -276,7 +287,23 @@ export class PocketApp {
     static async open(options: OpenOptions): Promise<PocketApp> {
         const app = new PocketApp(options);
 
-        await app.#open();
+        try {
+            await app.#open();
+        } catch (error) {
+            // Worker ownership starts before Harness.open, which can fail before its own cleanup scope.
+            if (app.#storageWorker) {
+                try {
+                    await app.close();
+                } catch (cleanupError) {
+                    throw new AggregateError(
+                        [error, cleanupError],
+                        "Startup failed and cleanup remains fenced",
+                    );
+                }
+            }
+
+            throw error;
+        }
 
         return app;
     }
@@ -370,10 +397,17 @@ export class PocketApp {
 
         registry.install(this.execution.extension());
 
-        const storage = scopedParseObject(
-            "durable-storage",
-            await openNodeSqliteStorage(join(this.dataDir, "pocket.sqlite")),
-        );
+        if (this.#storageWorkerEnabled) {
+            this.#storageWorker = new StorageWorker(this.dataDir);
+            await this.#storageWorker.ready();
+        }
+
+        const storage =
+            this.#storageWorker?.storage ??
+            scopedParseObject(
+                "durable-storage",
+                await openNodeSqliteStorage(join(this.dataDir, "pocket.sqlite")),
+            );
 
         this.harness = await Harness.open(
             storage,
@@ -409,7 +443,7 @@ export class PocketApp {
         );
 
         if (this.#kernelEnabled) {
-            this.kernel = new TeamKernel(this);
+            this.kernel = new TeamKernel(this, this.#storageWorker?.journal);
         }
 
         try {
@@ -467,7 +501,14 @@ export class PocketApp {
 
         // Work a previous process left unfinished continues now.
         this.harness.resume();
-        void this.kernel?.resumeInterrupted();
+
+        if (this.#storageWorker) {
+            void this.kernel!.resumeInterrupted().catch((error) => {
+                this.#log(`Native continuation stopped: ${describe(error)}`);
+            });
+        } else {
+            void this.kernel?.resumeInterrupted();
+        }
     }
 
     /**
@@ -2242,14 +2283,49 @@ export class PocketApp {
             );
             await this.#sessionListDrain;
             this.providers.close();
-            await this.kernel?.close();
+            const failures: unknown[] = [];
+
+            const failed = (error: unknown) => {
+                if (!this.#storageWorker) {
+                    throw error;
+                }
+
+                failures.push(error);
+            };
 
             try {
-                // Close writes no outcome: running work resumes when the next process opens the storage.
-                await this.harness?.close(context);
+                await this.kernel?.close();
+            } catch (error) {
+                failed(error);
+            }
+
+            try {
+                // A failed worker must not prevent parent-owned legacy tasks/resources from being stopped too.
+                try {
+                    await this.harness?.close(context);
+                } catch (error) {
+                    failed(error);
+                }
 
                 for (const env of this.#envs.values()) {
-                    await env.cleanup(context);
+                    try {
+                        await env.cleanup(context);
+                    } catch (error) {
+                        failed(error);
+                    }
+                }
+
+                // Environments can still own legacy child resources after Harness joins its invocations.
+                // Do not release either writer lease until that parent-owned cleanup is confirmed too.
+                if (this.#storageWorker && failures.length === 0) {
+                    await this.#storageWorker.close();
+                }
+
+                if (failures.length > 0) {
+                    throw new AggregateError(
+                        failures,
+                        "Shutdown incomplete; writer leases remain fenced",
+                    );
                 }
             } finally {
                 // After the harness: a browser call cut off by the stop resumes as interrupted, not as failed.
@@ -2258,7 +2334,9 @@ export class PocketApp {
                 try {
                     this.config.flush();
                 } finally {
-                    rmSync(this.#lockFile, { force: true });
+                    if (!this.#storageWorker || this.#storageWorker.closed) {
+                        rmSync(this.#lockFile, { force: true });
+                    }
                 }
             }
         })();

@@ -5,10 +5,11 @@ import { NativeMirrorDoc } from "../../src/server/team-kernel.ts";
 import { NATIVE_ENTRY } from "../../src/server/entry-format.ts";
 import { RotomJournal } from "../../src/server/rotom-journal.ts";
 
-const { dataDir, cwd, id } = JSON.parse(process.argv[2]!) as {
+const { dataDir, cwd, id, storageWorker } = JSON.parse(process.argv[2]!) as {
     dataDir: string;
     cwd: string;
     id: number;
+    storageWorker: boolean;
 };
 
 const originalEntries = RotomJournal.prototype.entries;
@@ -23,6 +24,7 @@ try {
         defaultCwd: cwd,
         supervised: false,
         kernel: true,
+        storageWorker,
         browser: null,
         log: () => {},
     });
@@ -48,6 +50,8 @@ try {
             authors,
             native,
             branch: state.hasBranchedHistory,
+            state,
+            info: await app.kernel!.roomInfo(id as never),
         });
     } finally {
         await app.close();

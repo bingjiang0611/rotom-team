@@ -259,6 +259,7 @@ const open = () =>
         defaultCwd: workspace,
         supervised: false,
         kernel: true,
+        storageWorker: process.argv.includes("--storage-worker"),
         browser: null,
         log: () => {},
         configureUserModels,

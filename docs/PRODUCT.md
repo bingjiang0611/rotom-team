@@ -17,6 +17,7 @@ flowchart LR
 - rotom 版本及文件摘要由 [`runtime/rotom/pin.json`](../runtime/rotom/pin.json) 固定。团队包版本与 rotom 版本不是同一个版本号。
 - Durable 只为 rotom 会话提供共享状态、权限和 Transcript 镜像，不另运行一个 Agent 循环。它自己的会话仍使用旧后端。
 - rotom 的工具、扩展消息和问题进入同一 Transcript。只有本轮付费成员可以回答该轮交互问题。
+- 可用 `--storage-worker` 将 journal 与公开 Durable Storage 放入单个数据库 worker，**默认关闭**；关闭时保持 D8a 路径。Harness、镜像协调、权限、个人凭据及 native/payer gate 仍在父线程。worker 失联不自动重启或重放；关闭必须先排空 native 所有权，再等数据库 ACK 和 worker 退出。失败保留租约。此开关仅用于 native kernel 模式，不删除旧后端能力，也不形成安全沙箱。
 
 ## 执行归属与历史
 

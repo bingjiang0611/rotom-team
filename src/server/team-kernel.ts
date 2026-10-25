@@ -56,6 +56,7 @@ import {
     KernelRequestConflict,
     type RotomJournal,
     type KernelBinding,
+    type AsyncRotomJournal,
     type KernelEntry,
     type KernelReceipt,
 } from "./rotom-journal.ts";
@@ -248,7 +249,9 @@ export class TeamKernel {
         string,
         { operation: string; identity: string; promise: Promise<unknown> }
     >();
-    constructor(app: PocketApp) {
+    readonly #remoteStorage: boolean;
+    constructor(app: PocketApp, journal?: AsyncRotomJournal) {
+        this.#remoteStorage = journal !== undefined;
         this.#app = app;
         this.#mcp = new McpSignIns(join(app.dataDir, "team-agent"));
         verifyRotomKernel();
@@ -326,6 +329,7 @@ export class TeamKernel {
                     }),
                 };
             },
+            journal,
         );
     }
 
@@ -3167,10 +3171,27 @@ export class TeamKernel {
      * Unknown outcomes and legacy interrupted classifications stay untouched, even with a persisted resume plan.
      * The derived request id prevents a second startup from sending the same continuation again.
      */
-    async resumeInterrupted(): Promise<void> {
+    #resumeDrain?: Promise<void>;
+    resumeInterrupted(): Promise<void> {
+        if (!this.#remoteStorage) {
+            return this.#resumeInterrupted();
+        }
+
+        this.#resumeDrain ??= this.#resumeInterrupted().finally(() => {
+            this.#resumeDrain = undefined;
+        });
+
+        return this.#resumeDrain;
+    }
+
+    async #resumeInterrupted(): Promise<void> {
         const journal = this.executions.journal;
 
         for (const plan of await journal.resumes("pending")) {
+            if (this.#remoteStorage && this.#closing) {
+                return;
+            }
+
             const id = this.#id(plan.sessionId);
             const attempt = await journal.receipt(plan.attemptId);
 
@@ -3196,6 +3217,10 @@ export class TeamKernel {
                 await this.submit(id, user, `#resume-${attempt.id}`, RESUME_TEXT, false);
                 await journal.markResume(plan.attemptId, "started");
             } catch (error) {
+                if (this.#remoteStorage && this.#closing) {
+                    return;
+                }
+
                 await journal.markResume(plan.attemptId, "skipped");
                 this.#app.notice(
                     "warning",
@@ -3211,17 +3236,55 @@ export class TeamKernel {
         this.#closing = true;
         this.#mcp.close();
 
-        // A stop cuts prompts off mid-work: plan their continuation before stopping them.
-        for (const id of new Set([...this.#active].map((run) => run.id))) {
-            await this.executions.journal.planPendingResume(String(id));
+        const failures: unknown[] = [];
+
+        const failed = (error: unknown) => {
+            if (!this.#remoteStorage) {
+                throw error; // Preserve the D8a path when the worker is disabled.
+            }
+
+            failures.push(error);
+        };
+
+        // A failed storage owner cannot save a continuation. Still abort/drain every native owner.
+        try {
+            for (const id of new Set([...this.#active].map((run) => run.id))) {
+                await this.executions.journal.planPendingResume(String(id));
+            }
+        } catch (error) {
+            failed(error);
         }
 
         for (const id of new Set([...this.#active].map((run) => run.id))) {
-            await this.executions.abort(String(id));
+            try {
+                await this.executions.abort(String(id));
+            } catch (error) {
+                failed(error);
+            }
         }
 
         await Promise.allSettled([...this.#active].map((run) => run.promise));
-        await this.executions.close();
+
+        try {
+            if (this.#resumeDrain) {
+                await this.#resumeDrain;
+            }
+        } catch (error) {
+            failed(error);
+        }
+
+        try {
+            await this.executions.close();
+        } catch (error) {
+            failed(error);
+        }
+
+        if (failures.length > 0) {
+            throw new AggregateError(
+                failures,
+                "Native shutdown attempted; storage or closure failures retain writer leases",
+            );
+        }
     }
 }
 

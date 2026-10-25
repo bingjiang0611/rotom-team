@@ -3,6 +3,7 @@ import { root, work, owner, until, context } from "./helpers.ts";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { once } from "node:events";
+import { Worker } from "node:worker_threads";
 import {
     mkdirSync,
     readFileSync,
@@ -470,12 +471,28 @@ const configureUserModels = (models: Runtime, user: User) =>
             throw new Error("Durable model path must not execute native conversations");
         },
     });
+const workerMode = process.argv.includes("--storage-worker");
+const workerPost = Worker.prototype.postMessage;
+let storageThread: Worker | undefined;
+let storageFailureInjected = false;
+
+if (workerMode) {
+    Worker.prototype.postMessage = function (...args) {
+        if (args[0]?.type === "next" && args[0].id === 0) {
+            storageThread = this;
+        }
+
+        return workerPost.apply(this, args);
+    };
+}
+
 const open = (kernel = true) =>
     PocketApp.open({
         dataDir: folder,
         defaultCwd: workspace,
         supervised: false,
         kernel,
+        storageWorker: kernel && workerMode,
         browser: null,
         log: () => {},
         configureUserModels,
@@ -2086,8 +2103,8 @@ try {
         handler = createHandler({ app, listen: { host: "127.0.0.1", port: 0 }, restart: () => {} });
     };
 
-    const startCutOff = async (requestId: string) => {
-        const started = await request(aliceToken, `c/${shared2.id}/submit`, "POST", {
+    const startCutOff = async (requestId: string, sessionId = shared2.id) => {
+        const started = await request(aliceToken, `c/${sessionId}/submit`, "POST", {
             text: `STREAM_SLOWLY until ${requestId}`,
             requestId,
             wait: false,
@@ -2096,7 +2113,7 @@ try {
         assert.equal(started.status, 200, await started.clone().text());
 
         for (let tries = 0; tries < 2400; tries++) {
-            if (JSON.stringify(app.kernel!.clientLive(shared2.id as never)).includes("PARTIAL")) {
+            if (JSON.stringify(app.kernel!.clientLive(sessionId as never)).includes("PARTIAL")) {
                 break;
             }
 
@@ -2760,9 +2777,42 @@ try {
     }
 
     report.crashedKernelRemainsUnknownWithoutContinuation = true;
+
+    if (workerMode) {
+        const live = await app.commands.createSession(app.config.userById(a.id)!, {
+            backend: "rotom",
+        });
+        const active = await startCutOff("storage-owner-crash", Number(live.id));
+        const inspection = new DatabaseSync(join(folder, "kernel.sqlite"), { readOnly: true });
+        const running = inspection
+            .prepare("SELECT pid FROM kernel_attempts WHERE id=?")
+            .get(active) as { pid: number };
+
+        inspection.close();
+        assert.ok(running.pid > 0);
+        assert.ok(storageThread && storageThread.threadId > 0);
+        storageFailureInjected = true;
+        await storageThread.terminate();
+        await assert.rejects(app.close(), /Shutdown incomplete/);
+        assert.throws(
+            () => process.kill(running.pid, 0),
+            { code: "ESRCH" },
+            "native process closes even when resume planning cannot reach storage",
+        );
+        assert.ok(existsSync(join(folder, "kernel.lock")));
+        assert.ok(existsSync(join(folder, "harness.lock")));
+        report.storageWorkerFailureStopsNativeAndRetainsLeases = true;
+    }
+
     report.loopbackRequests = calls;
 } finally {
-    await app.close();
+    if (storageFailureInjected) {
+        await app.close().catch(() => {});
+    } else {
+        await app.close();
+    }
+
+    Worker.prototype.postMessage = workerPost;
     oauth.close();
     server.closeAllConnections();
     modelServer.closeAllConnections();

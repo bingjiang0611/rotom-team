@@ -34,6 +34,7 @@ function parseArgs(argv: string[]) {
         rotateToken: false,
         // rotom runs every new session. `--no-rotom-kernel` keeps a server on Pi Durable only.
         kernel: true,
+        storageWorker: false,
         tlsCert: undefined as string | undefined,
         tlsKey: undefined as string | undefined,
     };
@@ -63,6 +64,10 @@ function parseArgs(argv: string[]) {
             options.kernel = true;
         } else if (arg === "--no-rotom-kernel") {
             options.kernel = false;
+        } else if (arg === "--storage-worker") {
+            options.storageWorker = true;
+        } else if (arg === "--no-storage-worker") {
+            options.storageWorker = false;
         } else if (arg === "--tls-cert") {
             options.tlsCert = resolve(value());
         } else if (arg === "--tls-key") {
@@ -71,7 +76,7 @@ function parseArgs(argv: string[]) {
             options.rotateToken = true;
         } else if (arg === "--help" || arg === "-h") {
             console.log(
-                "rotom-team [--host 127.0.0.1] [--port 8787] [--cwd DIR] [--data DIR] [--rotate-token] [--no-rotom-kernel] [--tls-cert FILE --tls-key FILE]",
+                "rotom-team [--host 127.0.0.1] [--port 8787] [--cwd DIR] [--data DIR] [--rotate-token] [--no-rotom-kernel] [--storage-worker | --no-storage-worker] [--tls-cert FILE --tls-key FILE]",
             );
             process.exit(0);
         } else {
@@ -229,6 +234,7 @@ const opened = await App.open({
     defaultCwd: options.cwd,
     supervised: process.env.PI_POCKET_SUPERVISED === "1",
     kernel: options.kernel,
+    storageWorker: options.storageWorker,
 });
 
 app = opened;

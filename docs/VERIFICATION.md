@@ -49,6 +49,40 @@ fresh process with synthetic native inference; its benchmark-only preload measur
 both-path tests, size-selection cost and repeated 1/10/100 MiB measurements. Neither is a production or
 multi-room capacity claim.
 
+## D8b storage-worker evidence
+
+`test/storage-worker.test.ts` runs the public Durable conformance suite on the real proxy and databases.
+It injects commit-before-crash, held/late ACK, proven rejection versus ordinary error, close failure, full queues,
+queued versus dispatched cancellation, double writers and permission revocation during an outstanding read.
+It also checks atomic head conflicts, multi-MiB transport pages, unknown restart/no replay and lease retention.
+`test/storage-worker-app.test.ts` covers omitted/false/true switching, invalid mode, partial startup cleanup,
+startup-continuation drain and the final app lease. `test/native-mirror.test.ts` runs both switch settings with a
+real child-process restart and a Durable commit whose local completion is lost; it forbids duplicate mirrored entries.
+
+```sh
+node --test test/storage-worker.test.ts test/storage-worker-app.test.ts test/storage-worker-counters.test.ts test/native-mirror.test.ts test/perf-room-part.test.ts
+node --import ./test/fixtures/storage-env-guard.ts --test test/storage-worker-app.test.ts
+node test/team-kernel-proof.ts --storage-worker
+node test/native-commands-proof.ts --storage-worker
+```
+
+The pinned application proof kills the actual storage thread during an active native prompt, then verifies native
+PID termination and both retained leases after rejected shutdown. The command proof retains permissions, fixed
+payer, large readback and unknown/no-replay checks. They use loopback models and synthetic credentials, not real accounts.
+The environment guard rejects ambient environment or extra startup fields in the production storage worker.
+
+The counter driver runs inside the worker too; missing counts fail rather than becoming zero. The real-counter test
+compares local/worker SQL and JSON work, original room/table attribution and the historical-entry observer. V8 byte/call
+counts include both threads; parent/worker serialization timings remain separate. FIFO wait/ACK timings overlap worker
+and serialization time, so they must not be summed as disjoint phases. Transfer byte counts expose copy volume; ACK
+round-trip includes page copying/scheduling rather than claiming an isolated structured-clone cost. `startup.restart`
+records app-close and app-open phases without changing the workload or quiet window.
+
+`ROTOM_PERF_STORAGE_WORKER=1 npm run perf:measure -- --runs 1 --out <report>` enables the same workload and installs
+its worker counter preload automatically. Normal `perf:ci` stays worker-off for comparison with older revisions.
+Compare on/off reports from the same product source; do not call a one-run timing difference a stable speedup.
+[The D8b record](performance/review-2026-10-23/d8b-validation.md) contains results, limits and runtime-only negative controls.
+
 ## Event subscriptions
 
 `session-subscriptions.test.ts` exercises authenticated HTTP SSE/poll: connection ownership, ACK/full-view order,

@@ -1709,7 +1709,7 @@ export class RotomJournal {
         }));
     }
 
-    close(): void {
+    close(releaseLease = true): void {
         if (this.#closed) {
             return;
         }
@@ -1718,7 +1718,10 @@ export class RotomJournal {
         this.#thinking.clear();
         this.#statements.clear();
         this.#db.close();
-        rmSync(this.#lock);
+
+        if (releaseLease) {
+            rmSync(this.#lock);
+        }
     }
 }
 
@@ -1738,7 +1741,7 @@ export type AsyncRotomJournal = {
           : never;
 };
 
-const JOURNAL_METHODS = new Set(
+export const JOURNAL_METHODS = new Set(
     Object.getOwnPropertyNames(RotomJournal.prototype).filter((name) => name !== "constructor"),
 );
 

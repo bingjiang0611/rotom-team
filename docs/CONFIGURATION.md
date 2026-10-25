@@ -87,6 +87,37 @@ Shared `extensions/pi-computer-use.json` is copied as declared native configurat
 owner declaration. Trusted project code runs with the service OS user's permissions; this is not filesystem or credential
 isolation from that code. Review project packages before enabling this release.
 
+## Optional storage worker
+
+`--storage-worker` opts the native-kernel server into one database worker. It is **off by default**;
+`--no-storage-worker` explicitly keeps the D8a in-process path. `PocketApp.open` also accepts
+`storageWorker: true`. Combining it with `--no-rotom-kernel` is rejected before acquiring a writer lease.
+This is a startup option, not a live toggle. Existing Durable sessions and execution capabilities are not removed.
+
+Only `RotomJournal` and the public Pi Durable `Storage` run in that worker. Harness, transaction callbacks,
+mutation queue, mirror coordination, permissions, personal credentials, native processes and the payer gate stay
+on the parent. The worker receives explicit data paths and an empty environment, not caller Context values or
+credential objects. It is trusted code in the same OS process, **not a sandbox**.
+
+Operations execute FIFO with full transaction boundaries. V8 values are limited to 256 MiB after serialization;
+accepted ordinary requests are capped at 128 (including the active request) and 256 MiB combined encoded bytes.
+Transport uses 1 MiB pages with one page in flight per direction; it still materializes the whole value at each end.
+Three deduplicated, argument-free lifecycle closes have reserved capacity so a full ordinary queue can drain.
+These are transport bounds, not a global heap/RSS limit or a maximum queue-wait promise.
+
+An admitted operation must receive its durable ACK. Cancellation can remove a queued request, but cannot declare
+a dispatched write rolled back. Startup, active-operation ACK and final exit deadlines are 120 seconds.
+Lost ACK, transport failure, unexpected exit or failed close fence the owner; they do not trigger a retry,
+restart, parent-side writer, fallback reader or automatic lock removal. A reply exceeding the limit can follow
+a completed write and therefore fences as unknown. Acknowledged backend errors retain the public Storage error
+classification: only actual `StorageRejected` remains that class; other errors poison the owning Durable Session.
+
+Shutdown stops native admission, drains native/gate/child ownership and startup continuation work, then closes both
+stores. Parent execution environments must finish cleanup before final owner close; only its ACK **and** worker exit
+release leases. Failed storage must not skip native
+shutdown. An incomplete shutdown retains `kernel.lock` and `harness.lock`; a dead parent PID alone never authorizes
+breaking them. Recovery requires the existing offline ownership checks, not another live writer.
+
 ## Native process lifetime
 
 One native process is retained per immutable conversation segment after successful prompts and commands. MCP connections

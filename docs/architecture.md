@@ -3,7 +3,7 @@
 This is the current **rotom team** architecture. [PRODUCT.md](PRODUCT.md) and
 [CONFIGURATION.md](CONFIGURATION.md) define the product contract; [map.md](map.md) locates the code.
 Pi Durable remains shared storage infrastructure. Its legacy agent execution path is separate from the default
-rotom execution path. Neither the proposed storage worker nor used-process idle eviction is implemented here.
+rotom execution path. A single storage worker is opt-in and off by default. Used-process idle eviction is not implemented.
 
 ## Execution and trust boundary
 
@@ -61,7 +61,8 @@ untrusted team members safe to host. Do not remove their checks on the assumptio
 Handoff, public fork and import size the serialized `publicNativeHistory` result in UTF-8 bytes.
 Below 8 MiB, `RotomExecutions.#seed` calls `prepareSeed/persistSeed` directly on the parent;
 at or above 8 MiB, each tracked execution owns one short-lived Node worker.
-The parent owns authorization and the only journal connection. The worker loads the verified pinned session-data
+The parent owns authorization and awaits the journal owner (local by default, or the optional storage worker).
+The seed worker loads the verified pinned session-data
 API, not an agent loop, account resolver or extension runtime. The large-history handoff sequence is below;
 public fork/import reuse the seed boundary after their own admission/reservation:
 
@@ -81,7 +82,35 @@ On the large path, a result alone cannot release the tracked execution or commit
 the worker; failure, missing completion or revocation after materialization starts remains unknown, never a replay.
 Empty histories still need no file/worker. There is no pool, background queue, cross-payer seed reuse or global
 memory admission cap. Large concurrent materializations need separate capacity validation.
-Projection and synchronous journal writes remain on the parent; this is not the D8 storage worker.
+Projection remains on the parent. Journal operations use the local D8a owner unless the separate D8b storage
+worker is enabled; a seed worker never opens either database.
+
+## Optional database ownership
+
+```text
+parent: Harness / callbacks / mutation queue / mirror coordinator / permissions / credentials
+        native RPC ownership / gate / HTTP
+          │ FIFO complete operations, bounded pages, durable ACK
+          ▼
+one storage worker: RotomJournal + public Pi Durable Storage
+```
+
+`storage-worker.ts` owns admission, queue bounds, correlation, cancellation-before-dispatch and failure fencing.
+`storage-protocol.ts` serializes complete operations into bounded transport pages; it does not split transactions
+or make multiple awaited reads atomic. `storage-worker-thread.ts` opens the journal lease before Durable Storage
+and dispatches only their declared operations. No private Durable table API or second parent writer is introduced.
+
+The parent keeps authority over side effects after ACK and rechecks current permissions and payer identity.
+Mirror count moves only with the Durable transaction; retry reads that committed count before appending again.
+A transport/exit uncertainty rejects pending and future calls and retains leases. Acknowledged backend errors
+preserve `StorageRejected` identity versus ordinary errors; the public Session owns its poisoning rules.
+
+Native shutdown and the continuation coordinator drain before database closure. Journal endpoint close does not
+release its lease or stop the shared worker while Harness still needs Storage. Final owner close waits for both
+store closes, parent execution-environment cleanup, the ACK and clean worker exit before removing `kernel.lock`.
+App closure then releases `harness.lock`.
+Failure still attempts parent-owned native cleanup, but never converts incomplete cleanup into a successful unlock.
+See [CONFIGURATION.md](CONFIGURATION.md#optional-storage-worker) for limits and the default-off switch.
 
 ## Persistent truth, mirror and live state
 

@@ -367,10 +367,11 @@ export class RotomExecutions {
             sessionId: string,
         ) => Promise<KernelRequestAuth | void>,
         prepare?: (binding: Readonly<KernelBinding>, sessionId: string) => KernelLaunchContext,
+        journal?: AsyncRotomJournal,
     ) {
-        const core = scopedParseObject("journal", new RotomJournal(data));
-
-        this.journal = createAsyncRotomJournal(core);
+        this.journal =
+            journal ??
+            createAsyncRotomJournal(scopedParseObject("journal", new RotomJournal(data)));
         this.#data = data;
         this.#authorize = authorize;
         this.#prepare = prepare;
