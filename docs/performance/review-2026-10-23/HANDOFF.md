@@ -23,27 +23,27 @@
 
 ## 状态表（执行方维护）
 
-| 编号  | 批次 | 标题                                        | 状态                           | 提交                                 |
-| ----- | ---- | ------------------------------------------- | ------------------------------ | ------------------------------------ |
-| A1    | A    | journal 索引 + 镜像游标                     | 核验通过                       | `2a2ac90`、`b44ca33`、`7c880fc`      |
-| A2    | A    | thinking level / native goal 跨推送缓存     | 核验通过                       | `b8d63f4`、`c13245d`                 |
-| A3    | A    | 启动时不再全量解析历史                      | 核验通过                       | `0f39ea3`                            |
-| A4    | A    | 静态资源 ETag / gzip / modulepreload        | 核验通过                       | `c8d7cbd`（测量见记录）              |
-| B1    | B    | `teamResourceRevision` 不在请求路径读大文件 | 核验通过                       | `9ccc0aa`                            |
-| B2    | B    | `finishedSeen` 写入与清理                   | 核验通过                       | `cc652cc`                            |
-| B3    | B    | 房间级字段每次推送只算一次                  | 核验通过                       | `8d42e63`                            |
-| B4    | B    | journal 预编译语句缓存                      | 核验通过                       | `37cb733`                            |
-| B5    | B    | 长轮询队列字节上限                          | 核验通过                       | `5fb4bbe`                            |
-| C1–C6 | C    | 需要 owner 决策，只写方案                   | C1 暂缓;C2–C6 已批准,见批次 D  | `14caa83`（方案，未实现）            |
-| D1    | D    | 文档纠偏(C6)                                | 核验通过                       | `0705511`（测量）；实现见执行记录    |
-| D2    | D    | notify 控制消息集中解码(C6)                 | 核验通过                       | `1b1228a`（测量）；实现见执行记录    |
-| D3    | D    | 流式 Markdown 解析(C6)                      | 核验通过                       | `b6d3842`（测量）；实现见执行记录    |
-| D4    | D    | App 根渲染局部订阅(C6)                      | 核验通过                       | `58ddb47`（测量）；实现见执行记录    |
-| D5    | D    | 切换会话不重连(C6)                          | 核验通过                       | `229bda2`（测量）；`5acca07`（实现） |
-| D6    | D    | 大文件纯移动拆分(C5)                        | 核验通过                       | `3768653`（测量）；实现见执行记录    |
-| D7    | D    | handoff 测量与异步化(C2)                    | 核验通过                       | `2af9690`（测量）；`859c283`（阈值） |
-| D8    | D    | storage worker(C3)                          | D8a 已推送待核验（第12轮修复） | 原子性修复已验证；D8b 等 owner 核验  |
-| D9    | D    | 下线旧后端(C4,只读归档)                     | 待做                           |                                      |
+| 编号  | 批次 | 标题                                        | 状态                          | 提交                                 |
+| ----- | ---- | ------------------------------------------- | ----------------------------- | ------------------------------------ |
+| A1    | A    | journal 索引 + 镜像游标                     | 核验通过                      | `2a2ac90`、`b44ca33`、`7c880fc`      |
+| A2    | A    | thinking level / native goal 跨推送缓存     | 核验通过                      | `b8d63f4`、`c13245d`                 |
+| A3    | A    | 启动时不再全量解析历史                      | 核验通过                      | `0f39ea3`                            |
+| A4    | A    | 静态资源 ETag / gzip / modulepreload        | 核验通过                      | `c8d7cbd`（测量见记录）              |
+| B1    | B    | `teamResourceRevision` 不在请求路径读大文件 | 核验通过                      | `9ccc0aa`                            |
+| B2    | B    | `finishedSeen` 写入与清理                   | 核验通过                      | `cc652cc`                            |
+| B3    | B    | 房间级字段每次推送只算一次                  | 核验通过                      | `8d42e63`                            |
+| B4    | B    | journal 预编译语句缓存                      | 核验通过                      | `37cb733`                            |
+| B5    | B    | 长轮询队列字节上限                          | 核验通过                      | `5fb4bbe`                            |
+| C1–C6 | C    | 需要 owner 决策，只写方案                   | C1 暂缓;C2–C6 已批准,见批次 D | `14caa83`（方案，未实现）            |
+| D1    | D    | 文档纠偏(C6)                                | 核验通过                      | `0705511`（测量）；实现见执行记录    |
+| D2    | D    | notify 控制消息集中解码(C6)                 | 核验通过                      | `1b1228a`（测量）；实现见执行记录    |
+| D3    | D    | 流式 Markdown 解析(C6)                      | 核验通过                      | `b6d3842`（测量）；实现见执行记录    |
+| D4    | D    | App 根渲染局部订阅(C6)                      | 核验通过                      | `58ddb47`（测量）；实现见执行记录    |
+| D5    | D    | 切换会话不重连(C6)                          | 核验通过                      | `229bda2`（测量）；`5acca07`（实现） |
+| D6    | D    | 大文件纯移动拆分(C5)                        | 核验通过                      | `3768653`（测量）；实现见执行记录    |
+| D7    | D    | handoff 测量与异步化(C2)                    | 核验通过                      | `2af9690`（测量）；`859c283`（阈值） |
+| D8    | D    | storage worker(C3)                          | D8a 核验通过;D8b 待做         | 原子性修复已验证；D8b 等 owner 核验  |
+| D9    | D    | 下线旧后端(C4,只读归档)                     | 待做                          |                                      |
 
 状态取值：`待做` / `进行中` / `已推送待核验` / `核验通过` / `核验未通过` / `放弃（写明原因）`。
 
@@ -1382,6 +1382,19 @@ reserve on head B
 3. 为第 1 条补一个确定性的回归测试:用排队的 handoff finish 插进检查和 reserve 之间,断言结果是冲突,而不是在新 head 上完成 reserve。
 
 D8b 暂不开始。
+
+### 第 13 轮核验:D8a 修复(HEAD `13705d8`,2026-10-25)
+
+**D8a — 通过**
+
+- 原子性已经恢复:
+    - `reserve` 现在接收 `expectedHead` 和 `expectedBinding` 两个参数,在 `BEGIN IMMEDIATE` 事务里比对 head 和 binding,任何一个不一致就抛出 `KernelRequestConflict`。`run` 和 `forkSeed` 都传入了 `admitted.segmentId` 和 `admitted.binding`;rebind 路径也比对 `expectedHead` 和 binding。
+    - fork 改为 `journal.forkSeed`、handoff 改为 `journal.handoffSeed`,源检查、读取历史、reserve 都在**同一次**核心调用里完成,中间没有任何让出点。
+    - `beginCommandInput` 会在同一次调用里检查 phase 和未完成的输入;关闭时用 `planPendingResume` 一次完成判断和计划。
+- 我做的负控:把 `run` 里传给 `reserve` 的 `admitted.segmentId, admitted.binding` 去掉,新增的回归测试「queued handoff finish between run's check and reserve…」随即失败(0/1);恢复后通过(1/1)。
+- `check`、`lint`、`format:check` 通过。默认并行 `npm test` 共 677 项:672 通过、4 跳过、1 失败,失败的仍是环境相关的 snap 那一项。`test:kernel:app` 和 `native-commands-proof` 都通过。
+
+D8a 核验通过,执行方可以开始 D8b(storage worker 默认关闭)。
 
 ## C 方案（执行方追加）
 
