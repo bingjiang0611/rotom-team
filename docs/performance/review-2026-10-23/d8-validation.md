@@ -4,7 +4,8 @@
 
 已拉取 `c6947a8` 并阅读 HANDOFF 第 11 轮；五个未推送提交已 rebase 到它之上，产品/test 改动逐字节恢复。
 D8a 按澄清口径提交供核验：测试与 perf gating/guard 通过，候选差异逐条保留来源和未知边界，不要求零差异。
-推送状态在 HANDOFF 同步；未声称审查通过。D8b 等 owner 核验 D8a 后再开始；D9 未开始。
+**D8a 已推送待核验**：测量证据 `02837de`、实现 `bf04234` 已在远端审查分支，`git ls-remote` 已确认。
+未声称审查通过。D8b 等 owner 核验 D8a 后再开始；D9 未开始。
 用户原有 opportunities.md 与未跟踪 proposals 文档备份在 `/tmp/rotom-review-D8/user/`，不纳入提交。
 
 ## Owner 本轮明确修订 C3
@@ -182,5 +183,7 @@ Node loader 中，临时 checkout 用后清理。没有改变仓库 workload、l
 | `93dbc7c`  | `28dd658` | 独立设置页测试同步修复       |
 
 历史日志保留原哈希；rebase 仅整合远端 HANDOFF，不改测试或产品字节。已有默认全量 670/670 和
-`perf:ci -- origin/main --runs 1` 仍对应当前产品内容；本次不新增性能运行。当前文档及源码静态检查结果
-随提交记录，D8b/D9 等待，不因提交而自动开工。
+`perf:ci -- origin/main --runs 1` 仍对应当前产品内容；本次不新增性能运行，也未重复默认全量。
+本次 `npm run format`、`check`、`lint`、`format:check` 通过，`node --test test/docs-examples.test.ts` 4/4；
+日志为 `round11-{format,check,lint,format-check,doc-tests}.log`。逐项证据检查确认 25/52 项最差值与保留的样本一致，
+第 11 轮原文逐字保留。用户两份文档未暂存，D8b/D9 等待，不因提交而自动开工。
