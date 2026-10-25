@@ -1,6 +1,8 @@
 {
     "scope": "Final round12 correctness fix; one final main CI run per side after removing the post-authorization journal await. Earlier implementation validation retained separately; no JSONL/frame diagnostic experiments.",
-    "head": "ba8892e plus final round12 working tree",
+    "head": "bac69763f965361cc0410aeca9bfa433e5d9c126",
+    "main": "e649d9d8a0ff8d56d241d9a4c54b1a6ca81a7a92",
+    "sourceTestDiffSha256AgainstBa8892e": "e507c973712ffe50d2e898f4f8c9cf9e7d20325b6be9bc672cf6d2855fbeb7e0",
     "environment": {
         "node": "v24.18.0",
         "platform": "darwin-arm64",

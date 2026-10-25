@@ -94,6 +94,9 @@
   没有改 ledger、容差或 workload。删除授权后的重复receipt读取减少两次查询；普通有gate的路径可能抵消，
   discovery无inference gate，因此cold/warm各净增2条SQL。fork另外读取indexed revision，clone加载后再验证；没有新native/model请求。
 - handoff 的原 projection 阶段现在覆盖合并 core 中的捕获与预留，保留全部工作；不能把该阶段直接与旧边界比较并声称速度收益。
+- `scopedParseObject` 按最外层方法归因（既有合同：nested calls保留outer scope）。合并后fork/handoff捕获内部的历史解析计入journal，
+  不再经过独立外层segmentEntries的journalSegments分类；实际解析仍计入总数，不能把分类移动当成解析减少。
+  当前main workload没有fork/handoff/importHistory，故其比较不验证seed子分类/阶段耗时；若需要跨旧版比较这些细项，须先独立统一测量口径。
 - [本轮逐项性能记录](d8a-round12-performance.md)和[机器可读差异](d8a-round12-performance.json)列出最终main的34项worse，
   以及旧五轮D8a报告到最终单轮的4项worse /5项slower。后一组不是同时间交错实验；未精确定位的采样项仍标未归因。
   最终源码diff的SHA256与 `verified-source.sha` 相同，随后只整理文档；不把前一版验证冒充最终版。
