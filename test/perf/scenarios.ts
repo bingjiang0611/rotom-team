@@ -772,7 +772,7 @@ try {
             );
         }
 
-        const expected = raw.stringify(app.sessions(owner(app)));
+        const expected = raw.stringify(await app.sessions(owner(app)));
 
         for (const tab of listTabs) {
             assert.equal(raw.stringify(tab.rows), expected, "each tab reconstructs the full list");
@@ -999,7 +999,7 @@ await readyTab.close();
 
 // A subagent's start runs the team's validator (`rotom-child.ts`, through `rotom-child.sh`) as its own Node process
 // before Pi: in that member's HOME and workspace, with the shared profile, as the native process's environment has them.
-const { binding: readyBinding } = app.kernel!.executions.journal.session(String(ready));
+const { binding: readyBinding } = await app.kernel!.executions.journal.session(String(ready));
 
 await scenario("native.validate", async () => {
     const child = spawn(
@@ -1072,7 +1072,7 @@ try {
 const nativeLong = (await call("sessions", "POST", { title: "Native long", backend: "rotom" }))
     .value.id as unknown as ConversationId;
 const nativeLongJournal = app.kernel!.executions.journal;
-const nativeLongBinding = nativeLongJournal.session(String(nativeLong)).binding;
+const nativeLongBinding = (await nativeLongJournal.session(String(nativeLong))).binding;
 const nativeLongEntries: KernelEntry[] = [];
 let nativeLongParent: string | null = null;
 
@@ -1124,21 +1124,21 @@ for (let index = 0; index < WORKLOAD.nativeLongEntries; index++) {
     nativeLongParent = id;
 }
 
-const nativeLongAttempt = nativeLongJournal.reserve(
+const nativeLongAttempt = await nativeLongJournal.reserve(
     String(nativeLong),
     "native-long-seed",
     "native-long-seed",
 );
 
-nativeLongJournal.attach(
+await nativeLongJournal.attach(
     nativeLongAttempt.id,
     join(nativeLongBinding.home, "native-long.jsonl"),
     "native-long",
 );
-nativeLongJournal.finish(nativeLongAttempt.id, "settled", nativeLongEntries);
+await nativeLongJournal.finish(nativeLongAttempt.id, "settled", nativeLongEntries);
 
 // Establish the expected values outside the measured window; this is an actual native roomInfo read, not a fixture.
-const nativeLongReference = app.kernel!.roomInfo(nativeLong);
+const nativeLongReference = await app.kernel!.roomInfo(nativeLong);
 
 assert.deepEqual(nativeLongReference.goal, {
     goal: { id: "native-long", status: "active" },
@@ -1161,7 +1161,7 @@ await scenario("session.open.native-long", async () => {
 
     try {
         for (let projection = 0; projection < 3; projection++) {
-            const info = app.kernel!.roomInfo(nativeLong);
+            const info = await app.kernel!.roomInfo(nativeLong);
 
             assert.deepEqual(info.goal, nativeLongReference.goal);
             assert.equal(info.agent.thinkingLevel, nativeLongReference.agent.thinkingLevel);
