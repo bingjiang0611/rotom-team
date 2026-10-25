@@ -5,6 +5,7 @@ import { DatabaseSync } from "node:sqlite";
 import {
     roomPartChannel,
     scopedParseObject,
+    storageWorkerChannel,
     type RoomPartSignal,
 } from "../src/server/perf-channels.ts";
 
@@ -69,6 +70,33 @@ test("splitting the thinking snapshot preserves parse attribution and total work
     assert.equal(work["json.parse.journalThinking.calls"], 2);
     assert.equal(work["json.parse.journalThinking.chars"], 2 * text.length);
     assert.equal(work["json.parse.journal.calls"] ?? 0, 0);
+});
+
+test("worker work is counted once with its original room attribution", () => {
+    const before = snapshot();
+
+    roomPartChannel.runStores({ part: "kernel" }, () =>
+        storageWorkerChannel.publish({
+            counters: {
+                "sql.statements": 2,
+                "view.kernel.sql.statements": 2,
+                "view.kernel.sql.heads": 1,
+            },
+            workerMs: 3,
+            replyBytes: 128,
+            requestBytes: 64,
+            encodeMs: 1,
+            queueMs: 2,
+            roundTripMs: 5,
+        }),
+    );
+    const work = since(before);
+
+    assert.equal(work["sql.statements"], 2);
+    assert.equal(work["view.kernel.sql.statements"], 2);
+    assert.equal(work["view.kernel.sql.heads"], 1);
+    assert.equal(work["storage.worker.replyBytes"], 128);
+    assert.equal(work["storage.worker.queueMs"], 2);
 });
 
 test("the same counter driver still measures older synchronous room spans", () => {

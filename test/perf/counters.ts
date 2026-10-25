@@ -12,7 +12,6 @@
  * uses `raw` for its own JSON so that its bookkeeping is not counted as the server's work.
  */
 import childProcess from "node:child_process";
-import { AsyncLocalStorage } from "node:async_hooks";
 import { subscribe } from "node:diagnostics_channel";
 import fs from "node:fs";
 import { syncBuiltinESMExports } from "node:module";
@@ -24,6 +23,9 @@ import {
     parseWorkChannel,
     pushChannel,
     roomPartChannel,
+    roomPartScope as roomScope,
+    storageWorkerChannel,
+    type StorageWorkerSignal,
     viewProjectionChannel,
     type NativeStartSignal,
     type PushSignal,
@@ -35,7 +37,6 @@ export type Counts = Record<string, number>;
 
 const counts: Counts = {};
 const nativeTimings: Counts = {};
-const roomScope = new AsyncLocalStorage<RoomPartSignal["part"]>();
 let synchronousRoomPart: RoomPartSignal["part"] | undefined;
 const roomMetrics = new Set(["sql.statements", "sql.rows", "json.parse.calls", "json.parse.chars"]);
 
@@ -51,6 +52,32 @@ const add = (name: string, amount = 1) => {
         counts[key] = (counts[key] ?? 0) + amount;
     }
 };
+
+// Worker counts already carry their original room scope. Adding via add() would attribute them twice.
+storageWorkerChannel.subscribe((message) => {
+    const sample = message as StorageWorkerSignal;
+
+    if (sample.counters === undefined) {
+        counts["storage.worker.unavailable"] = (counts["storage.worker.unavailable"] ?? 0) + 1;
+    } else {
+        for (const [name, value] of Object.entries(sample.counters)) {
+            counts[name] = (counts[name] ?? 0) + value;
+        }
+    }
+
+    for (const key of [
+        "workerMs",
+        "replyBytes",
+        "requestBytes",
+        "encodeMs",
+        "queueMs",
+        "roundTripMs",
+    ] as const) {
+        const name = `storage.worker.${key}`;
+
+        counts[name] = (counts[name] ?? 0) + sample[key];
+    }
+});
 
 export const raw = { parse: JSON.parse, stringify: JSON.stringify };
 

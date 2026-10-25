@@ -188,6 +188,7 @@ const open = () =>
         defaultCwd: workspace,
         supervised: false,
         kernel: true,
+        ...(process.env.ROTOM_PERF_STORAGE_WORKER === "1" ? { storageWorker: true } : {}),
         browser: null,
         log: () => {},
         configureUserModels,
@@ -1186,4 +1187,14 @@ server.close();
 model.close();
 await app.close();
 cleanUp();
+
+if (process.env.ROTOM_PERF_STORAGE_WORKER === "1") {
+    assert.ok((snapshot()["storage.worker.replyBytes"] ?? 0) > 0, "worker measurement is required");
+    assert.equal(
+        snapshot()["storage.worker.unavailable"] ?? 0,
+        0,
+        "unmeasured worker work is unavailable, not zero",
+    );
+}
+
 process.exit(0);
