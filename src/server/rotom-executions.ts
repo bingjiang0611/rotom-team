@@ -43,6 +43,7 @@ import {
 } from "./rotom-kernel.ts";
 import { publicNativeHistory } from "./rotom-history.ts";
 import { materializeSeed } from "./rotom-executions/seed.ts";
+import { prepareSeed, persistSeed } from "./rotom-executions/seed-files.ts";
 import { type RotomRpc, type RpcRecord, RpcFailure } from "./rotom-rpc.ts";
 import {
     readNativeSnapshot,
@@ -328,6 +329,8 @@ export function currentBranchGoalState(value: unknown): unknown {
 const WARM_TOTAL = 3;
 /** A warm process no request used retires after this long. */
 const WARM_UNUSED_MS = 5 * 60_000;
+/** Public-history JSON UTF-8 bytes. Avoid worker startup for small seeds; 10 MiB already causes long parent stalls. */
+const SEED_WORKER_MIN_BYTES = 8 * 1024 * 1024;
 
 export class RotomExecutions {
     readonly journal: RotomJournal;
@@ -680,7 +683,7 @@ export class RotomExecutions {
                 throw error;
             }
 
-            return this.#seed(receipt, messages, running);
+            return this.#seed(receipt, messages, native.SessionManager, running);
         });
     }
 
@@ -803,7 +806,7 @@ export class RotomExecutions {
                 }
             }
 
-            return this.#seed(receipt, messages, running, authorize);
+            return this.#seed(receipt, messages, native.SessionManager, running, authorize);
         });
     }
 
@@ -832,13 +835,14 @@ export class RotomExecutions {
             const messages = publicNativeHistory(native.buildSessionProjection(entries).messages);
             const receipt = this.journal.reserve(sessionId, requestId, identity, "fork");
 
-            return this.#seed(receipt, messages, running, authorize);
+            return this.#seed(receipt, messages, native.SessionManager, running, authorize);
         });
     }
 
     async #seed(
         receipt: KernelReceipt,
         messages: ReturnType<typeof publicNativeHistory>,
+        SessionManager: Awaited<ReturnType<typeof nativeSessionManager>>["SessionManager"],
         running: Running,
         authorize = () => this.#authorize(receipt.binding, "admission", receipt.sessionId),
     ): Promise<KernelReceipt> {
@@ -857,22 +861,36 @@ export class RotomExecutions {
 
             if (messages.length) {
                 materializing = true;
+                const bytes = Buffer.byteLength(JSON.stringify(messages), "utf8");
+
                 mark("select");
-                const seed = materializeSeed(receipt.binding, messages, (path, sessionId) => {
+
+                const attach = (path: string, sessionId: string) => {
                     const attached = seedPhases();
 
-                    // The worker waits for this durable attach before it can append.
+                    this.#notStopped(running);
                     this.journal.attach(receipt.id, path, sessionId);
                     attached("attach");
-                });
+                };
 
-                running.seed = seed;
+                if (bytes < SEED_WORKER_MIN_BYTES) {
+                    const { session, folder } = prepareSeed(receipt.binding, SessionManager);
 
-                try {
-                    // The result settles only after worker exit, including errors and stop.
-                    entries = await seed.result;
-                } finally {
-                    running.seed = undefined;
+                    attach(session.getSessionFile(), session.getSessionId());
+                    this.#notStopped(running);
+                    entries = persistSeed(session, folder, receipt.binding.workspace, messages);
+                } else {
+                    // The worker waits for the same durable attach before it can append.
+                    const seed = materializeSeed(receipt.binding, messages, attach);
+
+                    running.seed = seed;
+
+                    try {
+                        // The result settles only after worker exit, including errors and stop.
+                        entries = await seed.result;
+                    } finally {
+                        running.seed = undefined;
+                    }
                 }
 
                 mark = seedPhases();
