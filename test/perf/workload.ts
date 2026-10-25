@@ -212,12 +212,12 @@ const COUNTERS: Record<string, MetricSpec> = {
     "fs.read.calls": {
         layer: "storage",
         unit: "count",
-        source: "synchronous readSync calls in the parent process (test/perf/counters.ts)",
+        source: "synchronous readSync calls in instrumented parent/storage-worker processes (test/perf/counters.ts)",
     },
     "fs.read.bytes": {
         layer: "storage",
         unit: "bytes",
-        source: "bytes returned by synchronous readSync in the parent process (test/perf/counters.ts)",
+        source: "bytes returned by synchronous readSync in instrumented parent/storage-worker processes (test/perf/counters.ts)",
     },
     "fs.write.calls": {
         layer: "storage",
