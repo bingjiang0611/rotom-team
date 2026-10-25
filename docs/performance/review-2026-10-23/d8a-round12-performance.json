@@ -1,0 +1,952 @@
+{
+    "scope": "Final round12 correctness fix; one final main CI run per side after removing the post-authorization journal await. Earlier implementation validation retained separately; no JSONL/frame diagnostic experiments.",
+    "head": "ba8892e plus final round12 working tree",
+    "environment": {
+        "node": "v24.18.0",
+        "platform": "darwin-arm64",
+        "cores": 8,
+        "wallMs": 243298,
+        "loadBefore": 2.58,
+        "loadAfter": 5,
+        "highLoad": false
+    },
+    "gate": "passed",
+    "ledgerGuard": "passed",
+    "timingInterpretation": "Raw compare verdicts retained; a single current sample does not establish a stable causal latency regression or speedup. Main also includes A-D7.",
+    "earlierVersion": {
+        "wallMs": 253460,
+        "loadBefore": 3.92,
+        "loadAfter": 10.75,
+        "highLoad": true,
+        "mainWorse": 40,
+        "priorWorse": 15,
+        "reasonForNewValidation": "Code changed to eliminate journal await after authorization; not a rerun to improve metrics."
+    },
+    "comparisons": {
+        "prior": {
+            "counters": [
+                {
+                    "key": "web.send.stream/push.bytes",
+                    "base": 91804,
+                    "head": 92005,
+                    "delta": 201,
+                    "verdict": "worse",
+                    "reason": "两项同增201 bytes，来源是view正文而非额外非view事件。中间状态正文受推送时序影响，具体字段未留trace；采样差异，未归因，不抑制合法状态。"
+                },
+                {
+                    "key": "web.send.stream/push.view.bytes",
+                    "base": 77986,
+                    "head": 78187,
+                    "delta": 201,
+                    "verdict": "worse",
+                    "reason": "两项同增201 bytes，来源是view正文而非额外非view事件。中间状态正文受推送时序影响，具体字段未留trace；采样差异，未归因，不抑制合法状态。"
+                },
+                {
+                    "key": "commands.discover.cold/sql.statements",
+                    "base": 87,
+                    "head": 89,
+                    "delta": 2,
+                    "verdict": "worse",
+                    "reason": "reserve新增BEGIN IMMEDIATE/COMMIT，恰+2；discovery没有inference gate，不能被删除的授权后重复receipt读取抵消。正确性所需成本，未改workload或ledger。"
+                },
+                {
+                    "key": "commands.discover.warm/sql.statements",
+                    "base": 79,
+                    "head": 81,
+                    "delta": 2,
+                    "verdict": "worse",
+                    "reason": "reserve新增BEGIN IMMEDIATE/COMMIT，恰+2；discovery没有inference gate，不能被删除的授权后重复receipt读取抵消。正确性所需成本，未改workload或ledger。"
+                }
+            ],
+            "timings": [
+                {
+                    "key": "git.branches/ms",
+                    "base": 103.5,
+                    "head": 82.1,
+                    "change": -0.207,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "session.reclaim/ms",
+                    "base": 13.7,
+                    "head": 23.6,
+                    "change": 0.723,
+                    "verdict": "slower"
+                },
+                {
+                    "key": "session.reclaim/roomKernelProjectMs",
+                    "base": 0.6,
+                    "head": 0.3,
+                    "change": -0.5,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "session.history.earlier/ms",
+                    "base": 21.7,
+                    "head": 13.8,
+                    "change": -0.364,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "web.open.long/eventParseMs",
+                    "base": 0.2,
+                    "head": 0.6,
+                    "change": 2,
+                    "verdict": "slower"
+                },
+                {
+                    "key": "web.open.long/viewApplyMs",
+                    "base": 0.3,
+                    "head": 0.4,
+                    "change": 0.333,
+                    "verdict": "slower"
+                },
+                {
+                    "key": "native.warm/nativeStartVerifyMs",
+                    "base": 1.7,
+                    "head": 1.1,
+                    "change": -0.353,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "web.reopen/viewApplyMs",
+                    "base": 0.2,
+                    "head": 0.1,
+                    "change": -0.5,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "web.send.poll/submitAnsweredMs",
+                    "base": 22.9,
+                    "head": 27.6,
+                    "change": 0.205,
+                    "verdict": "slower"
+                },
+                {
+                    "key": "web.send.poll/runAdmittedMs",
+                    "base": 10.6,
+                    "head": 8,
+                    "change": -0.245,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "web.send.poll/promptDispatchedMs",
+                    "base": 63.3,
+                    "head": 48.9,
+                    "change": -0.227,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "web.send.poll/scriptMs",
+                    "base": 39.5,
+                    "head": 31.4,
+                    "change": -0.205,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "web.send.stream/submitSentMs",
+                    "base": 3.5,
+                    "head": 2.6,
+                    "change": -0.257,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "web.send.stream/submitAnsweredMs",
+                    "base": 22,
+                    "head": 30.8,
+                    "change": 0.4,
+                    "verdict": "slower"
+                },
+                {
+                    "key": "web.send.stream/promptDispatchedMs",
+                    "base": 55.7,
+                    "head": 37.8,
+                    "change": -0.321,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "web.send.stream/userEchoedMs",
+                    "base": 11.5,
+                    "head": 7.6,
+                    "change": -0.339,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "web.send.stream/clockUncertaintyMs",
+                    "base": 0.7,
+                    "head": 0.4,
+                    "change": -0.429,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "web.send.stream/scriptMs",
+                    "base": 47.4,
+                    "head": 36.5,
+                    "change": -0.23,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "commands.discover.cold/nativeStartResourcesMs",
+                    "base": 47.2,
+                    "head": 37.1,
+                    "change": -0.214,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "projection.large.paced/roomKernelProjectMs",
+                    "base": 13.8,
+                    "head": 10.8,
+                    "change": -0.217,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "image.thumbs.again/ms",
+                    "base": 12.3,
+                    "head": 8.7,
+                    "change": -0.293,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "journal.large/entriesSuffixMs",
+                    "base": 1,
+                    "head": 0.5,
+                    "change": -0.5,
+                    "verdict": "faster"
+                }
+            ]
+        },
+        "main": {
+            "counters": [
+                {
+                    "key": "startup.restart/sql.statements",
+                    "base": 848,
+                    "head": 851,
+                    "delta": 3,
+                    "verdict": "worse",
+                    "reason": "既有成本/采样来源（历史说明）：既有D6记录：main 含 A1–A3 等既有查询/窗口差异；D6 隔离此项未判 worse。无新增 SQL，完整 owner/状态顺序等价。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+                },
+                {
+                    "key": "web.open/push.events",
+                    "base": 10,
+                    "head": 11,
+                    "delta": 1,
+                    "verdict": "worse",
+                    "reason": "既有成本/采样来源（历史说明）：既有D6记录：main 含 D5 初连 ACK/room generation 包装；D6 协议未变，隔离此项未判 worse。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+                },
+                {
+                    "key": "web.open/push.bytes",
+                    "base": 83736,
+                    "head": 83964,
+                    "delta": 228,
+                    "verdict": "worse",
+                    "reason": "既有成本/采样来源（历史说明）：既有D6记录：main 含 D5 初连 ACK/room generation 包装；D6 协议未变，隔离此项未判 worse。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+                },
+                {
+                    "key": "web.open/push.view.bytes",
+                    "base": 76309,
+                    "head": 76333,
+                    "delta": 24,
+                    "verdict": "worse",
+                    "reason": "既有成本/采样来源（历史说明）：既有D6记录：main 含 D5 初连 ACK/room generation 包装；D6 协议未变，隔离此项未判 worse。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+                },
+                {
+                    "key": "web.open/http.requests",
+                    "base": 81,
+                    "head": 82,
+                    "delta": 1,
+                    "verdict": "worse",
+                    "reason": "main比较81→82，D6新增native.css的一次请求；相对旧D8a五轮最差值82没有变差。"
+                },
+                {
+                    "key": "web.open/cdp.Nodes",
+                    "base": 996,
+                    "head": 1138,
+                    "delta": 142,
+                    "verdict": "worse",
+                    "reason": "既有成本/采样来源（历史说明）：既有D6记录：main 含 A4 preload 节点；D6 加 1 link 及相邻空白。同一最终代码两轮 1114→1114；另有节点分配/回收取样，不等于持久 DOM 或泄漏。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+                },
+                {
+                    "key": "web.open/web.event.parse.calls",
+                    "base": 9,
+                    "head": 10,
+                    "delta": 1,
+                    "verdict": "worse",
+                    "reason": "既有成本/采样来源（历史说明）：既有D6记录：main 含 D5 初连 ACK/room generation 包装；D6 协议未变，隔离此项未判 worse。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+                },
+                {
+                    "key": "web.open/web.event.parse.chars",
+                    "base": 82941,
+                    "head": 83141,
+                    "delta": 200,
+                    "verdict": "worse",
+                    "reason": "既有成本/采样来源（历史说明）：既有D6记录：main 含 D5 初连 ACK/room generation 包装；D6 协议未变，隔离此项未判 worse。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+                },
+                {
+                    "key": "web.open.long/push.view.bytes",
+                    "base": 165859,
+                    "head": 165883,
+                    "delta": 24,
+                    "verdict": "worse",
+                    "reason": "既有成本/采样来源（历史说明）：既有D6记录：main 含 D5 初连 ACK/room generation 包装；D6 协议未变，隔离此项未判 worse。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+                },
+                {
+                    "key": "web.open.long/http.requests",
+                    "base": 80,
+                    "head": 81,
+                    "delta": 1,
+                    "verdict": "worse",
+                    "reason": "既有成本/采样来源（历史说明）：既有D6记录：D6 新增 native.css 一请求；步骤② web.open 在拆 CSS 前也曾 81→83，不能将 main 全部增量归到 CSS。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+                },
+                {
+                    "key": "web.open.long/cdp.Nodes",
+                    "base": 1585,
+                    "head": 1703,
+                    "delta": 118,
+                    "verdict": "worse",
+                    "reason": "既有成本/采样来源（历史说明）：既有D6记录：main 含 A4 preload 节点；D6 加 1 link 及相邻空白。同一最终代码两轮 1703→1703；另有节点分配/回收取样，不等于持久 DOM 或泄漏。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+                },
+                {
+                    "key": "web.open.long/web.event.parse.calls",
+                    "base": 8,
+                    "head": 9,
+                    "delta": 1,
+                    "verdict": "worse",
+                    "reason": "既有成本/采样来源（历史说明）：既有D6记录：main 含 D5 初连 ACK/room generation 包装；D6 协议未变，隔离此项未判 worse。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+                },
+                {
+                    "key": "web.open.long/web.event.parse.chars",
+                    "base": 173290,
+                    "head": 173492,
+                    "delta": 202,
+                    "verdict": "worse",
+                    "reason": "既有成本/采样来源（历史说明）：既有D6记录：main 含 D5 初连 ACK/room generation 包装；D6 协议未变，隔离此项未判 worse。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+                },
+                {
+                    "key": "native.warm/sql.rows",
+                    "base": 10,
+                    "head": 11,
+                    "delta": 1,
+                    "verdict": "worse",
+                    "reason": "既有成本/采样来源（历史说明）：既有D6记录：main 含 A1–A3 等既有查询/窗口差异；D6 隔离此项未判 worse。无新增 SQL，完整 owner/状态顺序等价。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+                },
+                {
+                    "key": "turn.prewarmed/fs.read.calls",
+                    "base": 25,
+                    "head": 26,
+                    "delta": 1,
+                    "verdict": "worse",
+                    "reason": "本轮再现旧D8a已有的26 reads、20 parses/1424chars组合，并非本轮首次出现。旧诊断观测NativeTail分批读取及151字符native-mirror metadata；本轮未保存对应调用栈，不能把分批/重复metadata假设写成确定根因。采样差异，未归因。"
+                },
+                {
+                    "key": "turn.prewarmed/json.parse.durableStorage.calls",
+                    "base": 18,
+                    "head": 20,
+                    "delta": 2,
+                    "verdict": "worse",
+                    "reason": "本轮再现旧D8a已有的26 reads、20 parses/1424chars组合，并非本轮首次出现。旧诊断观测NativeTail分批读取及151字符native-mirror metadata；本轮未保存对应调用栈，不能把分批/重复metadata假设写成确定根因。采样差异，未归因。"
+                },
+                {
+                    "key": "turn.prewarmed/json.parse.durableStorage.chars",
+                    "base": 1122,
+                    "head": 1424,
+                    "delta": 302,
+                    "verdict": "worse",
+                    "reason": "本轮再现旧D8a已有的26 reads、20 parses/1424chars组合，并非本轮首次出现。旧诊断观测NativeTail分批读取及151字符native-mirror metadata；本轮未保存对应调用栈，不能把分批/重复metadata假设写成确定根因。采样差异，未归因。"
+                },
+                {
+                    "key": "native.validate/json.stringify.chars",
+                    "base": 617,
+                    "head": 685,
+                    "delta": 68,
+                    "verdict": "worse",
+                    "reason": "+68，和已确认的Room head timer四次17字符序列化相符；validator未改变，当前没有逐字段trace，不把全部差值伪装成新的固定validator开销。"
+                },
+                {
+                    "key": "web.reopen/push.events",
+                    "base": 9,
+                    "head": 10,
+                    "delta": 1,
+                    "verdict": "worse",
+                    "reason": "既有成本/采样来源（历史说明）：既有D6记录：main 含 D5 初连 ACK/room generation 包装；D6 协议未变，隔离此项未判 worse。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+                },
+                {
+                    "key": "web.reopen/push.bytes",
+                    "base": 10313,
+                    "head": 10541,
+                    "delta": 228,
+                    "verdict": "worse",
+                    "reason": "既有成本/采样来源（历史说明）：既有D6记录：main 含 D5 初连 ACK/room generation 包装；D6 协议未变，隔离此项未判 worse。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+                },
+                {
+                    "key": "web.reopen/push.view.bytes",
+                    "base": 2001,
+                    "head": 2025,
+                    "delta": 24,
+                    "verdict": "worse",
+                    "reason": "既有成本/采样来源（历史说明）：既有D6记录：main 含 D5 初连 ACK/room generation 包装；D6 协议未变，隔离此项未判 worse。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+                },
+                {
+                    "key": "web.reopen/cdp.Nodes",
+                    "base": 1090,
+                    "head": 1232,
+                    "delta": 142,
+                    "verdict": "worse",
+                    "reason": "既有成本/采样来源（历史说明）：既有D6记录：main 含 A4 preload 节点；D6 加 1 link 及相邻空白。同一最终代码两轮 1208→1232；另有节点分配/回收取样，不等于持久 DOM 或泄漏。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+                },
+                {
+                    "key": "web.reopen/web.event.parse.calls",
+                    "base": 8,
+                    "head": 9,
+                    "delta": 1,
+                    "verdict": "worse",
+                    "reason": "既有成本/采样来源（历史说明）：既有D6记录：main 含 D5 初连 ACK/room generation 包装；D6 协议未变，隔离此项未判 worse。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+                },
+                {
+                    "key": "web.reopen/web.event.parse.chars",
+                    "base": 9527,
+                    "head": 9727,
+                    "delta": 200,
+                    "verdict": "worse",
+                    "reason": "既有成本/采样来源（历史说明）：既有D6记录：main 含 D5 初连 ACK/room generation 包装；D6 协议未变，隔离此项未判 worse。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+                },
+                {
+                    "key": "web.paced/cdp.Nodes",
+                    "base": 1284,
+                    "head": 1422,
+                    "delta": 138,
+                    "verdict": "worse",
+                    "reason": "既有成本/采样来源（历史说明）：既有D6记录：main 含 A4 preload 节点；D6 加 1 link 及相邻空白。同一最终代码两轮 1424→1421；另有节点分配/回收取样，不等于持久 DOM 或泄漏。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+                },
+                {
+                    "key": "web.send.poll/cdp.Nodes",
+                    "base": 1451,
+                    "head": 1597,
+                    "delta": 146,
+                    "verdict": "worse",
+                    "reason": "既有成本/采样来源（历史说明）：既有D6记录：main 含 A4 preload 节点；D6 加 1 link 及相邻空白。同一最终代码两轮 1603→1620；另有节点分配/回收取样，不等于持久 DOM 或泄漏。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+                },
+                {
+                    "key": "web.send.stream/push.bytes",
+                    "base": 91291,
+                    "head": 92005,
+                    "delta": 714,
+                    "verdict": "worse",
+                    "reason": "既有成本/采样来源（历史说明）：既有D6记录：main 含 D5 包装；D6 隔离本次数据长度增量未精确归因，未保存正文。同一最终代码两轮 91603→91603；保留差值，不把源码等价当作零成本。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+                },
+                {
+                    "key": "web.send.stream/push.view.bytes",
+                    "base": 77497,
+                    "head": 78187,
+                    "delta": 690,
+                    "verdict": "worse",
+                    "reason": "既有成本/采样来源（历史说明）：既有D6记录：main 含 D5 包装；D6 隔离本次数据长度增量未精确归因，未保存正文。同一最终代码两轮 77785→77785；保留差值，不把源码等价当作零成本。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+                },
+                {
+                    "key": "web.send.stream/cdp.Nodes",
+                    "base": 1492,
+                    "head": 1633,
+                    "delta": 141,
+                    "verdict": "worse",
+                    "reason": "既有成本/采样来源（历史说明）：既有D6记录：main 含 A4 preload 节点；D6 加 1 link 及相邻空白。同一最终代码两轮 1579→1654；另有节点分配/回收取样，不等于持久 DOM 或泄漏。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+                },
+                {
+                    "key": "web.send.stream/web.event.parse.chars",
+                    "base": 30133,
+                    "head": 30445,
+                    "delta": 312,
+                    "verdict": "worse",
+                    "reason": "既有成本/采样来源（历史说明）：既有D6记录：main 含 D5 包装；D6 隔离本次数据长度增量未精确归因，未保存正文。同一最终代码两轮 30445→30445；保留差值，不把源码等价当作零成本。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+                },
+                {
+                    "key": "projection.large.paced/push.bytes",
+                    "base": 245828,
+                    "head": 246628,
+                    "delta": 800,
+                    "verdict": "worse",
+                    "reason": "既有成本/采样来源（历史说明）：既有D6记录：同一最终代码两轮 246628→254628；RPC/SQL/view 次数相同但字节量不同。无正文 trace，无法精确字段归因；不声称性能等价。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+                },
+                {
+                    "key": "projection.large.paced/push.view.bytes",
+                    "base": 204456,
+                    "head": 205256,
+                    "delta": 800,
+                    "verdict": "worse",
+                    "reason": "既有成本/采样来源（历史说明）：既有D6记录：同一最终代码两轮 205256→213256；RPC/SQL/view 次数相同但字节量不同。无正文 trace，无法精确字段归因；不声称性能等价。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+                },
+                {
+                    "key": "assets.first/http.requests",
+                    "base": 53,
+                    "head": 54,
+                    "delta": 1,
+                    "verdict": "worse",
+                    "reason": "既有成本/采样来源（历史说明）：既有D6记录：新增 native.css，首次与条件请求都各 +1；条件响应正文仍为 0。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+                },
+                {
+                    "key": "assets.validated/http.requests",
+                    "base": 53,
+                    "head": 54,
+                    "delta": 1,
+                    "verdict": "worse",
+                    "reason": "既有成本/采样来源（历史说明）：既有D6记录：新增 native.css，首次与条件请求都各 +1；条件响应正文仍为 0。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+                }
+            ],
+            "timings": [
+                {
+                    "key": "sessions.list/ms",
+                    "base": 7.2,
+                    "head": 13,
+                    "change": 0.806,
+                    "verdict": "slower"
+                },
+                {
+                    "key": "session.open/ms",
+                    "base": 32.7,
+                    "head": 51.6,
+                    "change": 0.578,
+                    "verdict": "slower"
+                },
+                {
+                    "key": "session.open/roomKernelProjectMs",
+                    "base": 1.1,
+                    "head": 1.6,
+                    "change": 0.455,
+                    "verdict": "slower"
+                },
+                {
+                    "key": "turn.cold/nativeStartValidateMs",
+                    "base": 0.3,
+                    "head": 0.2,
+                    "change": -0.333,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "turn.cold/nativeStartHelperMs",
+                    "base": 3.1,
+                    "head": 0.6,
+                    "change": -0.806,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "turn.cold/nativeStartRpcSpawnMs",
+                    "base": 3.8,
+                    "head": 0.6,
+                    "change": -0.842,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "turn.cold/roomKernelProjectMs",
+                    "base": 1.5,
+                    "head": 0.6,
+                    "change": -0.6,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "turn.warm/ms",
+                    "base": 498.6,
+                    "head": 99.7,
+                    "change": -0.8,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "turn.paced/roomLiveProjectMs",
+                    "base": 0.4,
+                    "head": 0.7,
+                    "change": 0.75,
+                    "verdict": "slower"
+                },
+                {
+                    "key": "git.diff/ms",
+                    "base": 210.2,
+                    "head": 147.2,
+                    "change": -0.3,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "web.open/ms",
+                    "base": 151,
+                    "head": 117.4,
+                    "change": -0.223,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "web.open/eventParseMs",
+                    "base": 0.1,
+                    "head": 1,
+                    "change": 9,
+                    "verdict": "slower"
+                },
+                {
+                    "key": "web.open/viewApplyMs",
+                    "base": 0.4,
+                    "head": 0.3,
+                    "change": -0.25,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "session.reclaim/ms",
+                    "base": 105.7,
+                    "head": 23.6,
+                    "change": -0.777,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "session.reclaim/roomKernelProjectMs",
+                    "base": 0.7,
+                    "head": 0.3,
+                    "change": -0.571,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "session.open.long/ms",
+                    "base": 15.4,
+                    "head": 28.3,
+                    "change": 0.838,
+                    "verdict": "slower"
+                },
+                {
+                    "key": "session.open.long/roomKernelProjectMs",
+                    "base": 0.2,
+                    "head": 0.1,
+                    "change": -0.5,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "session.open.native-long/ms",
+                    "base": 24.9,
+                    "head": 1.6,
+                    "change": -0.936,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "session.history.earlier/ms",
+                    "base": 24.9,
+                    "head": 13.8,
+                    "change": -0.446,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "web.open.long/ms",
+                    "base": 150.5,
+                    "head": 116.5,
+                    "change": -0.226,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "web.open.long/eventParseMs",
+                    "base": 0.3,
+                    "head": 0.6,
+                    "change": 1,
+                    "verdict": "slower"
+                },
+                {
+                    "key": "web.open.long/viewApplyMs",
+                    "base": 0.2,
+                    "head": 0.4,
+                    "change": 1,
+                    "verdict": "slower"
+                },
+                {
+                    "key": "native.warm/nativeStartVerifyMs",
+                    "base": 3.2,
+                    "head": 1.1,
+                    "change": -0.656,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "native.warm/nativeStartHelperMs",
+                    "base": 0.5,
+                    "head": 0.2,
+                    "change": -0.6,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "native.warm/nativeStartRpcSpawnMs",
+                    "base": 0.8,
+                    "head": 0.5,
+                    "change": -0.375,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "turn.prewarmed/ms",
+                    "base": 128.1,
+                    "head": 92.6,
+                    "change": -0.277,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "turn.prewarmed/roomKernelProjectMs",
+                    "base": 0.5,
+                    "head": 0.2,
+                    "change": -0.6,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "native.validate/ms",
+                    "base": 668.3,
+                    "head": 805.3,
+                    "change": 0.205,
+                    "verdict": "slower"
+                },
+                {
+                    "key": "web.reopen/viewApplyMs",
+                    "base": 0.2,
+                    "head": 0.1,
+                    "change": -0.5,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "web.paced/eventParseMs",
+                    "base": 1,
+                    "head": 0.7,
+                    "change": -0.3,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "web.paced/viewApplyMs",
+                    "base": 0.9,
+                    "head": 1.4,
+                    "change": 0.556,
+                    "verdict": "slower"
+                },
+                {
+                    "key": "web.send.poll/submitSentMs",
+                    "base": 8.9,
+                    "head": 2.9,
+                    "change": -0.674,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "web.send.poll/runAdmittedMs",
+                    "base": 15.8,
+                    "head": 8,
+                    "change": -0.494,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "web.send.poll/promptDispatchedMs",
+                    "base": 70.2,
+                    "head": 48.9,
+                    "change": -0.303,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "web.send.poll/userEchoedMs",
+                    "base": 17.5,
+                    "head": 11.2,
+                    "change": -0.36,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "web.send.poll/scriptMs",
+                    "base": 47.1,
+                    "head": 31.4,
+                    "change": -0.333,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "web.send.poll/taskMs",
+                    "base": 167.6,
+                    "head": 124.4,
+                    "change": -0.258,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "web.send.stream/submitSentMs",
+                    "base": 3.5,
+                    "head": 2.6,
+                    "change": -0.257,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "web.send.stream/submitAnsweredMs",
+                    "base": 20.4,
+                    "head": 30.8,
+                    "change": 0.51,
+                    "verdict": "slower"
+                },
+                {
+                    "key": "web.send.stream/promptDispatchedMs",
+                    "base": 55.2,
+                    "head": 37.8,
+                    "change": -0.315,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "web.send.stream/userEchoedMs",
+                    "base": 11.1,
+                    "head": 7.6,
+                    "change": -0.315,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "web.send.stream/clockUncertaintyMs",
+                    "base": 0.7,
+                    "head": 0.4,
+                    "change": -0.429,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "web.send.stream/scriptMs",
+                    "base": 53.4,
+                    "head": 36.5,
+                    "change": -0.316,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "web.send.stream/taskMs",
+                    "base": 170.2,
+                    "head": 133.9,
+                    "change": -0.213,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "commands.discover.cold/nativeStartResourcesMs",
+                    "base": 60.9,
+                    "head": 37.1,
+                    "change": -0.391,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "commands.discover.cold/nativeStartHelperMs",
+                    "base": 0.3,
+                    "head": 0.6,
+                    "change": 1,
+                    "verdict": "slower"
+                },
+                {
+                    "key": "commands.discover.cold/nativeStartRpcSpawnMs",
+                    "base": 0.4,
+                    "head": 0.9,
+                    "change": 1.25,
+                    "verdict": "slower"
+                },
+                {
+                    "key": "commands.discover.warm/roomKernelProjectMs",
+                    "base": 0.5,
+                    "head": 0.3,
+                    "change": -0.4,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "turn.prepared/roomKernelProjectMs",
+                    "base": 0.5,
+                    "head": 0.3,
+                    "change": -0.4,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "projection.large.open/roomKernelProjectMs",
+                    "base": 2.7,
+                    "head": 2,
+                    "change": -0.259,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "projection.large.paced/roomLiveProjectMs",
+                    "base": 0.7,
+                    "head": 0.4,
+                    "change": -0.429,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "projection.large.paced/roomKernelProjectMs",
+                    "base": 25,
+                    "head": 10.8,
+                    "change": -0.568,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "image.single/imageLookupMs",
+                    "base": 2.4,
+                    "head": 3.2,
+                    "change": 0.333,
+                    "verdict": "slower"
+                },
+                {
+                    "key": "image.single/imageSendFinishMs",
+                    "base": 4.5,
+                    "head": 8.4,
+                    "change": 0.867,
+                    "verdict": "slower"
+                },
+                {
+                    "key": "image.single/imageServerMs",
+                    "base": 13.1,
+                    "head": 18.7,
+                    "change": 0.427,
+                    "verdict": "slower"
+                },
+                {
+                    "key": "image.original.validated/ms",
+                    "base": 36.4,
+                    "head": 20.6,
+                    "change": -0.434,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "image.concurrent/imageLookupMs",
+                    "base": 27.2,
+                    "head": 21,
+                    "change": -0.228,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "image.concurrent/imageDecodeMs",
+                    "base": 3.2,
+                    "head": 1.8,
+                    "change": -0.437,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "image.concurrent/imageSendFinishMs",
+                    "base": 55.7,
+                    "head": 73.4,
+                    "change": 0.318,
+                    "verdict": "slower"
+                },
+                {
+                    "key": "image.thumbs.again/ms",
+                    "base": 11.7,
+                    "head": 8.7,
+                    "change": -0.256,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "journal.large/ms",
+                    "base": 161.5,
+                    "head": 13,
+                    "change": -0.92,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "journal.large/entriesSuffixMs",
+                    "base": 77,
+                    "head": 0.5,
+                    "change": -0.994,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "journal.large/segmentEntriesMs",
+                    "base": 28.3,
+                    "head": 5.7,
+                    "change": -0.799,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "journal.large/creditsMs",
+                    "base": 55.4,
+                    "head": 6.3,
+                    "change": -0.886,
+                    "verdict": "faster"
+                },
+                {
+                    "key": "assets.validated/ms",
+                    "base": 56.4,
+                    "head": 34.9,
+                    "change": -0.381,
+                    "verdict": "faster"
+                }
+            ]
+        }
+    }
+}
