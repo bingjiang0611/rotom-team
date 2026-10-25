@@ -162,7 +162,7 @@ test("a session offers its folder's templates, and sending one sends it filled i
 
     assert.match(JSON.stringify(sent?.model), /Fix issue 42\. Keep the change small\./);
     assert.equal(
-        app.sessions().find((each) => each.id === Number(id))?.title,
+        (await app.sessions()).find((each) => each.id === Number(id))?.title,
         "/fix 42",
         "the title is what was typed",
     );

@@ -217,6 +217,18 @@ export class Room {
     #pushedAt = -Infinity;
     #closeTimer: NodeJS.Timeout | undefined;
     #headTimer: NodeJS.Timeout | undefined;
+    #nativePushChain = Promise.resolve();
+    #nativeRunning = false;
+    #nativeClosed = false;
+    readonly #nativePending = new Map<
+        Client,
+        {
+            full: boolean;
+            version: number;
+            generation: Client["subscriptionGeneration"];
+            connection: Client["connection"];
+        } & ReturnType<typeof Promise.withResolvers<void>>
+    >();
     /** The branch this view last read, as JSON. */
     #head = "";
     readonly #projected = new Map<number, ClientEntry | null>();
@@ -427,7 +439,13 @@ export class Room {
             () => {
                 this.#timer = undefined;
 
-                this.pushAll();
+                const pushed = this.pushAll();
+
+                if (pushed) {
+                    void pushed.catch((error) =>
+                        console.error("Native room projection failed", error),
+                    );
+                }
             },
             Math.max(0, this.#pushedAt + 90 - performance.now()),
         );
@@ -514,7 +532,7 @@ export class Room {
     }
 
     /** Public fields are identical for every viewer in one synchronous fanout. */
-    #fields(roomInfo: () => ReturnType<TeamKernel["roomInfo"]>) {
+    #fields(roomInfo: Awaited<ReturnType<TeamKernel["roomInfo"]>> | undefined) {
         const fields: Record<string, unknown> = {
             artifacts: Object.entries(this.artifacts).map(([id, meta]) => ({
                 id,
@@ -560,7 +578,11 @@ export class Room {
                           max: this.goal.max,
                           ...(this.goal.last === undefined ? {} : { last: this.goal.last }),
                       },
-            ...(this.#native() ? { nativeGoal: roomInfo().goal ?? null } : {}),
+            ...(this.#native()
+                ? {
+                      nativeGoal: roomInfo!.goal ?? null,
+                  }
+                : {}),
         };
 
         const serialized = Object.entries(fields).map(([key, value]) => ({
@@ -579,40 +601,160 @@ export class Room {
         return serialized;
     }
 
-    /** Send one client a fresh projection; do not retain the room-wide readback across calls. */
-    push(client: Client, full: boolean): void {
-        let info: ReturnType<TeamKernel["roomInfo"]> | undefined;
+    /** Send one client a fresh projection; do not retain room-wide readback across refreshes. */
+    push(client: Client, full: boolean): void | Promise<void> {
+        if (!this.#native()) {
+            this.#push(client, full, undefined, () => this.#fields(undefined));
 
-        const roomInfo = () => (info ??= this.#app.kernel!.roomInfo(this.id));
+            return;
+        }
 
-        this.#push(client, full, roomInfo, () => this.#fields(roomInfo));
+        return this.#queueNativePush(client, full);
     }
 
-    /** One synchronous fanout shares public room readback, never viewer-specific safety fields. */
-    pushAll(fullClient?: Client): void {
-        let info: ReturnType<TeamKernel["roomInfo"]> | undefined;
-
-        // Every tab gets the current view now: a push already scheduled would find nothing new.
+    /** A fanout shares public fields, never viewer-specific safety data. */
+    pushAll(fullClient?: Client): void | Promise<void> {
         clearTimeout(this.#timer);
         this.#timer = undefined;
         this.#pushedAt = performance.now();
 
-        const roomInfo = () => {
-            info ??= this.#app.kernel!.roomInfo(this.id);
+        const clients =
+            fullClient === undefined
+                ? [...this.clients]
+                : [fullClient, ...[...this.clients].filter((client) => client !== fullClient)];
 
-            return info;
-        };
+        if (!this.#native()) {
+            let fields: { key: string; value: unknown; json: string }[] | undefined;
+            const commonFields = () => (fields ??= this.#fields(undefined));
 
-        let fields: { key: string; value: unknown; json: string }[] | undefined;
-        const commonFields = () => (fields ??= this.#fields(roomInfo));
+            for (const client of clients) {
+                this.#push(client, client === fullClient, undefined, commonFields);
+            }
 
-        if (fullClient !== undefined) {
-            this.#push(fullClient, true, roomInfo, commonFields);
+            return;
         }
 
-        for (const client of this.clients) {
-            if (client !== fullClient) {
-                this.#push(client, false, roomInfo, commonFields);
+        return Promise.all(
+            clients.map((client) => this.#queueNativePush(client, client === fullClient)),
+        ).then(() => undefined);
+    }
+
+    #queueNativePush(client: Client, full: boolean): Promise<void> {
+        if (this.#nativeClosed || !this.clients.has(client)) {
+            return Promise.resolve();
+        }
+
+        let request = this.#nativePending.get(client);
+
+        if (request) {
+            request.full ||= full;
+            request.version++;
+            request.generation = client.subscriptionGeneration;
+            request.connection = client.connection;
+        } else {
+            request = {
+                full,
+                version: 0,
+                generation: client.subscriptionGeneration,
+                connection: client.connection,
+                ...Promise.withResolvers<void>(),
+            };
+            this.#nativePending.set(client, request);
+        }
+
+        if (!this.#nativeRunning) {
+            this.#nativeRunning = true;
+            this.#nativePushChain = Promise.resolve().then(async () => {
+                try {
+                    while (this.#nativePending.size) {
+                        await this.#pushNativeBatch();
+                    }
+                } finally {
+                    this.#nativeRunning = false;
+                }
+            });
+        }
+
+        return request.promise;
+    }
+
+    /** At most one pending completion per actual member, including requests arriving during preparation. */
+    async #pushNativeBatch(): Promise<void> {
+        const batch = [...this.#nativePending].map(([client, request]) => ({
+            client,
+            request,
+            version: request.version,
+            generation: request.generation,
+            connection: request.connection,
+        }));
+        const current = (item: (typeof batch)[number]) =>
+            !this.#nativeClosed &&
+            this.clients.has(item.client) &&
+            item.client.conversationId === this.id &&
+            item.client.subscriptionGeneration === item.generation &&
+            item.client.connection === item.connection &&
+            this.#app.config.userById(item.client.user.id) !== undefined &&
+            this.#app.canSee(item.client.user, this.id);
+        const active = batch.filter((item) => {
+            if (current(item)) {
+                return true;
+            }
+
+            this.#nativePending.delete(item.client);
+            item.request.resolve();
+
+            return false;
+        });
+
+        if (!active.length) {
+            return;
+        }
+
+        let info: Awaited<ReturnType<TeamKernel["roomInfo"]>>;
+
+        try {
+            info = await this.#app.kernel!.roomInfo(this.id);
+        } catch (error) {
+            for (const { client, request } of active) {
+                this.#nativePending.delete(client);
+                request.reject(error);
+                client.close?.();
+            }
+
+            return;
+        }
+
+        let fields: { key: string; value: unknown; json: string }[] | undefined;
+        const commonFields = () => (fields ??= this.#fields(info));
+
+        for (const item of active) {
+            const { client, request, version } = item;
+
+            try {
+                if (version !== request.version) {
+                    continue;
+                }
+
+                if (current(item)) {
+                    const state = await roomPart("kernel", () =>
+                        this.#app.kernel!.roomState(this.id, client.user),
+                    );
+
+                    if (version !== request.version) {
+                        continue;
+                    }
+
+                    if (current(item)) {
+                        this.#push(client, request.full, info, commonFields, state);
+                    }
+                }
+
+                this.#nativePending.delete(client);
+                request.resolve();
+            } catch (error) {
+                this.#nativePending.delete(client);
+                request.reject(error);
+                client.close?.();
             }
         }
     }
@@ -621,8 +763,9 @@ export class Room {
     #push(
         client: Client,
         full: boolean,
-        roomInfo: () => ReturnType<TeamKernel["roomInfo"]>,
+        roomInfo: Awaited<ReturnType<TeamKernel["roomInfo"]>> | undefined,
         commonFields: () => { key: string; value: unknown; json: string }[],
+        preparedState?: Awaited<ReturnType<TeamKernel["roomState"]>>,
     ): void {
         const view = this.#view?.value;
 
@@ -746,13 +889,11 @@ export class Room {
                 ),
             ),
             agent: this.#native()
-                ? roomInfo().agent
+                ? roomInfo!.agent
                 : agentInfo(this.#app.models, agentState, this.#app.defaultCwd),
             ...(this.#native()
                 ? {
-                      kernel: roomPart("kernel", () =>
-                          this.#app.kernel!.roomState(this.id, client.user),
-                      ),
+                      kernel: preparedState!,
                   }
                 : {}),
             stats: this.#projectStats(
@@ -989,7 +1130,8 @@ export class Room {
         this.#closeTimer.unref();
     }
 
-    close(): void {
+    close(): Promise<void> {
+        this.#nativeClosed = true;
         clearTimeout(this.#timer);
         clearTimeout(this.#closeTimer);
         clearInterval(this.#headTimer);
@@ -1012,5 +1154,7 @@ export class Room {
         this.#statsEntrySource = undefined;
         this.#statsUsage = undefined;
         this.#stats = undefined;
+
+        return this.#nativePushChain;
     }
 }

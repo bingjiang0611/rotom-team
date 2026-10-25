@@ -149,14 +149,14 @@ test("limits refuse new messages, for a session and for a guest, but never for t
     app.spend.setPersonBudget(owner(app), alex.id, null);
     app.spend.check(alex, id);
 
-    const summary = app.spend.summary(alex);
+    const summary = await app.spend.summary(alex);
 
     assert.equal(summary.total, undefined, "only the owner sees the total");
     assert.deepEqual(
         summary.people.map((person) => person.name),
         ["Alex"],
     );
-    assert.ok(app.spend.summary(owner(app)).people.length >= 2);
+    assert.ok((await app.spend.summary(owner(app))).people.length >= 2);
 });
 
 test("compacting asks the model too, so a limit refuses it", async () => {

@@ -73,7 +73,7 @@ test("personal profile and complete skills freeze per conversation, survive rest
         await app.close();
         app = await openApp(scriptedModel(), data);
         assert.equal(app.profiles.snapshot(id)!.digest, config.digest);
-        assert.equal(app.skillCommands(id)[0]!.path, config.skills[0]!.path);
+        assert.equal((await app.skillCommands(id))[0]!.path, config.skills[0]!.path);
         const newer = await app.commands.createSession(owner(app), { title: "new version" });
 
         assert.notEqual(app.profiles.snapshot(newer.id)!.digest, config.digest);

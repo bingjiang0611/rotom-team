@@ -175,8 +175,11 @@ test("each tab has its own permitted rows and versions; resync cannot target ano
             guest.events.some((each) => each.event.startsWith("sessions")),
             false,
         );
-        assert.throws(() => app.resyncSessionList(scoped, own.client.connection), { status: 404 });
-        app.resyncSessionList(scoped, guest.client.connection);
+        await assert.rejects(
+            async () => await app.resyncSessionList(scoped, own.client.connection),
+            { status: 404 },
+        );
+        await app.resyncSessionList(scoped, guest.client.connection);
         assert.deepEqual(
             (guest.last("sessions")!.items as Row[]).map((item) => item.id),
             [first],
@@ -201,9 +204,12 @@ test("each tab has its own permitted rows and versions; resync cannot target ano
         app.detach(own.client);
         app.detach(guest.client);
         app.detach(wide.client);
-        assert.throws(() => app.resyncSessionList(scoped, guest.client.connection), {
-            status: 404,
-        });
+        await assert.rejects(
+            async () => await app.resyncSessionList(scoped, guest.client.connection),
+            {
+                status: 404,
+            },
+        );
     } finally {
         await app.close();
         cleanUp();

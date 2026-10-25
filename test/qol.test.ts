@@ -254,7 +254,7 @@ test("skills run as /skill:name with the request, as Pi sends them", async () =>
     const id = await newSession(app, folder);
 
     assert.deepEqual(
-        app.skillCommands(id).map(({ name, description }) => ({ name, description })),
+        (await app.skillCommands(id)).map(({ name, description }) => ({ name, description })),
         [{ name: "deploy", description: "Ship the app to production" }],
     );
     await say(app, id, "/skill:deploy to staging");
@@ -515,8 +515,8 @@ test("a long first message gets a short written title; a short one is the title"
         "please look at the release script and tidy it up so the tags come out right",
     );
     await until(
-        () =>
-            app.sessions().find((each) => each.id === Number(id))?.title ===
+        async () =>
+            (await app.sessions()).find((each) => each.id === Number(id))?.title ===
             "Tidy The Release Script",
         "the written title",
     );
@@ -524,7 +524,7 @@ test("a long first message gets a short written title; a short one is the title"
 
     await say(app, short, "fix the login bug");
     assert.equal(
-        app.sessions().find((each) => each.id === Number(short))?.title,
+        (await app.sessions()).find((each) => each.id === Number(short))?.title,
         "fix the login bug",
     );
 });

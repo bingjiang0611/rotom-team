@@ -28,6 +28,9 @@ import {
 import { dirname, join } from "node:path";
 import {
     RotomJournal,
+    createAsyncRotomJournal,
+    thinkingFromEntries,
+    type AsyncRotomJournal,
     KernelRequestConflict,
     type KernelBinding,
     type KernelEntry,
@@ -146,7 +149,7 @@ export type RunHooks = {
         args?: string;
     }) => void | Promise<void>;
     /** Every kernel event, for provisional display only. */
-    onEvent?: (event: RpcRecord) => void;
+    onEvent?: (event: RpcRecord) => void | Promise<unknown>;
     /** The registry captured from this authorized kernel process. */
     onCommands?: (commands: Array<Record<string, unknown>>) => void | Promise<void>;
     /** Canonical Goal state read from the current native branch after a handled barrier. */
@@ -157,7 +160,7 @@ export type RunHooks = {
     /** Result from a structured native command adapter. */
     onNativeResult?: (result: unknown) => void | Promise<void>;
     /** New persisted entries were journaled mid-run. */
-    onProgress?: () => void;
+    onProgress?: () => void | Promise<unknown>;
 };
 
 type Running = {
@@ -238,6 +241,7 @@ type ActiveAttempt = {
     operation: "prompt" | "compact" | "discover" | "command";
     running: Running;
     inferenceAdmitted: boolean;
+    usageWrites: Promise<void>;
 };
 
 /** What a native launch made so far, for its caller to close should the launch fail. */
@@ -333,7 +337,7 @@ const WARM_UNUSED_MS = 5 * 60_000;
 const SEED_WORKER_MIN_BYTES = 8 * 1024 * 1024;
 
 export class RotomExecutions {
-    readonly journal: RotomJournal;
+    readonly journal: AsyncRotomJournal;
     readonly #data: string;
     readonly #authorize: (
         binding: Readonly<KernelBinding>,
@@ -364,7 +368,9 @@ export class RotomExecutions {
         ) => Promise<KernelRequestAuth | void>,
         prepare?: (binding: Readonly<KernelBinding>, sessionId: string) => KernelLaunchContext,
     ) {
-        this.journal = scopedParseObject("journal", new RotomJournal(data));
+        const core = scopedParseObject("journal", new RotomJournal(data));
+
+        this.journal = createAsyncRotomJournal(core);
         this.#data = data;
         this.#authorize = authorize;
         this.#prepare = prepare;
@@ -386,19 +392,41 @@ export class RotomExecutions {
         );
     }
 
-    thinkingLevel(sessionId: string, readEntries?: (segmentId: string) => KernelEntry[]): string {
-        const { segmentId } = this.journal.session(sessionId);
+    async thinkingLevel(
+        sessionId: string,
+        readEntries?: (segmentId: string) => Promise<KernelEntry[]>,
+    ): Promise<string> {
+        const { segmentId } = await this.journal.session(sessionId);
+        const live = this.#kernels.get(segmentId)?.state.thinkingLevel;
 
-        return (
-            this.#kernels.get(segmentId)?.state.thinkingLevel ??
-            this.journal.thinkingLevel(sessionId, readEntries)
-        );
+        if (live !== undefined) {
+            return live;
+        }
+
+        if (readEntries) {
+            const snapshot = await this.journal.thinkingSnapshot(sessionId);
+
+            if (snapshot.value !== undefined) {
+                return snapshot.value;
+            }
+
+            const value = thinkingFromEntries(
+                await readEntries(snapshot.segmentId),
+                snapshot.fallback,
+            );
+
+            await this.journal.rememberThinking(snapshot, value);
+
+            return value;
+        }
+
+        return this.journal.thinkingLevel(sessionId);
     }
 
     /** Change only native reasoning, under the current prompt's durable command fence. */
     async setThinkingLevel(sessionId: string, level: string): Promise<string> {
         const run = [...(this.#running.get(sessionId) ?? [])].find((run) => run.prompting);
-        const receipt = run?.attemptId ? this.journal.receipt(run.attemptId) : undefined;
+        const receipt = run?.attemptId ? await this.journal.receipt(run.attemptId) : undefined;
 
         if (
             !run?.kernel ||
@@ -417,7 +445,7 @@ export class RotomExecutions {
 
         const kernel = run.kernel;
         const snapshot = run.snapshot;
-        const inputId = this.journal.beginCommandInput(receipt.id, `/thinking ${level}`);
+        const inputId = await this.journal.beginCommandInput(receipt.id, `/thinking ${level}`);
 
         run.thinkingChange = (async () => {
             await kernel.setThinkingLevel(level);
@@ -433,8 +461,8 @@ export class RotomExecutions {
                 );
             }
 
-            this.journal.progress(receipt.id, entries);
-            this.journal.completeCommandInput(inputId);
+            await this.journal.progress(receipt.id, entries);
+            await this.journal.completeCommandInput(inputId);
 
             return state.thinkingLevel;
         })();
@@ -452,7 +480,7 @@ export class RotomExecutions {
     ): Promise<boolean> {
         for (const run of this.#running.get(sessionId) ?? []) {
             if (run.prompting && run.kernel) {
-                if (this.journal.hasUnresolvedCommandInput(run.attemptId!)) {
+                if (await this.journal.hasUnresolvedCommandInput(run.attemptId!)) {
                     throw new RpcFailure(
                         "rejected",
                         "A queued native command is pending or unknown; do not replay it",
@@ -473,7 +501,7 @@ export class RotomExecutions {
                 };
 
                 if (slash) {
-                    const { binding } = this.journal.session(sessionId);
+                    const { binding } = await this.journal.session(sessionId);
 
                     try {
                         await assertTeamResourceSources(
@@ -524,7 +552,7 @@ export class RotomExecutions {
                     });
 
                     try {
-                        const inputId = this.journal.beginCommandInput(
+                        const inputId = await this.journal.beginCommandInput(
                             run.attemptId!,
                             normalizeNativePrompt(text),
                         );
@@ -539,7 +567,7 @@ export class RotomExecutions {
                             );
                         }
 
-                        this.journal.completeCommandInput(inputId);
+                        await this.journal.completeCommandInput(inputId);
                     } finally {
                         detach();
                     }
@@ -655,11 +683,11 @@ export class RotomExecutions {
 
             this.#notStopped(running);
 
-            if (this.journal.request(sessionId, requestId)) {
-                return this.journal.handoff(sessionId, requestId, expectedHead, binding);
+            if (await this.journal.request(sessionId, requestId)) {
+                return await this.journal.handoff(sessionId, requestId, expectedHead, binding);
             }
 
-            if (this.journal.session(sessionId).segmentId !== expectedHead) {
+            if ((await this.journal.session(sessionId)).segmentId !== expectedHead) {
                 throw new KernelRequestConflict(
                     "Conversation head changed; refresh before handoff",
                 );
@@ -667,18 +695,19 @@ export class RotomExecutions {
 
             const mark = seedPhases();
             const messages = publicNativeHistory(
-                native.buildSessionProjection(this.journal.segmentEntries(expectedHead)).messages,
+                native.buildSessionProjection(await this.journal.segmentEntries(expectedHead))
+                    .messages,
             );
 
             mark("projection");
             // Reserve before awaiting closure so no new prompt can reuse the retiring process.
-            const receipt = this.journal.handoff(sessionId, requestId, expectedHead, binding);
+            const receipt = await this.journal.handoff(sessionId, requestId, expectedHead, binding);
 
             try {
                 await this.#retire(expectedHead);
             } catch (error) {
                 running.closureUnknown = true;
-                this.journal.fail(receipt.id, "unknown");
+                await this.journal.fail(receipt.id, "unknown");
 
                 throw error;
             }
@@ -700,7 +729,7 @@ export class RotomExecutions {
                 throw new KernelRequestConflict("Fork requires an independent target conversation");
             }
 
-            const binding = this.journal.session(sessionId).binding;
+            const binding = (await this.journal.session(sessionId)).binding;
 
             const authorize = async () => {
                 await this.#authorize(binding, "fork", sourceId);
@@ -716,7 +745,7 @@ export class RotomExecutions {
                 ...(entryId ? { entryId } : {}),
                 ...(clone ? { clone: true } : {}),
             });
-            const existing = this.journal.existing(sessionId, requestId, identity, "fork");
+            const existing = await this.journal.existing(sessionId, requestId, identity, "fork");
 
             if (existing) {
                 return existing;
@@ -729,23 +758,23 @@ export class RotomExecutions {
             const native = await nativeSessionManager();
 
             this.#notStopped(running);
-            const prior = this.journal.existing(sessionId, requestId, identity, "fork");
+            const prior = await this.journal.existing(sessionId, requestId, identity, "fork");
 
             if (prior) {
                 return prior;
             }
 
-            if (this.journal.session(sourceId).segmentId !== expectedHead) {
+            if ((await this.journal.session(sourceId)).segmentId !== expectedHead) {
                 throw new KernelRequestConflict("Source head changed; refresh before fork");
             }
 
-            if (this.journal.pendingConversation(sourceId)) {
+            if (await this.journal.pendingConversation(sourceId)) {
                 throw new KernelRequestConflict(
                     "Source operation is active or unknown; reconcile before fork",
                 );
             }
 
-            const entries = this.journal.segmentEntries(expectedHead);
+            const entries = await this.journal.segmentEntries(expectedHead);
             const selected = entryId ? entries.find((entry) => entry.id === entryId) : undefined;
 
             if (
@@ -763,9 +792,9 @@ export class RotomExecutions {
                 native.buildSessionProjection(entries, selected ? selected.parentId : undefined)
                     .messages,
             );
-            const receipt = this.journal.reserve(sessionId, requestId, identity, "fork");
+            const receipt = await this.journal.reserve(sessionId, requestId, identity, "fork");
 
-            const source = this.journal.segment(expectedHead);
+            const source = await this.journal.segment(expectedHead);
 
             if (clone && source.binding.memberId === binding.memberId && source.sessionFile) {
                 let materializing = false;
@@ -789,7 +818,7 @@ export class RotomExecutions {
                     materializing = true;
                     const path = manager.createBranchedSession(leafId);
 
-                    this.journal.attach(receipt.id, path, manager.getSessionId());
+                    await this.journal.attach(receipt.id, path, manager.getSessionId());
                     chmodSync(path, 0o600);
                     const entries = readNativeEntries(
                         path,
@@ -800,9 +829,12 @@ export class RotomExecutions {
                     await authorize();
                     this.#notStopped(running);
 
-                    return this.journal.finish(receipt.id, "settled", entries);
+                    return await this.journal.finish(receipt.id, "settled", entries);
                 } catch {
-                    return this.journal.fail(receipt.id, materializing ? "unknown" : "rejected");
+                    return await this.journal.fail(
+                        receipt.id,
+                        materializing ? "unknown" : "rejected",
+                    );
                 }
             }
 
@@ -818,13 +850,13 @@ export class RotomExecutions {
         entries: KernelEntry[],
     ): Promise<KernelReceipt> {
         return this.#track(sessionId, async (running) => {
-            const binding = this.journal.session(sessionId).binding;
+            const binding = (await this.journal.session(sessionId)).binding;
 
             const authorize = () => this.#authorize(binding, "fork", sessionId);
 
             await authorize();
             this.#notStopped(running);
-            const previous = this.journal.existing(sessionId, requestId, identity, "fork");
+            const previous = await this.journal.existing(sessionId, requestId, identity, "fork");
 
             if (previous) {
                 return previous;
@@ -833,7 +865,7 @@ export class RotomExecutions {
             this.#prepare?.(binding, sessionId);
             const native = await nativeSessionManager();
             const messages = publicNativeHistory(native.buildSessionProjection(entries).messages);
-            const receipt = this.journal.reserve(sessionId, requestId, identity, "fork");
+            const receipt = await this.journal.reserve(sessionId, requestId, identity, "fork");
 
             return this.#seed(receipt, messages, native.SessionManager, running, authorize);
         });
@@ -865,18 +897,18 @@ export class RotomExecutions {
 
                 mark("select");
 
-                const attach = (path: string, sessionId: string) => {
+                const attach = async (path: string, sessionId: string) => {
                     const attached = seedPhases();
 
                     this.#notStopped(running);
-                    this.journal.attach(receipt.id, path, sessionId);
+                    await this.journal.attach(receipt.id, path, sessionId);
                     attached("attach");
                 };
 
                 if (bytes < SEED_WORKER_MIN_BYTES) {
                     const { session, folder } = prepareSeed(receipt.binding, SessionManager);
 
-                    attach(session.getSessionFile(), session.getSessionId());
+                    await attach(session.getSessionFile(), session.getSessionId());
                     this.#notStopped(running);
                     entries = persistSeed(session, folder, receipt.binding.workspace, messages);
                 } else {
@@ -903,13 +935,13 @@ export class RotomExecutions {
                 throw new Error("Seed stopped before commit");
             }
 
-            const finished = this.journal.finish(receipt.id, "settled", entries);
+            const finished = await this.journal.finish(receipt.id, "settled", entries);
 
             mark("finish");
 
             return finished;
         } catch {
-            return this.journal.fail(receipt.id, materializing ? "unknown" : "rejected");
+            return await this.journal.fail(receipt.id, materializing ? "unknown" : "rejected");
         }
     }
 
@@ -985,12 +1017,12 @@ export class RotomExecutions {
         rebind?: KernelRebind,
     ): Promise<KernelReceipt> {
         const identity = nativePromptIdentity(prompt, images);
-        const admitted = this.journal.session(sessionId);
+        const admitted = await this.journal.session(sessionId);
         const binding = Object.freeze(rebind?.binding ?? admitted.binding);
 
         // Old receipts are returned, never fed to a new subprocess. Even unknown is a durable result of admission.
         await this.#authorize(binding, "admission", sessionId);
-        const previous = this.journal.existing(sessionId, requestId, identity, operation);
+        const previous = await this.journal.existing(sessionId, requestId, identity, operation);
 
         if (previous) {
             return previous;
@@ -1007,7 +1039,7 @@ export class RotomExecutions {
         // Authorization awaited user/account state. A concurrent completed handoff must not
         // reserve the new payer while launching this previously admitted binding.
         if (
-            this.journal.session(sessionId).segmentId !== admitted.segmentId ||
+            (await this.journal.session(sessionId)).segmentId !== admitted.segmentId ||
             (rebind && rebind.expectedHead !== admitted.segmentId)
         ) {
             throw new KernelRequestConflict("Conversation head changed during admission");
@@ -1024,13 +1056,19 @@ export class RotomExecutions {
             await this.#retire(admitted.segmentId);
         }
 
-        const receipt = this.journal.reserve(sessionId, requestId, identity, operation, rebind);
+        const receipt = await this.journal.reserve(
+            sessionId,
+            requestId,
+            identity,
+            operation,
+            rebind,
+        );
 
         running.attemptId = receipt.id;
 
         await hooks.onReserved?.(receipt);
         // Admission is asynchronous: an earlier request may have created the native file while it was pending.
-        const session = this.journal.session(sessionId);
+        const session = await this.journal.session(sessionId);
 
         const revision = teamResourceRevision(join(this.#data, "team-agent"), binding.workspace);
 
@@ -1053,11 +1091,26 @@ export class RotomExecutions {
         let contextFile: string | undefined = persistent?.contextFile;
         let closed = false;
         let failureStatus: "unknown" | "rejected" = "unknown";
+        let progressFailure: unknown;
+        let progressQueue = Promise.resolve();
+        let hookQueue = Promise.resolve();
+        let detachHook: (() => void) | undefined;
+        let detachProgress: (() => void) | undefined;
+
+        const observeHook = (result: void | Promise<unknown>) => {
+            hookQueue = Promise.all([hookQueue, result])
+                .then(() => undefined)
+                .catch((error) => {
+                    progressFailure = error;
+                });
+        };
+
         const activeAttempt: ActiveAttempt = {
             receipt,
             operation,
             running,
             inferenceAdmitted: false,
+            usageWrites: Promise.resolve(),
         };
 
         const gateState = persistent?.gateState ?? { active: activeAttempt };
@@ -1103,7 +1156,7 @@ export class RotomExecutions {
             const nativeState = state;
 
             running.kernel = kernel;
-            this.journal.attach(receipt.id, state.sessionFile, state.sessionId, kernel.pid);
+            await this.journal.attach(receipt.id, state.sessionFile, state.sessionId, kernel.pid);
             // Recheck after startup/catalog work, immediately before sending the user request.
             await this.#authorize(binding, "admission", sessionId);
 
@@ -1111,7 +1164,6 @@ export class RotomExecutions {
 
             running.snapshot = () => readNativeSnapshot(kernel!, state!, binding.workspace, tail);
 
-            let progressFailure: unknown;
             let extensionError: RpcRecord | undefined;
             const detachExtensionErrors = kernel.onEvent((event) => {
                 if (event.type === "extension_error") {
@@ -1126,20 +1178,18 @@ export class RotomExecutions {
                 timing.detach = kernel.onEvent((event) => timePromptEvent(timing, event));
             }
 
-            let detachHook: (() => void) | undefined;
-
             if (hooks.onEvent) {
-                detachHook = kernel.onEvent(hooks.onEvent);
+                detachHook = kernel.onEvent((event) => observeHook(hooks.onEvent!(event)));
                 // Someone watches this run, so its dialogs (ask_user_question, permissions) can reach a person.
                 kernel.forwardDialogs();
             }
 
             // Message-level durability: each persisted message is journaled as it lands, so a restart loses at most
             // the message in flight. The final snapshot below remains the authority for the outcome.
-            const detachProgress = kernel.onEvent((event) => {
+            detachProgress = kernel.onEvent((event) => {
                 if (event.type === "thinking_level_changed") {
                     nativeState.thinkingLevel = String(event.level);
-                    hooks.onProgress?.();
+                    observeHook(hooks.onProgress?.());
                 }
 
                 if (
@@ -1151,13 +1201,18 @@ export class RotomExecutions {
                     return;
                 }
 
-                try {
-                    if (this.journal.progress(receipt.id, tail.read()) > 0) {
-                        hooks.onProgress?.();
-                    }
-                } catch (error) {
-                    progressFailure = error;
-                }
+                // Admit the whole write now, before a later tool event can enqueue a journal read.
+                const writing = this.journal.progress(receipt.id, tail.read());
+
+                progressQueue = Promise.all([progressQueue, writing])
+                    .then(async ([, count]) => {
+                        if (count > 0) {
+                            await hooks.onProgress?.();
+                        }
+                    })
+                    .catch((error) => {
+                        progressFailure = error;
+                    });
             });
 
             if (running.aborted) {
@@ -1195,7 +1250,7 @@ export class RotomExecutions {
                     const source = dynamic.find((command) => command.name === name)?.source;
 
                     if (source === "prompt" || source === "skill") {
-                        this.journal.classifyPromptExpansion(receipt.id);
+                        await this.journal.classifyPromptExpansion(receipt.id);
                         operation = "prompt";
                         activeAttempt.operation = operation;
                     }
@@ -1257,9 +1312,9 @@ export class RotomExecutions {
                 }
 
                 if (
-                    !this.journal
-                        .segmentEntries(receipt.segmentId)
-                        .some((entry) => entry.id === entryId)
+                    !(await this.journal.segmentEntries(receipt.segmentId)).some(
+                        (entry) => entry.id === entryId,
+                    )
                 ) {
                     throw new RpcFailure(
                         "rejected",
@@ -1333,7 +1388,7 @@ export class RotomExecutions {
             }
 
             if (!running.aborted) {
-                this.journal.setPhase(receipt.id, "finalization");
+                await this.journal.setPhase(receipt.id, "finalization");
             }
 
             if (["prompt", "command"].includes(operation)) {
@@ -1355,7 +1410,7 @@ export class RotomExecutions {
                 // Goal owns the same native process and gate while active. Waiting/recovery has
                 // no agent turn to settle, so wake on native activity instead of polling/relaunching.
                 while (goalIsActive(goalState)) {
-                    this.journal.setPhase(receipt.id, "execution");
+                    await this.journal.setPhase(receipt.id, "execution");
 
                     if (kernel.activityRevision === revision) {
                         await kernel.waitForActivity(revision);
@@ -1371,7 +1426,7 @@ export class RotomExecutions {
                     }
 
                     if (!running.aborted) {
-                        this.journal.setPhase(receipt.id, "finalization");
+                        await this.journal.setPhase(receipt.id, "finalization");
                     }
 
                     await kernel.barrier();
@@ -1399,7 +1454,7 @@ export class RotomExecutions {
                     const message =
                         "Team did not accept a change to member configuration. Edit the owner-managed shared profile instead. This attempt is unknown; do not replay it.";
 
-                    hooks.onEvent?.({
+                    await hooks.onEvent?.({
                         type: "extension_ui_request",
                         id: randomUUID(),
                         method: "notify",
@@ -1457,6 +1512,8 @@ export class RotomExecutions {
             detachProgress();
             detachHook?.();
 
+            await Promise.all([progressQueue, hookQueue]);
+
             if (progressFailure !== undefined) {
                 throw progressFailure;
             }
@@ -1477,13 +1534,16 @@ export class RotomExecutions {
                 }
             }
 
-            const finished = this.journal.finish(receipt.id, disposition, entries);
+            // Close gate admission, then drain every admitted usage ACK before settling the attempt.
+            gateState.active = undefined;
+            await activeAttempt.usageWrites;
+            const finished = await this.journal.finish(receipt.id, disposition, entries);
 
             persistent.revision = revision;
             gateState.active = undefined;
             closed = true;
 
-            hooks.onProgress?.();
+            await hooks.onProgress?.();
 
             return finished;
         } catch (error) {
@@ -1493,7 +1553,7 @@ export class RotomExecutions {
                 !kernel &&
                 !activeAttempt.inferenceAdmitted
             ) {
-                hooks.onEvent?.({
+                await hooks.onEvent?.({
                     type: "extension_ui_request",
                     id: randomUUID(),
                     method: "notify",
@@ -1524,11 +1584,25 @@ export class RotomExecutions {
                     failure = "rpc-disconnected";
                 }
 
-                this.journal.recordFailure(receipt.id, failure);
+                await this.journal.recordFailure(receipt.id, failure);
             }
         } finally {
+            gateState.active = undefined;
+            detachHook?.();
+            detachProgress?.();
+            await Promise.all([progressQueue, hookQueue]);
+
+            try {
+                await activeAttempt.usageWrites;
+            } catch {
+                failureStatus = "unknown";
+            }
+
+            if (progressFailure !== undefined) {
+                failureStatus = "unknown";
+            }
+
             if (!closed) {
-                gateState.active = undefined;
                 this.#kernels.delete(admitted.segmentId);
                 gate?.closeAllConnections();
                 await new Promise<void>((resolve) => gate?.close(() => resolve()) ?? resolve());
@@ -1539,7 +1613,7 @@ export class RotomExecutions {
                         await kernel.close();
                     } catch (error) {
                         running.closureUnknown = true;
-                        this.journal.fail(receipt.id, "unknown");
+                        await this.journal.fail(receipt.id, "unknown");
 
                         throw error;
                     }
@@ -1555,14 +1629,14 @@ export class RotomExecutions {
             }
         }
 
-        const attached = this.journal.session(sessionId).sessionFile;
+        const attached = (await this.journal.session(sessionId)).sessionFile;
         const unmaterialized =
             failureStatus === "rejected" &&
             !session.sessionFile &&
             attached !== undefined &&
             !existsSync(attached);
 
-        return this.journal.fail(
+        return await this.journal.fail(
             receipt.id,
             failureStatus,
             unmaterialized,
@@ -1630,20 +1704,24 @@ export class RotomExecutions {
                     throw new Error("identity denied");
                 }
 
-                if (this.journal.receipt(active.receipt.id).status !== "dispatch-intent") {
-                    throw new Error("attempt is not active");
-                }
-
                 // A subagent's response: its entries stay in its own session, so the gate records what it spent.
                 if (value.operation === "usage") {
                     if (!value.usage || typeof value.usage !== "object") {
                         throw new Error("usage must be an object");
                     }
 
-                    this.journal.childUsage(active.receipt.id, value.usage);
+                    // childUsage itself checks the receipt and inserts atomically; no read/await/write gap.
+                    active.usageWrites = active.usageWrites.then(() =>
+                        this.journal.childUsage(active.receipt.id, value.usage),
+                    );
+                    await active.usageWrites;
                     res.writeHead(204).end();
 
                     return;
+                }
+
+                if ((await this.journal.receipt(active.receipt.id)).status !== "dispatch-intent") {
+                    throw new Error("attempt is not active");
                 }
 
                 if (active.running.aborted) {
@@ -1654,7 +1732,7 @@ export class RotomExecutions {
 
                 if (
                     active.running.aborted ||
-                    this.journal.receipt(active.receipt.id).status !== "dispatch-intent" ||
+                    (await this.journal.receipt(active.receipt.id)).status !== "dispatch-intent" ||
                     gateState.active !== active
                 ) {
                     throw new Error("attempt ended during authorization");
@@ -1731,7 +1809,7 @@ export class RotomExecutions {
         hooks.beforeStart?.();
         const kernel = await startRotomKernel({
             ...binding,
-            thinkingLevel: this.journal.thinkingLevel(sessionId),
+            thinkingLevel: await this.journal.thinkingLevel(sessionId),
             teamAgentDir: join(this.#data, "team-agent"),
             gateFile,
             sessionFile,
@@ -1780,7 +1858,7 @@ export class RotomExecutions {
      */
     async warm(sessionId: string): Promise<boolean> {
         try {
-            const admitted = this.journal.session(sessionId);
+            const admitted = await this.journal.session(sessionId);
             const segmentId = admitted.segmentId;
             const memberId = admitted.binding.memberId;
             const pending = this.#warming.get(segmentId);
@@ -1849,7 +1927,7 @@ export class RotomExecutions {
             const persistent = await this.#launch(
                 binding,
                 sessionId,
-                this.journal.session(sessionId).sessionFile,
+                (await this.journal.session(sessionId)).sessionFile,
                 prepared,
                 {},
                 `warm-${randomUUID()}`,
@@ -1861,7 +1939,7 @@ export class RotomExecutions {
             // for this start (`#execute`), and takes this process.
             if (
                 this.#closing ||
-                this.journal.session(sessionId).segmentId !== admitted.segmentId ||
+                (await this.journal.session(sessionId)).segmentId !== admitted.segmentId ||
                 this.#kernels.has(admitted.segmentId)
             ) {
                 throw new Error("The session moved on while its process started");
@@ -1988,7 +2066,7 @@ export class RotomExecutions {
                 await this.#retire(segmentId);
             }
 
-            this.journal.close();
+            await this.journal.close();
         })();
     }
 }

@@ -37,7 +37,7 @@ try {
         const mirror = await app.harness.snapshot(NativeMirrorDoc, id as never, BACKGROUND_CONTEXT);
         const authors = await app.harness.snapshot(AuthorsDoc, id as never, BACKGROUND_CONTEXT);
         const user = app.config.users.find((each) => each.role === "owner")!;
-        const state = app.kernel!.roomState(id as never, user);
+        const state = await app.kernel!.roomState(id as never, user);
 
         if (!("hasBranchedHistory" in state)) {
             throw new Error("Native mirror fixture reopened a missing conversation");

@@ -368,10 +368,10 @@ export class Spend {
     }
 
     /** Spend as this person may see it: the owner sees everything, others their own sessions and themselves. */
-    summary(user: User): SpendSummary {
+    async summary(user: User): Promise<SpendSummary> {
         const app = this.#app;
         const owner = user.role === "owner";
-        const sessions = app.sessions(user).map((session) => {
+        const sessions = (await app.sessions(user)).map((session) => {
             const budget = app.sessionMeta(session.id as unknown as ConversationId)?.budget;
 
             return {

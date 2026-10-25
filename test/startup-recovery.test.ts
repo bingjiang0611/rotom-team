@@ -70,7 +70,7 @@ test("startup leaves dead-PID unknowns and legacy pending continuations unchange
         for (const kind of ["unknown-no-plan", "unknown-planned", "legacy-interrupted"] as const) {
             const session = await app.commands.createSession(member, { backend: "rotom" });
             const journal = app.kernel!.executions.journal;
-            const { binding } = journal.session(String(session.id));
+            const { binding } = await journal.session(String(session.id));
             const directory = join(binding.home, "sessions");
             const file = join(directory, `${kind}.jsonl`);
 
@@ -85,15 +85,19 @@ test("startup leaves dead-PID unknowns and legacy pending continuations unchange
                     cwd: binding.workspace,
                 }) + "\n",
             );
-            const attempt = journal.reserve(String(session.id), kind, "Do not repeat this task");
+            const attempt = await journal.reserve(
+                String(session.id),
+                kind,
+                "Do not repeat this task",
+            );
 
-            journal.attach(attempt.id, file, kind, 999999999);
+            await journal.attach(attempt.id, file, kind, 999999999);
 
             if (kind !== "unknown-no-plan") {
-                journal.planResume(attempt.id);
+                await journal.planResume(attempt.id);
             }
 
-            journal.fail(attempt.id, "unknown");
+            await journal.fail(attempt.id, "unknown");
 
             if (kind !== "unknown-no-plan") {
                 // Reconstruct legacy rows directly: current APIs cannot classify an unknown as interrupted.
@@ -109,8 +113,8 @@ test("startup leaves dead-PID unknowns and legacy pending continuations unchange
             entries.push({
                 session: String(session.id),
                 attempt: attempt.id,
-                status: journal.receipt(attempt.id).status,
-                plan: journal.resume(attempt.id),
+                status: (await journal.receipt(attempt.id)).status,
+                plan: await journal.resume(attempt.id),
             });
         }
 
@@ -122,14 +126,18 @@ test("startup leaves dead-PID unknowns and legacy pending continuations unchange
             const journal = app.kernel!.executions.journal;
 
             for (const entry of entries) {
-                assert.equal(journal.receipt(entry.attempt).status, entry.status);
-                assert.deepEqual(journal.resume(entry.attempt), entry.plan);
-                assert.equal(journal.latest(entry.session)?.id, entry.attempt);
+                assert.equal((await journal.receipt(entry.attempt)).status, entry.status);
+                assert.deepEqual(await journal.resume(entry.attempt), entry.plan);
+                assert.equal((await journal.latest(entry.session))?.id, entry.attempt);
 
                 if (entry.status === "unknown") {
-                    assert.equal(journal.pendingConversation(entry.session)?.id, entry.attempt);
-                    assert.throws(
-                        () => journal.reserve(entry.session, "new-request", "try again"),
+                    assert.equal(
+                        (await journal.pendingConversation(entry.session))?.id,
+                        entry.attempt,
+                    );
+                    await assert.rejects(
+                        async () =>
+                            await journal.reserve(entry.session, "new-request", "try again"),
                         /unknown/,
                     );
                 }

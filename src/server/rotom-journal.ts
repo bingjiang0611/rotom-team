@@ -112,6 +112,34 @@ export function requireNoPendingKernel(data: string): void {
     }
 }
 
+export type ThinkingSnapshot = {
+    segmentId: string;
+    rowid: number;
+    fallback: string;
+    version: string;
+    value?: string;
+};
+
+export function thinkingFromEntries(entries: KernelEntry[], fallback: string): string {
+    const byId = new Map(entries.map((entry) => [entry.id, entry]));
+    let entry = entries.at(-1);
+
+    while (entry) {
+        if (entry.type === "thinking_level_change") {
+            return String(entry.thinkingLevel);
+        }
+
+        // A model switch restarts Pi, which clamps silently; the binding holds that clamped level.
+        if (entry.type === "model_change") {
+            break;
+        }
+
+        entry = typeof entry.parentId === "string" ? byId.get(entry.parentId) : undefined;
+    }
+
+    return fallback;
+}
+
 export class RotomJournal {
     readonly #db: DatabaseSync;
     // SQL is a finite set of literal statements (plus the two usage table names), never user text.
@@ -935,13 +963,36 @@ export class RotomJournal {
         this.#prepare("UPDATE kernel_resume SET state=? WHERE attempt_id=?").run(state, attemptId);
     }
 
-    /** The conversation's newest attempt, whatever its operation. */
-    latest(sessionId: string): KernelReceipt | undefined {
-        const row = this.#prepare(
+    #latestRow(sessionId: string) {
+        return this.#prepare(
             "SELECT * FROM kernel_attempts WHERE conversation_id=? ORDER BY rowid DESC LIMIT 1",
         ).get(sessionId);
+    }
+
+    /** The conversation's newest attempt, whatever its operation. */
+    latest(sessionId: string): KernelReceipt | undefined {
+        const row = this.#latestRow(sessionId);
 
         return row ? this.#receipt(row) : undefined;
+    }
+
+    /** One consistent room read, without duplicate receipt decoding or async round trips. */
+    roomSnapshot(sessionId: string) {
+        const session = this.sessionIfPresent(sessionId);
+
+        if (!session) {
+            return undefined;
+        }
+
+        const pending = this.pendingConversation(sessionId);
+        const row = this.#latestRow(sessionId);
+        let latest: KernelReceipt | undefined;
+
+        if (row) {
+            latest = pending?.id === String(row.id) ? pending : this.#receipt(row);
+        }
+
+        return { ...session, pending, latest };
     }
 
     /** Append-only history revision, using the segment index; empty history has revision zero. */
@@ -954,48 +1005,48 @@ export class RotomJournal {
     }
 
     /** Thinking is mutable native session state; the receipt binding retains its initial value. */
-    thinkingLevel(
-        sessionId: string,
-        readEntries: (segmentId: string) => KernelEntry[] = (id) => this.segmentEntries(id),
-    ): string {
+    thinkingSnapshot(sessionId: string): ThinkingSnapshot {
         const { segmentId, binding } = this.session(sessionId);
         const rowid = this.segmentRevision(segmentId);
         const fallback = binding.thinkingLevel ?? "off";
         const cached = this.#thinking.get(segmentId);
+        const snapshot = { segmentId, rowid, fallback, version: binding.kernelVersion };
 
         if (
             cached?.rowid === rowid &&
             cached.fallback === fallback &&
             cached.version === binding.kernelVersion
         ) {
-            return cached.value;
+            return { ...snapshot, value: cached.value };
         }
 
-        const entries = readEntries(segmentId);
-        const byId = new Map(entries.map((entry) => [entry.id, entry]));
-        let entry = entries.at(-1);
-        let value = fallback;
+        return snapshot;
+    }
 
-        while (entry) {
-            if (entry.type === "thinking_level_change") {
-                value = String(entry.thinkingLevel);
-                break;
-            }
-
-            // A model switch restarts Pi, which clamps silently; the binding holds that clamped level.
-            if (entry.type === "model_change") {
-                break;
-            }
-
-            entry = typeof entry.parentId === "string" ? byId.get(entry.parentId) : undefined;
-        }
+    rememberThinking(snapshot: ThinkingSnapshot, value: string): void {
+        const { segmentId, rowid, fallback, version } = snapshot;
 
         this.#thinking.delete(segmentId);
-        this.#thinking.set(segmentId, { rowid, fallback, version: binding.kernelVersion, value });
+        this.#thinking.set(segmentId, { rowid, fallback, version, value });
 
         if (this.#thinking.size > 128) {
             this.#thinking.delete(this.#thinking.keys().next().value!);
         }
+    }
+
+    thinkingLevel(
+        sessionId: string,
+        readEntries: (segmentId: string) => KernelEntry[] = (id) => this.segmentEntries(id),
+    ): string {
+        const snapshot = this.thinkingSnapshot(sessionId);
+
+        if (snapshot.value !== undefined) {
+            return snapshot.value;
+        }
+
+        const value = thinkingFromEntries(readEntries(snapshot.segmentId), snapshot.fallback);
+
+        this.rememberThinking(snapshot, value);
 
         return value;
     }
@@ -1534,4 +1585,46 @@ export class RotomJournal {
         this.#db.close();
         rmSync(this.#lock);
     }
+}
+
+type JournalMethodName = {
+    [K in keyof RotomJournal]: RotomJournal[K] extends (...args: never[]) => unknown ? K : never;
+}[keyof RotomJournal];
+
+/**
+ * Explicit async boundary for journal callers. The core remains synchronous so each SQL transaction stays
+ * contiguous; this facade only schedules one complete core call and never awaits inside a transaction.
+ */
+export type AsyncRotomJournal = {
+    [K in JournalMethodName]: K extends "thinkingLevel"
+        ? (sessionId: string) => Promise<string>
+        : RotomJournal[K] extends (...args: infer A) => infer R
+          ? (...args: A) => Promise<Awaited<R>>
+          : never;
+};
+
+const JOURNAL_METHODS = new Set(
+    Object.getOwnPropertyNames(RotomJournal.prototype).filter((name) => name !== "constructor"),
+);
+
+export function createAsyncRotomJournal(core: RotomJournal): AsyncRotomJournal {
+    let tail = Promise.resolve();
+
+    return Object.fromEntries(
+        [...JOURNAL_METHODS].map((name) => [
+            name,
+            (...args: unknown[]) => {
+                const operation = tail.then(() =>
+                    Reflect.apply(Reflect.get(core, name), core, args),
+                );
+
+                tail = operation.then(
+                    () => undefined,
+                    () => undefined,
+                );
+
+                return operation;
+            },
+        ]),
+    ) as AsyncRotomJournal;
 }

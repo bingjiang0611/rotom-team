@@ -143,7 +143,7 @@ test(
                 await evaluate(
                     `return JSON.stringify((await import('/store.js')).store.state.sessions)`,
                 ),
-                app.sessions(owner(app)),
+                await app.sessions(owner(app)),
             );
 
             // Reconnect starts a new version namespace and a fresh full snapshot.
@@ -227,7 +227,7 @@ test("polling replays unacknowledged deltas, and resync sends a full list on tha
         const restored = await get(`session=${first.session}&ack=${delta.seq}`);
         const snapshot = restored.events.find((each: any) => each.event === "sessions");
 
-        assert.deepEqual(snapshot.data.items, app.sessions(owner(app)));
+        assert.deepEqual(snapshot.data.items, await app.sessions(owner(app)));
         assert.notEqual(snapshot.data.version, full.data.version);
     } finally {
         await closePoll?.();

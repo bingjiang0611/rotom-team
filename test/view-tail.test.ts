@@ -48,17 +48,17 @@ test("a tail view sends the newest entries and the whole order; updates stay del
 
         const room = await app.room(id);
 
-        const tab = (tail?: number) => {
+        const tab = async (tail?: number) => {
             const each = fakeTab(id, owner(app));
 
             Object.assign(each.client, tail === undefined ? {} : { viewTail: tail });
-            room.push(each.client as Client, true);
+            await room.push(each.client as Client, true);
 
             return each;
         };
 
-        const whole = tab().last("view") as unknown as View;
-        const tailed = tab(5);
+        const whole = (await tab()).last("view") as unknown as View;
+        const tailed = await tab(5);
         const view = tailed.last("view") as unknown as View;
 
         assert.deepEqual(view.order, whole.order, "the whole order");
@@ -79,7 +79,7 @@ test("a tail view sends the newest entries and the whole order; updates stay del
         assert.deepEqual(room.earlier(999_999, 200), [], "an id not in the order");
 
         await append(app, id, "thirteen");
-        room.push(tailed.client as Client, false);
+        await room.push(tailed.client as Client, false);
         const added = tailed.last("view") as unknown as View;
 
         assert.equal(
@@ -117,7 +117,7 @@ test("pages of earlier entries over HTTP: checked parameters, and only for peopl
         const room = await app.room(id);
         const reference = fakeTab(id, owner(app));
 
-        room.push(reference.client, true);
+        await room.push(reference.client, true);
         const whole = reference.last("view") as unknown as View;
         const last = whole.order!.at(-1)!;
 

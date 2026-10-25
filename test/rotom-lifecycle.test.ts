@@ -24,6 +24,9 @@ function setup(t: TestContext) {
         root,
         data,
         journal: new RotomJournal(data),
+        close(): void | Promise<void> {
+            return this.journal.close();
+        },
         member(name: string): KernelBinding {
             const home = join(data, "kernel-homes", name);
 
@@ -42,8 +45,8 @@ function setup(t: TestContext) {
         },
     };
 
-    t.after(() => {
-        f.journal.close();
+    t.after(async () => {
+        await f.close();
         rmSync(root, { recursive: true, force: true });
     });
 
@@ -72,12 +75,14 @@ test("a handoff during asynchronous admission cannot reserve Bob while launching
     const admission = Promise.withResolvers<void>();
     const executions = new RotomExecutions(f.data, async () => admission.promise);
 
-    f.journal = executions.journal;
-    f.journal.bind("shared", alice);
-    const pending = executions.run("shared", "stale-request", "must not dispatch");
-    const handoff = f.journal.handoff("shared", "takeover", "shared", bob);
+    const journal = executions.journal;
 
-    f.journal.finish(handoff.id, "settled", []);
+    f.close = () => executions.close();
+    await journal.bind("shared", alice);
+    const pending = executions.run("shared", "stale-request", "must not dispatch");
+    const handoff = await journal.handoff("shared", "takeover", "shared", bob);
+
+    await journal.finish(handoff.id, "settled", []);
     admission.resolve();
     await assert.rejects(
         pending,
@@ -85,8 +90,8 @@ test("a handoff during asynchronous admission cannot reserve Bob while launching
             error instanceof KernelRequestConflict &&
             /head changed during admission/.test(error.message),
     );
-    assert.equal(f.journal.receipts("shared").length, 1);
-    assert.equal(f.journal.existing("shared", "stale-request", "must not dispatch"), undefined);
+    assert.equal((await journal.receipts("shared")).length, 1);
+    assert.equal(await journal.existing("shared", "stale-request", "must not dispatch"), undefined);
     await executions.close();
 });
 
@@ -100,9 +105,11 @@ for (const operation of ["prompt", "compact", "handoff", "fork"] as const) {
         const admission = Promise.withResolvers<void>();
         const executions = new RotomExecutions(f.data, async () => admission.promise);
 
-        f.journal = executions.journal;
-        f.journal.bind("shared", alice);
-        f.journal.bind("target", bob);
+        const journal = executions.journal;
+
+        f.close = () => executions.close();
+        await journal.bind("shared", alice);
+        await journal.bind("target", bob);
         const pending =
             operation === "prompt"
                 ? executions.run("shared", "stopped", "Do not dispatch")
@@ -116,11 +123,11 @@ for (const operation of ["prompt", "compact", "handoff", "fork"] as const) {
         await executions.abort(operation === "fork" ? "target" : "shared");
         admission.resolve();
         await assert.rejects(pending, KernelRequestConflict);
-        assert.equal(f.journal.receipts("shared").length, 0);
-        assert.equal(f.journal.receipts("target").length, 0);
-        assert.equal(f.journal.session("shared").segmentId, "shared");
-        assert.equal(f.journal.session("shared").sessionFile, undefined);
-        assert.equal(f.journal.session("target").sessionFile, undefined);
+        assert.equal((await journal.receipts("shared")).length, 0);
+        assert.equal((await journal.receipts("target")).length, 0);
+        assert.equal((await journal.session("shared")).segmentId, "shared");
+        assert.equal((await journal.session("shared")).sessionFile, undefined);
+        assert.equal((await journal.session("target")).sessionFile, undefined);
         await executions.close();
     });
 }

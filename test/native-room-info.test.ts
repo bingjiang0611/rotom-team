@@ -13,7 +13,7 @@ import { RotomJournal, type KernelBinding, type KernelEntry } from "../src/serve
 
 test.after(cleanUp);
 
-test("room readback shares full entries by exact segment only within one call", () => {
+test("room readback shares full entries by exact segment only within one call", async () => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), "room-info-")));
     const data = join(root, "data");
     const home = join(data, "kernel-homes", "alice");
@@ -57,8 +57,11 @@ test("room readback shares full entries by exact segment only within one call", 
             };
         },
     };
-    const info = () =>
-        TeamKernel.prototype.roomInfo.call(fixture as unknown as TeamKernel, 1 as ConversationId);
+    const info = async () =>
+        await TeamKernel.prototype.roomInfo.call(
+            fixture as unknown as TeamKernel,
+            1 as ConversationId,
+        );
 
     const countReads = () => {
         fixture.executions.journal = journal;
@@ -88,7 +91,7 @@ test("room readback shares full entries by exact segment only within one call", 
             { id: "branch", parentId: "high", type: "custom", customType: "branch" },
         ]);
         countReads();
-        assert.deepEqual(info(), {
+        assert.deepEqual(await info(), {
             goal: { goal: { id: "first", status: "active" } },
             agent: { thinkingLevel: "high" },
         });
@@ -103,31 +106,31 @@ test("room readback shares full entries by exact segment only within one call", 
             },
             { id: "off", parentId: "clear", type: "thinking_level_change", thinkingLevel: "off" },
         ]);
-        assert.deepEqual(info(), { goal: { goal: null }, agent: { thinkingLevel: "off" } });
+        assert.deepEqual(await info(), { goal: { goal: null }, agent: { thinkingLevel: "off" } });
         assert.equal(reads, 2, "the next call observes appended native state");
         liveGoal = { value: { goal: { id: "live", status: "waiting" } } };
         liveThinking = "max";
-        assert.deepEqual(info(), { goal: liveGoal.value, agent: { thinkingLevel: "max" } });
+        assert.deepEqual(await info(), { goal: liveGoal.value, agent: { thinkingLevel: "max" } });
         assert.equal(reads, 2, "live readback takes precedence and avoids unnecessary history");
         liveGoal = undefined;
         liveThinking = undefined;
         journal.bind("other", { ...binding, thinkingLevel: "low" });
         agentSession = "other";
-        assert.deepEqual(info(), { goal: { goal: null }, agent: { thinkingLevel: "low" } });
+        assert.deepEqual(await info(), { goal: { goal: null }, agent: { thinkingLevel: "low" } });
         assert.equal(
             reads,
             4,
             "different segment IDs never share entries, including empty segments",
         );
         goalSession = "other";
-        assert.deepEqual(info(), { goal: undefined, agent: { thinkingLevel: "low" } });
+        assert.deepEqual(await info(), { goal: undefined, agent: { thinkingLevel: "low" } });
         assert.equal(reads, 5, "an empty full segment is shared, not mistaken for a cache miss");
         goalSession = "native";
         agentSession = "native";
         journal.close();
         journal = new RotomJournal(data);
         countReads();
-        assert.deepEqual(info(), { goal: { goal: null }, agent: { thinkingLevel: "off" } });
+        assert.deepEqual(await info(), { goal: { goal: null }, agent: { thinkingLevel: "off" } });
         assert.equal(reads, 6);
         journal.close();
         const db = new DatabaseSync(join(data, "kernel.sqlite"));
@@ -140,7 +143,7 @@ test("room readback shares full entries by exact segment only within one call", 
         db.close();
         journal = new RotomJournal(data);
         countReads();
-        assert.throws(info, SyntaxError);
+        await assert.rejects(info, SyntaxError);
         assert.equal(reads, 7, "sharing does not bypass complete history parsing or its errors");
     } finally {
         journal.close();
@@ -177,16 +180,16 @@ test("real TeamKernel caches idle native readback without stale segment state", 
         },
     );
 
-    const compactInfo = () => {
-        const info = app.kernel!.roomInfo(session.id);
+    const compactInfo = async () => {
+        const info = await app.kernel!.roomInfo(session.id);
 
         return { goal: info.goal, thinkingLevel: info.agent.thinkingLevel };
     };
 
-    const attach = (attemptId: string, segmentId: string) => {
-        const segment = journal.segment(segmentId);
+    const attach = async (attemptId: string, segmentId: string) => {
+        const segment = await journal.segment(segmentId);
 
-        journal.attach(
+        await journal.attach(
             attemptId,
             segment.sessionFile ?? join(dataDir, `${segmentId}.jsonl`),
             segment.kernelSessionId ?? `synthetic-${segmentId}`,
@@ -194,35 +197,37 @@ test("real TeamKernel caches idle native readback without stale segment state", 
     };
 
     try {
-        const initial = compactInfo();
+        const initial = await compactInfo();
 
         assert.equal(initial.goal, undefined, "an empty segment has no cached Goal");
         assert.equal(segmentEntriesReads, 1);
-        assert.deepEqual(compactInfo(), initial);
+        assert.deepEqual(await compactInfo(), initial);
         assert.equal(segmentEntriesReads, 1, "the next idle roomInfo reads no segment history");
 
-        const binding = journal.session(id).binding;
-        const revisionBeforeSwitch = journal.segmentRevision(journal.session(id).segmentId);
-        const rebound = journal.reserve(
+        const binding = (await journal.session(id)).binding;
+        const revisionBeforeSwitch = await journal.segmentRevision(
+            (await journal.session(id)).segmentId,
+        );
+        const rebound = await journal.reserve(
             id,
             "switch-fallback",
             "/model synthetic/image-fixture",
             "command",
             {
-                expectedHead: journal.session(id).segmentId,
+                expectedHead: (await journal.session(id)).segmentId,
                 binding: { ...binding, thinkingLevel: "minimal" },
             },
         );
 
-        attach(rebound.id, rebound.segmentId);
-        journal.finish(rebound.id, "handled", []);
+        await attach(rebound.id, rebound.segmentId);
+        await journal.finish(rebound.id, "handled", []);
 
         assert.equal(
-            journal.segmentRevision(journal.session(id).segmentId),
+            await journal.segmentRevision((await journal.session(id)).segmentId),
             revisionBeforeSwitch,
             "model switch fallback update appends no history",
         );
-        assert.deepEqual(compactInfo(), { goal: undefined, thinkingLevel: "minimal" });
+        assert.deepEqual(await compactInfo(), { goal: undefined, thinkingLevel: "minimal" });
         assert.equal(
             segmentEntriesReads,
             2,
@@ -230,10 +235,10 @@ test("real TeamKernel caches idle native readback without stale segment state", 
         );
 
         const activeGoal = { goal: { id: "goal-1", status: "active" } };
-        const progress = journal.reserve(id, "goal-progress", "goal-progress", "command");
+        const progress = await journal.reserve(id, "goal-progress", "goal-progress", "command");
 
-        attach(progress.id, progress.segmentId);
-        journal.progress(progress.id, [
+        await attach(progress.id, progress.segmentId);
+        await journal.progress(progress.id, [
             {
                 id: "goal-1",
                 parentId: null,
@@ -258,10 +263,10 @@ test("real TeamKernel caches idle native readback without stale segment state", 
                 thinkingLevel: "high",
             },
         ]);
-        assert.deepEqual(compactInfo(), { goal: activeGoal, thinkingLevel: "high" });
+        assert.deepEqual(await compactInfo(), { goal: activeGoal, thinkingLevel: "high" });
         assert.equal(segmentEntriesReads, 3, "progress is immediately visible to roomInfo");
 
-        journal.finish(progress.id, "handled", [
+        await journal.finish(progress.id, "handled", [
             {
                 id: "goal-2",
                 parentId: "thinking-high",
@@ -276,25 +281,25 @@ test("real TeamKernel caches idle native readback without stale segment state", 
                 thinkingLevel: "low",
             },
         ]);
-        assert.deepEqual(compactInfo(), {
+        assert.deepEqual(await compactInfo(), {
             goal: { goal: { id: "goal-2", status: "queued" } },
             thinkingLevel: "low",
         });
         assert.equal(segmentEntriesReads, 4, "finish-appended branch state is immediately visible");
 
-        const previousHead = journal.session(id).segmentId;
-        const inheritedEntries = journal.segmentEntries(previousHead);
+        const previousHead = (await journal.session(id)).segmentId;
+        const inheritedEntries = await journal.segmentEntries(previousHead);
         const readsBeforeHandoff = segmentEntriesReads;
-        const handoff = journal.handoff(
+        const handoff = await journal.handoff(
             id,
             "synthetic-handoff",
             previousHead,
-            journal.session(id).binding,
+            (await journal.session(id)).binding,
         );
 
-        attach(handoff.id, handoff.segmentId);
-        journal.finish(handoff.id, "settled", inheritedEntries);
-        assert.deepEqual(compactInfo(), {
+        await attach(handoff.id, handoff.segmentId);
+        await journal.finish(handoff.id, "settled", inheritedEntries);
+        assert.deepEqual(await compactInfo(), {
             goal: { goal: { id: "goal-2", status: "queued" } },
             thinkingLevel: "low",
         });
@@ -303,7 +308,7 @@ test("real TeamKernel caches idle native readback without stale segment state", 
             readsBeforeHandoff + 1,
             "a new handoff head reads inherited state once",
         );
-        assert.deepEqual(compactInfo(), {
+        assert.deepEqual(await compactInfo(), {
             goal: { goal: { id: "goal-2", status: "queued" } },
             thinkingLevel: "low",
         });
@@ -317,23 +322,27 @@ test("real TeamKernel caches idle native readback without stale segment state", 
             session.id,
             member,
             "synthetic-fork",
-            journal.session(id).segmentId,
+            (await journal.session(id)).segmentId,
         );
 
         assert.equal(fork.receipt?.status, "settled");
         const forkedId = fork.id;
-        const forkedInfo = app.kernel!.roomInfo(forkedId);
+        const forkedInfo = await app.kernel!.roomInfo(forkedId);
 
         assert.equal(forkedInfo.goal, undefined, "fork does not inherit private Goal state");
         assert.equal(
             forkedInfo.agent.thinkingLevel,
-            journal.session(String(forkedId)).binding.thinkingLevel,
+            (await journal.session(String(forkedId))).binding.thinkingLevel,
             "fork uses its own binding fallback rather than the source cache",
         );
         const readsBeforeUpgrade = segmentEntriesReads;
 
-        journal.upgradeKernel(id, journal.session(id).segmentId, "synthetic-kernel-upgrade");
-        assert.deepEqual(compactInfo(), {
+        await journal.upgradeKernel(
+            id,
+            (await journal.session(id)).segmentId,
+            "synthetic-kernel-upgrade",
+        );
+        assert.deepEqual(await compactInfo(), {
             goal: { goal: { id: "goal-2", status: "queued" } },
             thinkingLevel: "low",
         });

@@ -104,7 +104,7 @@ const report: Record<string, unknown> = {
 };
 
 try {
-    executions.journal.bind("qoder-conversation", {
+    await executions.journal.bind("qoder-conversation", {
         memberId: "alice",
         accountGeneration: "fixture-1",
         provider: "qoder",
@@ -123,7 +123,7 @@ try {
     assert.equal(receipt.status, "settled", JSON.stringify(receipt));
     assert.equal(readFileSync(join(workspace, "qoder-proof.txt"), "utf8"), "QODER_NATIVE_OK\n");
     assert.equal(inferenceChecks, 2);
-    let session = executions.journal.session("qoder-conversation")!;
+    let session = (await executions.journal.session("qoder-conversation"))!;
     const jsonl = readFileSync(session.sessionFile!, "utf8");
 
     assert.ok(!jsonl.includes(auth.credential.accessToken));
@@ -141,8 +141,8 @@ try {
     const credits = entries.filter((entry) => entry.customType === "qoder-credit-observation-v1");
 
     assert.equal(credits.length, 2);
-    assert.equal(executions.journal.credits("qoder-conversation")[0]?.credits, 0.25);
-    assert.equal(executions.journal.credits("qoder-conversation")[0]?.memberId, "alice");
+    assert.equal((await executions.journal.credits("qoder-conversation"))[0]?.credits, 0.25);
+    assert.equal((await executions.journal.credits("qoder-conversation"))[0]?.memberId, "alice");
     assert.ok(
         credits.every((entry) => entry.data.status === "reported" && entry.data.credits === 0.125),
     );
@@ -154,7 +154,7 @@ try {
                 JSON.stringify(entry.message.content).includes("NATIVE_QODER_FINISHED"),
         ),
     );
-    assert.equal(executions.journal.usage("qoder-conversation").length, 2);
+    assert.equal((await executions.journal.usage("qoder-conversation")).length, 2);
     const duplicate = await executions.run(
         "qoder-conversation",
         "native-qoder-once",
@@ -190,7 +190,7 @@ try {
     assert.equal(handoff.status, "settled", JSON.stringify(handoff));
     const originalSegment = session.segmentId;
 
-    session = executions.journal.session("qoder-conversation");
+    session = await executions.journal.session("qoder-conversation");
     assert.equal(session.binding.memberId, "bob");
     assert.notEqual(session.sessionFile, sourcePath);
     assert.equal(readFileSync(sourcePath, "utf8"), jsonl);
@@ -200,7 +200,7 @@ try {
     assert.ok(!seeded.includes("qoder-account-v1"));
     assert.ok(!seeded.includes(auth.credential.fingerprint));
     assert.deepEqual(
-        executions.journal.usage("qoder-conversation").map((row) => row.memberId),
+        (await executions.journal.usage("qoder-conversation")).map((row) => row.memberId),
         ["alice", "alice"],
     );
     assert.equal(
@@ -230,8 +230,11 @@ try {
     const summary = compacted.find((entry) => entry.type === "compaction");
 
     assert.ok(summary?.summary.includes("NATIVE_QODER_SUMMARY"));
-    assert.equal(executions.journal.usage("qoder-conversation").length, 3);
-    assert.equal(executions.journal.usage("qoder-conversation").at(-1)?.attemptId, compact.id);
+    assert.equal((await executions.journal.usage("qoder-conversation")).length, 3);
+    assert.equal(
+        (await executions.journal.usage("qoder-conversation")).at(-1)?.attemptId,
+        compact.id,
+    );
     assert.equal(
         (
             await executions.compact(
@@ -265,7 +268,7 @@ try {
     assert.equal(after.status, "settled");
     assert.equal(inferenceChecks, 4);
     assert.deepEqual(
-        executions.journal.usage("qoder-conversation").map((row) => row.memberId),
+        (await executions.journal.usage("qoder-conversation")).map((row) => row.memberId),
         ["alice", "alice", "bob", "bob"],
     );
     assert.equal(readFileSync(sourcePath, "utf8"), jsonl);
@@ -285,9 +288,9 @@ try {
     const beforeFork = readFileSync(session.sessionFile!, "utf8");
 
     assert.ok(beforeFork.includes(bobAuth.credential.fingerprint));
-    const aliceBinding = executions.journal.segment(originalSegment).binding;
+    const aliceBinding = (await executions.journal.segment(originalSegment)).binding;
 
-    executions.journal.bind("qoder-fork", aliceBinding);
+    await executions.journal.bind("qoder-fork", aliceBinding);
     const fork = await executions.fork(
         "qoder-conversation",
         "qoder-fork",
@@ -296,9 +299,9 @@ try {
     );
 
     assert.equal(fork.status, "settled", JSON.stringify(fork));
-    assert.equal(executions.journal.usage("qoder-fork").length, 0);
-    assert.deepEqual(executions.journal.credits("qoder-fork"), []);
-    const forkSession = executions.journal.session("qoder-fork");
+    assert.equal((await executions.journal.usage("qoder-fork")).length, 0);
+    assert.deepEqual(await executions.journal.credits("qoder-fork"), []);
+    const forkSession = await executions.journal.session("qoder-fork");
 
     assert.notEqual(forkSession.sessionFile, session.sessionFile);
     assert.ok(
@@ -319,17 +322,17 @@ try {
     assert.equal(forkReply.status, "settled");
     assert.equal(inferenceChecks, 5);
     assert.deepEqual(
-        executions.journal.usage("qoder-fork").map((row) => row.memberId),
+        (await executions.journal.usage("qoder-fork")).map((row) => row.memberId),
         ["alice"],
     );
     assert.equal(readFileSync(session.sessionFile!, "utf8"), beforeFork);
-    executions.journal.bind("fork-denied", aliceBinding);
+    await executions.journal.bind("fork-denied", aliceBinding);
     forbidFork = true;
     await assert.rejects(
         executions.fork("qoder-conversation", "fork-denied", "denied", session.segmentId),
         /permission revoked/,
     );
-    assert.equal(executions.journal.receipts("fork-denied").length, 0);
+    assert.equal((await executions.journal.receipts("fork-denied")).length, 0);
     forbidFork = false;
     writeFileSync(join(workspace, ".fixture-compact-error"), "fixture", { mode: 0o600 });
     const failed = await executions.compact(
@@ -360,16 +363,16 @@ try {
         executions.fork("qoder-conversation", "fork-denied", "unknown-source", session.segmentId),
         /active or unknown/,
     );
-    assert.equal(executions.journal.receipts("fork-denied").length, 0);
+    assert.equal((await executions.journal.receipts("fork-denied")).length, 0);
     assert.equal(inferenceChecks, callsAfterFailure);
-    const subtotals = executions.journal.credits("qoder-conversation");
+    const subtotals = await executions.journal.credits("qoder-conversation");
 
     assert.equal(subtotals.find((row) => row.memberId === "alice")?.credits, 0.25);
     const bobSubtotal = subtotals.find((row) => row.memberId === "bob")!;
 
     assert.equal(bobSubtotal.credits, 0.25);
     assert.ok(bobSubtotal.unknown + bobSubtotal.unmeteredOperations > 0);
-    assert.equal(executions.journal.credits("qoder-fork")[0]?.credits, 0.125);
+    assert.equal((await executions.journal.credits("qoder-fork"))[0]?.credits, 0.125);
     Object.assign(report, {
         status: "passed",
         compactedHistoryUsedAfterRestart: true,

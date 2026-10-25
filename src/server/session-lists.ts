@@ -5,7 +5,7 @@
 import type { PocketApp } from "./app.ts";
 import type { Client } from "./room.ts";
 
-type Row = ReturnType<PocketApp["sessions"]>[number];
+type Row = Awaited<ReturnType<PocketApp["sessions"]>>[number];
 type Prepared = { items: Row[]; encoded: Map<number, string> | undefined };
 type Sent = { sequence: number; version: string; encoded: Map<number, string> | undefined };
 

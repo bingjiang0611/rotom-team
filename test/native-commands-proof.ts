@@ -332,13 +332,16 @@ try {
         ),
     );
     assert.equal(calls.length, 0);
-    const beforeDiscovery = app.kernel!.executions.journal.receipts(String(id)).length;
+    const beforeDiscovery = (await app.kernel!.executions.journal.receipts(String(id))).length;
 
     assert.equal(
         (await request(viewer, `c/${id}/prompts`, { requestId: "viewer-discovery" })).status,
         403,
     );
-    assert.equal(app.kernel!.executions.journal.receipts(String(id)).length, beforeDiscovery);
+    assert.equal(
+        (await app.kernel!.executions.journal.receipts(String(id))).length,
+        beforeDiscovery,
+    );
     const discovered = await json(
         await request(alice, `c/${id}/prompts`, { requestId: "first-discovery" }),
     );
@@ -384,7 +387,7 @@ try {
     assert.equal(app.sessionMeta(id)?.title, undefined);
     assert.equal((await json(await submit(alice, "FIRST_USER_MARKER"))).status, "settled");
     assert.equal(calls.at(-1)!.body.model, "model-a");
-    const sourceFirst = app.kernel!.executions.journal.session(String(id));
+    const sourceFirst = await app.kernel!.executions.journal.session(String(id));
 
     const originalFile = sourceFirst.sessionFile!;
     const registry = await json(await request(alice, `c/${id}/prompts`));
@@ -393,16 +396,19 @@ try {
 
     assert.ok(registry.dynamicReady);
     assert.notEqual(
-        (app.kernel!.roomState(id, alice) as { commandsRevision: string | null }).commandsRevision,
+        ((await app.kernel!.roomState(id, alice)) as { commandsRevision: string | null })
+            .commandsRevision,
         null,
         "the catalog revision reaches only its exact member and binding",
     );
     assert.equal(
-        (app.kernel!.roomState(id, bob) as { commandsRevision: string | null }).commandsRevision,
+        ((await app.kernel!.roomState(id, bob)) as { commandsRevision: string | null })
+            .commandsRevision,
         null,
     );
     assert.equal(
-        (app.kernel!.roomState(id, viewer) as { commandsRevision: string | null }).commandsRevision,
+        ((await app.kernel!.roomState(id, viewer)) as { commandsRevision: string | null })
+            .commandsRevision,
         null,
     );
     const projectionJournal = app.kernel!.executions.journal;
@@ -410,14 +416,14 @@ try {
     let projectionReads = 0;
 
     try {
-        projectionJournal.sessionIfPresent = function (sessionId) {
+        projectionJournal.sessionIfPresent = async function (sessionId) {
             projectionReads++;
 
-            return originalSessionIfPresent.call(this, sessionId);
+            return await originalSessionIfPresent.call(this, sessionId);
         };
 
         assert.notEqual(
-            (app.kernel!.roomState(id, alice) as { commandsRevision: string | null })
+            ((await app.kernel!.roomState(id, alice)) as { commandsRevision: string | null })
                 .commandsRevision,
             null,
         );
@@ -427,8 +433,8 @@ try {
             "one roomState performs exactly one fresh head/session read",
         );
 
-        projectionJournal.sessionIfPresent = function (sessionId) {
-            const session = originalSessionIfPresent.call(this, sessionId)!;
+        projectionJournal.sessionIfPresent = async function (sessionId) {
+            const session = (await originalSessionIfPresent.call(this, sessionId))!;
 
             return {
                 ...session,
@@ -437,7 +443,7 @@ try {
         };
 
         assert.equal(
-            (app.kernel!.roomState(id, alice) as { commandsRevision: string | null })
+            ((await app.kernel!.roomState(id, alice)) as { commandsRevision: string | null })
                 .commandsRevision,
             null,
             "even the same member and segment need exact full binding equality",
@@ -455,7 +461,7 @@ try {
     const viewerTab = fakeTab(id, viewer);
     let goalReads = 0;
     let safetyReads = 0;
-    let nextGoal: unknown = originalGoal.call(app.kernel!, id);
+    let nextGoal: unknown = await originalGoal.call(app.kernel!, id);
 
     try {
         projectionRoom.clients.clear();
@@ -465,19 +471,19 @@ try {
             projectionRoom.clients.add(tab.client);
         }
 
-        app.kernel!.nativeGoal = function () {
+        app.kernel!.nativeGoal = async function () {
             goalReads++;
 
             return nextGoal;
         };
 
-        app.kernel!.roomState = function (sessionId, user) {
+        app.kernel!.roomState = async function (sessionId, user) {
             safetyReads++;
 
-            return originalRoomState.call(this, sessionId, user);
+            return await originalRoomState.call(this, sessionId, user);
         };
 
-        projectionRoom.pushAll(aliceTab.client);
+        await projectionRoom.pushAll(aliceTab.client);
         assert.equal(goalReads, 1, "one synchronous fanout reads native Goal once, even if absent");
         assert.equal(safetyReads, 3, "every viewer still performs its fresh safety projection");
         assert.equal(aliceTab.last("view")!.full, true);
@@ -497,7 +503,7 @@ try {
             null,
         );
         nextGoal = { goal: { id: "fixture-current", status: "active" } };
-        projectionRoom.pushAll();
+        await projectionRoom.pushAll();
         assert.equal(goalReads, 2, "the next fanout rereads Goal rather than keeping a cache");
         assert.equal(safetyReads, 6);
 
@@ -506,18 +512,18 @@ try {
         }
 
         nextGoal = { goal: { id: "fixture-current", status: "waiting" } };
-        projectionRoom.pushAll();
+        await projectionRoom.pushAll();
         assert.equal(goalReads, 3);
         nextGoal = undefined;
-        projectionRoom.pushAll();
+        await projectionRoom.pushAll();
         assert.equal(goalReads, 4);
 
         for (const tab of tabs) {
             assert.equal(tab.field("nativeGoal"), null, "cleared Goal is not retained");
         }
 
-        projectionRoom.push(aliceTab.client, true);
-        projectionRoom.push(bobTab.client, true);
+        await projectionRoom.push(aliceTab.client, true);
+        await projectionRoom.push(bobTab.client, true);
         assert.equal(goalReads, 6, "standalone/reconnect pushes stay independently fresh");
 
         app.kernel!.nativeGoal = () => {
@@ -526,14 +532,17 @@ try {
 
         const before = tabs.map((tab) => tab.events.length);
 
-        assert.throws(() => projectionRoom.pushAll(), /fixture corrupt Goal read/);
+        await assert.rejects(
+            async () => await projectionRoom.pushAll(),
+            /fixture corrupt Goal read/,
+        );
         assert.deepEqual(
             tabs.map((tab) => tab.events.length),
             before,
             "read failures are not swallowed into empty state",
         );
         projectionRoom.clients.clear();
-        projectionRoom.pushAll();
+        await projectionRoom.pushAll();
     } finally {
         app.kernel!.nativeGoal = originalGoal;
         app.kernel!.roomState = originalRoomState;
@@ -628,9 +637,10 @@ try {
         registry.commands.find((each: { name: string }) => each.name === "fixture-echo").web.label,
         "Unverified extension",
     );
-    const beforeRejected = app.kernel!.executions.journal.receipts(String(id)).length;
+    const beforeRejected = (await app.kernel!.executions.journal.receipts(String(id))).length;
     const startsBeforeRejected = readFileSync(startsFile, "utf8");
-    const bindingBeforeRejected = app.kernel!.executions.journal.session(String(id)).binding;
+    const bindingBeforeRejected = (await app.kernel!.executions.journal.session(String(id)))
+        .binding;
 
     for (const text of [
         "/llama",
@@ -644,10 +654,13 @@ try {
         assert.equal(rejected.status, 400, await rejected.text());
     }
 
-    assert.equal(app.kernel!.executions.journal.receipts(String(id)).length, beforeRejected);
+    assert.equal(
+        (await app.kernel!.executions.journal.receipts(String(id))).length,
+        beforeRejected,
+    );
     assert.equal(readFileSync(startsFile, "utf8"), startsBeforeRejected);
     assert.deepEqual(
-        app.kernel!.executions.journal.session(String(id)).binding,
+        (await app.kernel!.executions.journal.session(String(id))).binding,
         bindingBeforeRejected,
     );
 
@@ -703,7 +716,7 @@ try {
     ]);
     assert.equal(calls.length, noInference);
     assert.ok(!JSON.stringify(await app.room(id)).includes("PRIVATE_CREDITS_"));
-    assert.ok(!JSON.stringify(app.kernel!.snapshot(id, bob)).includes("PRIVATE_CREDITS_"));
+    assert.ok(!JSON.stringify(await app.kernel!.snapshot(id, bob)).includes("PRIVATE_CREDITS_"));
     // A tracked resource change reloads the retained runtime: the live extension shadows the cached template and is
     // admitted without a second Team allowlist.
     writeFileSync(join(data, "team-agent/extensions/swap-command.flag"), "fixture");
@@ -713,7 +726,7 @@ try {
     assert.equal(swapped.status, "handled");
     assert.equal(calls.length, noInference);
     assert.ok(readFileSync(originalFile, "utf8").includes("hidden-command-effect"));
-    const excludedReceipts = app.kernel!.executions.journal.receipts(String(id)).length;
+    const excludedReceipts = (await app.kernel!.executions.journal.receipts(String(id))).length;
 
     for (const text of ["/share", "/bug"]) {
         const response = await submit(alice, text);
@@ -723,7 +736,7 @@ try {
     }
 
     assert.equal(
-        app.kernel!.executions.journal.receipts(String(id)).length,
+        (await app.kernel!.executions.journal.receipts(String(id))).length,
         excludedReceipts,
         "excluded external actions never start a native process",
     );
@@ -761,7 +774,7 @@ try {
     );
     assert.equal(calls.length, noInference);
     assert.equal((await submit(viewer, "/name denied")).status, 403);
-    assert.equal(app.kernel!.executions.thinkingLevel(String(id)), "off");
+    assert.equal(await app.kernel!.executions.thinkingLevel(String(id)), "off");
     const reasoningOnly = await json(await submit(alice, "/model openai/model-c"));
 
     assert.equal(
@@ -769,13 +782,13 @@ try {
         "handled",
         "a model without the current level restarts with its clamped level",
     );
-    assert.equal(app.kernel!.executions.thinkingLevel(String(id)), "low");
+    assert.equal(await app.kernel!.executions.thinkingLevel(String(id)), "low");
     // Native history still ends at "off": a later ordinary startup must accept Pi's clamp too.
     await app.close();
     app = await open();
     handler = createHandler({ app, listen: { host: "127.0.0.1", port: 0 }, restart: () => {} });
     assert.equal(
-        app.kernel!.agentInfo(id).thinkingLevel,
+        (await app.kernel!.agentInfo(id)).thinkingLevel,
         "low",
         "an idle session shows the level its model actually uses",
     );
@@ -784,14 +797,14 @@ try {
         "handled",
         "a restarted reasoning-only model starts from its clamped level",
     );
-    assert.equal(app.kernel!.executions.thinkingLevel(String(id)), "medium");
-    const beforeModel = app.kernel!.executions.journal.session(String(id));
+    assert.equal(await app.kernel!.executions.thinkingLevel(String(id)), "medium");
+    const beforeModel = await app.kernel!.executions.journal.session(String(id));
     const changed = await json(
         await submit(alice, "/model openai/model-b", { requestId: "model-change" }),
     );
 
     assert.equal(changed.status, "handled");
-    const afterModel = app.kernel!.executions.journal.session(String(id));
+    const afterModel = await app.kernel!.executions.journal.session(String(id));
 
     assert.equal(afterModel.segmentId, beforeModel.segmentId, "own model change keeps the segment");
     assert.equal(
@@ -802,9 +815,9 @@ try {
     assert.ok(beforeModel.sessionFile, "the model change runs on an existing native session");
     assert.equal(afterModel.kernelSessionId, beforeModel.kernelSessionId);
     assert.ok(
-        app
-            .kernel!.executions.journal.segmentEntries(afterModel.segmentId)
-            .some((entry) => entry.type === "model_change" && entry.modelId === "model-b"),
+        (await app.kernel!.executions.journal.segmentEntries(afterModel.segmentId)).some(
+            (entry) => entry.type === "model_change" && entry.modelId === "model-b",
+        ),
         "native history records the in-place model change",
     );
     const replayedModel = await json(
@@ -817,23 +830,26 @@ try {
         409,
     );
     assert.equal(calls.length, noInference, "model selection does not infer");
-    assert.equal(app.kernel!.executions.journal.session(String(id)).binding.model, "model-b");
+    assert.equal(
+        (await app.kernel!.executions.journal.session(String(id))).binding.model,
+        "model-b",
+    );
 
     for (const viewer of [alice, bob]) {
         assert.equal(
-            app.sessions(viewer).find((session) => session.id === Number(id))?.model,
+            (await app.sessions(viewer)).find((session) => session.id === Number(id))?.model,
             "model-b",
             "sidebar uses the same current native model for every authorized viewer",
         );
     }
 
-    const beforeThinking = app.kernel!.executions.journal.session(String(id));
+    const beforeThinking = await app.kernel!.executions.journal.session(String(id));
     const thinking = await json(await submit(alice, "/thinking high"));
 
     assert.equal(thinking.status, "handled");
     assert.equal(calls.length, noInference, "idle thinking selection does not infer");
-    assert.equal(app.kernel!.executions.thinkingLevel(String(id)), "high");
-    const afterThinking = app.kernel!.executions.journal.session(String(id));
+    assert.equal(await app.kernel!.executions.thinkingLevel(String(id)), "high");
+    const afterThinking = await app.kernel!.executions.journal.session(String(id));
 
     assert.equal(
         afterThinking.segmentId,
@@ -853,7 +869,7 @@ try {
         "idle thinking reaches the next request",
     );
     assert.equal(
-        app.kernel!.executions.journal.session(String(id)).segmentId,
+        (await app.kernel!.executions.journal.session(String(id))).segmentId,
         beforeThinking.segmentId,
         "the next prompt runs in the same segment",
     );
@@ -866,7 +882,7 @@ try {
     );
     await json(await request(alice, `sessions/${id}`, { title: "Synchronized Native Name" }));
     assert.equal(app.sessionMeta(id)?.title, "Synchronized Native Name");
-    const firstNamed = app.kernel!.executions.journal.session(String(id));
+    const firstNamed = await app.kernel!.executions.journal.session(String(id));
     const native = await nativeSessionManager();
 
     assert.ok(
@@ -881,7 +897,7 @@ try {
     await json(await submit(alice, "/thinking low"));
     await json(await submit(alice, "THIRD_USER_MARKER"));
     assert.equal(app.sessionMeta(id)?.title, "Synchronized Native Name");
-    const named = app.kernel!.executions.journal.session(String(id));
+    const named = await app.kernel!.executions.journal.session(String(id));
     const titleApi = await nativeSessionManager();
 
     assert.equal(
@@ -926,7 +942,7 @@ try {
 
     assert.equal(replayedCopy.conversationId, clone.conversationId);
     assert.equal(app.sessionMeta(clone.conversationId)?.title, copyTitle);
-    const cloneSegment = app.kernel!.executions.journal.session(String(clone.conversationId));
+    const cloneSegment = await app.kernel!.executions.journal.session(String(clone.conversationId));
 
     assert.equal(clone.receipt.status, "settled");
     assert.notEqual(clone.conversationId, id);
@@ -942,7 +958,7 @@ try {
         "same-member native clone retains private native entries",
     );
     const foreignClone = await json(await submit(bob, "/clone"));
-    const foreignSegment = app.kernel!.executions.journal.session(
+    const foreignSegment = await app.kernel!.executions.journal.session(
         String(foreignClone.conversationId),
     );
 
@@ -959,7 +975,7 @@ try {
     assert.equal(calls.at(-1)!.payer, bob.id);
     assert.ok(JSON.stringify(calls.at(-1)!.body).includes("THIRD_USER_MARKER"));
     assert.ok(!JSON.stringify(calls.at(-1)!.body).includes(`PRIVATE_REASONING_${alice.id}`));
-    const entries = app.kernel!.executions.journal.segmentEntries(named.segmentId);
+    const entries = await app.kernel!.executions.journal.segmentEntries(named.segmentId);
     const selected = entries.find(
         (entry) =>
             entry.type === "message" &&
@@ -969,13 +985,13 @@ try {
 
     assert.equal(app.sessionMeta(fork.conversationId)?.title, "Synchronized Native Name · Fork");
     assert.equal(fork.editorText, "SECOND_USER_MARKER");
-    const forkMessages = app.kernel!.snapshot(fork.conversationId, bob).messages;
+    const forkMessages = (await app.kernel!.snapshot(fork.conversationId, bob)).messages;
 
     assert.ok(JSON.stringify(forkMessages).includes("FIRST_USER_MARKER"));
     assert.ok(!JSON.stringify(forkMessages).includes("SECOND_USER_MARKER"));
     assert.ok(!JSON.stringify(forkMessages).includes("THIRD_USER_MARKER"));
     assert.ok(!JSON.stringify(forkMessages).includes("private-response-"));
-    const forkSegment = app.kernel!.executions.journal.session(String(fork.conversationId));
+    const forkSegment = await app.kernel!.executions.journal.session(String(fork.conversationId));
 
     assert.ok(
         !readFileSync(forkSegment.sessionFile!, "utf8").includes(`PRIVATE_REASONING_${alice.id}`),
@@ -984,7 +1000,8 @@ try {
     assert.equal(calls.at(-1)!.payer, bob.id);
     assert.ok(!JSON.stringify(calls.at(-1)!.body).includes(`PRIVATE_REASONING_${alice.id}`));
     assert.equal(
-        app.kernel!.executions.journal.session(String(fork.conversationId)).binding.memberId,
+        (await app.kernel!.executions.journal.session(String(fork.conversationId))).binding
+            .memberId,
         bob.id,
     );
     const selection = await json(await submit(alice, "/tree"));
@@ -997,11 +1014,11 @@ try {
     assert.equal(treeResult.nativeResult.navigation.editorText, "SECOND_USER_MARKER");
     assert.equal(treeResult.nativeResult.navigation.cancelled, false);
     await app.kernel!.mirror(id);
-    const firstBranchState = app.kernel!.roomState(id, alice);
+    const firstBranchState = await app.kernel!.roomState(id, alice);
 
     assert.ok("hasBranchedHistory" in firstBranchState && firstBranchState.hasBranchedHistory);
     await app.kernel!.mirror(id);
-    const repeatedBranchState = app.kernel!.roomState(id, alice);
+    const repeatedBranchState = await app.kernel!.roomState(id, alice);
 
     assert.ok(
         "hasBranchedHistory" in repeatedBranchState && repeatedBranchState.hasBranchedHistory,
@@ -1066,7 +1083,7 @@ try {
     );
 
     const beforeChoice = app.accounts.choice(alice);
-    const beforeBinding = app.kernel!.executions.journal.session(String(id)).binding;
+    const beforeBinding = (await app.kernel!.executions.journal.session(String(id))).binding;
 
     assert.equal(
         (
@@ -1107,7 +1124,7 @@ try {
         409,
     );
     assert.deepEqual(app.accounts.choice(alice), beforeChoice);
-    const beforeLive = app.kernel!.executions.journal.latest(String(id))!;
+    const beforeLive = (await app.kernel!.executions.journal.latest(String(id)))!;
     const startsBeforeThinking = readFileSync(startsFile, "utf8");
     const heldReasoning = calls.at(-1)!.body.reasoning_effort;
 
@@ -1130,12 +1147,12 @@ try {
         409,
     );
     await json(await request(alice, `c/${id}/configure`, { thinkingLevel: "medium" }));
-    assert.equal(app.kernel!.agentInfo(id).thinkingLevel, "medium");
+    assert.equal((await app.kernel!.agentInfo(id)).thinkingLevel, "medium");
     await json(await submit(alice, "/thinking high", { mode: "steer" }));
-    assert.equal(app.kernel!.agentInfo(id).thinkingLevel, "high");
+    assert.equal((await app.kernel!.agentInfo(id)).thinkingLevel, "high");
     await json(await request(alice, `c/${id}/configure`, { thinkingLevel: "max" }));
     assert.equal(
-        app.kernel!.agentInfo(id).thinkingLevel,
+        (await app.kernel!.agentInfo(id)).thinkingLevel,
         "high",
         "native clamps unsupported levels",
     );
@@ -1145,8 +1162,11 @@ try {
         heldReasoning,
         "already dispatched request unchanged",
     );
-    assert.deepEqual(app.kernel!.executions.journal.session(String(id)).binding, beforeBinding);
-    const afterLive = app.kernel!.executions.journal.latest(String(id))!;
+    assert.deepEqual(
+        (await app.kernel!.executions.journal.session(String(id))).binding,
+        beforeBinding,
+    );
+    const afterLive = (await app.kernel!.executions.journal.latest(String(id)))!;
 
     assert.equal(afterLive.id, beforeLive.id);
     assert.equal(readFileSync(startsFile, "utf8"), startsBeforeThinking);
@@ -1164,12 +1184,15 @@ try {
     app = await open();
     handler = createHandler({ app, listen: { host: "127.0.0.1", port: 0 }, restart: () => {} });
     assert.equal(app.sessionMeta(id)?.title, "Synchronized Native Name");
-    assert.equal(app.kernel!.executions.journal.session(String(id)).binding.model, "model-b");
-    assert.equal(app.kernel!.agentInfo(id).thinkingLevel, "high");
+    assert.equal(
+        (await app.kernel!.executions.journal.session(String(id))).binding.model,
+        "model-b",
+    );
+    assert.equal((await app.kernel!.agentInfo(id)).thinkingLevel, "high");
     const callsBeforeMirror = calls.length;
 
     await app.kernel!.mirror(id);
-    const restoredBranchState = app.kernel!.roomState(id, alice);
+    const restoredBranchState = await app.kernel!.roomState(id, alice);
 
     assert.ok(
         "hasBranchedHistory" in restoredBranchState && restoredBranchState.hasBranchedHistory,
@@ -1178,7 +1201,7 @@ try {
     await app.kernel!.mirror(id);
     assert.equal(calls.length, callsBeforeMirror, "mirror catch-up does not invoke a model");
     assert.equal(
-        app.sessions(alice).find((session) => session.id === Number(id))?.model,
+        (await app.sessions(alice)).find((session) => session.id === Number(id))?.model,
         "model-b",
     );
     assert.equal(app.sessionMeta(clone.conversationId)?.title, copyTitle);
@@ -1203,7 +1226,7 @@ try {
     );
 
     await json(await submit(alice, "NOOP_BASELINE", {}, noOpSession.id));
-    const noOpSegment = app.kernel!.executions.journal.session(String(noOpSession.id));
+    const noOpSegment = await app.kernel!.executions.journal.session(String(noOpSession.id));
     const noOpLeaf = native.SessionManager.open(noOpSegment.sessionFile!).getLeafId();
     const beforeNoOp = calls.length;
     const noOp = await json(await submit(alice, `/tree ${noOpLeaf}`, {}, noOpSession.id));
@@ -1313,7 +1336,9 @@ try {
         "ordinary active prompt for queued effect",
         20000,
     );
-    const queuedOwner = app.kernel!.executions.journal.latest(String(queuedFailureSession.id))!;
+    const queuedOwner = (await app.kernel!.executions.journal.latest(
+        String(queuedFailureSession.id),
+    ))!;
     // Exercise the trusted executor below Team admission. HTTP rejects fixture commands above.
     // These fixtures still prove the native effect/error fence; they are not an extra public command surface.
     const queuedFailurePending = app
@@ -1322,8 +1347,8 @@ try {
             () => assert.fail("fixture must throw after its native effect"),
             (error) => error,
         );
-    const queuedFile = app.kernel!.executions.journal.session(
-        String(queuedFailureSession.id),
+    const queuedFile = (
+        await app.kernel!.executions.journal.session(String(queuedFailureSession.id))
     ).sessionFile!;
 
     await until(
@@ -1346,7 +1371,7 @@ try {
         "queued effect owner closure",
         20000,
     );
-    const queuedReceipt = app.kernel!.executions.journal.receipt(queuedOwner.id);
+    const queuedReceipt = await app.kernel!.executions.journal.receipt(queuedOwner.id);
     const queuedBytes = readFileSync(queuedFile, "utf8");
 
     assert.ok(queuedBytes.includes("fixture-effect"));
@@ -1356,7 +1381,7 @@ try {
         1,
         "queued retry cannot repeat the effect",
     );
-    const queuedRecoverable = app.kernel!.executions.journal.canResume(queuedOwner.id);
+    const queuedRecoverable = await app.kernel!.executions.journal.canResume(queuedOwner.id);
 
     writeFileSync(
         join(data, "queued-effect-evidence.json"),
@@ -1452,7 +1477,7 @@ try {
     assert.equal(memoryFailure.status, "unknown");
     assert.equal(memoryFailure.phase, "finalization");
     assert.equal(memoryFailure.failure, "rpc-record-limit");
-    const failedRoom = app.kernel!.roomState(largeMemory.id, alice);
+    const failedRoom = await app.kernel!.roomState(largeMemory.id, alice);
 
     assert.ok("pending" in failedRoom);
     assert.equal(failedRoom.pending?.failure, "rpc-record-limit");
@@ -1469,9 +1494,8 @@ try {
         "a handled RPC response cannot erase a post-effect extension error",
     );
     assert.equal(failed.operation, "command");
-    const failureFile = app.kernel!.executions.journal.session(
-        String(failureSession.id),
-    ).sessionFile!;
+    const failureFile = (await app.kernel!.executions.journal.session(String(failureSession.id)))
+        .sessionFile!;
     const failureBytes = readFileSync(failureFile, "utf8");
 
     assert.ok(
@@ -1482,14 +1506,17 @@ try {
     app = await open();
     handler = createHandler({ app, listen: { host: "127.0.0.1", port: 0 }, restart: () => {} });
     await new Promise((resolve) => setTimeout(resolve, 350));
-    assert.equal(app.kernel!.executions.journal.receipt(failed.id).status, "unknown");
-    assert.equal(app.kernel!.executions.journal.receipt(memoryFailure.id).status, "unknown");
+    assert.equal((await app.kernel!.executions.journal.receipt(failed.id)).status, "unknown");
     assert.equal(
-        app.kernel!.executions.journal.receipt(memoryFailure.id).failure,
+        (await app.kernel!.executions.journal.receipt(memoryFailure.id)).status,
+        "unknown",
+    );
+    assert.equal(
+        (await app.kernel!.executions.journal.receipt(memoryFailure.id)).failure,
         "rpc-record-limit",
     );
-    assert.equal(app.kernel!.executions.journal.resume(memoryFailure.id), undefined);
-    assert.equal(app.kernel!.executions.journal.receipts(String(largeMemory.id)).length, 1);
+    assert.equal(await app.kernel!.executions.journal.resume(memoryFailure.id), undefined);
+    assert.equal((await app.kernel!.executions.journal.receipts(String(largeMemory.id))).length, 1);
 
     if (process.argv.includes("--ui")) {
         bootstrap = { token: tokens.get(alice.id)!, id: Number(largeMemory.id) };
@@ -1502,8 +1529,8 @@ try {
         );
     }
 
-    assert.equal(app.kernel!.executions.journal.receipt(queuedOwner.id).status, "unknown");
-    assert.equal(app.kernel!.executions.journal.resume(queuedOwner.id), undefined);
+    assert.equal((await app.kernel!.executions.journal.receipt(queuedOwner.id)).status, "unknown");
+    assert.equal(await app.kernel!.executions.journal.resume(queuedOwner.id), undefined);
     assert.equal(readFileSync(queuedFile, "utf8"), queuedBytes);
     const queuedReadback = await json(
         await submit(
@@ -1516,7 +1543,7 @@ try {
 
     assert.equal(queuedReadback.id, queuedOwner.id);
     assert.equal(queuedReadback.status, "unknown");
-    const failedReadback = app.kernel!.executions.journal.receipt(failed.id);
+    const failedReadback = await app.kernel!.executions.journal.receipt(failed.id);
 
     assert.equal(failedReadback.id, failed.id);
     assert.equal(failedReadback.operation, "command");

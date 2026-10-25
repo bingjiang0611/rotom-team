@@ -491,13 +491,15 @@ test("the session list says when a session's last run ended", async () => {
     const started = Date.now();
 
     assert.equal(
-        app.sessions().find((each) => each.id === Number(id))?.endedAt,
+        (await app.sessions()).find((each) => each.id === Number(id))?.endedAt,
         undefined,
         "not before it ran",
     );
     await say(app, id, "hi");
     await until(
-        () => (app.sessions().find((each) => each.id === Number(id))?.endedAt ?? 0) >= started,
+        async () =>
+            ((await app.sessions()).find((each) => each.id === Number(id))?.endedAt ?? 0) >=
+            started,
         "the end of the run",
     );
 });

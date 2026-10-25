@@ -175,6 +175,13 @@ export class PocketApp {
     readonly #clients = new Set<Client>();
     readonly #clientRooms = new WeakMap<Client, Room>();
     readonly #sessionLists = new SessionLists();
+    readonly #sessionListPending = new Map<
+        Client,
+        { full: boolean; version: number } & ReturnType<typeof Promise.withResolvers<void>>
+    >();
+    #sessionListRunning = false;
+    #sessionListDrain = Promise.resolve();
+    #projectAccessEpoch = 0;
     readonly #rooms = new Map<ConversationId, Promise<Room>>();
     readonly #envs = new Map<string, NodeExecutionEnv>();
     readonly #busy = new Set<ConversationId>();
@@ -786,7 +793,7 @@ export class PocketApp {
         }
 
         client.send("hello", this.#helloFor(client, hello));
-        this.#sendSessionLists([client], true);
+        await this.#sendSessionLists([client], true);
 
         if (arriving) {
             this.#peopleChanged(client.user.id);
@@ -884,7 +891,16 @@ export class PocketApp {
             this.#clientRooms.set(client, room);
             room.clients.add(client);
             acknowledge();
-            room.pushAll(client);
+            await room.pushAll(client);
+
+            if (
+                !current() ||
+                this.#clientRooms.get(client) !== room ||
+                !this.canSee(client.user, room.id)
+            ) {
+                return;
+            }
+
             room.sendChanges(client, room.watchChanges(this.cwdOf(id)), false);
             client.send("chat", { conversationId: room.id, full: true, messages: room.chat });
             client.send("notes", { conversationId: room.id, ...room.notes });
@@ -1217,6 +1233,7 @@ export class PocketApp {
     }
 
     async projectsChanged(): Promise<void> {
+        this.#projectAccessEpoch++;
         await this.kernel?.revoke();
 
         for (const client of [...this.#clients]) {
@@ -1235,7 +1252,7 @@ export class PocketApp {
             }
         }
 
-        this.#sendSessionLists(this.#clients, true);
+        await this.#sendSessionLists(this.#clients, true);
 
         for (const id of this.busyConversations()) {
             const owner = this.execution.owner(id);
@@ -1400,7 +1417,7 @@ export class PocketApp {
         }
     }
 
-    markRunSeen(id: ConversationId, user: User, finishedAt: number): void {
+    async markRunSeen(id: ConversationId, user: User, finishedAt: number): Promise<void> {
         this.requireSee(user, id);
         const current = this.#sessions[String(id)]?.finishedAt;
 
@@ -1415,11 +1432,13 @@ export class PocketApp {
 
         this.config.markFinishedSeen(user.id, String(id), finishedAt);
 
-        this.#sendSessionLists([...this.#clients].filter((client) => client.user.id === user.id));
+        await this.#sendSessionLists(
+            [...this.#clients].filter((client) => client.user.id === user.id),
+        );
     }
 
     /** Re-send a full list on the same ordered stream after a tab missed a delta. Never target another user's tab. */
-    resyncSessionList(user: User, connection: string): void {
+    async resyncSessionList(user: User, connection: string): Promise<void> {
         const client = [...this.#clients].find(
             (candidate) =>
                 candidate.connection === connection &&
@@ -1431,42 +1450,122 @@ export class PocketApp {
             throw new HttpError(404, "Session-list connection is no longer available.");
         }
 
-        this.#sendSessionLists([client], true);
+        await this.#sendSessionLists([client], true);
     }
 
-    /** Filter and prepare a list once per current user per refresh; compare/send separately for each connection. */
-    #sendSessionLists(clients: Iterable<Client>, full = false): void {
-        const rows = new Map<User, ReturnType<PocketApp["sessions"]>>();
-        const prepared = new Map<User, ReturnType<SessionLists["prepare"]>>();
+    /** One coalesced request per attached client; newer refreshes share its completion, never an unbounded queue. */
+    #sendSessionLists(clients: Iterable<Client>, full = false): Promise<void> {
+        const pending = new Set<Promise<void>>();
 
         for (const client of clients) {
+            if (this.#closing || !this.#clients.has(client)) {
+                continue;
+            }
+
+            let request = this.#sessionListPending.get(client);
+
+            if (request) {
+                request.full ||= full;
+                request.version++;
+            } else {
+                request = { full, version: 0, ...Promise.withResolvers<void>() };
+                this.#sessionListPending.set(client, request);
+            }
+
+            pending.add(request.promise);
+        }
+
+        if (!this.#sessionListRunning && this.#sessionListPending.size) {
+            this.#sessionListRunning = true;
+            this.#sessionListDrain = Promise.resolve().then(async () => {
+                try {
+                    while (this.#sessionListPending.size) {
+                        await this.#sendSessionListBatch();
+                    }
+                } finally {
+                    this.#sessionListRunning = false;
+                }
+            });
+        }
+
+        return Promise.all(pending).then(() => undefined);
+    }
+
+    /** Public rows and encoding are shared only within one refresh and one member's unchanged access. */
+    async #sendSessionListBatch(): Promise<void> {
+        const rows = new Map<User, Awaited<ReturnType<PocketApp["sessions"]>>>();
+        const prepared = new Map<User, ReturnType<SessionLists["prepare"]>>();
+        const access = new Map<
+            User,
+            { role: User["role"]; sessions: User["sessions"]; projects: number }
+        >();
+        const batch = [...this.#sessionListPending].map(([client, request]) => ({
+            client,
+            request,
+            version: request.version,
+        }));
+        // Config.updateUser replaces session scopes; project access has its own invalidation epoch.
+        const permissionKey = (user: User) => ({
+            role: user.role,
+            sessions: user.sessions,
+            projects: this.#projectAccessEpoch,
+        });
+
+        for (const { client, request, version } of batch) {
             const user = this.config.userById(client.user.id);
 
-            if (user === undefined || !this.#clients.has(client)) {
-                continue;
+            try {
+                if (user && this.#clients.has(client) && !this.#closing) {
+                    let items = rows.get(user);
+
+                    if (items === undefined) {
+                        access.set(user, permissionKey(user));
+                        items = await this.sessions(user);
+                        rows.set(user, items);
+                    }
+
+                    if (
+                        !this.#closing &&
+                        this.#clients.has(client) &&
+                        this.config.userById(user.id) === user
+                    ) {
+                        const scope = access.get(user)!;
+
+                        if (
+                            version !== request.version ||
+                            scope.role !== user.role ||
+                            scope.sessions !== user.sessions ||
+                            scope.projects !== this.#projectAccessEpoch
+                        ) {
+                            continue;
+                        }
+
+                        let list = prepared.get(user);
+
+                        if (!list) {
+                            list = client.sessionDeltas
+                                ? this.#sessionLists.prepare(items)
+                                : { items, encoded: undefined };
+
+                            if (client.sessionDeltas) {
+                                prepared.set(user, list);
+                            }
+                        }
+
+                        this.#sessionLists.send(
+                            client,
+                            client.sessionDeltas ? list : { items, encoded: undefined },
+                            request.full,
+                        );
+                    }
+                }
+
+                this.#sessionListPending.delete(client);
+                request.resolve();
+            } catch (error) {
+                this.#sessionListPending.delete(client);
+                request.reject(error);
             }
-
-            let items = rows.get(user);
-
-            if (items === undefined) {
-                items = this.sessions(user);
-                rows.set(user, items);
-            }
-
-            if (!client.sessionDeltas) {
-                this.#sessionLists.send(client, { items, encoded: undefined }, full);
-
-                continue;
-            }
-
-            let list = prepared.get(user);
-
-            if (list === undefined) {
-                list = this.#sessionLists.prepare(items);
-                prepared.set(user, list);
-            }
-
-            this.#sessionLists.send(client, list, full);
         }
     }
 
@@ -1478,13 +1577,15 @@ export class PocketApp {
         this.#sessionsTimer = setTimeout(() => {
             this.#sessionsTimer = undefined;
 
-            this.#sendSessionLists(this.#clients);
+            void this.#sendSessionLists(this.#clients).catch((error) => {
+                console.error("Session list projection failed", error);
+            });
         }, 400);
     }
 
     /** The session list, with who is in each session and its newest chat message. Scoped people see only theirs. */
-    sessions(user?: User) {
-        const nativeModels = this.kernel?.modelNames();
+    async sessions(user?: User) {
+        const nativeModels = this.kernel ? await this.kernel.modelNames() : undefined;
         const waiting = new Set(
             this.approvals.all().map((approval) => String(this.rootOf(approval.conversationId))),
         );
@@ -1502,45 +1603,51 @@ export class PocketApp {
             people.set(key, here);
         }
 
-        return Object.entries(this.#sessions)
-            .filter(
-                ([id]) =>
-                    user === undefined ||
-                    this.canSee(user, Number(id) as unknown as ConversationId),
-            )
-            .map(([id, meta]) => {
-                const conversationId = Number(id) as unknown as ConversationId;
-                const model =
-                    meta.backend === "rotom"
-                        ? nativeModels?.get(id)
-                        : this.#agents.get(conversationId)?.model?.modelId;
-                const busy = this.isBusy(conversationId);
-                const needsAnswer = this.kernel?.needsAnswer(conversationId, user) === true;
-                const here = [...(people.get(id) ?? new Map<string, string>())].map(
-                    ([userId, name]) => ({ id: userId, name }),
-                );
-                const chat = this.#lastChat.get(id);
-                const endedAt =
-                    meta.finishedAt ?? this.#endedAt.get(Number(id) as unknown as ConversationId);
-                const finishedUnread =
-                    user !== undefined &&
-                    meta.finishedAt !== undefined &&
-                    meta.finishedAt > (user.finishedSeen?.[id] ?? 0);
+        return (
+            await Promise.all(
+                Object.entries(this.#sessions)
+                    .filter(
+                        ([id]) =>
+                            user === undefined ||
+                            this.canSee(user, Number(id) as unknown as ConversationId),
+                    )
+                    .map(async ([id, meta]) => {
+                        const conversationId = Number(id) as unknown as ConversationId;
+                        const model =
+                            meta.backend === "rotom"
+                                ? nativeModels?.get(id)
+                                : this.#agents.get(conversationId)?.model?.modelId;
+                        const busy = this.isBusy(conversationId);
+                        const needsAnswer =
+                            this.kernel !== undefined &&
+                            (await this.kernel.needsAnswer(conversationId, user));
+                        const here = [...(people.get(id) ?? new Map<string, string>())].map(
+                            ([userId, name]) => ({ id: userId, name }),
+                        );
+                        const chat = this.#lastChat.get(id);
+                        const endedAt =
+                            meta.finishedAt ??
+                            this.#endedAt.get(Number(id) as unknown as ConversationId);
+                        const finishedUnread =
+                            user !== undefined &&
+                            meta.finishedAt !== undefined &&
+                            meta.finishedAt > (user.finishedSeen?.[id] ?? 0);
 
-                return {
-                    id: Number(id),
-                    ...meta,
-                    busy,
-                    waiting: waiting.has(id),
-                    ...(needsAnswer ? { needsAnswer: true } : {}),
-                    ...(endedAt === undefined ? {} : { endedAt }),
-                    ...(finishedUnread ? { finishedUnread: true } : {}),
-                    ...(model === undefined ? {} : { model }),
-                    ...(here.length === 0 ? {} : { people: here }),
-                    ...(chat === undefined ? {} : { chatAt: chat.at, chatBy: chat.userId }),
-                };
-            })
-            .sort((a, b) => b.updatedAt - a.updatedAt || a.id - b.id);
+                        return {
+                            id: Number(id),
+                            ...meta,
+                            busy,
+                            waiting: waiting.has(id),
+                            ...(needsAnswer ? { needsAnswer: true } : {}),
+                            ...(endedAt === undefined ? {} : { endedAt }),
+                            ...(finishedUnread ? { finishedUnread: true } : {}),
+                            ...(model === undefined ? {} : { model }),
+                            ...(here.length === 0 ? {} : { people: here }),
+                            ...(chat === undefined ? {} : { chatAt: chat.at, chatBy: chat.userId }),
+                        };
+                    }),
+            )
+        ).sort((a, b) => b.updatedAt - a.updatedAt || a.id - b.id);
     }
 
     isBusy(id: ConversationId): boolean {
@@ -1854,7 +1961,7 @@ export class PocketApp {
             }
 
             client.send("hello", this.#helloFor(client, await this.hello(user)));
-            this.#sendSessionLists([client], true);
+            await this.#sendSessionLists([client], true);
         }
     }
 
@@ -1894,10 +2001,11 @@ export class PocketApp {
         return this.#agents.get(id)?.cwd ?? this.#sessions[String(id)]?.cwd ?? this.defaultCwd;
     }
 
-    configuration(id: ConversationId): ConfigurationSnapshot | undefined {
+    async configuration(id: ConversationId): Promise<ConfigurationSnapshot | undefined> {
         if (
             this.sessionMeta(id)?.backend === "rotom" &&
-            this.kernel?.executions.journal.hasConversation(String(id))
+            this.kernel &&
+            (await this.kernel.executions.journal.hasConversation(String(id)))
         ) {
             return this.kernel.configuration(id);
         }
@@ -1906,8 +2014,8 @@ export class PocketApp {
     }
 
     /** Pi's skills in a conversation's folder, to run as `/skill:name`. */
-    skillCommands(id: ConversationId): SkillCommand[] {
-        const snapshot = this.configuration(id);
+    async skillCommands(id: ConversationId): Promise<SkillCommand[]> {
+        const snapshot = await this.configuration(id);
 
         if (snapshot) {
             return snapshot.skills;
@@ -2124,13 +2232,15 @@ export class PocketApp {
                 client.send("closing", {});
             }
 
-            for (const pending of this.#rooms.values()) {
-                void pending.then(
-                    (room) => room.close(),
-                    () => {},
-                );
-            }
-
+            await Promise.all(
+                [...this.#rooms.values()].map((pending) =>
+                    pending.then(
+                        (room) => room.close(),
+                        () => {},
+                    ),
+                ),
+            );
+            await this.#sessionListDrain;
             this.providers.close();
             await this.kernel?.close();
 

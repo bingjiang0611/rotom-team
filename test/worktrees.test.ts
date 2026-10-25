@@ -169,13 +169,13 @@ test("a fork can get a worktree of its own, and a folder outside any repository 
     const plain = join(root, "plain");
 
     mkdirSync(plain, { recursive: true });
-    const before = app.sessions().length;
+    const before = (await app.sessions()).length;
 
     await assert.rejects(app.commands.createSession(owner(app), { cwd: plain, worktree: true }), {
         status: 400,
         message: /not in a git repository/,
     });
-    assert.equal(app.sessions().length, before, "no session was made");
+    assert.equal((await app.sessions()).length, before, "no session was made");
 });
 
 test("a folder reached through a symbolic link gets the matching folder in its worktree", async () => {

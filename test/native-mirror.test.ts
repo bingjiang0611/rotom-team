@@ -109,27 +109,27 @@ test(
         const session = await app.commands.createSession(member, { backend: "rotom" });
         const id = Number(session.id);
         const journal = app.kernel!.executions.journal;
-        const binding = journal.session(String(id)).binding;
+        const binding = (await journal.session(String(id))).binding;
 
-        const append = (
+        const append = async (
             requestId: string,
             entries: KernelEntry[],
             operation: "prompt" | "fork" = "prompt",
         ) => {
-            const attempt = journal.reserve(
+            const attempt = await journal.reserve(
                 String(id),
                 operation === "prompt" ? `${member.id}:${requestId}` : requestId,
                 requestId,
                 operation,
             );
-            const segment = journal.segment(attempt.segmentId);
+            const segment = await journal.segment(attempt.segmentId);
 
-            journal.attach(
+            await journal.attach(
                 attempt.id,
                 segment.sessionFile ?? join(dataDir, `${attempt.segmentId}.jsonl`),
                 segment.kernelSessionId ?? `fixture-${attempt.segmentId}`,
             );
-            journal.finish(attempt.id, "settled", entries);
+            await journal.finish(attempt.id, "settled", entries);
 
             return attempt;
         };
@@ -141,7 +141,7 @@ test(
                 messageEntry("prefix-answer", binding, "assistant"),
             ];
 
-            append("prefix", prefix);
+            await append("prefix", prefix);
             await app.kernel!.mirror(session.id);
 
             const prefixRoom = await app.room(session.id);
@@ -160,19 +160,19 @@ test(
 
             assert.equal(prefixAuthors?.entries[String(prefixNative[1]!.id)], member.id);
 
-            const expectedHead = journal.session(String(id)).segmentId;
-            const handoff = journal.handoff(
+            const expectedHead = (await journal.session(String(id))).segmentId;
+            const handoff = await journal.handoff(
                 String(id),
                 `${member.id}:handoff`,
                 expectedHead,
                 binding,
             );
 
-            journal.attach(handoff.id, join(dataDir, "handoff.jsonl"), "handoff-native");
-            journal.finish(handoff.id, "settled", [
+            await journal.attach(handoff.id, join(dataDir, "handoff.jsonl"), "handoff-native");
+            await journal.finish(handoff.id, "settled", [
                 { type: "custom", id: "copied-handoff-seed", customType: "handoff-seed" },
             ]);
-            append("after-handoff", [
+            await append("after-handoff", [
                 messageEntry("after-handoff-user", binding, "user"),
                 messageEntry("after-handoff-answer", binding, "assistant"),
             ]);
@@ -205,11 +205,11 @@ test(
             const afterRetry = await app.harness.snapshot(NativeMirrorDoc, session.id, context);
 
             assert.equal(afterRetry?.count, prefix.length + 2);
-            append("last-suffix", [
+            await append("last-suffix", [
                 messageEntry("last-suffix-user", binding, "user"),
                 messageEntry("last-suffix-answer", binding, "assistant"),
             ]);
-            const expected = journal.entries(String(id));
+            const expected = await journal.entries(String(id));
             const expectedIds = expected.map((row) => row.entry.id);
 
             await app.close();

@@ -217,7 +217,7 @@ export class Commands {
                             const snapshot = native
                                 ? undefined
                                 : fork
-                                  ? structuredClone(app.configuration(fork.sourceId))
+                                  ? structuredClone(await app.configuration(fork.sourceId))
                                   : app.profiles.capture(user, cwd, app.settings.getSkillPaths());
 
                             if (!native && !snapshot) {
@@ -360,13 +360,11 @@ export class Commands {
         }
 
         // A fork made without a worktree of its own works in this one.
-        const sharing = app
-            .sessions()
-            .find(
-                (session) =>
-                    session.id !== Number(id) &&
-                    inside(app.cwdOf(session.id as unknown as ConversationId)),
-            );
+        const sharing = (await app.sessions()).find(
+            (session) =>
+                session.id !== Number(id) &&
+                inside(app.cwdOf(session.id as unknown as ConversationId)),
+        );
 
         if (sharing !== undefined) {
             throw new HttpError(
@@ -520,7 +518,7 @@ export class Commands {
         const typed = request.text.trim();
         // `/skill:name request` sends the skill with the request; `/name arguments`, Pi's prompt template of that name.
         const text = typed.startsWith("/skill:")
-            ? (expandSkillCommand(typed, app.skillCommands(id)) ?? typed)
+            ? (expandSkillCommand(typed, await app.skillCommands(id)) ?? typed)
             : typed.startsWith("/")
               ? (expandPromptTemplate(typed, app.promptTemplates(id)) ?? typed)
               : typed;
@@ -611,7 +609,7 @@ export class Commands {
 
             for (const candidate of mention.candidates) {
                 try {
-                    const resolved = app.workspace.readableFile(user, id, candidate);
+                    const resolved = await app.workspace.readableFile(user, id, candidate);
 
                     if (statSync(resolved).isFile()) {
                         file = resolved;

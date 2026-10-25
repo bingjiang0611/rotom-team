@@ -47,6 +47,70 @@ function setup() {
     return { root, data, binding };
 }
 
+test("room snapshots preserve receipt fences and decode a shared latest/pending receipt once", (t) => {
+    const f = setup();
+    const journal = new RotomJournal(f.data);
+    const original = StatementSync.prototype.get;
+    let commandReads = 0;
+
+    t.mock.method(
+        StatementSync.prototype,
+        "get",
+        function (this: StatementSync, ...args: Parameters<typeof original>) {
+            if (this.sourceSQL.includes("FROM kernel_command_inputs")) {
+                commandReads++;
+            }
+
+            return Reflect.apply(original, this, args);
+        },
+    );
+
+    try {
+        assert.equal(journal.roomSnapshot("missing"), undefined);
+        journal.bind("room", f.binding);
+        assert.deepEqual(journal.roomSnapshot("room"), {
+            ...journal.sessionIfPresent("room"),
+            pending: undefined,
+            latest: undefined,
+        });
+        const receipt = journal.reserve("room", "request", "hello", "prompt");
+
+        journal.attach(receipt.id, join(f.root, "session.jsonl"), "native-session");
+        const input = journal.beginCommandInput(receipt.id, "/fixture");
+
+        commandReads = 0;
+        const pending = journal.pendingConversation("room");
+        const latest = journal.latest("room");
+
+        assert.equal(commandReads, 2, "the previous separate reads decode twice");
+        commandReads = 0;
+        const snapshot = journal.roomSnapshot("room")!;
+
+        assert.equal(commandReads, 1);
+        assert.deepEqual(snapshot.pending, pending);
+        assert.deepEqual(snapshot.latest, latest);
+        assert.equal(snapshot.pending, snapshot.latest);
+        assert.equal(snapshot.pending?.unresolvedCommandInput, true);
+        journal.completeCommandInput(input);
+        journal.finish(receipt.id, "handled", []);
+        const finished = journal.roomSnapshot("room")!;
+
+        assert.equal(finished.pending, undefined);
+        assert.equal(finished.latest?.status, "handled");
+        assert.equal(finished.latest?.unresolvedCommandInput, undefined);
+        const next = journal.reserve("room", "next", "next", "prompt");
+
+        journal.fail(next.id, "unknown");
+        const unknown = journal.roomSnapshot("room")!;
+
+        assert.equal(unknown.pending?.id, next.id);
+        assert.equal(unknown.latest?.status, "unknown");
+    } finally {
+        journal.close();
+        rmSync(f.root, { recursive: true, force: true });
+    }
+});
+
 test("journal prepares each SQL once, reads fresh values and never reuses a closed connection statement", (t) => {
     const f = setup();
     let journal = new RotomJournal(f.data);

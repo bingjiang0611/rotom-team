@@ -116,8 +116,10 @@ test("a finished run stays unread independently for every member", async () => {
     const bob = guest("Finished Bob");
 
     await app.recordRunFinished(id);
-    const ownerSession = app.sessions(owner(app)).find((session) => session.id === Number(id))!;
-    const bobSession = app.sessions(bob).find((session) => session.id === Number(id))!;
+    const ownerSession = (await app.sessions(owner(app))).find(
+        (session) => session.id === Number(id),
+    )!;
+    const bobSession = (await app.sessions(bob)).find((session) => session.id === Number(id))!;
 
     assert.equal(ownerSession.finishedUnread, true);
     assert.equal(bobSession.finishedUnread, true);
@@ -131,17 +133,18 @@ test("a finished run stays unread independently for every member", async () => {
     await app.attach(bobTab.client);
     ownerTab.events.length = 0;
     bobTab.events.length = 0;
-    app.markRunSeen(id, owner(app), finishedAt);
+    await app.markRunSeen(id, owner(app), finishedAt);
     assert.equal(ownerTab.events.filter((event) => event.event === "sessions").length, 1);
     assert.equal(bobTab.events.filter((event) => event.event === "sessions").length, 0);
     app.detach(ownerTab.client);
     app.detach(bobTab.client);
     assert.equal(
-        app.sessions(owner(app)).find((session) => session.id === Number(id))!.finishedUnread,
+        (await app.sessions(owner(app))).find((session) => session.id === Number(id))!
+            .finishedUnread,
         undefined,
     );
     assert.equal(
-        app.sessions(bob).find((session) => session.id === Number(id))!.finishedUnread,
+        (await app.sessions(bob)).find((session) => session.id === Number(id))!.finishedUnread,
         true,
         "one member looking never marks another member's result viewed",
     );
@@ -155,14 +158,18 @@ test("a finished run stays unread independently for every member", async () => {
         (await app.harness.snapshot(SessionsDoc, context))?.items[String(id)]?.finishedAt,
         finishedAt,
     );
-    assert.throws(() => app.markRunSeen(id, bob, finishedAt + 1), /current finishedAt/);
+    await assert.rejects(
+        async () => await app.markRunSeen(id, bob, finishedAt + 1),
+        /current finishedAt/,
+    );
     await app.recordRunFinished(id);
-    const newer = app.sessions(owner(app)).find((session) => session.id === Number(id))!;
+    const newer = (await app.sessions(owner(app))).find((session) => session.id === Number(id))!;
 
     assert.ok(newer.finishedAt! > finishedAt);
-    app.markRunSeen(id, owner(app), finishedAt);
+    await app.markRunSeen(id, owner(app), finishedAt);
     assert.equal(
-        app.sessions(owner(app)).find((session) => session.id === Number(id))!.finishedUnread,
+        (await app.sessions(owner(app))).find((session) => session.id === Number(id))!
+            .finishedUnread,
         true,
         "a delayed acknowledgement of the old result cannot clear a newer result",
     );
@@ -183,7 +190,7 @@ test("a fork keeps the history through the chosen message, then goes its own way
     const { id: fork } = await app.commands.fork(id, owner(app), {
         entryId: Number(firstAnswer!.id),
     });
-    const meta = app.sessions().find((each) => each.id === Number(fork))!;
+    const meta = (await app.sessions()).find((each) => each.id === Number(fork))!;
 
     assert.equal(meta.title, "Origin · fork");
     assert.deepEqual(meta.forkedFrom, { id: Number(id), entryId: Number(firstAnswer!.id) });
@@ -303,10 +310,7 @@ test("a message can be edited and sent again in a fork that ends just before it"
     assert.match(sent[0]!, /hello one/);
     assert.match(sent[1]!, /hello TWO, edited/);
     assert.ok(
-        app
-            .sessions()
-            .find((each) => each.id === Number(fork))
-            ?.title?.endsWith("· edit"),
+        (await app.sessions()).find((each) => each.id === Number(fork))?.title?.endsWith("· edit"),
     );
 
     // Unchanged, it is the same message sent again: a retry.
@@ -320,8 +324,7 @@ test("a message can be edited and sent again in a fork that ends just before it"
         "the retry to be answered",
     );
     assert.ok(
-        app
-            .sessions()
+        (await app.sessions())
             .find((each) => each.id === Number(retry))
             ?.title?.endsWith("· retry"),
     );

@@ -83,7 +83,7 @@ test("project grants separate view, continue and fork; forks inherit scope and r
 
         await say(app, id, "shared note");
         assert.equal(app.canSee(c, id), false);
-        assert.equal(app.sessions(c).length, 0);
+        assert.equal((await app.sessions(c)).length, 0);
         assert.equal(app.canSee(b, id), true);
         await assert.rejects(
             app.commands.submit(id, b, { text: "not allowed", requestId: "no-write" }),

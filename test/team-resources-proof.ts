@@ -540,7 +540,7 @@ let executions = new RotomExecutions(root, async (_binding, operation) => {
     assert.ok(["admission", "inference", "fork"].includes(operation), operation);
 });
 
-executions.journal.bind("generic", {
+await executions.journal.bind("generic", {
     memberId: "fixture-member",
     kernelVersion: verifyRotomKernel().version,
     accountGeneration: "synthetic",
@@ -567,7 +567,7 @@ try {
     assert.equal(followed.operation, "command");
     assert.equal(calls.length, beforeFollowup + 1);
     assert.ok(JSON.stringify(calls.at(-1)).includes("ASYNC_FOLLOWUP_REQUEST"));
-    const sessionFile = executions.journal.session("generic").sessionFile!;
+    const sessionFile = (await executions.journal.session("generic")).sessionFile!;
 
     assert.ok(readFileSync(sessionFile, "utf8").includes("ASYNC_FOLLOWUP_COMPLETED"));
 
@@ -650,7 +650,10 @@ try {
         executions.discover("generic", "blocked-after-unknown", {}),
         /running or unknown attempt/,
     );
-    executions.journal.bind("new-after-restart", executions.journal.session("generic").binding);
+    await executions.journal.bind(
+        "new-after-restart",
+        (await executions.journal.session("generic")).binding,
+    );
     let restartedNames: string[] = [];
     const discovery = await executions.discover("new-after-restart", "after-restart", {
         onCommands: (commands) => {
@@ -667,7 +670,9 @@ try {
         "configuration-write",
         "/future-config-write",
         {
-            onEvent: (event) => configurationEvents.push(event),
+            onEvent: (event) => {
+                configurationEvents.push(event);
+            },
         },
     );
 
@@ -682,7 +687,10 @@ try {
         readFileSync(join(teamAgentDir, "fixture-config.json"), "utf8"),
         '{"enabled":true}',
     );
-    executions.journal.bind("fresh-derived-view", executions.journal.session("generic").binding);
+    await executions.journal.bind(
+        "fresh-derived-view",
+        (await executions.journal.session("generic")).binding,
+    );
     assert.equal(
         (await executions.discover("fresh-derived-view", "restore-shared", {})).status,
         "handled",

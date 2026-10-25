@@ -64,7 +64,7 @@ export class TeamExecution {
         }
     }
     async accountIdle(user: User): Promise<void> {
-        this.#app.kernel?.requireAccountIdle(user);
+        await this.#app.kernel?.requireAccountIdle(user);
         // Its warm processes no request used yet would run on the account about to change.
         await this.#app.kernel?.executions.retireUnusedOf(user.id);
 
@@ -111,7 +111,7 @@ export class TeamExecution {
     async admit(id: ConversationId, user: User): Promise<ModelRef> {
         const app = this.#app;
 
-        app.kernel?.requireAccountIdle(user);
+        await app.kernel?.requireAccountIdle(user);
 
         if (app.sessionMeta(app.rootOf(id))?.backend === "rotom") {
             throw new HttpError(409, "Native sessions cannot enter Durable execution.");
@@ -231,7 +231,7 @@ export class TeamExecution {
             throw new Error("No authorized personal execution owner.");
         }
 
-        app.kernel?.requireAccountIdle(user);
+        await app.kernel?.requireAccountIdle(user);
         app.projects.require(user, app.sessionMeta(app.rootOf(id))?.projectId, "continue");
         app.accounts.assertModel(user, agent.model);
         const configuration = await app.harness.snapshot(ConfigurationDoc, id, context);

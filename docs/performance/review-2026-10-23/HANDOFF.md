@@ -42,7 +42,7 @@
 | D5    | D    | 切换会话不重连(C6)                          | 核验通过                      | `229bda2`（测量）；`5acca07`（实现） |
 | D6    | D    | 大文件纯移动拆分(C5)                        | 核验通过                      | `3768653`（测量）；实现见执行记录    |
 | D7    | D    | handoff 测量与异步化(C2)                    | 核验通过                      | `2af9690`（测量）；`859c283`（阈值） |
-| D8    | D    | storage worker(C3)                          | 进行中                        | 测量与边界修订见执行记录             |
+| D8    | D    | storage worker(C3)                          | D8a 提交待推送                | 按第 11 轮提交核验；D8b 等待         |
 | D9    | D    | 下线旧后端(C4,只读归档)                     | 待做                          |                                      |
 
 状态取值：`待做` / `进行中` / `已推送待核验` / `核验通过` / `核验未通过` / `放弃（写明原因）`。
@@ -1104,7 +1104,29 @@ owner 已批准把 C2–C6 从「只写方案」改为「实现」。C1(进程�
   严格关闭与故障注入；不得提前归档旧后端。D9 未开始。
 - 首先运行现有 `perf:measure --runs 1`，计时锁 highLoad=false、load 2.38→3.38/8 核，exit=0。
   证据 `/tmp/rotom-review-D8/base.{log,json}`；无 workload/ledger 更改。当前没有性能收益结论。
-- 详细边界及后续验证记录：[D8 记录](d8-validation.md)。当前仅测量/合同修订，产品实现尚未提交。
+- 详细边界及后续验证记录：[D8 记录](d8-validation.md)。本条最初仅记录测量/合同修订；后续状态如下。
+
+### D8a — 按第 11 轮提交待推送
+
+- 已拉取 `c6947a8` 并将五个未推送提交 rebase 到它之上，产品/test 内容逐字节保留。
+  异步 journal / consumers、投影失效检查与关闭 drain、attach/progress/usage ACK 顺序已实现。
+  测量提交现为 `e120828`、`9d70ac6`、`4e8571a`；独立测试同步修复 `28dd658`。
+- 当前 format/check/lint/format:check、默认全量 **670/670，0 skip** 通过。设置页账户切换测试不再抢在
+  POST 导航完成前导入 store.js；owner 单独批准修复，负控能在确认页确定复现原 preact/hooks 错误。
+  未增加 sleep、超时或重放请求。之前失败及一次授权重跑均保留在 D8 记录中。
+- 五轮对照发现的大投影稳定变慢没有被接受；已合并 room 状态存储读，去除重复 receipt decode，
+  并复用 sessionIfPresent。最终重复对照无 slower，但仍有 **25 项候选 worse**，主要来自一轮 warm
+  244.8 ms / 4 次 view（其余四轮 2 次）。尚未把该慢样本归因，不将其直接当作噪声。
+- 最终 `perf:ci -- origin/main --runs 1` check/guard 通过；原 ledger / workload / quiet 规则不变。
+  **第 11 轮澄清：不要求零变差，要求测试、gating/guard 通过，并逐条说明候选差异。**
+- 三项有界诊断已全部完成（22 个 fixture 进程，全部 exit 0）。自然 warm 未复现慢样本；
+  状态屏障诊断中两侧都出现长等待和额外 view，相同三次 view 下 head 的 SQL 工作量更少。
+  原始慢样本无时间线，不能追溯断言同因；prewarmed 的三项差异及 poll 的 19 次 Layout 均未复现，
+  按第 11 轮标为“采样差异，未归因”，不阻塞提交。保留确定计数器的实际来源与原始差值，不伪造根因。
+- Owner 已否决额外对照；不做 JSONL 分批/帧边界实验，不追加性能重跑。测量与实现分开提交，推送后等待核验。
+  [逐项性能记录](d8-performance-review.md)覆盖 25 项隔离 worse 和 52 项 main worse；
+  [机器可读证据](d8-performance-evidence.json)保留数值和既有诊断，详情与日志索引见 [D8 记录](d8-validation.md)。
+  D8b 等 owner 核验 D8a 后再开始；D9 未开始。用户两份文档保留，不部署、不重启、不使用真实账号。
 
 ## 核验记录（审查方追加）
 

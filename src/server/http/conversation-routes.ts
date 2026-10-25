@@ -30,7 +30,7 @@ export async function conversationRoutes(
             throw new HttpError(400, "A finishedAt value is required.");
         }
 
-        app.markRunSeen(id, user, body.finishedAt);
+        await app.markRunSeen(id, user, body.finishedAt);
 
         return json(response, 200, { seen: true });
     }
@@ -79,7 +79,7 @@ export async function conversationRoutes(
         }
 
         if (third === "kernel" && method === "GET" && fourth === undefined) {
-            return json(response, 200, app.kernel.snapshot(id, user));
+            return json(response, 200, await app.kernel.snapshot(id, user));
         }
 
         if (third === "configuration" && method === "POST" && fourth === undefined) {
@@ -221,7 +221,11 @@ export async function conversationRoutes(
         }
 
         if (third === "dialog" && method === "POST" && fourth === undefined) {
-            return json(response, 200, app.kernel.answerDialog(id, user, await readJson(request)));
+            return json(
+                response,
+                200,
+                await app.kernel.answerDialog(id, user, await readJson(request)),
+            );
         }
 
         if (third === "configure" && method === "POST" && fourth === undefined) {
@@ -312,7 +316,7 @@ export async function conversationRoutes(
     }
 
     if (third === "configuration" && method === "GET") {
-        return json(response, 200, app.configuration(id) ?? null);
+        return json(response, 200, (await app.configuration(id)) ?? null);
     }
 
     if (third === "configuration" && method === "POST") {
@@ -571,7 +575,11 @@ export async function conversationRoutes(
             throw new HttpError(400, "path is required");
         }
 
-        return serveImage(request, response, app.workspace.conversationFile(user, id, requested));
+        return serveImage(
+            request,
+            response,
+            await app.workspace.conversationFile(user, id, requested),
+        );
     }
 
     if (third === "download" && method === "GET") {
@@ -581,7 +589,7 @@ export async function conversationRoutes(
             throw new HttpError(400, "path is required");
         }
 
-        return serveDownload(response, app.workspace.readableFile(user, id, requested));
+        return serveDownload(response, await app.workspace.readableFile(user, id, requested));
     }
 
     if (third === "entry" && fourth !== undefined && method === "GET") {

@@ -23,7 +23,7 @@ import { seedPhaseChannel, type SeedPhaseSignal } from "../src/server/perf-chann
 import { prepareSeed, persistSeed } from "../src/server/rotom-executions/seed-files.ts";
 import { publicNativeHistory } from "../src/server/rotom-history.ts";
 
-function fixture(
+async function fixture(
     t: TestContext,
     authorize: (call: number) => Promise<void> = async () => {},
     chars = 128,
@@ -64,7 +64,7 @@ function fixture(
     const alice = member("alice"),
         bob = member("bob");
 
-    journal.bind("shared", alice);
+    await journal.bind("shared", alice);
     const messages = [
         { role: "user", content: [{ type: "text", text: "hello" }], timestamp: 1 },
         {
@@ -103,10 +103,10 @@ function fixture(
           }));
 
     if (!empty) {
-        const source = journal.reserve("shared", "source", "source", "command");
+        const source = await journal.reserve("shared", "source", "source", "command");
 
-        journal.attach(source.id, join(root, "source.jsonl"), "source");
-        journal.finish(source.id, "handled", entries);
+        await journal.attach(source.id, join(root, "source.jsonl"), "source");
+        await journal.finish(source.id, "handled", entries);
     }
 
     return {
@@ -134,7 +134,7 @@ for (const thread of ["main", "worker"] as const) {
     const chars = thread === "main" ? 128 : 8 * 1024 * 1024;
 
     test(`${thread}: handoff persists on the selected thread with attach before append`, async (t) => {
-        const f = fixture(t, undefined, chars);
+        const f = await fixture(t, undefined, chars);
         const phases: SeedPhaseSignal[] = [];
         let ticks = 0;
         const timer = setInterval(() => ticks++, 1);
@@ -150,16 +150,16 @@ for (const thread of ["main", "worker"] as const) {
         const originalAttach = f.journal.attach.bind(f.journal);
         let attached = 0;
 
-        f.journal.attach = (id, path, sessionId, pid) => {
+        f.journal.attach = async (id, path, sessionId, pid) => {
             assert.ok(
                 !existsSync(path) || !readFileSync(path, "utf8").includes('"type":"message"'),
                 "attach precedes the first append",
             );
-            originalAttach(id, path, sessionId, pid);
+            await originalAttach(id, path, sessionId, pid);
             attached++;
         };
 
-        const before = f.journal.usage("shared");
+        const before = await f.journal.usage("shared");
         const result = await f.handoff();
 
         assert.equal(result.status, "settled");
@@ -182,7 +182,7 @@ for (const thread of ["main", "worker"] as const) {
         );
         assert.equal(attached, 1);
         assert.equal(f.calls(), 3, "authorization is repeated after durable readback");
-        const target = f.journal.session("shared");
+        const target = await f.journal.session("shared");
         const file = target.sessionFile!;
 
         assert.notEqual(target.segmentId, "shared");
@@ -193,16 +193,66 @@ for (const thread of ["main", "worker"] as const) {
             0o700,
         );
         assert.ok(!readFileSync(file, "utf8").includes("ALICE_PRIVATE"));
-        assert.deepEqual(f.journal.usage("shared"), before);
-        assert.equal(f.journal.entries("shared").length, 2, "seed is not mirrored again");
+        assert.deepEqual(await f.journal.usage("shared"), before);
+        assert.equal((await f.journal.entries("shared")).length, 2, "seed is not mirrored again");
         assert.equal((await f.handoff()).id, result.id);
         assert.equal(attached, 1, "same request must not materialize again");
     });
 
+    for (const outcome of ["release", "reject", "stop"] as const) {
+        test(`${thread}: delayed attach ACK ${outcome} cannot be mistaken for permission to append`, async (t) => {
+            const f = await fixture(t, undefined, chars);
+            const entered = Promise.withResolvers<void>();
+            const acknowledged = Promise.withResolvers<void>();
+            const original = f.journal.attach.bind(f.journal);
+            let file = "";
+
+            f.journal.attach = async (...args) => {
+                await original(...args);
+                file = args[1];
+                entered.resolve();
+                await acknowledged.promise;
+
+                if (outcome === "reject") {
+                    throw new Error("Attach committed but ACK was lost");
+                }
+            };
+
+            const pending = f.handoff();
+
+            try {
+                await entered.promise;
+                assert.ok(
+                    !existsSync(file) || !readFileSync(file, "utf8").includes('"type":"message"'),
+                );
+                assert.equal((await f.journal.session("shared")).segmentId, "shared");
+                assert.throws(() => f.executions.close(), /still active/);
+
+                if (outcome === "stop") {
+                    await f.executions.abort("shared");
+                }
+            } finally {
+                acknowledged.resolve();
+            }
+
+            const receipt = await pending;
+
+            assert.equal(receipt.status, outcome === "release" ? "settled" : "unknown");
+
+            if (outcome !== "release") {
+                assert.ok(
+                    !existsSync(file) || !readFileSync(file, "utf8").includes('"type":"message"'),
+                );
+                assert.equal((await f.journal.session("shared")).segmentId, "shared");
+                assert.equal((await f.handoff()).id, receipt.id);
+            }
+        });
+    }
+
     test(`${thread}: final authorization retains the writer lease and old head; duplicate intent does not replay`, async (t) => {
         const reached = Promise.withResolvers<void>();
         const release = Promise.withResolvers<void>();
-        const f = fixture(
+        const f = await fixture(
             t,
             async (call) => {
                 if (call === 3) {
@@ -218,10 +268,10 @@ for (const thread of ["main", "worker"] as const) {
 
         try {
             assert.throws(() => f.executions.close(), /still active/);
-            assert.equal(f.journal.session("shared").segmentId, "shared");
+            assert.equal((await f.journal.session("shared")).segmentId, "shared");
             const duplicate = await f.handoff();
 
-            assert.equal(duplicate.id, f.journal.request("shared", "handoff")!.id);
+            assert.equal(duplicate.id, (await f.journal.request("shared", "handoff"))!.id);
             await assert.rejects(f.handoff("different"), KernelRequestConflict);
         } finally {
             release.resolve();
@@ -232,13 +282,13 @@ for (const thread of ["main", "worker"] as const) {
 
     for (const point of ["before-attach", "after-attach", "after-readback"] as const) {
         test(`${thread}: Stop ${point} keeps unknown and prevents commit`, async (t) => {
-            const f = fixture(t, undefined, chars);
+            const f = await fixture(t, undefined, chars);
             const stages: SeedPhaseSignal[] = [];
             let stopping: Promise<void> | undefined;
             const originalAttach = f.journal.attach.bind(f.journal);
 
-            f.journal.attach = (id, path, sessionId, pid) => {
-                originalAttach(id, path, sessionId, pid);
+            f.journal.attach = async (id, path, sessionId, pid) => {
+                await originalAttach(id, path, sessionId, pid);
 
                 if (point === "after-attach") {
                     stopping = f.executions.abort("shared");
@@ -265,11 +315,11 @@ for (const thread of ["main", "worker"] as const) {
                 point === "after-readback",
             );
             assert.equal(
-                f.journal.segment(result.segmentId).sessionFile !== undefined,
+                (await f.journal.segment(result.segmentId)).sessionFile !== undefined,
                 point !== "before-attach",
             );
             assert.equal(result.status, "unknown");
-            assert.equal(f.journal.session("shared").segmentId, "shared");
+            assert.equal((await f.journal.session("shared")).segmentId, "shared");
             assert.equal((await f.handoff()).id, result.id);
             await assert.rejects(f.handoff("different"), KernelRequestConflict);
             await f.executions.close();
@@ -278,7 +328,7 @@ for (const thread of ["main", "worker"] as const) {
 
     for (const fault of ["attach", "file-write", "private-directory"] as const) {
         test(`${thread}: ${fault} failure never commits or replays the seed`, async (t) => {
-            const f = fixture(t, undefined, chars);
+            const f = await fixture(t, undefined, chars);
             const originalAttach = f.journal.attach.bind(f.journal);
 
             if (fault === "private-directory") {
@@ -288,8 +338,8 @@ for (const thread of ["main", "worker"] as const) {
                 chmodSync(folder, 0o755);
             }
 
-            f.journal.attach = (id, path, sessionId, pid) => {
-                originalAttach(id, path, sessionId, pid);
+            f.journal.attach = async (id, path, sessionId, pid) => {
+                await originalAttach(id, path, sessionId, pid);
 
                 if (fault === "attach") {
                     throw new Error("lost attach acknowledgement");
@@ -304,7 +354,7 @@ for (const thread of ["main", "worker"] as const) {
             const result = await f.handoff();
 
             assert.equal(result.status, "unknown");
-            assert.equal(f.journal.session("shared").segmentId, "shared");
+            assert.equal((await f.journal.session("shared")).segmentId, "shared");
             assert.equal((await f.handoff()).id, result.id);
             await assert.rejects(f.handoff("different"), KernelRequestConflict);
             await f.executions.close();
@@ -313,7 +363,7 @@ for (const thread of ["main", "worker"] as const) {
 
     for (const call of [2, 3]) {
         test(`${thread}: authorization rejection at seed stage ${call} preserves outcome classification`, async (t) => {
-            const f = fixture(
+            const f = await fixture(
                 t,
                 async (current) => {
                     if (current === call) {
@@ -325,26 +375,29 @@ for (const thread of ["main", "worker"] as const) {
             const result = await f.handoff();
 
             assert.equal(result.status, call === 2 ? "rejected" : "unknown");
-            assert.equal(f.journal.session("shared").segmentId, "shared");
-            assert.equal(f.journal.segment(result.segmentId).sessionFile !== undefined, call === 3);
+            assert.equal((await f.journal.session("shared")).segmentId, "shared");
+            assert.equal(
+                (await f.journal.segment(result.segmentId)).sessionFile !== undefined,
+                call === 3,
+            );
         });
     }
 }
 
 test("empty handoff keeps the zero-file path and still authorizes before finish", async (t) => {
-    const f = fixture(t, undefined, 0, true);
+    const f = await fixture(t, undefined, 0, true);
     const phases: SeedPhaseSignal[] = [];
 
     observe(t, (s) => phases.push(s));
     assert.equal((await f.handoff()).status, "settled");
     assert.equal(f.calls(), 3);
-    assert.equal(f.journal.session("shared").sessionFile, undefined);
+    assert.equal((await f.journal.session("shared")).sessionFile, undefined);
     assert.ok(phases.every((s) => s.thread === "main"));
     assert.ok(!existsSync(join(f.bob.home, ".pi/agent/sessions/team-seeds")));
 });
 
 test("the shared persistence helper refuses a mismatched readback without weakening comparison", async (t) => {
-    const f = fixture(t);
+    const f = await fixture(t);
     const native = await nativeSessionManager();
     const { session, folder } = prepareSeed(f.bob, native.SessionManager);
     const append = session.appendMessage.bind(session);
@@ -361,10 +414,10 @@ for (const thread of ["main", "worker"] as const) {
     const chars = thread === "main" ? 128 : 8 * 1024 * 1024;
 
     test(`${thread}: public fork and import preserve independent target authorization`, async (t) => {
-        const f = fixture(t, undefined, chars);
+        const f = await fixture(t, undefined, chars);
 
-        f.journal.bind("forked", f.bob);
-        f.journal.bind("imported", f.bob);
+        await f.journal.bind("forked", f.bob);
+        await f.journal.bind("imported", f.bob);
         const phases: SeedPhaseSignal[] = [];
 
         observe(t, (s) => phases.push(s));
@@ -376,7 +429,7 @@ for (const thread of ["main", "worker"] as const) {
             (await f.executions.importHistory("imported", "import", "digest", f.entries)).status,
             "settled",
         );
-        assert.equal(f.journal.session("shared").segmentId, "shared");
+        assert.equal((await f.journal.session("shared")).segmentId, "shared");
         assert.ok(phases.filter((s) => s.phase === "compare").every((s) => s.thread === thread));
         assert.equal(phases.filter((s) => s.phase === "compare").length, 2);
         assert.equal(
@@ -389,7 +442,7 @@ for (const thread of ["main", "worker"] as const) {
     test(`${thread}: Stop during final authorization cannot commit an already read-back seed`, async (t) => {
         const reached = Promise.withResolvers<void>();
         const release = Promise.withResolvers<void>();
-        const f = fixture(
+        const f = await fixture(
             t,
             async (call) => {
                 if (call === 3) {
@@ -406,15 +459,15 @@ for (const thread of ["main", "worker"] as const) {
         assert.throws(() => f.executions.close(), /still active/);
         release.resolve();
         assert.equal((await pending).status, "unknown");
-        assert.equal(f.journal.session("shared").segmentId, "shared");
+        assert.equal((await f.journal.session("shared")).segmentId, "shared");
     });
 
     test(`${thread}: failed materialization remains fenced after journal reopen`, async (t) => {
-        const f = fixture(t, undefined, chars);
+        const f = await fixture(t, undefined, chars);
         const attach = f.journal.attach.bind(f.journal);
 
-        f.journal.attach = (...args) => {
-            attach(...args);
+        f.journal.attach = async (...args) => {
+            await attach(...args);
 
             throw new Error("lost attach acknowledgement");
         };
@@ -434,7 +487,7 @@ for (const thread of ["main", "worker"] as const) {
                 reopened.handoff("shared", "different", "shared", f.bob),
                 KernelRequestConflict,
             );
-            assert.equal(reopened.journal.session("shared").segmentId, "shared");
+            assert.equal((await reopened.journal.session("shared")).segmentId, "shared");
         } finally {
             await reopened.close();
         }
@@ -443,7 +496,7 @@ for (const thread of ["main", "worker"] as const) {
 
 for (const delta of [-1, 0, 1]) {
     test(`public JSON UTF-8 size at 8 MiB ${delta < 0 ? "minus 1" : delta === 0 ? "exactly" : "plus 1"} selects the boundary path`, async (t) => {
-        const f = fixture(t, undefined, 1);
+        const f = await fixture(t, undefined, 1);
         const wanted = 8 * 1024 * 1024 + delta;
         const overhead =
             Buffer.byteLength(JSON.stringify(publicNativeHistory(f.messages)), "utf8") - 1;
@@ -470,7 +523,7 @@ for (const delta of [-1, 0, 1]) {
             assert.ok(Buffer.byteLength(JSON.stringify(f.messages), "utf8") > wanted + 1);
         }
 
-        f.journal.bind("boundary", f.bob);
+        await f.journal.bind("boundary", f.bob);
         const phases: SeedPhaseSignal[] = [];
 
         observe(t, (s) => phases.push(s));

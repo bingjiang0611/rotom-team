@@ -56,7 +56,7 @@ test("offline backup refuses a live writer and restores sessions/configuration w
         const history = await (await app.conversation(id)).context(context);
 
         assert.match(JSON.stringify(history.messages), /persist me/);
-        assert.equal(app.sessions().length, 1);
+        assert.equal((await app.sessions()).length, 1);
     } finally {
         await app.close();
     }

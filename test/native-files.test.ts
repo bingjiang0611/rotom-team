@@ -74,7 +74,7 @@ before(async () => {
             }),
     });
     ({ id } = await app.commands.createSession(owner(app), { backend: "rotom" }));
-    home = app.kernel!.executions.journal.session(String(id)).binding.home;
+    home = (await app.kernel!.executions.journal.session(String(id))).binding.home;
     mkdirSync(join(home, ".local/state/runtime-verify"), { recursive: true });
     writeFileSync(join(home, report), content);
     writeFileSync(join(work, "native-workspace-report.md"), "Workspace report");
@@ -105,9 +105,12 @@ after(async () => {
 
 test("native ~/ reports preview, download and attach from the bound HOME", async () => {
     assert.notEqual(home, homedir());
-    assert.equal(app.workspace.conversationPath(id, "~"), home);
-    assert.equal(app.workspace.conversationPath(id, `~/${report}`), join(home, report));
-    assert.equal(app.workspace.readableFile(owner(app), id, `~/${report}`), join(home, report));
+    assert.equal(await app.workspace.conversationPath(id, "~"), home);
+    assert.equal(await app.workspace.conversationPath(id, `~/${report}`), join(home, report));
+    assert.equal(
+        await app.workspace.readableFile(owner(app), id, `~/${report}`),
+        join(home, report),
+    );
     const preview = await get(`~/${report}`);
 
     assert.equal(preview.status, 200);
@@ -126,7 +129,7 @@ test("native ~/ reports preview, download and attach from the bound HOME", async
     assert.equal((await get(join(home, report))).status, 200);
     assert.equal((await get("native-workspace-report.md")).status, 200);
     assert.equal(
-        app.workspace.conversationPath(id, join(homedir(), "report.md")),
+        await app.workspace.conversationPath(id, join(homedir(), "report.md")),
         join(homedir(), "report.md"),
     );
 });

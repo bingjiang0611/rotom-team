@@ -93,7 +93,7 @@ test("a session lists itself and takes its first message as its title", async ()
     const id = await newSession();
 
     await say(id, "hello there");
-    const session = app.sessions().find((each) => each.id === Number(id));
+    const session = (await app.sessions()).find((each) => each.id === Number(id));
 
     assert.equal(session?.title, "hello there");
     assert.equal(session?.cwd, work);
@@ -299,8 +299,8 @@ test("a pasted image is stored with its message and read back, and image paths r
         ),
         undefined,
     );
-    assert.equal(app.workspace.conversationPath(id, "chart.png"), join(work, "chart.png"));
-    assert.equal(app.workspace.conversationPath(id, "/tmp/chart.png"), "/tmp/chart.png");
+    assert.equal(await app.workspace.conversationPath(id, "chart.png"), join(work, "chart.png"));
+    assert.equal(await app.workspace.conversationPath(id, "/tmp/chart.png"), "/tmp/chart.png");
 });
 
 /** A grey PNG, `width` by `height`. */
@@ -767,10 +767,10 @@ test("viewers read and chat but never steer; people invited to one session see o
         );
 
         assert.deepEqual(
-            app.sessions(scoped).map((each) => each.id),
+            (await app.sessions(scoped)).map((each) => each.id),
             [Number(id)],
         );
-        assert.ok(app.sessions(owner()).length >= 2);
+        assert.ok((await app.sessions(owner())).length >= 2);
         await assert.rejects(
             app.commands.submit(other, scoped, { text: "hi", requestId: "s1" }),
             /not shared/,
@@ -920,24 +920,27 @@ test("requests with the wrong types are refused, and nothing odd is stored", asy
         app.commands.createSession(owner(), { cwd: 5 as never }),
         /cwd must be text/,
     );
-    assert.equal(app.sessions().find((each) => each.id === Number(id))?.archived, undefined);
+    assert.equal(
+        (await app.sessions()).find((each) => each.id === Number(id))?.archived,
+        undefined,
+    );
     await app.commands.configure(id, owner(), { thinkingLevel: "off" });
 });
 
 test("archiving leaves a session where it was in the list, and so does bringing it back; renaming moves it up", async () => {
     const id = await newSession();
-    const meta = () => app.sessions().find((each) => each.id === Number(id))!;
-    const before = meta().updatedAt;
+    const meta = async () => (await app.sessions()).find((each) => each.id === Number(id))!;
+    const before = (await meta()).updatedAt;
 
     await new Promise((resolve) => setTimeout(resolve, 5));
     await app.commands.updateSession(id, owner(), { archived: true });
-    assert.equal(meta().archived, true);
-    assert.equal(meta().updatedAt, before);
+    assert.equal((await meta()).archived, true);
+    assert.equal((await meta()).updatedAt, before);
     await app.commands.updateSession(id, owner(), { archived: false });
-    assert.equal(meta().archived, false);
-    assert.equal(meta().updatedAt, before);
+    assert.equal((await meta()).archived, false);
+    assert.equal((await meta()).updatedAt, before);
     await app.commands.updateSession(id, owner(), { title: "Moved up" });
-    assert.ok(meta().updatedAt > before);
+    assert.ok((await meta()).updatedAt > before);
 });
 
 test("a lock left by a process that is gone, or is not Node, is taken over; a running server's is not", async () => {
@@ -1922,9 +1925,10 @@ test("access holds: a refused tab hears nothing, narrowed access evicts, removal
             "no notices from the other session or the server",
         );
         assert.ok(
-            !(app.sessions(owner()).find((each) => each.id === Number(other))?.people ?? []).some(
-                (each) => each.id === sam.id,
-            ),
+            !(
+                (await app.sessions(owner())).find((each) => each.id === Number(other))?.people ??
+                []
+            ).some((each) => each.id === sam.id),
         );
 
         // Narrowing Sam's access takes his tab out of the session at once.
@@ -1950,16 +1954,19 @@ test("access holds: a refused tab hears nothing, narrowed access evicts, removal
         writeFileSync(join(work, "inside.png"), png);
         writeFileSync(join(root, "outside.png"), png);
         assert.equal(
-            app.workspace.conversationFile(vee, id, "inside.png"),
+            await app.workspace.conversationFile(vee, id, "inside.png"),
             realpathSync(join(work, "inside.png")),
         );
-        assert.throws(
-            () => app.workspace.conversationFile(vee, id, join(root, "outside.png")),
+        await assert.rejects(
+            async () => await app.workspace.conversationFile(vee, id, join(root, "outside.png")),
             /not found/,
         );
-        assert.throws(() => app.workspace.conversationFile(vee, id, "../outside.png"), /not found/);
+        await assert.rejects(
+            async () => await app.workspace.conversationFile(vee, id, "../outside.png"),
+            /not found/,
+        );
         assert.equal(
-            app.workspace.conversationFile(owner(), id, join(root, "outside.png")),
+            await app.workspace.conversationFile(owner(), id, join(root, "outside.png")),
             join(root, "outside.png"),
         );
 
@@ -2005,6 +2012,6 @@ test("sessions and artifacts survive closing and reopening the storage", async (
     await say(id, "make an artifact for the restart test");
     await app.close();
     app = await open();
-    assert.ok(app.sessions().some((each) => each.id === Number(id)));
+    assert.ok((await app.sessions()).some((each) => each.id === Number(id)));
     assert.equal((await app.artifactBody(id, "demo-page", undefined)).content, "<h1>one</h1>");
 });
