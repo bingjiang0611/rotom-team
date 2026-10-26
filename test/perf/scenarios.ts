@@ -598,6 +598,8 @@ try {
                         return bytes.length;
                     }),
                 );
+
+                await imageProbe.settled();
                 const measured = imageProbe.report(indices.length);
 
                 assert.equal(
