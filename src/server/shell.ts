@@ -323,6 +323,7 @@ export class Shell {
         const app = this.#app;
 
         app.requireSee(user, id);
+        app.requireArchiveWriteAllowed(id);
         app.requireSteer(user);
         const task = Number.isInteger(taskId)
             ? await app.harness.getTask(taskId as unknown as TaskId, BACKGROUND_CONTEXT)

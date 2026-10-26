@@ -1,4 +1,4 @@
-import { cleanUp, openApp, owner, root, scriptedModel } from "./helpers.ts";
+import { cleanUp, openApp, owner, root, scriptedModel, seedHistoricalSession } from "./helpers.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { syncBuiltinESMExports } from "node:module";
@@ -63,20 +63,20 @@ test("app close flushes pending markers and catalogue removal cleans all members
     const data = join(root, "finished-app");
     const app = await openApp(scriptedModel(), data);
     const user = owner(app);
-    const session = await app.commands.createSession(user, {});
-    const other = await app.commands.createSession(user, {});
+    const session = await seedHistoricalSession(app);
+    const other = await seedHistoricalSession(app);
 
     try {
-        app.config.markFinishedSeen(user.id, String(session.id), 1);
-        app.config.markFinishedSeen(user.id, String(other.id), 2);
+        app.config.markFinishedSeen(user.id, String(session), 1);
+        app.config.markFinishedSeen(user.id, String(other), 2);
         await app.harness.commit(async (tx) => {
-            delete (await tx.doc(SessionsDoc)).items[String(session.id)];
+            delete (await tx.doc(SessionsDoc)).items[String(session)];
         }, BACKGROUND_CONTEXT);
-        assert.equal(app.config.userById(user.id)?.finishedSeen?.[String(session.id)], undefined);
-        app.config.markFinishedSeen(user.id, String(other.id), 3);
+        assert.equal(app.config.userById(user.id)?.finishedSeen?.[String(session)], undefined);
+        app.config.markFinishedSeen(user.id, String(other), 3);
     } finally {
         await app.close();
     }
 
-    assert.equal(new ConfigStore(data).userById(user.id)?.finishedSeen?.[String(other.id)], 3);
+    assert.equal(new ConfigStore(data).userById(user.id)?.finishedSeen?.[String(other)], 3);
 });

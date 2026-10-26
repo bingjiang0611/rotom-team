@@ -3,10 +3,10 @@
 import {
     type App,
     cleanUp,
-    newSession,
+    seedHistoricalSession,
     openApp,
+    appendHistoricalTurn,
     root,
-    say,
     scriptedModel,
     until,
     work,
@@ -48,8 +48,8 @@ const inPage = async <T>(script: string): Promise<T> =>
 
 before(async () => {
     app = await openApp(scriptedModel());
-    id = await newSession(app);
-    const other = await newSession(app);
+    id = await seedHistoricalSession(app);
+    const other = await seedHistoricalSession(app);
 
     scoped = app.config.addUser("Scoped", "guest", [String(id)]);
     viewer = app.config.addUser("Viewer", "viewer", [String(id)]);
@@ -155,9 +155,10 @@ test(
         skip: chromium === undefined ? "no Chromium-based browser on this machine" : false,
     },
     async () => {
-        await say(
+        await appendHistoricalTurn(
             app,
             id,
+            "delivery links",
             [
                 `[PDF](${file("changelog.pdf")})`,
                 `[HTML](${file("changelog.html")})`,

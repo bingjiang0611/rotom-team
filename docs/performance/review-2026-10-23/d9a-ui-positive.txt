@@ -1,0 +1,10 @@
+✔ archive status reaches the composer and clears on native navigation (stream) (4732.415166ms)
+✔ archive status reaches the composer and clears on native navigation (poll) (4268.942542ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 2
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 12144.496625

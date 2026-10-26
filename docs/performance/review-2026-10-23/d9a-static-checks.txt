@@ -1,0 +1,37 @@
+$ npm run check
+exit=0
+
+> rotom-team@0.1.1 check
+> tsc --noEmit -p .
+
+
+$ npm run lint
+exit=0
+
+> rotom-team@0.1.1 lint
+> eslint .
+
+
+$ npm run format:check
+exit=0
+
+> rotom-team@0.1.1 format:check
+> prettier --check . && eslint .
+
+Checking formatting...
+All matched files use Prettier code style!
+
+$ node --test test/docs-examples.test.ts
+exit=0
+✔ example source and old extension choices survive archive startup without loading (66.645208ms)
+✔ extensions.md names the reserved historical built-in tools and extension namespaces (109.528542ms)
+✔ the unloaded historical prompt source names existing documentation paths (5.291167ms)
+✔ every link between the docs leads to a file, and to a heading there when it names one (12.919875ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1555.54075

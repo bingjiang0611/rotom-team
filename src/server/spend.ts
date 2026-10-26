@@ -23,7 +23,7 @@ export const dollars = (amount: number) => `$${amount.toFixed(2)}`;
 export type SpendSummary = {
     /** Everything Pi spent on this server; only the owner sees it. */
     total?: number;
-    sessions: { id: number; title: string; spent: number; budget?: number }[];
+    sessions: { id: number; title: string; spent: number; budget?: number; readOnly: boolean }[];
     /** Everyone for the owner; others see themselves. */
     people: { id: string; name: string; spent: number; budget?: number }[];
 };
@@ -319,8 +319,10 @@ export class Spend {
     /** The owner limits what Pi may spend in a session (`null`: no limit). */
     async setSessionBudget(user: User, id: ConversationId, budget: unknown): Promise<void> {
         requireOwner(user);
+        this.#app.requireSee(user, id);
         const amount = budgetOf(budget);
 
+        this.#app.requireArchiveWriteAllowed(id);
         await this.#app.harness.commit(async (tx) => {
             const meta = (await tx.doc(SessionsDoc)).items[String(id)];
 
@@ -378,6 +380,7 @@ export class Spend {
                 id: session.id,
                 title: session.title ?? "New session",
                 spent: this.sessionSpent(session.id as unknown as ConversationId),
+                readOnly: app.sessionBackend(session.id as unknown as ConversationId) === "durable",
                 ...(budget === undefined ? {} : { budget }),
             };
         });

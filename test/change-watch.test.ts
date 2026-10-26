@@ -1,6 +1,14 @@
 // Changes told, not polled: a session's repository is watched while a tab has it open, and tabs that may read Changes
 // hear that something moved (never what), then ask with their own permissions.
-import { cleanUp, fakeTab, newSession, openApp, owner, root, scriptedModel } from "./helpers.ts";
+import {
+    cleanUp,
+    fakeTab,
+    seedHistoricalSession,
+    openApp,
+    owner,
+    root,
+    scriptedModel,
+} from "./helpers.ts";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -122,7 +130,7 @@ test(
         const app = await openApp(scriptedModel(), join(root, "watch-data"));
 
         try {
-            const id = await newSession(app, folder);
+            const id = await seedHistoricalSession(app, folder);
             const tab = fakeTab(id, owner(app));
             const viewer = fakeTab(id, app.config.addUser("Vee", "viewer").user);
 

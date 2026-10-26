@@ -735,5 +735,9 @@ export async function conversationRoutes(
         );
     }
 
+    if (third === "upload" && method === "POST") {
+        app.requireArchiveWriteAllowed(id);
+    }
+
     return conversationUpload(api, id, third, method);
 }

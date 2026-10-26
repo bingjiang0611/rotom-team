@@ -44,6 +44,8 @@ export class Goals {
      */
     async set(id: ConversationId, by: string, command: string): Promise<Goal> {
         const app = this.#app;
+
+        app.requireArchiveWriteAllowed(id);
         const model = (await app.agentState(id))?.model;
 
         if (!model || model.provider.startsWith("team:")) {
@@ -96,6 +98,8 @@ export class Goals {
 
     /** Drop the goal; true when there was one. */
     async clear(id: ConversationId): Promise<boolean> {
+        this.#app.requireArchiveWriteAllowed(id);
+
         return this.#app.harness.commit(async (tx) => {
             const doc = await tx.doc(GoalDoc, id);
 
@@ -126,6 +130,7 @@ export class Goals {
         command: string,
         context: Context,
     ): Promise<Omit<GoalCheck, "at">> {
+        this.#app.requireArchiveWriteAllowed(id);
         let output = "";
         const env = this.#app.envFor(id);
         const result = await env.exec(
@@ -164,6 +169,8 @@ export class Goals {
         check: Omit<GoalCheck, "at">,
     ): Promise<Goal | undefined> {
         const app = this.#app;
+
+        app.requireArchiveWriteAllowed(id);
         const goal = await app.harness.commit(async (tx) => {
             const doc = await tx.doc(GoalDoc, id);
             const goal = doc.goal;

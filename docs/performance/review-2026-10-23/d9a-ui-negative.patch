@@ -1,0 +1,20 @@
+diff --git a/web/store.js b/web/store.js
+index 62cfdd5..ae01439 100644
+--- a/web/store.js
++++ b/web/store.js
+@@ -70,6 +70,7 @@ const emptyView = () => ({
+     pins: [],
+     turns: { on: false, asks: [] },
+     decisions: {},
++    readOnly: null,
+     plan: { on: false },
+     schedules: [],
+     goal: null,
+@@ -764,6 +765,7 @@ function applyView(data) {
+                 pins: data.pins ?? base.pins,
+                 turns: data.turns ?? base.turns,
+                 decisions: data.decisions ?? base.decisions,
++                readOnly: data.readOnly === undefined ? base.readOnly : data.readOnly,
+                 plan: data.plan ?? base.plan,
+                 schedules: data.schedules ?? base.schedules,
+                 // No goal is null, which the server sends too: only a missing field keeps the last value.

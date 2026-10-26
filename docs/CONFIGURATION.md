@@ -16,10 +16,10 @@ account; the paying member changes model in place, in the same native session. S
 
 ## Shared installation and configuration
 
-Team supports native Agent Extensions only. In Team kernel mode, the inherited server extension loader is absent:
+Team supports native Agent Extensions only. In both kernel and read-only archive modes, the inherited server extension loader is absent:
 `src/server/extensions/` and `<data>/extensions/` are not loaded or watched, no drop-in dependency link is created,
 and the old `/api/extensions` listing/toggle/reload endpoints return 404 for authorized requests. Existing files and
-switch records are retained. The non-Team legacy runtime still owns those modules; it is not an Agent configuration path.
+switch records are retained. These legacy modules are preserved source, not an enabled runtime or an Agent configuration path.
 For paths, examples, package installation and reload steps, use [AGENT-CONFIGURATION.md](AGENT-CONFIGURATION.md).
 
 The owner manages `<data>/team-agent` using the pinned native resource layout:
@@ -92,7 +92,7 @@ isolation from that code. Review project packages before enabling this release.
 `--storage-worker` opts the native-kernel server into one database worker. It is **off by default**;
 `--no-storage-worker` explicitly keeps the D8a in-process path. `PocketApp.open` also accepts
 `storageWorker: true`. Combining it with `--no-rotom-kernel` is rejected before acquiring a writer lease.
-This is a startup option, not a live toggle. Existing Durable sessions and execution capabilities are not removed.
+This is a startup option, not a live toggle. Existing Durable sessions remain readable archives, not executable sessions. `--no-rotom-kernel` permits archive access only; it cannot bypass pending native ownership checks. See [LEGACY-ARCHIVE.md](LEGACY-ARCHIVE.md) for quarantine and rollback.
 
 Only `RotomJournal` and the public Pi Durable `Storage` run in that worker. Harness, transaction callbacks,
 mutation queue, mirror coordination, permissions, personal credentials, native processes and the payer gate stay

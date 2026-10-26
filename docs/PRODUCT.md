@@ -13,11 +13,11 @@ flowchart LR
     T --> D[(Durable: 共享会话与 Transcript 镜像)]
 ```
 
-- 新会话默认由 rotom 执行。`--no-rotom-kernel` 启动仅使用 Pi Durable 的服务；既有 Durable 会话保持原后端，不自动迁移。
+- 新会话只由 rotom 执行。既有 Durable 会话保留原后端并成为只读归档，不转换为 native 会话。`--no-rotom-kernel` 仅提供只读归档访问，不恢复旧执行。
 - rotom 版本及文件摘要由 [`runtime/rotom/pin.json`](../runtime/rotom/pin.json) 固定。团队包版本与 rotom 版本不是同一个版本号。
-- Durable 只为 rotom 会话提供共享状态、权限和 Transcript 镜像，不另运行一个 Agent 循环。它自己的会话仍使用旧后端。
+- Durable 为 rotom 会话提供共享状态、权限和 Transcript 镜像，不运行另一个 Agent 循环。旧会话保留读取、导出和访问授权；创建、执行、恢复及普通修改（含会话预算）被拒绝。启动归档的原子性、私有恢复记录及回滚限制见 [LEGACY-ARCHIVE.md](LEGACY-ARCHIVE.md)。
 - rotom 的工具、扩展消息和问题进入同一 Transcript。只有本轮付费成员可以回答该轮交互问题。
-- 可用 `--storage-worker` 将 journal 与公开 Durable Storage 放入单个数据库 worker，**默认关闭**；关闭时保持 D8a 路径。Harness、镜像协调、权限、个人凭据及 native/payer gate 仍在父线程。worker 失联不自动重启或重放；关闭必须先排空 native 所有权，再等数据库 ACK 和 worker 退出。失败保留租约。此开关仅用于 native kernel 模式，不删除旧后端能力，也不形成安全沙箱。
+- 可用 `--storage-worker` 将 journal 与公开 Durable Storage 放入单个数据库 worker，**默认关闭**；关闭时保持 D8a 路径。Harness、镜像协调、权限、个人凭据及 native/payer gate 仍在父线程。worker 失联不自动重启或重放；关闭必须先排空 native 所有权，再等数据库 ACK 和 worker 退出。失败保留租约。此开关仅用于 native kernel 模式，不开启旧后端执行，也不形成安全沙箱。
 
 ## 执行归属与历史
 

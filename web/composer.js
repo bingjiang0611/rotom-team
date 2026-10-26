@@ -151,6 +151,10 @@ function DriverBar() {
 function PlanBar({ blocked }) {
     const { view } = store.state;
 
+    if (view.plan?.archive) {
+        return html`<div class="plan-bar"><span class="grow">${view.plan.archive.text}</span></div>`;
+    }
+
     if (!view.plan?.on || !planAvailable()) {
         return null;
     }
@@ -218,6 +222,10 @@ function GoalBar() {
         </div>`;
     }
 
+    if (goal.archive) {
+        return html`<div class="goal-bar gave-up"><span class="grow"><span class="mono">${goal.command}</span> · ${goal.archive.text}</span></div>`;
+    }
+
     const command = html`<span class="mono">${goal.command}</span>`;
     const text =
         goal.status === "met"
@@ -230,6 +238,7 @@ function GoalBar() {
         <span class="grow">${text}</span>
         ${
             canSteer() &&
+            !store.state.view.readOnly &&
             html`<button class="link small" onClick=${() => attempt(actions.clearGoal)}>
                 ${goal.status === "working" ? "Drop" : "Dismiss"}
             </button>`
@@ -262,6 +271,7 @@ export function Composer() {
     const requestId = useRef(uid());
     const busy = view.live.busy;
     const agent = view.agent;
+    const readOnly = view.readOnly?.reason;
 
     useEffect(() => {
         const draft = drafts.get(conversationId);
@@ -867,6 +877,17 @@ export function Composer() {
             : item.by === me?.id
               ? " · you"
               : ` · ${users.find((user) => user.id === item.by)?.name ?? "someone"}`;
+
+    if (readOnly) {
+        return html`<footer class="composer-wrap">
+            <${PlanBar} blocked=${true} />
+            <${GoalBar} />
+            <div class="view-only" role="status">
+                <span>${readOnly}</span>
+            </div>
+            <${StatusLine} />
+        </footer>`;
+    }
 
     if (collab() && !canSteer()) {
         return html`<footer class="composer-wrap">

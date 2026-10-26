@@ -3,7 +3,7 @@ import {
     cleanUp,
     context,
     fakeTab,
-    newSession,
+    seedHistoricalSession,
     openApp,
     owner,
     root,
@@ -111,7 +111,7 @@ test("a room sends only what a valid claim lacks, once, and everything for any o
     const app = await openApp(scriptedModel(), join(root, "claims"));
 
     try {
-        const id = await newSession(app);
+        const id = await seedHistoricalSession(app);
 
         for (const text of ["one", "two", "three"]) {
             await append(app, id, text);

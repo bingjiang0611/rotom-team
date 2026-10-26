@@ -49,7 +49,7 @@ import { ChangeWatches } from "./change-watch.ts";
 import type { BrowserState } from "./browser/page.ts";
 import { Collab, REACTIONS } from "./collab.ts";
 import { Commands } from "./commands.ts";
-import { APP_ROOT, ConfigStore, type User } from "./config.ts";
+import { ConfigStore, type User } from "./config.ts";
 import {
     ArtifactBodyDoc,
     type ArtifactMeta,
@@ -67,10 +67,10 @@ import {
 } from "./docs.ts";
 import { describe, HttpError } from "./errors.ts";
 import { Goals } from "./goals.ts";
-import { type ApprovalRequest, Approvals, type PocketHost } from "./host.ts";
+import { type ApprovalRequest, Approvals } from "./host.ts";
 import { type GuardStatus, LancetGuard } from "./lancet.ts";
 import { takeLock } from "./lock.ts";
-import { modelList, resolveModel } from "./models.ts";
+import { modelList } from "./models.ts";
 import { configureHttp } from "./net.ts";
 import { snippet } from "./projection.ts";
 import {
@@ -81,10 +81,10 @@ import {
 } from "./prompts.ts";
 import { Providers } from "./providers.ts";
 import { PushStore } from "./push.ts";
-import { type ExtensionInfo, ExtensionLoader, prepareDropInFolder } from "./reload.ts";
+import { type ExtensionInfo, ExtensionLoader } from "./reload.ts";
 import { ResendTask } from "./resend.ts";
 import { type Client, Room, ROOM_DOCS } from "./room.ts";
-import { SUBSCRIPTION_COPY } from "./constants/copy.ts";
+import { ARCHIVE_COPY, SUBSCRIPTION_COPY } from "./constants/copy.ts";
 import { Schedules } from "./schedules.ts";
 import { SessionLists } from "./session-lists.ts";
 import { Shell } from "./shell.ts";
@@ -92,6 +92,7 @@ import { Spend } from "./spend.ts";
 import { Transcripts } from "./transcripts.ts";
 import { MediaStore, type Resize } from "./media.ts";
 import { Workspace } from "./workspace.ts";
+import { quarantineLegacyTasks } from "./legacy-archive.ts";
 
 const context = BACKGROUND_CONTEXT;
 
@@ -152,6 +153,8 @@ export class PocketApp {
     readonly #kernelEnabled: boolean;
     readonly #storageWorkerEnabled: boolean;
     #storageWorker?: StorageWorker;
+    /** Direct Storage is owned here only between opening SQLite and successful Harness ownership transfer. */
+    #preHarnessStorage?: Storage;
     readonly projects: TeamProjects;
     readonly execution = new TeamExecution(this);
     settings!: SettingsManager;
@@ -290,8 +293,19 @@ export class PocketApp {
         try {
             await app.#open();
         } catch (error) {
-            // Worker ownership starts before Harness.open, which can fail before its own cleanup scope.
-            if (app.#storageWorker) {
+            // The new pre-Harness quarantine stage owns direct SQLite until Harness.open succeeds.
+            if (app.#preHarnessStorage) {
+                try {
+                    await app.#preHarnessStorage.close(context);
+                    app.#preHarnessStorage = undefined;
+                    await app.close();
+                } catch (cleanupError) {
+                    throw new AggregateError(
+                        [error, cleanupError],
+                        "Startup failed and cleanup remains fenced",
+                    );
+                }
+            } else if (app.#storageWorker) {
                 try {
                     await app.close();
                 } catch (cleanupError) {
@@ -356,45 +370,8 @@ export class PocketApp {
             defineExtension({ name: "pocket-core", tasks: [ResendTask, this.shell.task] }),
         );
 
-        if (!this.#kernelEnabled) {
-            const host: PocketHost = {
-                guard: this.guard,
-                approvals: this.approvals,
-                agentDir: getAgentDir(),
-                dataDir: this.dataDir,
-                skillPaths: () => {
-                    try {
-                        return this.settings.getSkillPaths();
-                    } catch {
-                        return [];
-                    }
-                },
-                resolveModel: (spec) => resolveModel(this.models, spec),
-                requesterOf: (conversationId) => this.attribution.requesterOf(conversationId),
-                notice: (level, message) => this.notice(level, message),
-                schedules: this.schedules,
-                goals: this.goals,
-                browsers: this.browsers,
-            };
-            const dropIn = join(this.dataDir, "extensions");
-
-            try {
-                prepareDropInFolder(dropIn, join(APP_ROOT, "node_modules"));
-            } catch (error) {
-                this.#log(
-                    `Drop-in extensions cannot import Pi Pocket's packages: ${describe(error)}`,
-                );
-            }
-
-            this.loader = new ExtensionLoader(
-                registry,
-                host,
-                { builtIn: join(APP_ROOT, "src", "server", "extensions"), dropIn },
-                (file) => this.config.extensionChoice(file),
-            );
-            await this.loader.loadAll();
-        }
-
+        // Legacy service extensions are deliberately not loaded in D9a. Their files and persisted choices remain
+        // available for later migration, but archive startup must not execute or watch old code.
         registry.install(this.execution.extension());
 
         if (this.#storageWorkerEnabled) {
@@ -408,6 +385,12 @@ export class PocketApp {
                 "durable-storage",
                 await openNodeSqliteStorage(join(this.dataDir, "pocket.sqlite")),
             );
+
+        if (!this.#storageWorker) {
+            this.#preHarnessStorage = storage;
+        }
+
+        await quarantineLegacyTasks(storage, (line) => this.#log(line));
 
         this.harness = await Harness.open(
             storage,
@@ -441,6 +424,7 @@ export class PocketApp {
             },
             context,
         );
+        this.#preHarnessStorage = undefined;
 
         if (this.#kernelEnabled) {
             this.kernel = new TeamKernel(this, this.#storageWorker?.journal);
@@ -499,9 +483,8 @@ export class PocketApp {
             void this.guard.warm().catch(() => {});
         }
 
-        // Work a previous process left unfinished continues now.
-        this.harness.resume();
-
+        // Legacy Durable tasks are quarantined before Harness opens and are never resumed. Native journal recovery is
+        // separate and remains below; it is the only execution recovery path in Team mode.
         if (this.#storageWorker) {
             void this.kernel!.resumeInterrupted().catch((error) => {
                 this.#log(`Native continuation stopped: ${describe(error)}`);
@@ -1218,6 +1201,24 @@ export class PocketApp {
         return current;
     }
 
+    /** Backend identity follows the session root, never whether the native kernel is loaded. */
+    sessionBackend(id: ConversationId): "durable" | "rotom" {
+        return this.sessionMeta(this.rootOf(id))?.backend ?? "durable";
+    }
+
+    /** Throw before any durable execution or workspace mutation can begin. */
+    requireArchiveWriteAllowed(id: ConversationId): void {
+        const meta = this.sessionMeta(this.rootOf(id));
+
+        if (meta === undefined) {
+            throw new HttpError(404, ARCHIVE_COPY.sessionMissing);
+        }
+
+        if (meta.backend !== "rotom") {
+            throw new HttpError(409, ARCHIVE_COPY.readOnly);
+        }
+    }
+
     /** People invited to one session see only that session and its subagents. */
     canSee(user: User, id: ConversationId): boolean {
         return (
@@ -1248,11 +1249,15 @@ export class PocketApp {
         user: User,
         backend: "durable" | "rotom" = "durable",
     ): Promise<void> {
-        if ((this.sessionMeta(this.rootOf(id))?.backend ?? "durable") !== backend) {
+        if (this.sessionBackend(id) !== backend) {
             throw new HttpError(
                 409,
                 "This operation is not supported by this conversation's execution backend.",
             );
+        }
+
+        if (backend === "durable") {
+            this.requireArchiveWriteAllowed(id);
         }
 
         this.requireSteer(user);
@@ -1806,6 +1811,7 @@ export class PocketApp {
             return false;
         }
 
+        this.requireArchiveWriteAllowed(request.conversationId);
         const refused = allow ? this.cannotAllow(user, request) : undefined;
 
         if (refused !== undefined) {

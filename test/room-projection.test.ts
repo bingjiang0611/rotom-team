@@ -1,13 +1,13 @@
 import {
+    appendHistoricalTurn,
     cleanUp,
     context,
     fakeTab,
-    newSession,
+    seedHistoricalSession,
     openApp,
     owner,
     recordCost,
     root,
-    say,
     scriptedModel,
     until,
 } from "./helpers.ts";
@@ -15,6 +15,7 @@ import assert from "node:assert/strict";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import type { ConversationId, EntryRecord } from "@earendil-works/pi-durable";
+import { ARCHIVE_COPY } from "../src/server/constants/copy.ts";
 import { viewProjectionChannel, type ViewProjectionSignal } from "../src/server/perf-channels.ts";
 import { projectEntry } from "../src/server/projection.ts";
 import type { Client, Room } from "../src/server/room.ts";
@@ -111,7 +112,7 @@ test("room fields serialize once per fanout while each tab keeps independent del
     const app = await openApp(scriptedModel(), join(root, "fields-fanout"));
 
     try {
-        const id = await newSession(app);
+        const id = await seedHistoricalSession(app);
         const record = await append(app, id, "fields");
         const room = await app.room(id);
         const first = fakeTab(id, owner(app));
@@ -126,6 +127,7 @@ test("room fields serialize once per fanout while each tab keeps independent del
 
         try {
             await room.push(first.client, true);
+            assert.deepEqual(first.last("view")!.readOnly, { reason: ARCHIVE_COPY.readOnly });
             const single = calls;
 
             assert.ok(single > 0);
@@ -162,7 +164,7 @@ test("room entry sequence is shared across tabs but invalidates on append and he
     const app = await openApp(scriptedModel(), join(root, "sequence"));
 
     try {
-        const id = await newSession(app);
+        const id = await seedHistoricalSession(app);
 
         await append(app, id, "first");
         await app.harness.commit((tx) => tx.appendEntry(id, { kind: "pi.system" }), context);
@@ -277,7 +279,7 @@ test("client cursors skip hidden appends and rescan safely after missed sequence
     const app = await openApp(scriptedModel(), join(root, "client-cursors"));
 
     try {
-        const id = await newSession(app);
+        const id = await seedHistoricalSession(app);
 
         await append(app, id, "prefix");
         const room = await app.room(id);
@@ -337,7 +339,7 @@ test("room stats are shared across tabs and invalidate on usage, append and head
     const app = await openApp(scriptedModel(), join(root, "stats"));
 
     try {
-        const id = await newSession(app);
+        const id = await seedHistoricalSession(app);
 
         await append(app, id, "first");
         const room = await app.room(id);
@@ -392,44 +394,31 @@ test("room stats are shared across tabs and invalidate on usage, append and head
     }
 });
 
-test("room sequence does not cross a fork or survive restart", async () => {
+test("room sequence survives archive restart and legacy fork mutation is rejected", async () => {
     const data = join(root, "sequence-restart");
     const model = scriptedModel();
     let app = await openApp(model, data);
 
     try {
-        const id = await newSession(app);
+        const id = await seedHistoricalSession(app);
 
-        await say(app, id, "shared prefix");
+        await appendHistoricalTurn(app, id, "shared prefix", "historical answer");
         const room = await app.room(id);
-        const forkAt = room.value!.entries.findLast((entry) => entry.kind === "pi.assistant")!;
-
-        await append(app, id, "parent only");
-        await until(
-            () =>
-                visible(room).some(
-                    (entry) => entry.kind === "user" && entry.text === "parent only",
-                ),
-            "parent append",
-        );
         const parentTab = fakeTab(id, owner(app));
 
-        await push(room, parentTab.client, true);
-        const fork = await app.commands.fork(id, owner(app), { entryId: Number(forkAt.id) });
-        const forkRoom = await app.room(fork.id);
-        const forkTab = fakeTab(fork.id, owner(app));
+        assert.equal(await push(room, parentTab.client, true), room.value!.entries.length);
+        const before = room.value!.entries.length;
 
-        assert.equal(await push(forkRoom, forkTab.client, true), forkRoom.value!.entries.length);
-        assert.deepEqual(forkTab.last("view")!.entries, visible(forkRoom));
-        assert.ok(!JSON.stringify(forkTab.last("view")!.entries).includes("parent only"));
+        await assert.rejects(
+            app.commands.fork(id, owner(app), { entryId: Number(room.value!.entries.at(-1)!.id) }),
+            /read-only archive/,
+        );
         await app.close();
         app = await openApp(model, data);
         const reopened = await app.room(id);
 
-        assert.equal(await push(reopened, parentTab.client, true), reopened.value!.entries.length);
-        assert.deepEqual(parentTab.last("view")!.entries, visible(reopened));
-        assert.equal(await push(reopened, parentTab.client, false), 0);
-        assert.deepEqual(parentTab.last("view")!.entries, []);
+        assert.equal(reopened.value!.entries.length, before);
+        assert.equal(await push(reopened, parentTab.client, false), reopened.value!.entries.length);
     } finally {
         await app.close();
     }

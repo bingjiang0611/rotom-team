@@ -1,6 +1,14 @@
 // A real browser opens a long session with only its newest entries, shows earlier ones as the reader scrolls up, and
 // reads the whole history for find and for a jump to a message it does not hold.
-import { cleanUp, context, newSession, openApp, root, scriptedModel, until } from "./helpers.ts";
+import {
+    cleanUp,
+    context,
+    seedHistoricalSession,
+    openApp,
+    root,
+    scriptedModel,
+    until,
+} from "./helpers.ts";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { join } from "node:path";
@@ -36,7 +44,7 @@ test(
         });
 
         try {
-            const id = await newSession(app);
+            const id = await seedHistoricalSession(app);
 
             await app.harness.commit(async (tx) => {
                 for (let index = 1; index <= COUNT; index++) {

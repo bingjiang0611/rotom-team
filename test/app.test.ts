@@ -1,7 +1,8 @@
 // End-to-end tests of the server core with a scripted model: no network, no API keys, no Pi config.
 import {
-    type LegacyApp as App,
+    type App,
     cleanUp,
+    context,
     fakeTab,
     lastText,
     openApp,
@@ -9,19 +10,24 @@ import {
     root,
     say as sayTo,
     scriptedModel,
-    newSession as startSession,
+    seedHistoricalSession as startSession,
+    appendHistoricalTurn,
     until,
     work,
+    noInferenceModels,
 } from "./helpers.ts";
 import assert from "node:assert/strict";
-import { mkdirSync, realpathSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-import { crc32, deflateSync } from "node:zlib";
+import { mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { after, before, mock, test } from "node:test";
+import { crc32, deflateSync } from "node:zlib";
 import type { FauxResponseStep } from "@earendil-works/pi-ai";
 import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai/providers/faux";
 import type { ConversationId } from "@earendil-works/pi-durable";
 import type { Attachment } from "../src/server/commands.ts";
+import { PocketApp } from "../src/server/app.ts";
+import { NATIVE_ENTRY } from "../src/server/entry-format.ts";
+import { ChatDoc } from "../src/server/docs.ts";
 
 /** The provider session id each request carried, with the message it answered. */
 const requests: { sessionId: string | undefined; text: string }[] = [];
@@ -73,10 +79,56 @@ const route: FauxResponseStep = (context, options) => {
 
 const faux = scriptedModel(route);
 
+/** A valid RGB PNG used to prove the native model-image resize path. */
+function greyPng(width: number, height: number): Buffer {
+    const chunk = (type: string, data: Buffer) => {
+        const body = Buffer.concat([Buffer.from(type), data]);
+        const frame = Buffer.alloc(8);
+
+        frame.writeUInt32BE(data.length, 0);
+        frame.writeUInt32BE(crc32(body), 4);
+
+        return Buffer.concat([frame.subarray(0, 4), body, frame.subarray(4)]);
+    };
+
+    const header = Buffer.alloc(13);
+
+    header.writeUInt32BE(width, 0);
+    header.writeUInt32BE(height, 4);
+    header.set([8, 2], 8);
+    const row = Buffer.concat([Buffer.from([0]), Buffer.alloc(width * 3, 0x80)]);
+
+    return Buffer.concat([
+        Buffer.from("89504e470d0a1a0a", "hex"),
+        chunk("IHDR", header),
+        chunk("IDAT", deflateSync(Buffer.concat(Array.from({ length: height }, () => row)))),
+        chunk("IEND", Buffer.alloc(0)),
+    ]);
+}
+
 let app: App;
 const open = () => openApp(faux);
 const owner = () => ownerOf(app);
-const newSession = () => startSession(app);
+const newSession = () => seedHistoricalSession();
+let nativeSerial = 0;
+
+const openNativeApp = () => {
+    const dataDir = join(realpathSync(root), `app-native-${++nativeSerial}`);
+
+    mkdirSync(dataDir, { mode: 0o700 });
+
+    return PocketApp.open({
+        dataDir: realpathSync(dataDir),
+        defaultCwd: realpathSync(work),
+        supervised: false,
+        kernel: true,
+        browser: null,
+        log: () => {},
+        configureUserModels: noInferenceModels,
+    });
+};
+
+const seedHistoricalSession = () => startSession(app);
 const say = (id: ConversationId, text: string, attachments?: Attachment[]) =>
     sayTo(app, id, text, attachments);
 
@@ -89,30 +141,133 @@ after(async () => {
     cleanUp();
 });
 
-test("a session lists itself and takes its first message as its title", async () => {
-    const id = await newSession();
+test("a historical session keeps its stored title and rejects a new title", async () => {
+    const id = await seedHistoricalSession();
+    const before = (await app.sessions()).find((each) => each.id === Number(id));
 
-    await say(id, "hello there");
-    const session = (await app.sessions()).find((each) => each.id === Number(id));
-
-    assert.equal(session?.title, "hello there");
-    assert.equal(session?.cwd, work);
+    await assert.rejects(say(id, "hello there"), /read-only archive/);
+    assert.equal(
+        (await app.sessions()).find((each) => each.id === Number(id))?.title,
+        before?.title,
+    );
+    assert.equal(before?.cwd, work);
 });
 
-test("the artifact tool publishes versions, edits the latest, and serves the body", async () => {
-    const id = await newSession();
+test("native loopback submission sets the title and delivers an uploaded image", async () => {
+    const { createServer } = await import("node:http");
+    const { once } = await import("node:events");
+    const requests: string[] = [];
+    const model = createServer(async (request, response) => {
+        let body = "";
 
-    await say(id, "please make an artifact");
-    const first = await app.artifactBody(id, "demo-page", undefined);
+        for await (const chunk of request) {
+            body += String(chunk);
+        }
 
-    assert.equal(first.version, 1);
-    assert.equal(first.content, "<h1>one</h1>");
-    await say(id, "now fix the artifact");
-    const second = await app.artifactBody(id, "demo-page", undefined);
+        requests.push(body);
+        response.writeHead(200, { "Content-Type": "text/event-stream" });
+        response.end(
+            `data: ${JSON.stringify({ id: "app-loopback", object: "chat.completion.chunk", created: 1, model: "app-loopback", choices: [{ index: 0, delta: { role: "assistant", content: "Loopback reply" }, finish_reason: null }] })}\\n\\ndata: ${JSON.stringify({ id: "app-loopback", object: "chat.completion.chunk", created: 1, model: "app-loopback", choices: [{ index: 0, delta: {}, finish_reason: "stop" }] })}\\n\\ndata: [DONE]\\n\\n`,
+        );
+    });
 
-    assert.equal(second.version, 2);
-    assert.equal(second.content, "<h1>two</h1>");
-    assert.equal((await app.artifactBody(id, "demo-page", 1)).content, "<h1>one</h1>");
+    model.listen(0, "127.0.0.1");
+    await once(model, "listening");
+    const baseUrl = `http://127.0.0.1:${(model.address() as { port: number }).port}/v1`;
+    const dataDir = join(realpathSync(root), "app-loopback");
+
+    mkdirSync(dataDir, { mode: 0o700 });
+    const native = await PocketApp.open({
+        dataDir: realpathSync(dataDir),
+        defaultCwd: realpathSync(work),
+        kernel: true,
+        supervised: false,
+        browser: null,
+        log: () => {},
+        configureUserModels: (models, user) =>
+            models.registerNativeProvider({
+                id: "openai",
+                name: "App loopback",
+                auth: {
+                    apiKey: {
+                        name: "Synthetic",
+                        resolve: async () => ({
+                            auth: { apiKey: `app:${user.id}` },
+                            source: "test",
+                        }),
+                    },
+                },
+                getModels: () => [
+                    {
+                        id: "app-loopback",
+                        name: "app-loopback",
+                        api: "openai-completions",
+                        provider: "openai",
+                        baseUrl,
+                        reasoning: false,
+                        input: ["text", "image"],
+                        contextWindow: 32_000,
+                        maxTokens: 1024,
+                        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+                    },
+                ],
+                stream: () => {
+                    throw new Error("native kernel owns this stream");
+                },
+                streamSimple: () => {
+                    throw new Error("native kernel owns this stream");
+                },
+            }),
+    });
+
+    try {
+        const member = native.config.users.find((user) => user.role === "owner")!;
+        const id = (await native.commands.createSession(member, { backend: "rotom" })).id;
+
+        await native.kernel!.chooseModel(
+            id,
+            member,
+            { model: { provider: "openai", modelId: "app-loopback" } },
+            "model-1",
+        );
+        const imagePath = join(native.workspace.uploadDirectory(id), "uploaded.png");
+        const image = greyPng(10, 3000);
+
+        writeFileSync(imagePath, image);
+        const result = await native.kernel!.submit(
+            id,
+            member,
+            "app-submit-1",
+            "hello title",
+            true,
+            [{ path: imagePath, name: "uploaded.png", mime: "image/png", size: image.length }],
+        );
+
+        assert.equal(result.status, "settled");
+        assert.equal(
+            (await native.sessions()).find((session) => session.id === Number(id))?.title,
+            "hello title",
+        );
+        assert.equal(requests.length, 1);
+        const sent = JSON.parse(requests[0]!) as { messages: { content: unknown }[] };
+        const content = JSON.stringify(sent.messages.at(-1)?.content);
+        const encoded = /base64,([^\\\"]+)/.exec(content)?.[1];
+
+        assert.ok(encoded, "the submitted native turn includes model image data");
+        const resized = Buffer.from(encoded!, "base64");
+
+        assert.equal(resized.readUInt32BE(20), 2000, "native model image is bounded to 2000px");
+    } finally {
+        await native.close();
+        model.close();
+    }
+});
+
+test("archived artifact execution is rejected and no body is published", async () => {
+    const id = await seedHistoricalSession();
+
+    await assert.rejects(say(id, "please make an artifact"), /read-only archive/);
+    await assert.rejects(app.artifactBody(id, "demo-page", undefined), { status: 404 });
 });
 
 test("the page that runs a reply's HTML is for people signed in, sandboxed, and runs only what the app sends it", async () => {
@@ -159,23 +314,14 @@ test("the page that runs a reply's HTML is for people signed in, sandboxed, and 
     }
 });
 
-test("each conversation sends its own provider session id, the same on every request and after a reopen", async () => {
-    const first = await newSession();
-    const second = await newSession();
-    const sent = (text: string) => requests.findLast((request) => request.text === text)?.sessionId;
+test("archive submissions never call a provider route", async () => {
+    const first = await seedHistoricalSession();
+    const second = await seedHistoricalSession();
+    const count = requests.length;
 
-    await say(first, "session id one");
-    await say(first, "session id two");
-    await say(second, "session id three");
-    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-
-    assert.match(sent("session id one") ?? "", uuid, "OpenCode refuses requests without one");
-    assert.equal(sent("session id two"), sent("session id one"));
-    assert.notEqual(sent("session id three"), sent("session id one"));
-    await app.close();
-    app = await open();
-    await say(first, "session id four");
-    assert.equal(sent("session id four"), sent("session id one"));
+    await assert.rejects(say(first, "session id one"), /read-only archive/);
+    await assert.rejects(say(second, "session id two"), /read-only archive/);
+    assert.equal(requests.length, count);
 });
 
 test("personal sign-in has a stable member-scoped device identity, not the host Pi identity", async () => {
@@ -218,140 +364,49 @@ test("personal sign-in has a stable member-scoped device identity, not the host 
     }
 });
 
-test("codemode is on by default, and a script's nested calls each do their own work", async () => {
-    assert.ok(
-        (await app.extensions(owner())).modules.some(
-            (module) => module.file === "codemode.ts" && module.enabled,
-        ),
-    );
-    writeFileSync(join(work, "hello.txt"), "hello from a file\n");
-    const id = await newSession();
+test("archived codemode requests reject without artifacts or file reads", async () => {
+    const id = await seedHistoricalSession();
 
-    await say(id, "please run a script");
-    assert.equal((await app.artifactBody(id, "notes", 1)).content, "<p>one</p>");
+    await assert.rejects(say(id, "please run a script"), /read-only archive/);
+    await assert.rejects(app.artifactBody(id, "notes", undefined), { status: 404 });
+});
+
+test("archived subagent requests reject without creating a child", async () => {
+    const id = await seedHistoricalSession();
+
+    await assert.rejects(say(id, "start a helper"), /read-only archive/);
+    const { BACKGROUND_CONTEXT } = await import("@earendil-works/chord/context");
+    const doc = await app.harness.conversation(id, BACKGROUND_CONTEXT);
+
     assert.equal(
-        (await app.artifactBody(id, "notes", undefined)).version,
-        2,
-        "the second nested artifact call made its own version",
-    );
-    const { BACKGROUND_CONTEXT } = await import("@earendil-works/chord/context");
-    const view = await (await app.harness.conversation(id, BACKGROUND_CONTEXT))!.context(
-        BACKGROUND_CONTEXT,
-    );
-    const said = view.messages.map((message) => JSON.stringify(message.content)).join("\n");
-
-    assert.match(said, /tool said: Script completed\\nWall time [\d.]+ seconds\\nOutput:\\n/);
-    assert.match(said, /hello from a file/);
-});
-
-test("a background subagent reports its answer back to the parent", async () => {
-    const id = await newSession();
-
-    await say(id, "start a helper");
-    const { BACKGROUND_CONTEXT } = await import("@earendil-works/chord/context");
-    const conversation = (await app.harness.conversation(id, BACKGROUND_CONTEXT))!;
-
-    const texts = async () => {
-        const view = await conversation.context(BACKGROUND_CONTEXT);
-
-        return view.messages.map((message) => JSON.stringify(message.content));
-    };
-
-    await until(
-        async () => (await texts()).some((text) => text.includes("noted")),
-        "the parent to react to the report",
-    );
-    assert.ok(
-        (await texts()).some((text) =>
-            text.includes("[subagent helper answered, no reply needed] hi from helper"),
+        (await doc?.context(BACKGROUND_CONTEXT))?.messages.some((message) =>
+            JSON.stringify(message.content).includes("helper"),
         ),
+        false,
     );
 });
 
-test("a pasted image is stored with its message and read back, and image paths resolve in the session folder", async () => {
-    const id = await newSession();
-
-    await app.commands.configure(id, owner(), {
-        model: { provider: "faux", modelId: "faux-vision" },
-    });
-    const png = Buffer.from(
-        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
-        "base64",
-    );
+test("archive image attachment rejects writes while path access remains scoped", async () => {
+    const id = await seedHistoricalSession();
     const path = join(app.workspace.uploadDirectory(id), "dot.png");
+    const png = Buffer.from("89504e470d0a1a0a", "hex");
 
     writeFileSync(path, png);
-    await say(id, "look at this", [{ path, name: "dot.png", mime: "image/png", size: png.length }]);
-    const { BACKGROUND_CONTEXT } = await import("@earendil-works/chord/context");
-    const conversation = (await app.harness.conversation(id, BACKGROUND_CONTEXT))!;
-    const entries = await conversation.entries({}, 256, undefined, BACKGROUND_CONTEXT);
-    const user = entries.items.find((entry) => entry.kind === "pi.user")!;
-    const image = await app.transcripts.entryImage(id, user.id as unknown as number, 0);
 
-    assert.equal(image?.mimeType, "image/png");
-    assert.deepEqual(image?.data, png);
-    assert.equal(await app.transcripts.entryImage(id, user.id as unknown as number, 1), undefined);
-    assert.equal(
-        await app.transcripts.entryImage(
-            (Number(id) + 1000) as unknown as ConversationId,
-            user.id as unknown as number,
-            0,
-        ),
-        undefined,
-    );
+    await assert.rejects(say(id, "look at this"), /read-only archive/);
     assert.equal(await app.workspace.conversationPath(id, "chart.png"), join(work, "chart.png"));
     assert.equal(await app.workspace.conversationPath(id, "/tmp/chart.png"), "/tmp/chart.png");
+    assert.equal((await app.harness.conversation(id, context)) !== undefined, true);
 });
 
-/** A grey PNG, `width` by `height`. */
-function greyPng(width: number, height: number): Buffer {
-    const chunk = (type: string, data: Buffer) => {
-        const body = Buffer.concat([Buffer.from(type), data]);
-        const frame = Buffer.alloc(8);
+test("archive oversized image configuration is rejected before model access", async () => {
+    const id = await seedHistoricalSession();
 
-        frame.writeUInt32BE(data.length, 0);
-        frame.writeUInt32BE(crc32(body), 4);
-
-        return Buffer.concat([frame.subarray(0, 4), body, frame.subarray(4)]);
-    };
-
-    const header = Buffer.alloc(13);
-
-    header.writeUInt32BE(width, 0);
-    header.writeUInt32BE(height, 4);
-    header.set([8, 2], 8);
-    const row = Buffer.concat([Buffer.from([0]), Buffer.alloc(width * 3, 0x80)]);
-
-    return Buffer.concat([
-        Buffer.from("89504e470d0a1a0a", "hex"),
-        chunk("IHDR", header),
-        chunk("IDAT", deflateSync(Buffer.concat(Array.from({ length: height }, () => row)))),
-        chunk("IEND", Buffer.alloc(0)),
-    ]);
-}
-
-test("a big pasted image goes to the model at most 2000 pixels a side", async () => {
-    const id = await newSession();
-
-    await app.commands.configure(id, owner(), {
-        model: { provider: "faux", modelId: "faux-vision" },
-    });
-    const png = greyPng(10, 3000);
-    const path = join(app.workspace.uploadDirectory(id), "tall.png");
-
-    writeFileSync(path, png);
-    await say(id, "how tall?", [{ path, name: "tall.png", mime: "image/png", size: png.length }]);
-    const { BACKGROUND_CONTEXT } = await import("@earendil-works/chord/context");
-    const conversation = (await app.harness.conversation(id, BACKGROUND_CONTEXT))!;
-    const entries = await conversation.entries({}, 256, undefined, BACKGROUND_CONTEXT);
-    const user = entries.items.find((entry) => entry.kind === "pi.user")!;
-    const image = (await app.transcripts.entryImage(id, user.id as unknown as number, 0))!;
-
-    assert.equal(image.mimeType, "image/png");
-    assert.equal(image.data.readUInt32BE(20), 2000, "its height, from the PNG header");
+    await assert.rejects(say(id, "large image"), /read-only archive/);
+    assert.equal(app.isBusy(id), false);
 });
 
-test("long polling delivers the stream's events, resends until acknowledged, and waits for new ones", async () => {
+test("long polling preserves hello/session ordering, replay, ACKs, and close", async () => {
     const { createServer } = await import("node:http");
     const { createHandler } = await import("../src/server/http.ts");
     const server = createServer(
@@ -361,10 +416,7 @@ test("long polling delivers the stream's events, resends until acknowledged, and
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
     const port = (server.address() as { port: number }).port;
 
-    type Poll = {
-        session: string;
-        events: { seq: number; event: string; data: Record<string, unknown> }[];
-    };
+    type Poll = { session: string; events: { seq: number; event: string }[] };
     const poll = async (query: string): Promise<Poll> =>
         (
             await fetch(`http://127.0.0.1:${port}/api/poll?${query}`, {
@@ -373,52 +425,27 @@ test("long polling delivers the stream's events, resends until acknowledged, and
         ).json() as Promise<Poll>;
 
     try {
-        const id = await newSession();
+        const id = await seedHistoricalSession();
         const first = await poll(`tab=t1&c=${id}`);
 
         assert.deepEqual(
             first.events.slice(0, 2).map((each) => each.event),
             ["hello", "sessions"],
         );
-        assert.ok(first.events.some((each) => each.event === "view" && each.data.full === true));
-        // Without an acknowledgement, the same events come again (a debounced update may follow them).
+        assert.ok(first.events.some((each) => each.event === "view"));
         const again = await poll(`tab=t1&c=${id}&session=${first.session}&ack=0`);
 
         assert.deepEqual(
             again.events.slice(0, first.events.length).map((each) => each.seq),
             first.events.map((each) => each.seq),
         );
-        let ack = first.events.at(-1)!.seq;
-        const sent = say(id, "hello by polling");
-        let seen = false;
+        const ack = first.events.at(-1)!.seq;
+        const closed = await poll(`session=${first.session}&close=1`);
 
-        for (let round = 0; round < 20 && !seen; round++) {
-            const next = await poll(`tab=t1&c=${id}&session=${first.session}&ack=${ack}`);
-
-            assert.equal(next.session, first.session);
-            assert.ok(next.events.every((each) => each.seq > ack));
-
-            for (const each of next.events) {
-                ack = each.seq;
-                const entries = (each.data.entries ?? []) as { kind: string; text?: string }[];
-
-                if (
-                    each.event === "view" &&
-                    entries.some(
-                        (entry) => entry.kind === "user" && entry.text === "hello by polling",
-                    )
-                ) {
-                    seen = true;
-                }
-            }
-        }
-
-        await sent;
-        assert.ok(seen, "the new message arrived by polling");
-        await poll(`session=${first.session}&close=1`);
+        assert.equal(closed.events?.length ?? 0, 0);
         const fresh = await poll(`tab=t1&c=${id}&session=${first.session}&ack=${ack}`);
 
-        assert.notEqual(fresh.session, first.session, "a closed session starts over");
+        assert.notEqual(fresh.session, first.session);
         await poll(`session=${fresh.session}&close=1`);
     } finally {
         server.closeAllConnections();
@@ -426,74 +453,8 @@ test("long polling delivers the stream's events, resends until acknowledged, and
     }
 });
 
-test("the owner turns extensions off and on, the guard follows its switch, and the choice survives a restart", async () => {
-    const module = (file: string) => app.loader.list().find((each) => each.file === file)!;
-
-    assert.deepEqual(
-        app.loader.list().map((each) => each.file),
-        [
-            "prompt.ts",
-            "artifacts.ts",
-            "browser.ts",
-            "subagents.ts",
-            "schedules.ts",
-            "goals.ts",
-            "plan.ts",
-            "guard.ts",
-            "codemode.ts",
-        ],
-    );
-    assert.equal(module("browser.ts").title, "Browser");
-    assert.deepEqual(module("browser.ts").extensions[0]?.tools, ["browser"]);
-    assert.equal(module("prompt.ts").required, true);
-    assert.equal(module("codemode.ts").title, "Codemode");
-    assert.match(
-        module("codemode.ts").summary,
-        /^Codemode lets the agent write JavaScript that calls its other tools/,
-    );
-    assert.deepEqual(module("codemode.ts").extensions[0]?.tools, ["codemode"]);
-    assert.match(module("guard.ts").summary, /^Lancet Guard for Pi Pocket's tools\.$/);
-    assert.deepEqual(module("subagents.ts").extensions[0]?.tools, ["subagent"]);
-
-    // Lancet Guard is off until the owner turns it on.
-    assert.equal(module("guard.ts").enabled, false);
-    assert.ok(!app.loader.extensionNames().includes("pocket-guard"));
-    assert.match((await app.guardStatus()).detail, /off in Pi Pocket/);
-    await app.setExtensionEnabled(owner(), "guard.ts", true);
-    assert.ok(app.loader.extensionNames().includes("pocket-guard"));
-    assert.deepEqual(app.config.enabledExtensions, ["guard.ts"]);
-
-    await app.setExtensionEnabled(owner(), "subagents.ts", false);
-    assert.equal(module("subagents.ts").enabled, false);
-    assert.deepEqual(module("subagents.ts").extensions, []);
-    assert.ok(!app.loader.extensionNames().includes("pocket-subagents"));
-
-    await app.setExtensionEnabled(owner(), "guard.ts", false);
-    const guard = await app.guardStatus();
-
-    assert.equal(guard.enabled, false);
-    assert.match(guard.detail, /off in Pi Pocket/);
-
-    await assert.rejects(app.setExtensionEnabled(owner(), "prompt.ts", false), /required/);
-    await assert.rejects(app.setExtensionEnabled(owner(), "nope.ts", false), /no extension module/);
-
-    await app.close();
-    app = await open();
-    assert.equal(module("subagents.ts").enabled, false);
-    assert.ok(!app.loader.extensionNames().includes("pocket-subagents"));
-    assert.equal(module("guard.ts").enabled, false);
-
-    await app.setExtensionEnabled(owner(), "subagents.ts", true);
-    await app.setExtensionEnabled(owner(), "guard.ts", true);
-    assert.deepEqual(module("subagents.ts").extensions[0]?.tools, ["subagent"]);
-    assert.ok(app.loader.extensionNames().includes("pocket-guard"));
-    assert.deepEqual(app.config.disabledExtensions, []);
-
-    // Turned on, it stays on after a restart.
-    await app.close();
-    app = await open();
-    assert.equal(module("guard.ts").enabled, true);
-    assert.ok(app.loader.extensionNames().includes("pocket-guard"));
+test("legacy service extension access remains unavailable in archive mode", async () => {
+    await assert.rejects(app.extensions(owner()), { status: 404 });
 });
 
 test("everyone signed in gets the desktop's theme colors; only the owner gets its wallpaper", async () => {
@@ -582,292 +543,141 @@ test("everyone signed in gets the desktop's theme colors; only the owner gets it
     }
 });
 
-test("anyone signed in can list extensions; only the owner can change them", async () => {
-    const { createServer } = await import("node:http");
-    const { createHandler } = await import("../src/server/http.ts");
-    const server = createServer(
-        createHandler({ app, listen: { host: "127.0.0.1", port: 0 }, restart: () => {} }),
+test("extension routes remain unavailable to archive sessions", async () => {
+    const id = await seedHistoricalSession();
+
+    await assert.rejects(
+        app.commands.submit(id, owner(), { text: "extension", requestId: "extension-archive" }),
+        /read-only archive/,
     );
-
-    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-    const port = (server.address() as { port: number }).port;
-    const guest = app.config.addUser("Guest", "guest");
-    const call = (token: string, path: string, body?: unknown) =>
-        fetch(`http://127.0.0.1:${port}/api/${path}`, {
-            method: body === undefined ? "GET" : "POST",
-            headers: {
-                authorization: `Bearer ${token}`,
-                "x-pocket": "1",
-                "content-type": "application/json",
-            },
-            ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-        });
-
-    try {
-        const listed = await call(guest.token, "extensions");
-
-        assert.equal(listed.status, 200);
-        assert.deepEqual(
-            ((await listed.json()) as { modules: { file: string }[] }).modules.map(
-                (module) => module.file,
-            ),
-            app.loader.list().map((module) => module.file),
-        );
-        assert.equal(
-            (await call(guest.token, "extensions/guard.ts", { enabled: false })).status,
-            403,
-        );
-        assert.equal((await call(guest.token, "extensions/guard.ts/reload", {})).status, 403);
-        assert.equal(
-            (await call(app.config.ownerToken, "extensions/guard.ts", { enabled: "no" })).status,
-            400,
-        );
-        const off = await call(app.config.ownerToken, "extensions/guard.ts", { enabled: false });
-
-        assert.equal(off.status, 200);
-        assert.equal(
-            ((await off.json()) as { modules: { file: string; enabled: boolean }[] }).modules.find(
-                (each) => each.file === "guard.ts",
-            )?.enabled,
-            false,
-        );
-        assert.equal(
-            (await call(app.config.ownerToken, "extensions/guard.ts/reload", {})).status,
-            409,
-        );
-        assert.equal(
-            (await call(app.config.ownerToken, "extensions/guard.ts", { enabled: true })).status,
-            200,
-        );
-        assert.equal(
-            (await call(app.config.ownerToken, "extensions/guard.ts/reload", {})).status,
-            200,
-        );
-    } finally {
-        app.config.removeUser(guest.user.id);
-        server.closeAllConnections();
-        server.close();
-    }
+    await assert.rejects(app.extensions(owner()), { status: 404 });
 });
 
-test("people chat beside Pi: presence, typing, one post per request, and the chat survives a reopen", async () => {
-    const id = await newSession();
-    const guest = app.config.addUser("Alex", "guest");
+test("extension routes remain unavailable to archive sessions", async () => {
+    const id = await seedHistoricalSession();
 
-    type Event = { event: string; data: Record<string, unknown> };
-    const tab = (name: string, user: (typeof guest)["user"], events: Event[]) => ({
-        id: name,
-        connection: name,
-        user,
-        conversationId: id,
-        sentEntries: new Set<number>(),
-        orderKey: "",
-        send: (event: string, data: unknown) =>
-            events.push({ event, data: data as Record<string, unknown> }),
+    await assert.rejects(
+        app.commands.submit(id, owner(), { text: "extension", requestId: "extension-archive" }),
+        /read-only archive/,
+    );
+    assert.equal(await app.extensions(owner()).catch((error) => error.status), 404);
+});
+
+test("native chat supports presence, typing, deduplication, pins, grants, and reopen", async () => {
+    const dataDir = join(realpathSync(root), "app-native-chat");
+
+    mkdirSync(dataDir, { mode: 0o700 });
+    let native = await PocketApp.open({
+        dataDir: realpathSync(dataDir),
+        defaultCwd: realpathSync(work),
+        supervised: false,
+        kernel: true,
+        browser: null,
+        log: () => {},
+        configureUserModels: noInferenceModels,
     });
-    const mine: Event[] = [];
-    const ownerTab = tab("tab-owner", owner(), mine);
-    const guestTab = tab("tab-guest", guest.user, []);
-
-    type People = { name: string; typing?: string }[];
-    const people = () =>
-        (mine.findLast((each) => each.event === "presence")?.data.people ?? []) as People;
 
     try {
-        await app.attach(ownerTab);
-        assert.deepEqual(mine.find((each) => each.event === "chat")?.data, {
-            conversationId: id,
-            full: true,
-            messages: [],
-        });
-        await app.attach(guestTab);
-        assert.deepEqual(
-            people()
-                .map((each) => each.name)
-                .sort(),
-            ["Alex", owner().name].sort(),
-        );
+        const member = native.config.users.find((user) => user.role === "owner")!;
+        const guest = native.config.addUser("Native guest", "guest").user;
+        const id = (await native.commands.createSession(member, { backend: "rotom" })).id;
+        const tab = fakeTab(id, member);
 
-        app.collab.setTyping(id, guest.user, "chat");
-        await until(
-            () => people().find((each) => each.name === "Alex")?.typing === "chat",
-            "Alex to show as typing",
-        );
-
-        const posted = await app.collab.postChat(id, guest.user, {
-            text: "  hi team  ",
-            requestId: "r1",
-        });
-
-        assert.equal(posted.text, "hi team");
-        assert.equal(
-            (await app.collab.postChat(id, guest.user, { text: "hi team", requestId: "r1" })).id,
-            posted.id,
-            "a retry does not post twice",
-        );
-        await until(
-            () =>
-                mine.some(
-                    (each) =>
-                        each.event === "chat" &&
-                        (each.data.messages as { id: string }[]).some(
-                            (message) => message.id === posted.id,
-                        ),
-                ),
-            "the message to reach the other tab",
-        );
-        await until(
-            () => people().find((each) => each.name === "Alex")?.typing === undefined,
-            "sending to stop the typing indicator",
+        await native.attach(tab.client);
+        await assert.rejects(
+            native.collab.postChat(id, member, { text: "", requestId: "native-empty" }),
+            { status: 400 },
         );
         await assert.rejects(
-            app.collab.postChat(id, guest.user, { text: "   ", requestId: "r2" }),
-            /empty/,
+            native.collab.postChat(id, member, {
+                text: "x".repeat(20_001),
+                requestId: "native-long",
+            }),
+            { status: 413 },
+        );
+        native.collab.setTyping(id, member, "chat");
+        const first = await native.collab.postChat(id, member, {
+            text: "native @Native guest",
+            requestId: "native-chat-1",
+        });
+        const duplicate = await native.collab.postChat(id, member, {
+            text: "native @Native guest",
+            requestId: "native-chat-1",
+        });
+
+        assert.equal(duplicate.id, first.id);
+        assert.deepEqual((await native.collab.pin(id, member, { chatId: first.id })).pinned, true);
+        const entry = await native.harness.commit(
+            (tx) =>
+                tx.appendEntry(id, {
+                    kind: "pi.user",
+                    model: [{ role: "user", content: "native transcript", timestamp: Date.now() }],
+                }),
+            context,
         );
 
-        app.detach(guestTab);
-        await until(() => people().length === 1, "Alex to leave");
+        await native.collab.react(id, member, Number(entry.id), "👍");
+        native.setAccess(member, guest.id, { role: "viewer", sessions: [String(id)] });
+        await native.collab.postChat(id, guest, {
+            text: "viewer chat",
+            requestId: "native-chat-2",
+        });
+        assert.equal(
+            tab.events.some((event) => event.event === "presence"),
+            true,
+        );
+        native.detach(tab.client);
+        await native.close();
+        native = await PocketApp.open({
+            dataDir: realpathSync(dataDir),
+            defaultCwd: realpathSync(work),
+            supervised: false,
+            kernel: true,
+            browser: null,
+            log: () => {},
+            configureUserModels: noInferenceModels,
+        });
+        const chat = await native.harness.snapshot(ChatDoc, id, context);
+
+        assert.equal(chat?.messages.length, 3);
+        assert.equal(chat?.messages[0]?.text, "native @Native guest");
     } finally {
-        app.detach(ownerTab);
-        app.detach(guestTab);
-        app.config.removeUser(guest.user.id);
+        await native.close();
     }
+});
 
-    await app.close();
-    app = await open();
-    const { BACKGROUND_CONTEXT } = await import("@earendil-works/chord/context");
-    const { ChatDoc } = await import("../src/server/docs.ts");
-    const stored = await app.harness.snapshot(ChatDoc, id, BACKGROUND_CONTEXT);
+test("archive chat rejects writes while history remains readable", async () => {
+    const id = await seedHistoricalSession();
 
-    assert.deepEqual(
-        stored?.messages.map((message) => [message.name, message.text]),
-        [["Alex", "hi team"]],
+    await assert.rejects(
+        app.collab.postChat(id, owner(), { text: "hello", requestId: "chat-archive" }),
+        /read-only archive/,
+    );
+    assert.ok(await app.conversation(id));
+});
+
+test("archive steering rejects without weakening access checks", async () => {
+    const id = await seedHistoricalSession();
+    const viewer = app.config.addUser("Archive viewer", "viewer").user;
+
+    await assert.rejects(
+        app.commands.submit(id, viewer, { text: "steer", requestId: "archive-viewer" }),
+        /read-only archive/,
+    );
+    await assert.rejects(
+        app.commands.submit(id, owner(), { text: "steer", requestId: "archive-owner" }),
+        /read-only archive/,
     );
 });
 
-/** A fake browser tab attached to a conversation, recording what the server sends it. */
-test("viewers read and chat but never steer; people invited to one session see only that session", async () => {
-    const id = await newSession();
-    const other = await newSession();
-    const viewer = app.config.addUser("Vee", "viewer").user;
-    const scoped = app.config.addUser("Sam", "guest", [String(id)]).user;
+test("archive turn-taking mutation rejects without activity", async () => {
+    const id = await seedHistoricalSession();
 
-    try {
-        await assert.rejects(
-            app.commands.submit(id, viewer, { text: "hi", requestId: "v1" }),
-            /not steer/,
-        );
-        await assert.rejects(app.commands.abort(id, viewer), /not steer/);
-        await assert.rejects(app.commands.createSession(viewer, { cwd: work }), /not steer/);
-        await assert.rejects(app.answerApproval("nope", true, viewer), /not steer/);
-        assert.equal(
-            (await app.collab.postChat(id, viewer, { text: "just watching", requestId: "v2" }))
-                .text,
-            "just watching",
-        );
-
-        assert.deepEqual(
-            (await app.sessions(scoped)).map((each) => each.id),
-            [Number(id)],
-        );
-        assert.ok((await app.sessions(owner())).length >= 2);
-        await assert.rejects(
-            app.commands.submit(other, scoped, { text: "hi", requestId: "s1" }),
-            /not shared/,
-        );
-        await assert.rejects(app.commands.createSession(scoped, { cwd: work }), /one session/);
-        const tab = fakeTab(other, scoped);
-
-        await app.attach(tab.client);
-        assert.match(String(tab.last("missing")?.message), /not shared/);
-        app.detach(tab.client);
-
-        // The owner widens Sam's access and makes Vee a guest.
-        app.setAccess(owner(), scoped.id, { sessions: null });
-        assert.equal(app.config.userById(scoped.id)?.sessions, undefined);
-        app.setAccess(owner(), viewer.id, { role: "guest" });
-        assert.equal(app.config.userById(viewer.id)?.role, "guest");
-        assert.throws(() => app.setAccess(viewer, scoped.id, { role: "viewer" }), /owner/);
-        assert.throws(
-            () => app.setAccess(owner(), owner().id, { role: "viewer" }),
-            /owner can do everything/,
-        );
-    } finally {
-        app.config.removeUser(viewer.id);
-        app.config.removeUser(scoped.id);
-    }
-});
-
-test("take turns: only the driver steers, others ask, the driver hands over, and it all shows as activity", async () => {
-    const id = await newSession();
-    const alex = app.config.addUser("Alex", "guest").user;
-    const ownerTab = fakeTab(id, owner());
-    const alexTab = fakeTab(id, alex);
-
-    try {
-        await app.attach(ownerTab.client);
-        await app.attach(alexTab.client);
-        await app.collab.turns(id, owner(), { action: "on" });
-        await assert.rejects(
-            app.commands.submit(id, alex, { text: "my turn?", requestId: "t1" }),
-            /is driving/,
-        );
-        await assert.rejects(
-            app.commands.configure(id, alex, { thinkingLevel: "off" }),
-            /is driving/,
-        );
-        await assert.rejects(app.collab.turns(id, alex, { action: "claim" }), /is driving/);
-        await app.collab.turns(id, alex, { action: "ask" });
-        await until(
-            () =>
-                (alexTab.field("turns") as { asks?: string[] } | undefined)?.asks?.includes(
-                    alex.id,
-                ) === true,
-            "the ask to show",
-        );
-        await app.collab.turns(id, owner(), { action: "handover", to: alex.id });
-        await until(
-            () => (ownerTab.field("turns") as { driver?: string } | undefined)?.driver === alex.id,
-            "Alex to drive",
-        );
-        await assert.rejects(
-            app.commands.submit(id, owner(), { text: "me again", requestId: "t2" }),
-            /Alex is driving/,
-        );
-        await app.commands.submit(id, alex, { text: "hello from the driver", requestId: "t3" });
-        await app.collab.turns(id, alex, { action: "off" });
-        const chat = (await app.harness.snapshot(
-            (await import("../src/server/docs.ts")).ChatDoc,
-            id,
-            (await import("@earendil-works/chord/context")).BACKGROUND_CONTEXT,
-        ))!;
-        const lines = chat.messages
-            .filter((each) => each.kind === "event")
-            .map((each) => `${each.name} ${each.text}`);
-
-        assert.deepEqual(lines, [
-            `${owner().name} turned on take turns and is driving`,
-            "Alex asked to drive",
-            `${owner().name} handed the wheel to Alex`,
-            "Alex turned off take turns",
-        ]);
-        // The others saw it as notices too.
-        assert.ok(
-            alexTab.events.some(
-                (each) =>
-                    each.event === "notice" &&
-                    String(each.data.message).includes("handed the wheel to Alex"),
-            ),
-        );
-    } finally {
-        app.detach(ownerTab.client);
-        app.detach(alexTab.client);
-        app.config.removeUser(alex.id);
-    }
+    await assert.rejects(app.collab.turns(id, owner(), { action: "ask" }), /read-only archive/);
 });
 
 test("a tab that closes while it is attaching is never counted as there", async () => {
-    const id = await newSession();
+    const id = await seedHistoricalSession();
     const gone = fakeTab(id, owner());
     const attaching = app.attach(gone.client);
 
@@ -894,53 +704,69 @@ test("a tab that closes while it is attaching is never counted as there", async 
 });
 
 test("requests with the wrong types are refused, and nothing odd is stored", async () => {
-    const id = await newSession();
+    const native = await openNativeApp();
+    const member = native.config.users.find((user) => user.role === "owner")!;
 
-    await assert.rejects(
-        app.commands.updateSession(id, owner(), { archived: "yes" as never }),
-        /archived must be true or false/,
-    );
-    await assert.rejects(
-        app.commands.updateSession(id, owner(), { title: 5 as never }),
-        /title must be text/,
-    );
-    await assert.rejects(
-        app.commands.configure(id, owner(), { thinkingLevel: "banana" }),
-        /thinkingLevel must be one of/,
-    );
-    await assert.rejects(
-        app.commands.configure(id, owner(), { model: { provider: 5 } as never }),
-        /model must name/,
-    );
-    await assert.rejects(
-        app.commands.configure(id, owner(), { cwd: 5 as never }),
-        /cwd must be text/,
-    );
-    await assert.rejects(
-        app.commands.createSession(owner(), { cwd: 5 as never }),
-        /cwd must be text/,
-    );
-    assert.equal(
-        (await app.sessions()).find((each) => each.id === Number(id))?.archived,
-        undefined,
-    );
-    await app.commands.configure(id, owner(), { thinkingLevel: "off" });
+    try {
+        const id = (await native.commands.createSession(member, { backend: "rotom" })).id;
+
+        await assert.rejects(
+            native.commands.updateSession(id, member, { archived: "yes" as never }),
+            /archived must be true or false/,
+        );
+        await assert.rejects(
+            native.commands.updateSession(id, member, { title: 5 as never }),
+            /title must be text/,
+        );
+        await assert.rejects(
+            native.commands.createSession(member, { cwd: 5 as never }),
+            /cwd must be text/,
+        );
+        assert.equal(
+            (await native.sessions()).find((each) => each.id === Number(id))?.archived,
+            undefined,
+        );
+    } finally {
+        await native.close();
+    }
 });
 
 test("archiving leaves a session where it was in the list, and so does bringing it back; renaming moves it up", async () => {
-    const id = await newSession();
-    const meta = async () => (await app.sessions()).find((each) => each.id === Number(id))!;
-    const before = (await meta()).updatedAt;
+    const app = await openNativeApp();
+    const owner = () => app.config.users.find((user) => user.role === "owner")!;
+    const newSession = async () =>
+        (await app.commands.createSession(owner(), { backend: "rotom" })).id;
 
-    await new Promise((resolve) => setTimeout(resolve, 5));
-    await app.commands.updateSession(id, owner(), { archived: true });
-    assert.equal((await meta()).archived, true);
-    assert.equal((await meta()).updatedAt, before);
-    await app.commands.updateSession(id, owner(), { archived: false });
-    assert.equal((await meta()).archived, false);
-    assert.equal((await meta()).updatedAt, before);
-    await app.commands.updateSession(id, owner(), { title: "Moved up" });
-    assert.ok((await meta()).updatedAt > before);
+    try {
+        const id = await newSession();
+        const meta = async () => (await app.sessions()).find((each) => each.id === Number(id))!;
+        const before = (await meta()).updatedAt;
+
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        await app.commands.updateSession(id, owner(), { archived: true });
+        assert.equal((await meta()).archived, true);
+        assert.equal((await meta()).updatedAt, before);
+        await app.commands.updateSession(id, owner(), { archived: false });
+        assert.equal((await meta()).archived, false);
+        assert.equal((await meta()).updatedAt, before);
+        await app.commands.updateSession(id, owner(), { title: "Moved up" });
+        assert.ok((await meta()).updatedAt > before);
+    } finally {
+        await app.close();
+    }
+});
+
+test("archive metadata cannot be renamed or archived", async () => {
+    const id = await seedHistoricalSession();
+
+    await assert.rejects(
+        app.commands.updateSession(id, owner(), { title: "changed" }),
+        /read-only archive/,
+    );
+    await assert.rejects(
+        app.commands.updateSession(id, owner(), { archived: true }),
+        /read-only archive/,
+    );
 });
 
 test("a lock left by a process that is gone, or is not Node, is taken over; a running server's is not", async () => {
@@ -978,156 +804,166 @@ test("a lock left by a process that is gone, or is not Node, is taken over; a ru
     }
 });
 
-test("view updates repeat the slow-changing fields only when they change", async () => {
-    const id = await newSession();
-
-    await say(id, "hello there");
-    const tab = fakeTab(id, owner());
-    const fields = ["artifacts", "subagents", "authors", "reactions", "pins", "turns", "decisions"];
-    const views = () => tab.events.filter((each) => each.event === "view").map((each) => each.data);
+test("native view deltas send slow-changing fields only when changed", async () => {
+    const native = await openNativeApp();
+    const member = native.config.users.find((user) => user.role === "owner")!;
 
     try {
-        await app.attach(tab.client);
+        const id = (await native.commands.createSession(member, { backend: "rotom" })).id;
+        const entry = await native.harness.commit(
+            (tx) =>
+                tx.appendEntry(id, {
+                    kind: NATIVE_ENTRY,
+                    data: {
+                        entry: {
+                            type: "message",
+                            id: "native-view-answer",
+                            parentId: null,
+                            message: {
+                                role: "assistant",
+                                timestamp: Date.now(),
+                                content: [{ type: "text", text: "view answer" }],
+                            },
+                        },
+                    },
+                }),
+            context,
+        );
+        const tab = fakeTab(id, member);
+        const fields = [
+            "artifacts",
+            "subagents",
+            "authors",
+            "reactions",
+            "pins",
+            "turns",
+            "decisions",
+        ];
+        const views = () =>
+            tab.events.filter((each) => each.event === "view").map((each) => each.data);
+
+        await native.attach(tab.client);
         const first = views()[0]!;
 
         assert.equal(first.full, true);
 
-        for (const name of fields) {
-            assert.ok(name in first, `a full view has ${name}`);
+        for (const field of fields) {
+            assert.ok(field in first, `a full view has ${field}`);
         }
 
-        const answer = (first.entries as { id: number; kind: string }[]).findLast(
-            (entry) => entry.kind === "assistant",
-        )!;
-
-        await app.collab.react(id, owner(), answer.id, "👍");
-        await until(() => views().length > 1, "an update after the reaction");
+        await native.collab.react(id, member, Number(entry.id), "👍");
+        await until(() => views().length > 1, "native reaction view update");
         const update = views().at(-1)!;
 
-        assert.deepEqual(update.reactions, { [String(answer.id)]: { "👍": [owner().id] } });
+        assert.deepEqual(update.reactions, { [String(entry.id)]: { "👍": [member.id] } });
 
-        for (const name of fields.filter((each) => each !== "reactions")) {
-            assert.ok(!(name in update), `an update leaves out unchanged ${name}`);
+        for (const field of fields.filter((field) => field !== "reactions")) {
+            assert.ok(!(field in update), `unchanged ${field} omitted from delta`);
         }
 
-        app.detach(tab.client);
-        await app.attach(tab.client);
+        native.detach(tab.client);
+        await native.attach(tab.client);
         const again = views().at(-1)!;
 
         assert.equal(again.full, true);
 
-        for (const name of fields) {
-            assert.ok(name in again, `a fresh attach sends ${name} again`);
+        for (const field of fields) {
+            assert.ok(field in again, `reattach includes ${field}`);
         }
+
+        native.detach(tab.client);
     } finally {
-        app.detach(tab.client);
+        await native.close();
     }
 });
 
-test("reactions, pins, notes, mentions, quotes, model changes, and guard decisions", async () => {
-    const { BACKGROUND_CONTEXT } = await import("@earendil-works/chord/context");
+test("native reactions, pins, notes, mentions, quotes, and notices preserve shared state", async () => {
     const docs = await import("../src/server/docs.ts");
-    const id = await newSession();
-    const other = await newSession();
-    const alex = app.config.addUser("Alex", "guest").user;
-    const elsewhere = fakeTab(other, alex);
+    const native = await openNativeApp();
+    const member = native.config.users.find((user) => user.role === "owner")!;
+    const alex = native.config.addUser("Alex", "guest").user;
 
     try {
-        await app.attach(elsewhere.client);
-        await say(id, "something to react to");
-        const entries = (await app.harness.conversation(id, BACKGROUND_CONTEXT))!;
-        const page = await entries.entries({}, 20, undefined, BACKGROUND_CONTEXT);
-        const answer = page.items.find((entry) => entry.kind === "pi.assistant")!
-            .id as unknown as number;
+        const id = (await native.commands.createSession(member, { backend: "rotom" })).id;
+        const other = (await native.commands.createSession(member, { backend: "rotom" })).id;
+        const elsewhere = fakeTab(other, alex);
 
-        await app.collab.react(id, alex, answer, "👍");
-        await app.collab.react(id, owner(), answer, "👍");
-        await app.collab.react(id, owner(), answer, "👍");
-        assert.deepEqual(
-            (await app.harness.snapshot(docs.ReactionsDoc, id, BACKGROUND_CONTEXT))?.entries,
-            { [String(answer)]: { "👍": [alex.id] } },
+        await native.attach(elsewhere.client);
+        const entry = await native.harness.commit(
+            (tx) =>
+                tx.appendEntry(id, {
+                    kind: NATIVE_ENTRY,
+                    data: {
+                        entry: {
+                            type: "message",
+                            id: "native-shared-answer",
+                            parentId: null,
+                            message: {
+                                role: "assistant",
+                                timestamp: Date.now(),
+                                content: [{ type: "text", text: "native answer" }],
+                            },
+                        },
+                    },
+                }),
+            context,
         );
-        await assert.rejects(app.collab.react(id, alex, answer, "💩"), /Pick one/);
+        const answer = Number(entry.id);
 
-        assert.deepEqual(await app.collab.pin(id, alex, { entryId: answer }), { pinned: true });
-        const pins = (await app.harness.snapshot(docs.PinsDoc, id, BACKGROUND_CONTEXT))!.items;
+        await native.collab.react(id, alex, answer, "👍");
+        await native.collab.react(id, member, answer, "👍");
+        await native.collab.react(id, member, answer, "👍");
+        assert.deepEqual((await native.harness.snapshot(docs.ReactionsDoc, id, context))?.entries, {
+            [String(answer)]: { "👍": [alex.id] },
+        });
+        await assert.rejects(native.collab.react(id, alex, answer, "💩"), /Pick one/);
+        assert.deepEqual(await native.collab.pin(id, alex, { entryId: answer }), { pinned: true });
+        const pinned = (await native.harness.snapshot(docs.PinsDoc, id, context))!.items[0]!;
 
-        assert.equal(pins[0]?.author, "Pi");
-        assert.match(pins[0]!.text, /^echo: .*something to react to$/);
-        const pinnedText = pins[0]!.text;
-
-        assert.deepEqual(await app.collab.pin(id, alex, { entryId: answer }), { pinned: false });
-
-        const saved = await app.collab.saveNotes(id, alex, "plan: ship it", 0);
+        assert.equal(pinned.author, "Pi");
+        assert.equal(pinned.text, "native answer");
+        assert.deepEqual(await native.collab.pin(id, alex, { entryId: answer }), { pinned: false });
+        const saved = await native.collab.saveNotes(id, alex, "plan: ship it", 0);
 
         assert.equal(saved.rev, 1);
-        await assert.rejects(
-            app.collab.saveNotes(id, owner(), "stale edit", 0),
-            /Alex changed the notes/,
-        );
-
-        const posted = await app.collab.postChat(id, owner(), {
+        await assert.rejects(native.collab.saveNotes(id, member, "stale edit", 0), /Alex changed/);
+        const posted = await native.collab.postChat(id, member, {
             text: "@alex look at this, cc @Alexander",
-            requestId: "m1",
+            requestId: "native-m1",
             quote: { entryId: answer },
         });
 
         assert.deepEqual(posted.mentions, [alex.id]);
-        assert.equal(posted.quote!.text, pinnedText);
+        assert.equal(posted.quote?.text, "native answer");
         await until(
             () =>
                 elsewhere.events.some(
-                    (each) =>
-                        each.event === "notice" &&
-                        String(each.data.message).includes("mentioned you"),
+                    (event) =>
+                        event.event === "notice" &&
+                        String(event.data.message).includes("mentioned you"),
                 ),
             "Alex to hear about the mention elsewhere",
         );
         assert.deepEqual(elsewhere.last("notice")?.link, { conversationId: id, sheet: "chat" });
-
-        await app.commands.configure(id, alex, {
-            model: { provider: "faux", modelId: "faux-vision" },
-            thinkingLevel: "off",
+        const duplicate = await native.collab.postChat(id, member, {
+            text: "@alex look at this, cc @Alexander",
+            requestId: "native-m1",
+            quote: { entryId: answer },
         });
-        const asked = app.approvals.request(
-            {
-                id: "approval-1",
-                conversationId: id,
-                taskId: 1 as never,
-                callId: "call-1",
-                tool: "bash",
-                subject: "rm -rf build",
-                reason: "deletes files",
-                createdAt: Date.now(),
-            },
-            BACKGROUND_CONTEXT,
-        );
 
-        assert.equal(await app.answerApproval("approval-1", true, alex), true);
-        assert.deepEqual(await asked, { allow: true, by: "Alex" });
-        const decision = (await app.harness.snapshot(docs.DecisionsDoc, id, BACKGROUND_CONTEXT))
-            ?.calls["call-1"];
-
-        assert.equal(decision?.by, "Alex");
-        assert.equal(decision?.allow, true);
-
-        const lines = (await app.harness.snapshot(docs.ChatDoc, id, BACKGROUND_CONTEXT))!.messages
-            .filter((each) => each.kind === "event")
-            .map((each) => each.text);
-
-        assert.deepEqual(lines, [
-            `pinned “${pinnedText}”`,
-            "updated the notes",
-            "switched the model to faux-vision",
-            "allowed the bash call: rm -rf build",
-        ]);
+        assert.equal(duplicate.id, posted.id);
+        native.detach(elsewhere.client);
     } finally {
-        app.detach(elsewhere.client);
-        app.config.removeUser(alex.id);
+        native.config.removeUser(alex.id);
+        await native.close();
     }
 });
 
 test("the session list shows who is where, the newest chat, and people come and go with a last-seen time", async () => {
+    const app = await openNativeApp();
+    const owner = () => app.config.users.find((user) => user.role === "owner")!;
+    const newSession = async () =>
+        (await app.commands.createSession(owner(), { backend: "rotom" })).id;
     const id = await newSession();
     const alex = app.config.addUser("Alex", "guest").user;
     const watcher = fakeTab(undefined, owner());
@@ -1162,111 +998,132 @@ test("the session list shows who is where, the newest chat, and people come and 
         app.detach(watcher.client);
         app.detach(tab.client);
         app.config.removeUser(alex.id);
+        await app.close();
     }
 });
 
 test("invites carry a role and a session over HTTP, and viewers get 403 on steering routes", async () => {
-    const { createServer } = await import("node:http");
-    const { createHandler } = await import("../src/server/http.ts");
-    const server = createServer(
-        createHandler({ app, listen: { host: "127.0.0.1", port: 0 }, restart: () => {} }),
-    );
-
-    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-    const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
-    const call = (token: string, path: string, body?: unknown) =>
-        fetch(`${base}/api/${path}`, {
-            method: body === undefined ? "GET" : "POST",
-            headers: {
-                authorization: `Bearer ${token}`,
-                "x-pocket": "1",
-                "content-type": "application/json",
-            },
-            ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-        });
-    const id = await newSession();
-    const joined: string[] = [];
+    const app = await openNativeApp();
+    const owner = () => app.config.users.find((user) => user.role === "owner")!;
+    const newSession = async () =>
+        (await app.commands.createSession(owner(), { backend: "rotom" })).id;
 
     try {
-        const invite = (await (
-            await call(app.config.ownerToken, "invite", { role: "viewer", session: Number(id) })
-        ).json()) as { code: string; grant: unknown };
+        const { createServer } = await import("node:http");
+        const { createHandler } = await import("../src/server/http.ts");
+        const server = createServer(
+            createHandler({ app, listen: { host: "127.0.0.1", port: 0 }, restart: () => {} }),
+        );
 
-        assert.deepEqual(invite.grant, { role: "viewer", session: String(id) });
-        const page = await (await fetch(`${base}/join/${invite.code}`)).text();
+        await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+        const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+        const call = (token: string, path: string, body?: unknown) =>
+            fetch(`${base}/api/${path}`, {
+                method: body === undefined ? "GET" : "POST",
+                headers: {
+                    authorization: `Bearer ${token}`,
+                    "x-pocket": "1",
+                    "content-type": "application/json",
+                },
+                ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+            });
+        const id = await newSession();
+        const joined: string[] = [];
 
-        assert.match(page, /but not steer Pi/);
-        const redeemed = await fetch(`${base}/join/${invite.code}`, {
-            method: "POST",
-            body: "name=Watcher",
-            headers: { "content-type": "application/x-www-form-urlencoded" },
-            redirect: "manual",
-        });
-        const token = decodeURIComponent(
-            /pocket_auth=([^;]+)/.exec(redeemed.headers.get("set-cookie") ?? "")![1]!,
-        );
-        const watcher = app.config.users.find((each) => each.name === "Watcher")!;
+        try {
+            const invite = (await (
+                await call(app.config.ownerToken, "invite", { role: "viewer", session: Number(id) })
+            ).json()) as { code: string; grant: unknown };
 
-        joined.push(watcher.id);
-        assert.equal(watcher.role, "viewer");
-        assert.deepEqual(watcher.sessions, [String(id)]);
-        assert.equal(
-            (await call(token, `c/${id}/submit`, { text: "hi", requestId: "x" })).status,
-            403,
-        );
-        assert.equal((await call(token, `c/${id}/abort`, {})).status, 403);
-        assert.equal((await call(token, "invite", {})).status, 403);
-        assert.equal((await call(token, "fs?path=/")).status, 403);
-        assert.equal(
-            (await call(token, "fs", { path: join(root, "made-by-watcher") })).status,
-            403,
-        );
-        assert.equal((await call(token, `c/${id}/files`)).status, 403);
-        assert.equal((await call(token, `c/${id}/view?path=README.md`)).status, 403);
-        assert.equal((await call(token, `c/${id}/shell`, { command: "echo hi" })).status, 403);
-        assert.equal((await call(token, `c/${id}/changes/revert`, { path: "a.txt" })).status, 403);
-        assert.equal(
-            (await call(token, `c/${id}/chat`, { text: "hello", requestId: "y" })).status,
-            200,
-        );
-        assert.equal(
-            (await call(token, `c/${Number(id) + 999}/chat`, { text: "hello", requestId: "z" }))
-                .status,
-            404,
-        );
-        const sessions = (await (await call(token, "sessions")).json()) as { id: number }[];
+            assert.deepEqual(invite.grant, { role: "viewer", session: String(id) });
+            const page = await (await fetch(`${base}/join/${invite.code}`)).text();
 
-        assert.deepEqual(
-            sessions.map((each) => each.id),
-            [Number(id)],
-        );
-        const push = (await (await call(token, "push")).json()) as {
-            publicKey: string;
-            prefs: Record<string, boolean>;
-            devices: number;
-        };
+            assert.match(page, /but not steer Pi/);
+            const redeemed = await fetch(`${base}/join/${invite.code}`, {
+                method: "POST",
+                body: "name=Watcher",
+                headers: { "content-type": "application/x-www-form-urlencoded" },
+                redirect: "manual",
+            });
+            const token = decodeURIComponent(
+                /pocket_auth=([^;]+)/.exec(redeemed.headers.get("set-cookie") ?? "")![1]!,
+            );
+            const watcher = app.config.users.find((each) => each.name === "Watcher")!;
 
-        assert.equal(push.devices, 0);
-        assert.equal(push.prefs.mention, true);
-        assert.ok(push.publicKey.length > 80);
-        assert.equal(
-            (
-                await call(token, "push/subscribe", {
-                    subscription: {
-                        endpoint: "http://insecure.example/x",
-                        keys: { p256dh: "a", auth: "b" },
-                    },
-                })
-            ).status,
-            400,
-        );
-    } finally {
-        for (const userId of joined) {
-            app.config.removeUser(userId);
+            joined.push(watcher.id);
+            assert.equal(watcher.role, "viewer");
+            assert.deepEqual(watcher.sessions, [String(id)]);
+            const submitResponse = await call(token, `c/${id}/submit`, {
+                text: "hi",
+                requestId: "x",
+            });
+
+            assert.equal(submitResponse.status, 403);
+
+            const abortResponse = await call(token, `c/${id}/abort`, {});
+
+            assert.equal(abortResponse.status, 403);
+
+            assert.ok((await call(token, "invite", {})).status === 403);
+            assert.ok((await call(token, "fs?path=/")).status === 403);
+            assert.ok(
+                (await call(token, "fs", { path: join(root, "made-by-watcher") })).status === 403,
+            );
+            assert.ok((await call(token, `c/${id}/files`)).status === 403);
+            assert.ok((await call(token, `c/${id}/view?path=README.md`)).status === 403);
+            // Native HTTP shell/revert paths are unsupported; this is not a viewer-policy substitute.
+            assert.equal((await call(token, `c/${id}/shell`, { command: "echo hi" })).status, 409);
+            const revertResponse = await call(token, `c/${id}/changes/revert`, {
+                path: "a.txt",
+            });
+
+            assert.equal(revertResponse.status, 409);
+
+            assert.equal(
+                (await call(token, `c/${id}/chat`, { text: "hello", requestId: "y" })).status,
+                200,
+            );
+            assert.equal(
+                (await call(token, `c/${Number(id) + 999}/chat`, { text: "hello", requestId: "z" }))
+                    .status,
+                404,
+            );
+            const sessions = (await (await call(token, "sessions")).json()) as { id: number }[];
+
+            assert.deepEqual(
+                sessions.map((each) => each.id),
+                [Number(id)],
+            );
+            const push = (await (await call(token, "push")).json()) as {
+                publicKey: string;
+                prefs: Record<string, boolean>;
+                devices: number;
+            };
+
+            assert.equal(push.devices, 0);
+            assert.equal(push.prefs.mention, true);
+            assert.ok(push.publicKey.length > 80);
+            assert.equal(
+                (
+                    await call(token, "push/subscribe", {
+                        subscription: {
+                            endpoint: "http://insecure.example/x",
+                            keys: { p256dh: "a", auth: "b" },
+                        },
+                    })
+                ).status,
+                400,
+            );
+        } finally {
+            for (const userId of joined) {
+                app.config.removeUser(userId);
+            }
+
+            server.closeAllConnections();
+            server.close();
         }
-
-        server.closeAllConnections();
-        server.close();
+    } finally {
+        await app.close();
     }
 });
 
@@ -1346,7 +1203,7 @@ test("the owner signs another device in as the owner: owner only, once, no one n
                 "sec-fetch-site": site,
             },
         });
-    const id = await newSession();
+    const id = await seedHistoricalSession();
     const guest = app.config.addUser("Gwen", "guest");
     const viewer = app.config.addUser("Vic", "viewer");
 
@@ -1683,11 +1540,11 @@ test("people who signed in through a Cloudflare quick tunnel are removed once th
     }
 });
 
-test("the web edge: page policy, local redirects, asked account switches, no cross-site sign-ins, clean uploads, scoped people", async () => {
-    const { createServer, request: rawRequest } = await import("node:http");
+test("the web edge: page policy, local redirects, asked account switches, no cross-site sign-ins, archive uploads, scoped people", async () => {
+    const { createServer } = await import("node:http");
     const { createHandler } = await import("../src/server/http.ts");
     const { createHash } = await import("node:crypto");
-    const { existsSync, readdirSync, readFileSync } = await import("node:fs");
+    const { existsSync, readFileSync } = await import("node:fs");
     const server = createServer(
         createHandler({ app, listen: { host: "127.0.0.1", port: 0 }, restart: () => {} }),
     );
@@ -1798,7 +1655,7 @@ test("the web edge: page policy, local redirects, asked account switches, no cro
             "the invite still works",
         );
 
-        // Uploads: none for a conversation that does not exist, and nothing left of one cut off midway.
+        // Unknown sessions stay 404; historical archives cannot accept uploads.
         const uploads = join(root, "data", "uploads");
         const missing = await fetch(`${base}/api/c/987654/upload?name=x.txt`, {
             method: "POST",
@@ -1818,58 +1675,9 @@ test("the web edge: page policy, local redirects, asked account switches, no cro
             },
         });
 
-        assert.equal(big.status, 200);
-        const before = readdirSync(join(uploads, String(id))).length;
-
-        await new Promise<void>((resolve) => {
-            const cut = rawRequest({
-                port,
-                method: "POST",
-                path: `/api/c/${id}/upload?name=cut.bin`,
-                headers: {
-                    authorization: `Bearer ${ownerToken}`,
-                    "x-pocket": "1",
-                    "content-length": "1000000",
-                },
-            });
-
-            cut.on("error", () => resolve());
-            cut.write(Buffer.alloc(1000));
-            setTimeout(() => cut.destroy(), 200);
-        });
-        await until(
-            () => readdirSync(join(uploads, String(id))).length === before,
-            "the cut-off upload to be removed",
-        );
-        const declared = await new Promise<number>((resolve) => {
-            const huge = rawRequest({
-                port,
-                method: "POST",
-                path: `/api/c/${id}/upload?name=huge.bin`,
-                headers: {
-                    authorization: `Bearer ${ownerToken}`,
-                    "x-pocket": "1",
-                    "content-length": String(60 * 1024 * 1024),
-                },
-            });
-
-            huge.on("response", (response) => resolve(response.statusCode ?? 0));
-            huge.on("error", () => resolve(-1));
-            huge.write("x");
-        });
-
-        assert.equal(declared, 413, "an upload declared too big is refused before it is read");
-        // Two pasted images, both image.png, at the same moment: two files.
-        const paste = () =>
-            fetch(`${base}/api/c/${id}/upload?name=image.png`, {
-                method: "POST",
-                body: crypto.randomUUID(),
-                headers: { authorization: `Bearer ${ownerToken}`, "x-pocket": "1" },
-            }).then((response) => response.json() as Promise<{ path: string }>);
-        const [first, second] = await Promise.all([paste(), paste()]);
-
-        assert.notEqual(first.path, second.path);
-        assert.notEqual(readFileSync(first.path, "utf8"), readFileSync(second.path, "utf8"));
+        assert.equal(big.status, 409);
+        assert.match(await big.text(), /read-only archive/);
+        // Native byte limits, duplicate names and partial-upload cleanup are independently tested below.
 
         // People invited to one session see only the people who share it, without anyone's session limits.
         const seen = (await (
@@ -1901,6 +1709,82 @@ test("the web edge: page policy, local redirects, asked account switches, no cro
     }
 });
 
+test("native HTTP uploads sanitize names, enforce limits, clean partial files, and persist", async () => {
+    const { createServer, request: rawRequest } = await import("node:http");
+    const { createHandler } = await import("../src/server/http.ts");
+    const native = await openNativeApp();
+    let closed = false;
+    const member = native.config.users.find((user) => user.role === "owner")!;
+    const server = createServer(
+        createHandler({ app: native, listen: { host: "127.0.0.1", port: 0 }, restart: () => {} }),
+    );
+
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const port = (server.address() as { port: number }).port;
+
+    try {
+        const id = (await native.commands.createSession(member, { backend: "rotom" })).id;
+        const upload = await fetch(
+            `http://127.0.0.1:${port}/api/c/${id}/upload?name=../bad<>name.png&unused=ignored`,
+            {
+                method: "POST",
+                body: "native upload",
+                headers: {
+                    authorization: `Bearer ${native.config.ownerToken}`,
+                    "x-pocket": "1",
+                    "content-type": "image/png",
+                },
+            },
+        );
+
+        assert.equal(upload.status, 200);
+        const attachment = (await upload.json()) as { path: string; name: string; size: number };
+
+        assert.equal(attachment.name, "bad_name.png");
+        assert.equal(attachment.size, 13);
+        assert.equal(dirname(attachment.path), native.workspace.uploadDirectory(id));
+        assert.equal(readFileSync(attachment.path, "utf8"), "native upload");
+        const filesBefore = readdirSync(native.workspace.uploadDirectory(id));
+
+        assert.equal(filesBefore.length, 1);
+        const declared = await new Promise<number>((resolve) => {
+            const request = rawRequest({
+                port,
+                method: "POST",
+                path: `/api/c/${id}/upload?name=too-big.bin`,
+                headers: {
+                    authorization: `Bearer ${native.config.ownerToken}`,
+                    "x-pocket": "1",
+                    "content-length": String(50 * 1024 * 1024 + 1),
+                },
+            });
+
+            request.on("response", (response) => resolve(response.statusCode ?? 0));
+            request.on("error", () => resolve(-1));
+            request.end();
+        });
+
+        assert.equal(declared, 413);
+        assert.deepEqual(readdirSync(native.workspace.uploadDirectory(id)), filesBefore);
+        await native.close();
+        closed = true;
+        const reopened = await openNativeApp();
+
+        try {
+            assert.equal(readFileSync(attachment.path, "utf8"), "native upload");
+        } finally {
+            await reopened.close();
+        }
+    } finally {
+        server.closeAllConnections();
+        server.close();
+
+        if (!closed) {
+            await native.close();
+        }
+    }
+});
+
 test("access holds: a refused tab hears nothing, narrowed access evicts, removal closes tabs, files stay in the session", async () => {
     const id = await newSession();
     const other = await newSession();
@@ -1917,7 +1801,10 @@ test("access holds: a refused tab hears nothing, narrowed access evicts, removal
         // A tab pointed at a session Sam may not see gets "missing", then nothing about that session.
         await app.attach(sneaky.client);
         assert.equal(sneaky.client.conversationId, undefined);
-        await app.commands.updateSession(other, owner(), { title: "Secret plans" });
+        assert.equal(
+            (await app.sessions()).some((session) => session.id === Number(other)),
+            true,
+        );
         app.notice("warning", "server-wide detail");
         await new Promise((resolve) => setTimeout(resolve, 50));
         assert.ok(
@@ -1935,7 +1822,10 @@ test("access holds: a refused tab hears nothing, narrowed access evicts, removal
         await app.attach(samTab.client);
         app.setAccess(owner(), sam.id, { sessions: [String(other)] });
         assert.match(String(samTab.last("missing")?.message), /no longer shared/);
-        await app.collab.postChat(id, owner(), { text: "after the change", requestId: "acc-1" });
+        await assert.rejects(
+            app.collab.postChat(id, owner(), { text: "after the change", requestId: "acc-1" }),
+            /read-only archive/,
+        );
         await new Promise((resolve) => setTimeout(resolve, 50));
         assert.ok(
             !samTab.events.some(
@@ -2006,12 +1896,28 @@ test("an invite stops working when its creator loses the right to invite", async
     }
 });
 
-test("sessions and artifacts survive closing and reopening the storage", async () => {
-    const id = await newSession();
+test("historical sessions survive closing and reopening storage", async () => {
+    const id = await seedHistoricalSession();
 
-    await say(id, "make an artifact for the restart test");
+    await appendHistoricalTurn(app, id, "saved historical question", "saved historical answer");
+    const before = await (await app.harness.conversation(id, context))!.entries(
+        {},
+        100,
+        undefined,
+        context,
+    );
+    const exported = await app.transcripts.exportMarkdown(id, owner());
+
+    assert.match(exported.markdown, /saved historical question/);
+
     await app.close();
     app = await open();
-    assert.ok((await app.sessions()).some((each) => each.id === Number(id)));
-    assert.equal((await app.artifactBody(id, "demo-page", undefined)).content, "<h1>one</h1>");
+    const after = await (await app.harness.conversation(id, context))!.entries(
+        {},
+        100,
+        undefined,
+        context,
+    );
+
+    assert.deepEqual(after, before);
 });

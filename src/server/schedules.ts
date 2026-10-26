@@ -220,6 +220,8 @@ export class Schedules {
     /** Set up a message to Pi. Throws an HttpError a person can act on when the time or the message will not do. */
     async add(conversationId: ConversationId, request: ScheduleRequest): Promise<Schedule> {
         const app = this.#app;
+
+        app.requireArchiveWriteAllowed(conversationId);
         const model = (await app.agentState(conversationId))?.model;
 
         if (model?.provider.startsWith("team:")) {
@@ -327,6 +329,7 @@ export class Schedules {
         conversationId: ConversationId,
         scheduleId: string,
     ): Promise<Schedule | undefined> {
+        this.#app.requireArchiveWriteAllowed(conversationId);
         const schedule = (await this.list(conversationId)).find((item) => item.id === scheduleId);
 
         if (schedule === undefined) {

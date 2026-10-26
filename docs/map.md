@@ -232,9 +232,7 @@ Plain ES modules, loaded as they are. `store.js` holds the shared state, and not
    applies them. Native live events and a tab's optimistic send may appear before persistence, visibly separate
    from confirmed history.
 
-**Legacy Durable path:** the same HTTP route selects `Commands.submit` for the old backend, followed by
-`TeamExecution.admit` and Durable generation/tool tasks. `TeamExecution.authorize` still checks the personal
-payer. Do not transfer its task-replay or service-hook assumptions to native receipts.
+**Legacy archive path:** the HTTP route and direct commands reject execution/mutation using the persisted root backend. `legacy-archive.ts` atomically quarantines outstanding work through public Storage before Harness opens; no legacy callbacks or resume run. Reads, export and access grants remain. Native receipts keep their own payer/unknown rules.
 For startup, clean closure and permitted continuation, follow [architecture.md](architecture.md#startup-and-recovery-order).
 
 ## Adding things
@@ -243,7 +241,7 @@ For startup, clean closure and permitted continuation, follow [architecture.md](
 - **A command:** choose the backend first. Native adapters belong with `TeamKernel` and `team-command-policy.ts`; legacy/shared wrappers may use `commands.ts`. Route through `conversationRoutes`/`createApi`, enforce access and request identity, then add the store action/UI.
 - **A sheet:** a component in `web/sheets/`, a case in `sheetBody` (`web/sheets.js`), and `openSheet({ type })` where it opens. An app-wide one also goes in `SETTINGS_PAGES` and the list in `web/sheets/settings.js`, so it opens as a page of the settings window.
 - **Something back should close** (a screen over the conversation, a view that takes another's place on a phone): `useBack(open, close)` from `web/back.js` in the component that shows it. Sheets already have it.
-- **A Team native extension:** follow [AGENT-CONFIGURATION.md](AGENT-CONFIGURATION.md) and the admitted shared/project configuration. Only for a **legacy service extension**, use `extensions/`, `reload.ts`'s `ORDER`/`TITLES`/`BUILT_IN_TOOLS`, and its loader tests.
+- **A Team native extension:** follow [AGENT-CONFIGURATION.md](AGENT-CONFIGURATION.md) and the admitted shared/project configuration. Legacy service extension source and `reload.ts` definitions are retained but never loaded or watched; do not add a legacy execution path.
 - **A slash command:** `web/commands.js`.
 
 ## Rules that are easy to break
@@ -254,10 +252,8 @@ For startup, clean closure and permitted continuation, follow [architecture.md](
 - Native unknown outcomes are not replayable; `RotomJournal.reserve/canResume` and
   `TeamKernel.resumeInterrupted` enforce fences and limited continuation. A missing PID proves no outcome.
 - Native payer identity comes from the binding and gate, not the newest author or `Attribution.requesterOf`.
-- **Legacy Durable only:** task hooks use memo/snapshot and replay-safe tool declarations. Do not assume those
-  guarantees wrap native tools or MCP side effects.
-- **Legacy service extensions only:** reach the app through `PocketHost`. Native Agent Extensions are admitted
-  trusted native code, not an OS sandbox.
+- Legacy task/memo/Live records are recovery data, not runnable work. Do not invoke old callbacks while archiving.
+- Native Agent Extensions are admitted trusted code, not an OS sandbox. Retained `PocketHost` modules are unloaded.
 - Server code remains erasable TypeScript with `.ts` imports. Pure moves preserve code and module/subscription
   order; see [architecture.md](architecture.md#the-web-app).
 
@@ -269,13 +265,13 @@ models, `openApp`, `until` and `fakeTab`; do not point these checks at real acco
 - `team.test.ts`, `rotom-lifecycle.test.ts`, `native-recovery.test.ts`: personal identity, receipts, restart
   and uncertain outcomes.
 - `native-mirror.test.ts`: real cross-process mirror recovery, including failed mirror retries.
-- `native-service-extensions.test.ts`: kernel mode does not enable the legacy service loader.
+- `legacy-archive.test.ts`, `legacy-archive-ui.test.ts`: real old-version fixture, atomic/idempotent quarantine, immutable archive and browser read-only controls.
+- `native-service-extensions.test.ts`, `dropins.test.ts`: neither mode enables the legacy service loader.
 - `native-room-info.test.ts`, `room-projection.test.ts`: native projections and per-client delivery.
 - `static-assets.test.ts`: HTTP validators, preload success/failure and CSP.
 - `*ui.test.ts` plus the browser/native fixtures exercise the web app in real Chromium where available.
   The web app is not untested merely because it uses plain modules.
-- `docs-examples.test.ts` validates the **legacy** drop-in examples; passing it does not prove a Team native
-  extension is admitted. `test/perf/` is the separate controlled performance loop.
+- `docs-examples.test.ts` parses **unloaded legacy** examples and checks source/config preservation; it does not execute factories or prove native extension admission. `test/perf/` is the separate controlled performance loop.
 
 Use [VERIFICATION.md](VERIFICATION.md) to choose the required native, UI and policy proofs.
 `node test/serve.ts` is the inherited temporary-data fixture, not a production deployment command;

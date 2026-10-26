@@ -1,0 +1,31 @@
+D9a negative control: restored original 32-edge truncation in memory only
+✖ archive quarantine walks a public-storage ownership chain deeper than 32 levels (28.339458ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1571.22075
+
+✖ failing tests:
+
+test at test/legacy-archive.test.ts:123:1
+✖ archive quarantine walks a public-storage ownership chain deeper than 32 levels (28.339458ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+
+  + 'running'
+  - 'terminal'
+
+      at TestContext.<anonymous> (file:///Users/test/vibecoding/rotom-team/test/legacy-archive.test.ts:232:20)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'running',
+    expected: 'terminal',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

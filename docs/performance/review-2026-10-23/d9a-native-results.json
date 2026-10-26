@@ -1,0 +1,359 @@
+{
+    "app-off": {
+        "realProvider": false,
+        "status": "passed",
+        "webUiVerified": false,
+        "invalidBackendRejectedWithoutFallback": true,
+        "creationGapRecoveredWithoutDispatch": true,
+        "lostInitializedJournalFailsClosed": true,
+        "legacyNativeSetupBackfilledFromJournal": true,
+        "mcpSheetReportsProjectServers": true,
+        "nativeCompactBudgetAdmission": true,
+        "apiHandoffAndCompaction": true,
+        "handoffHistoricalUsagePreserved": true,
+        "apiForkIdempotencyConfigurationAndPayer": true,
+        "forkAndContinuePermissionsIndependent": true,
+        "concurrentConfigurationIdentityProtected": true,
+        "sameDigestStagingPreservesSnapshotIdentity": true,
+        "nativeConfigurationActivationAndFork": true,
+        "forkGapAndUnknownSourceNotReplayed": true,
+        "configurationGapNotReplayed": true,
+        "preparedOnlyReadbackExcludesLiveAndUnknown": true,
+        "readOnlyExactReceiptLookup": true,
+        "submitTakesOverWithSendersAccount": true,
+        "kernelUpgradeKeepsNativeSession": true,
+        "unifiedTranscriptLiveAndMirrored": true,
+        "extensionDialogsReachThePayer": true,
+        "messagesJoinTheRunningPrompt": true,
+        "projectMcpConnectedByChild": true,
+        "personalSkillsIgnoredByParentAndChild": true,
+        "subagentsThroughTheGate": true,
+        "stopEndsSubagents": true,
+        "cleanRestartContinues": true,
+        "projectSkillRunsByName": true,
+        "nativeForkSharesWorktree": true,
+        "nativeLiveForeignMutationDenied": true,
+        "oneMemberRunsSessionsInParallel": true,
+        "projectViewAndContinue": true,
+        "accountGenerationChecked": true,
+        "budgetNotBypassed": true,
+        "excludedSlashAndLongRequestRejectedBeforeIntent": true,
+        "disablingCannotBypassUnknownFence": true,
+        "apiCreateSubmitReadAbort": true,
+        "roleRevocation": true,
+        "projectConfiguration": true,
+        "fixedPayer": true,
+        "restartIdempotency": true,
+        "nativeHistoryResume": true,
+        "noDurableFallback": true,
+        "privateRequestAuthNotPersisted": true,
+        "loopbackRequests": 85,
+        "nativeDeliveredFileReadback": true,
+        "nativeAttachmentsImagesAndHistory": true,
+        "firstMessageNamesSession": true,
+        "nativeSubagentInjections": [
+            {
+                "kind": "SKILL",
+                "childInferences": 2,
+                "descriptor": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-o0N1Zf/native-app/kernel-homes/44907b7f-6ec4-4ef4-921e-95ea3b4a26da/.local/state/rotom/subagent-store/owned-process-groups-v2/async-subagent-runs/3bb76c51-2343-4b35-acb0-10a41acb4c47/recovery-descriptor.json"
+            },
+            {
+                "kind": "MEMORY",
+                "childInferences": 1,
+                "descriptor": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-o0N1Zf/native-app/kernel-homes/44907b7f-6ec4-4ef4-921e-95ea3b4a26da/.local/state/rotom/subagent-store/owned-process-groups-v2/async-subagent-runs/c16415a4-0066-40e1-bf7c-7252539939d5/recovery-descriptor.json"
+            },
+            {
+                "kind": "PROJECT_MEMORY",
+                "childInferences": 1,
+                "descriptor": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-o0N1Zf/native-app/kernel-homes/44907b7f-6ec4-4ef4-921e-95ea3b4a26da/.local/state/rotom/subagent-store/owned-process-groups-v2/async-subagent-runs/b9dc6616-8a80-4af0-9e86-78070205bcb9/recovery-descriptor.json"
+            },
+            {
+                "kind": "REFINEMENT",
+                "childInferences": 1,
+                "descriptor": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-o0N1Zf/native-app/kernel-homes/44907b7f-6ec4-4ef4-921e-95ea3b4a26da/.local/state/rotom/subagent-store/owned-process-groups-v2/async-subagent-runs/e0fb2ab7-ccff-4e40-b156-828c70df39c1/recovery-descriptor.json"
+            },
+            {
+                "kind": "ASYNC_WORKFLOW",
+                "childInferences": 0
+            },
+            {
+                "kind": "WORKFLOW",
+                "childInferences": 0
+            },
+            {
+                "kind": "WORKER",
+                "childInferences": 1,
+                "descriptor": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-o0N1Zf/native-app/kernel-homes/44907b7f-6ec4-4ef4-921e-95ea3b4a26da/.local/state/rotom/subagent-store/owned-process-groups-v2/async-subagent-runs/1921aaea-86cd-457e-94dc-d325deeb7f41/recovery-descriptor.json"
+            },
+            {
+                "kind": "MEMORY",
+                "childInferences": 1,
+                "descriptor": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-o0N1Zf/native-app/kernel-homes/31f645b9-ade6-4219-b2d8-528426fa1dbf/.local/state/rotom/subagent-store/owned-process-groups-v2/async-subagent-runs/226c191c-b9a8-4556-af95-e07a9ba735df/recovery-descriptor.json"
+            },
+            {
+                "kind": "PROJECT_MEMORY",
+                "childInferences": 1,
+                "descriptor": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-o0N1Zf/native-app/kernel-homes/31f645b9-ade6-4219-b2d8-528426fa1dbf/.local/state/rotom/subagent-store/owned-process-groups-v2/async-subagent-runs/4ad5fe72-172e-491b-984c-f4370b804157/recovery-descriptor.json"
+            }
+        ],
+        "userProvidedWorkflowScripts": "unsupported: native scoped sync refusal and async lifetime/result-delivery gap",
+        "crashedKernelRemainsUnknownWithoutContinuation": true,
+        "evidence": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-o0N1Zf/team-kernel-report.json"
+    },
+    "app-on": {
+        "realProvider": false,
+        "status": "passed",
+        "webUiVerified": false,
+        "invalidBackendRejectedWithoutFallback": true,
+        "creationGapRecoveredWithoutDispatch": true,
+        "lostInitializedJournalFailsClosed": true,
+        "legacyNativeSetupBackfilledFromJournal": true,
+        "mcpSheetReportsProjectServers": true,
+        "nativeCompactBudgetAdmission": true,
+        "apiHandoffAndCompaction": true,
+        "handoffHistoricalUsagePreserved": true,
+        "apiForkIdempotencyConfigurationAndPayer": true,
+        "forkAndContinuePermissionsIndependent": true,
+        "concurrentConfigurationIdentityProtected": true,
+        "sameDigestStagingPreservesSnapshotIdentity": true,
+        "nativeConfigurationActivationAndFork": true,
+        "forkGapAndUnknownSourceNotReplayed": true,
+        "configurationGapNotReplayed": true,
+        "preparedOnlyReadbackExcludesLiveAndUnknown": true,
+        "readOnlyExactReceiptLookup": true,
+        "submitTakesOverWithSendersAccount": true,
+        "kernelUpgradeKeepsNativeSession": true,
+        "unifiedTranscriptLiveAndMirrored": true,
+        "extensionDialogsReachThePayer": true,
+        "messagesJoinTheRunningPrompt": true,
+        "projectMcpConnectedByChild": true,
+        "personalSkillsIgnoredByParentAndChild": true,
+        "subagentsThroughTheGate": true,
+        "stopEndsSubagents": true,
+        "cleanRestartContinues": true,
+        "projectSkillRunsByName": true,
+        "nativeForkSharesWorktree": true,
+        "nativeLiveForeignMutationDenied": true,
+        "oneMemberRunsSessionsInParallel": true,
+        "projectViewAndContinue": true,
+        "accountGenerationChecked": true,
+        "budgetNotBypassed": true,
+        "excludedSlashAndLongRequestRejectedBeforeIntent": true,
+        "disablingCannotBypassUnknownFence": true,
+        "apiCreateSubmitReadAbort": true,
+        "roleRevocation": true,
+        "projectConfiguration": true,
+        "fixedPayer": true,
+        "restartIdempotency": true,
+        "nativeHistoryResume": true,
+        "noDurableFallback": true,
+        "privateRequestAuthNotPersisted": true,
+        "loopbackRequests": 86,
+        "nativeDeliveredFileReadback": true,
+        "nativeAttachmentsImagesAndHistory": true,
+        "firstMessageNamesSession": true,
+        "nativeSubagentInjections": [
+            {
+                "kind": "SKILL",
+                "childInferences": 2,
+                "descriptor": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-33sry0/native-app/kernel-homes/3773ab77-e919-44c1-b5be-7f5284cc33b7/.local/state/rotom/subagent-store/owned-process-groups-v2/async-subagent-runs/ca658eac-a128-4d22-b561-8eec08cfc0e0/recovery-descriptor.json"
+            },
+            {
+                "kind": "MEMORY",
+                "childInferences": 1,
+                "descriptor": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-33sry0/native-app/kernel-homes/3773ab77-e919-44c1-b5be-7f5284cc33b7/.local/state/rotom/subagent-store/owned-process-groups-v2/async-subagent-runs/815f7757-eb15-43a1-be0c-e4734e4d2080/recovery-descriptor.json"
+            },
+            {
+                "kind": "PROJECT_MEMORY",
+                "childInferences": 1,
+                "descriptor": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-33sry0/native-app/kernel-homes/3773ab77-e919-44c1-b5be-7f5284cc33b7/.local/state/rotom/subagent-store/owned-process-groups-v2/async-subagent-runs/f6bddea7-ee01-4d78-82bc-08577806b105/recovery-descriptor.json"
+            },
+            {
+                "kind": "REFINEMENT",
+                "childInferences": 1,
+                "descriptor": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-33sry0/native-app/kernel-homes/3773ab77-e919-44c1-b5be-7f5284cc33b7/.local/state/rotom/subagent-store/owned-process-groups-v2/async-subagent-runs/da7c4469-0ff4-493c-8795-24db572d168e/recovery-descriptor.json"
+            },
+            {
+                "kind": "ASYNC_WORKFLOW",
+                "childInferences": 0
+            },
+            {
+                "kind": "WORKFLOW",
+                "childInferences": 0
+            },
+            {
+                "kind": "WORKER",
+                "childInferences": 1,
+                "descriptor": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-33sry0/native-app/kernel-homes/3773ab77-e919-44c1-b5be-7f5284cc33b7/.local/state/rotom/subagent-store/owned-process-groups-v2/async-subagent-runs/c7ca4aab-4122-4479-8f0f-494c5a83f261/recovery-descriptor.json"
+            },
+            {
+                "kind": "MEMORY",
+                "childInferences": 1,
+                "descriptor": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-33sry0/native-app/kernel-homes/d4a9b5d0-3ffc-42e0-a91a-c3f7abff4dad/.local/state/rotom/subagent-store/owned-process-groups-v2/async-subagent-runs/c23de61a-38e0-4695-8b4d-464e55bba2ed/recovery-descriptor.json"
+            },
+            {
+                "kind": "PROJECT_MEMORY",
+                "childInferences": 1,
+                "descriptor": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-33sry0/native-app/kernel-homes/d4a9b5d0-3ffc-42e0-a91a-c3f7abff4dad/.local/state/rotom/subagent-store/owned-process-groups-v2/async-subagent-runs/245286ef-80b2-4250-ab42-eb5bd6700594/recovery-descriptor.json"
+            }
+        ],
+        "userProvidedWorkflowScripts": "unsupported: native scoped sync refusal and async lifetime/result-delivery gap",
+        "crashedKernelRemainsUnknownWithoutContinuation": true,
+        "storageWorkerFailureStopsNativeAndRetainsLeases": true,
+        "evidence": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-33sry0/team-kernel-report.json"
+    },
+    "commands-off": {
+        "realAccounts": false,
+        "data": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-yCawxP/native-commands",
+        "context": {
+            "usage": true,
+            "injections": true,
+            "noInference": true,
+            "idempotentReadback": true
+        },
+        "dynamicCommands": {
+            "shipped": 15,
+            "metadata": true,
+            "rejectedWithoutEffects": true,
+            "readOnlyHandlers": 8,
+            "noInference": true
+        },
+        "compaction": {
+            "calls": 2,
+            "usage": {
+                "input": 22,
+                "output": 14,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "reasoning": 0,
+                "totalTokens": 36,
+                "cost": {
+                    "input": 0,
+                    "output": 0,
+                    "cacheRead": 0,
+                    "cacheWrite": 0,
+                    "total": 0
+                }
+            }
+        },
+        "queuedCommand": {
+            "operation": "prompt",
+            "status": "unknown",
+            "unresolvedCommandInput": true,
+            "effectCount": 1,
+            "recoveryEligible": false,
+            "restartedWithoutReplay": true
+        },
+        "largeReadback": {
+            "persistedHistoryOver64MiB": "settled",
+            "unflushedSuffix": "rpc-record-limit",
+            "finalizationFencedAfterRestart": true
+        },
+        "passed": true,
+        "inferences": 19,
+        "checks": [
+            "trusted executor fixture command effects remain unknown without restart/retry replay (below HTTP admission)",
+            "queued effect-then-error durably fences the existing prompt; no duplicate effect or automatic resume",
+            "actual unknown discovery cannot start a second native process with same or new request ID",
+            "catalog retained after 30 seconds/restart without native startup; owner-only shared settings",
+            "live native extensions exposed without a Team allowlist; protected account/upload/lifecycle commands rejected",
+            "native context usage/injections before first message and after inference; no paid probe or raw text result",
+            "first-session no-inference discovery and member-private snapshots",
+            "Qoder account API private results",
+            "native title readback before first message and after handoff",
+            "model A→B then inference B and Alice payer",
+            "thinking high persisted",
+            "skill admission clears before held inference completes",
+            "live thinking changes next provider request without replacing process, segment or receipt binding",
+            "native thinking clamping, payer-only admission and unknown/mixed-model fences",
+            "live thinking survives native process retirement and server restart",
+            "fixture native title and Team rename persist across handoff",
+            "native JSONL entries and HTML export/member privacy",
+            "selected earlier-user fork with Bob payer",
+            "native tree navigation and explicit branch summary usage",
+            "native slash compaction receipt, persisted summary/usage and idempotency",
+            "clone and selected-message fork create independent Team sessions; removed lifecycle commands rejected",
+            "settings persist to real native startup",
+            "unknown/private/excluded commands no inference",
+            "busy model mutation rejected without preference change",
+            "restart persistence"
+        ]
+    },
+    "commands-on": {
+        "realAccounts": false,
+        "data": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-R97nFT/native-commands",
+        "context": {
+            "usage": true,
+            "injections": true,
+            "noInference": true,
+            "idempotentReadback": true
+        },
+        "dynamicCommands": {
+            "shipped": 15,
+            "metadata": true,
+            "rejectedWithoutEffects": true,
+            "readOnlyHandlers": 8,
+            "noInference": true
+        },
+        "compaction": {
+            "calls": 2,
+            "usage": {
+                "input": 22,
+                "output": 14,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "reasoning": 0,
+                "totalTokens": 36,
+                "cost": {
+                    "input": 0,
+                    "output": 0,
+                    "cacheRead": 0,
+                    "cacheWrite": 0,
+                    "total": 0
+                }
+            }
+        },
+        "queuedCommand": {
+            "operation": "prompt",
+            "status": "unknown",
+            "unresolvedCommandInput": true,
+            "effectCount": 1,
+            "recoveryEligible": false,
+            "restartedWithoutReplay": true
+        },
+        "largeReadback": {
+            "persistedHistoryOver64MiB": "settled",
+            "unflushedSuffix": "rpc-record-limit",
+            "finalizationFencedAfterRestart": true
+        },
+        "passed": true,
+        "inferences": 19,
+        "checks": [
+            "trusted executor fixture command effects remain unknown without restart/retry replay (below HTTP admission)",
+            "queued effect-then-error durably fences the existing prompt; no duplicate effect or automatic resume",
+            "actual unknown discovery cannot start a second native process with same or new request ID",
+            "catalog retained after 30 seconds/restart without native startup; owner-only shared settings",
+            "live native extensions exposed without a Team allowlist; protected account/upload/lifecycle commands rejected",
+            "native context usage/injections before first message and after inference; no paid probe or raw text result",
+            "first-session no-inference discovery and member-private snapshots",
+            "Qoder account API private results",
+            "native title readback before first message and after handoff",
+            "model A→B then inference B and Alice payer",
+            "thinking high persisted",
+            "skill admission clears before held inference completes",
+            "live thinking changes next provider request without replacing process, segment or receipt binding",
+            "native thinking clamping, payer-only admission and unknown/mixed-model fences",
+            "live thinking survives native process retirement and server restart",
+            "fixture native title and Team rename persist across handoff",
+            "native JSONL entries and HTML export/member privacy",
+            "selected earlier-user fork with Bob payer",
+            "native tree navigation and explicit branch summary usage",
+            "native slash compaction receipt, persisted summary/usage and idempotency",
+            "clone and selected-message fork create independent Team sessions; removed lifecycle commands rejected",
+            "settings persist to real native startup",
+            "unknown/private/excluded commands no inference",
+            "busy model mutation rejected without preference change",
+            "restart persistence"
+        ]
+    }
+}

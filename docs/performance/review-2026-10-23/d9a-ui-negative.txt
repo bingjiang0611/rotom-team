@@ -1,0 +1,56 @@
+✖ archive status reaches the composer and clears on native navigation (stream) (4343.73675ms)
+✖ archive status reaches the composer and clears on native navigation (poll) (3754.539083ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 0
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 11178.123625
+
+✖ failing tests:
+
+test at test/legacy-archive-ui.test.ts:11:5
+✖ archive status reaches the composer and clears on native navigation (stream) (4343.73675ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+
+  + null
+  - 'This legacy Durable session is a read-only archive. Open, read, export, and access grants remain available; execution and mutation are disabled.'
+
+      at file:///Users/test/vibecoding/rotom-team/test/legacy-archive-ui.test.ts:22:20
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async withAppPage (file:///Users/test/vibecoding/rotom-team/test/fixtures/app-browser.ts:99:16)
+      at async TestContext.<anonymous> (file:///Users/test/vibecoding/rotom-team/test/legacy-archive-ui.test.ts:12:9)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: null,
+    expected: 'This legacy Durable session is a read-only archive. Open, read, export, and access grants remain available; execution and mutation are disabled.',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/legacy-archive-ui.test.ts:11:5
+✖ archive status reaches the composer and clears on native navigation (poll) (3754.539083ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+
+  + null
+  - 'This legacy Durable session is a read-only archive. Open, read, export, and access grants remain available; execution and mutation are disabled.'
+
+      at file:///Users/test/vibecoding/rotom-team/test/legacy-archive-ui.test.ts:22:20
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async withAppPage (file:///Users/test/vibecoding/rotom-team/test/fixtures/app-browser.ts:99:16)
+      at async TestContext.<anonymous> (file:///Users/test/vibecoding/rotom-team/test/legacy-archive-ui.test.ts:12:9)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: null,
+    expected: 'This legacy Durable session is a read-only archive. Open, read, export, and access grants remain available; execution and mutation are disabled.',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

@@ -2,8 +2,7 @@
 
 This is the current **rotom team** architecture. [PRODUCT.md](PRODUCT.md) and
 [CONFIGURATION.md](CONFIGURATION.md) define the product contract; [map.md](map.md) locates the code.
-Pi Durable remains shared storage infrastructure. Its legacy agent execution path is separate from the default
-rotom execution path. A single storage worker is opt-in and off by default. Used-process idle eviction is not implemented.
+Pi Durable remains shared storage infrastructure. Its legacy sessions are read-only archives; only rotom executes new work. A single storage worker is opt-in and off by default. Used-process idle eviction is not implemented.
 
 ## Execution and trust boundary
 
@@ -52,9 +51,9 @@ untrusted team members safe to host. Do not remove their checks on the assumptio
   Public history is copied; private reasoning/signatures do not become another member's prompt.
   `TeamKernel.snapshot` reports native cost status as unknown; shared transcript attribution is not proof
   of provider billing.
-- Legacy Durable dispatch also uses personal routes: `TeamExecution.admit/authorize`, `TeamRunDoc` and
-  `TeamAccounts`, not a shared owner account. `attribution.ts: requesterOf` and `requests.ts` retain
-  authorship and legacy workflow attribution; they are not the native payer authority.
+- Legacy Durable dispatch is rejected by backend guards. `TeamRunDoc`, `TeamAccounts`,
+  `attribution.ts: requesterOf` and `requests.ts` retain historical ownership, authorship and spend
+  attribution; they are not the native payer authority.
 
 ## Public-history materialization
 
@@ -148,16 +147,16 @@ The normal path in `PocketApp.#open` is:
 
 1. Verify the native pin in kernel mode; take `harness.lock`. In non-kernel mode,
    `requireNoPendingKernel` checks that native work is not being bypassed.
-2. Initialize push/settings/HTTP and `TeamAccounts`. Install core tasks and the identity extension.
-   Only non-kernel mode creates `ExtensionLoader` and loads service extensions.
-3. Open `pocket.sqlite` and `Harness`; then create `TeamKernel`/`RotomExecutions`.
+2. Initialize push/settings/HTTP and `TeamAccounts`. Install core definitions and the identity guard.
+   Neither mode creates `ExtensionLoader` or loads/watches service extensions.
+3. Open public Storage and run `quarantineLegacyTasks` before `Harness` can own it. Each legacy catalog root's full ownership closure is one atomic commit; failure retains writer fencing until cleanup is proven. Open `Harness`, then create `TeamKernel`/`RotomExecutions`.
    `RotomJournal` takes `kernel.lock`, opens its own store and marks unfinished dispatch intents unknown.
 4. `PocketApp.#recover` rebuilds shared session/agent/chat/profile/subagent indexes and repairs authors.
    `TeamKernel.reconcile` reconciles native metadata and catches mirrors up; it does not replay provider work.
 5. `TeamExecution.recover` rebuilds legacy owner/provider-session indexes, then `spend.load` restores
    the shared spend view.
-6. Subscribe to commits, approvals and browser events. Warm the legacy guard only when enabled.
-7. Call `harness.resume()`, then schedule `TeamKernel.resumeInterrupted()`.
+6. Subscribe to commits, approvals and browser events. No legacy extension/guard warm-up is enabled.
+7. Never call `harness.resume()`. Schedule only `TeamKernel.resumeInterrupted()` in kernel mode.
 
 The last method's name is **not** permission to replay an unknown result. It requires a persisted pending plan
 and an eligible **settled** prompt receipt, rechecks the member, and submits a new continuation with the existing
@@ -237,13 +236,13 @@ interrupted merely because the process is gone. Tests of closure and recovery ar
   `rotom-skills.mjs` supplies project resources through the pinned resolver; bundled parent and explicit frozen
   skills still load. Personal skill settings/files are ignored, not removed. Other personal configuration remains
   policy-checked. `rotom-child.ts` validates each child before launch.
-- **Legacy service extensions only:** `src/server/extensions/`, data-folder drop-ins, `PocketHost`,
-  `ExtensionLoader`, Lancet Guard and the service browser tool belong to the non-kernel branch.
-  `PocketApp.#open` and `main.ts` do not load/watch that extension directory in kernel mode.
-  Team uses native Agent Extensions; see [AGENT-CONFIGURATION.md](AGENT-CONFIGURATION.md).
-- `Commands.submit` and Durable generation/task replay remain the legacy execution path.
-  Legacy sessions have not yet been switched to read-only archival by D9. Shared storage, author records and
-  document definitions remain necessary even if that execution path is later retired.
+- **Preserved, unloaded legacy source:** `src/server/extensions/`, data-folder drop-ins, `PocketHost`,
+  `ExtensionLoader`, Lancet Guard and the service browser tool are not an enabled execution path in either mode.
+  Existing files and switch records remain untouched. Team uses native Agent Extensions;
+  see [AGENT-CONFIGURATION.md](AGENT-CONFIGURATION.md).
+- `Commands.submit`, ordinary mutations and Durable task replay reject legacy archives.
+  Shared storage, author records and document definitions remain necessary. Quarantine preserves private task/Live
+  recovery records without exposing them in public notes; see [LEGACY-ARCHIVE.md](LEGACY-ARCHIVE.md).
 
 ## The web app
 

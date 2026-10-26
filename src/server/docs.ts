@@ -7,6 +7,7 @@
 import type { JsonValue } from "@earendil-works/chord";
 import {
     type ConversationId,
+    type JsonObject,
     defineDoc,
     defineDocFamily,
     type EntryId,
@@ -100,6 +101,17 @@ export const ArtifactBodyDoc = defineDocFamily<{ content: string }, { content: s
     history: "latest",
     fork: "current",
     initial: (seed) => ({ content: seed.content }),
+});
+
+/** Private snapshot of live Durable presentation state preserved when a legacy run is archived. */
+export const LegacyLiveArchiveDoc = defineDocFamily<{ live: JsonObject }, { live: JsonObject }>({
+    kind: "pocket.legacy-live-archive",
+    version: 1,
+    family: true,
+    scope: "conversation",
+    history: "latest",
+    fork: "initial",
+    initial: (seed) => ({ live: seed.live }),
 });
 
 export type SubagentRecord = {
@@ -234,7 +246,12 @@ export const DecisionsDoc = defineDoc<{ calls: Record<string, Decision> }>({
 export const REPORT_PREFIX = "[subagent ";
 
 /** Plan mode: while on, Pi reads and proposes, and anything that would change something is blocked. */
-export const PlanDoc = defineDoc<{ on: boolean; by?: string; at?: number }>({
+export const PlanDoc = defineDoc<{
+    on: boolean;
+    by?: string;
+    at?: number;
+    archive?: ArchiveMarker;
+}>({
     kind: "pocket.plan",
     version: 1,
     scope: "conversation",
@@ -242,6 +259,13 @@ export const PlanDoc = defineDoc<{ on: boolean; by?: string; at?: number }>({
     fork: "current",
     initial: () => ({ on: false }),
 });
+
+export type ArchiveMarker = {
+    status: "aborted";
+    at: number;
+    reason: string;
+    text: string;
+};
 
 export type Schedule = {
     /** Short and stable: what people and Pi use to cancel it. */
@@ -259,6 +283,8 @@ export type Schedule = {
     by?: string;
     /** For one Pi set up: whom Pi worked for then. It goes out as Pi's, but as their work. */
     requestedBy?: string;
+    /** D9a archive marker; the planned schedule remains visible but is no longer executable. */
+    archive?: ArchiveMarker;
     createdAt: number;
     /** How many times it went out: each time sends with its own request id, so a restart never sends one twice. */
     runs: number;
@@ -267,6 +293,14 @@ export type Schedule = {
     /** Set by the same call already, when a tool call is replayed: its `taskId:callId`. */
     key?: string;
 };
+
+/** Private D9a preservation of a replaced legacy task record; never projected into visible notes. */
+export const LegacyTaskArchiveDoc = defineDoc<{ task: JsonObject }>({
+    kind: "pocket.legacy-task-archive",
+    version: 1,
+    scope: "task",
+    initial: () => ({ task: {} }),
+});
 
 /** Messages that go to Pi later, or on repeat. A fork starts without them: they belong to who set them up. */
 export const ScheduleDoc = defineDoc<{ items: Record<string, Schedule> }>({
@@ -293,6 +327,8 @@ export type Goal = {
     status: "working" | "met" | "gave-up";
     last?: GoalCheck;
     counted: string[];
+    /** D9a archive marker; the original goal state remains available for inspection. */
+    archive?: ArchiveMarker;
 };
 
 export const GoalDoc = defineDoc<{ goal?: Goal }>({

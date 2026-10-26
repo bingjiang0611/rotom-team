@@ -10,7 +10,7 @@
  * does not sign a browser out of a Pi Pocket on 127.0.0.1 or localhost.
  */
 // helpers.ts first: it points Pi's folder at a temporary one before anything from src/ loads.
-import { cleanUp, newSession, openApp, root, say, scriptedModel } from "./helpers.ts";
+import { cleanUp, seedHistoricalSession, openApp, root, scriptedModel } from "./helpers.ts";
 import { createServer } from "node:http";
 import { join } from "node:path";
 import { APP_ROOT } from "../src/server/config.ts";
@@ -23,14 +23,9 @@ const app = await openApp(scriptedModel());
 const server = createServer(createHandler({ app, listen: { host, port }, restart: () => {} }));
 const stopWatching = watchTree(join(APP_ROOT, "web"), (file) => app.reloadClients(file));
 
-// Extension modules reload when saved, as in the real server (`app.close()` stops this).
-app.loader.watch();
-
 await new Promise<void>((resolve) => server.listen(port, host, resolve));
-// Something to look at: a session with one exchange in it.
-const session = await newSession(app);
-
-await say(app, session, "Hello from the copy");
+// Something to look at: a historical read-only session.
+await seedHistoricalSession(app);
 const guest = app.config.addUser("Guest", "guest");
 const base = `http://${host}:${port}`;
 

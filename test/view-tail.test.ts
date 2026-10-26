@@ -4,7 +4,7 @@ import {
     cleanUp,
     context,
     fakeTab,
-    newSession,
+    seedHistoricalSession,
     openApp,
     owner,
     root,
@@ -40,7 +40,7 @@ test("a tail view sends the newest entries and the whole order; updates stay del
     const app = await openApp(scriptedModel(), join(root, "tail-room"));
 
     try {
-        const id = await newSession(app);
+        const id = await seedHistoricalSession(app);
 
         for (let index = 1; index <= 12; index++) {
             await append(app, id, `message ${index}`);
@@ -105,8 +105,8 @@ test("pages of earlier entries over HTTP: checked parameters, and only for peopl
     const get = (token: string, path: string) =>
         fetch(`${base}/api/${path}`, { headers: { authorization: `Bearer ${token}` } });
     const ownerToken = app.config.ownerToken;
-    const id = await newSession(app);
-    const other = await newSession(app);
+    const id = await seedHistoricalSession(app);
+    const other = await seedHistoricalSession(app);
     const elsewhere = app.config.addUser("Elsewhere", "guest", [String(other)]);
 
     try {

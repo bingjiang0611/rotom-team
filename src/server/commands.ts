@@ -44,6 +44,7 @@ import {
     SessionsDoc,
     SubagentsDoc,
 } from "./docs.ts";
+import { ARCHIVE_COPY } from "./constants/copy.ts";
 import { ATTACHMENTS_HEADING, FILE_BLOCK, FROM_PREFIX, NOTE_ENTRY } from "./entry-format.ts";
 import { describe, HttpError, optionalText } from "./errors.ts";
 import { homePath } from "./paths.ts";
@@ -156,9 +157,15 @@ export class Commands {
             throw new HttpError(400, "Unknown execution backend.");
         }
 
-        const native = request.backend === "rotom";
+        const native =
+            request.backend === "rotom" ||
+            (request.backend === undefined && app.kernel !== undefined);
 
-        if (native && !app.kernel) {
+        if (!native) {
+            throw new HttpError(409, ARCHIVE_COPY.readOnly);
+        }
+
+        if (!app.kernel) {
             throw new HttpError(409, "The rotom backend is not enabled on this server.");
         }
 
@@ -441,6 +448,7 @@ export class Commands {
         const app = this.#app;
 
         app.requireSee(user, id);
+        app.requireArchiveWriteAllowed(id);
         app.requireSteer(user);
         optionalText(patch.title, "title");
 
@@ -674,6 +682,7 @@ export class Commands {
      * changes. Pi gets it too, with its next message; while Pi works, it waits for a place in the conversation.
      */
     async note(id: ConversationId, user: User, text: string): Promise<void> {
+        this.#app.requireArchiveWriteAllowed(id);
         const conversation = await this.#app.conversation(id);
         const model = [
             {
@@ -721,6 +730,7 @@ export class Commands {
         const app = this.#app;
 
         app.requireSee(user, id);
+        app.requireArchiveWriteAllowed(id);
         app.requireSteer(user);
         const conversation = await app.conversation(id);
         const busy = app.isBusy(id);
@@ -739,6 +749,7 @@ export class Commands {
         const app = this.#app;
 
         app.requireSee(user, id);
+        app.requireArchiveWriteAllowed(id);
         app.requireSteer(user);
         const by = app.attribution.knownSubmitter(submissionId);
 
@@ -1146,6 +1157,7 @@ export class Commands {
         const app = this.#app;
 
         app.requireSee(user, id);
+        app.requireArchiveWriteAllowed(id);
         app.requireSteer(user);
         const goal = await app.goals.get(id);
 
@@ -1341,7 +1353,7 @@ export class Commands {
     requireForkable(id: ConversationId, user: User, backend: "durable" | "rotom"): void {
         const app = this.#app;
 
-        if ((app.sessionMeta(app.rootOf(id))?.backend ?? "durable") !== backend) {
+        if (app.sessionBackend(id) !== backend) {
             throw new HttpError(
                 409,
                 "Fork must preserve the source execution backend; no fallback is allowed.",
@@ -1349,6 +1361,11 @@ export class Commands {
         }
 
         app.requireSee(user, id);
+
+        if (backend === "durable") {
+            app.requireArchiveWriteAllowed(id);
+        }
+
         app.requireSteer(user);
         app.projects.require(user, app.sessionMeta(app.rootOf(id))?.projectId, "fork");
 

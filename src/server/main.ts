@@ -14,6 +14,7 @@ import { join, resolve } from "node:path";
 // Only types from the app here: its modules load below, after the signal handlers (loading takes a moment).
 import type { AccessInfo, PocketApp } from "./app.ts";
 import { APP_ROOT, dataDir } from "./config.ts";
+import { ARCHIVE_COPY } from "./constants/copy.ts";
 import type { createHandler } from "./http.ts";
 import { createListener, readTls } from "./listener.ts";
 
@@ -32,7 +33,7 @@ function parseArgs(argv: string[]) {
         cwd: process.cwd(),
         data: dataDir(),
         rotateToken: false,
-        // rotom runs every new session. `--no-rotom-kernel` keeps a server on Pi Durable only.
+        // rotom runs every new session. `--no-rotom-kernel` provides read-only archive access.
         kernel: true,
         storageWorker: false,
         tlsCert: undefined as string | undefined,
@@ -78,6 +79,7 @@ function parseArgs(argv: string[]) {
             console.log(
                 "rotom-team [--host 127.0.0.1] [--port 8787] [--cwd DIR] [--data DIR] [--rotate-token] [--no-rotom-kernel] [--storage-worker | --no-storage-worker] [--tls-cert FILE --tls-key FILE]",
             );
+            console.log(ARCHIVE_COPY.cliMode);
             process.exit(0);
         } else {
             throw new Error(`Unknown argument: ${arg}`);
@@ -222,9 +224,7 @@ if (options.kernel) {
     try {
         verifyRotomKernel();
     } catch (error) {
-        throw new Error(
-            `The pinned rotom runtime is not ready (${(error as Error).message}). Run \`npm run install:kernel\`, or start with --no-rotom-kernel.`,
-        );
+        throw new Error(ARCHIVE_COPY.kernelUnavailable((error as Error).message));
     }
 }
 

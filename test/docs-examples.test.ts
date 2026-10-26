@@ -1,79 +1,34 @@
-// The documentation for agents holds up: its example extensions work as drop-ins, the system prompt points at files
-// that exist, and every link between the docs leads somewhere.
-import {
-    cleanUp,
-    lastText,
-    modelTexts,
-    newSession,
-    openApp,
-    owner,
-    root,
-    say,
-    scriptedModel,
-} from "./helpers.ts";
+// Historical extension examples remain valid source, but the current app never loads or executes them.
+import { cleanUp, openApp, owner, root, scriptedModel } from "./helpers.ts";
 import assert from "node:assert/strict";
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { after, before, test } from "node:test";
 import { fileURLToPath } from "node:url";
-import type { FauxResponseStep } from "@earendil-works/pi-ai";
-import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai/providers/faux";
+import ts from "typescript";
+import { getDocsPath } from "@earendil-works/pi-coding-agent";
+import { APP_ROOT, ConfigStore } from "../src/server/config.ts";
+import { GOALS_EXTENSION } from "../src/server/goals.ts";
+import { SCHEDULES_EXTENSION } from "../src/server/schedules.ts";
 
 const DOCS = fileURLToPath(new URL("../docs/", import.meta.url));
 const EXAMPLES = join(DOCS, "examples");
-
-/** The system prompt of the newest request, and its sections by name. */
-let prompt = "";
-let sections: Record<string, string> = {};
-
-const route: FauxResponseStep = (context) => {
-    const { role, text } = lastText(context as never);
-
-    // The system prompt reaches the model as system messages, each with the sections that changed since the last.
-    sections = Object.assign(
-        {},
-        ...(context.messages as { role: string; sections?: Record<string, string> }[])
-            .filter((message) => message.role === "system")
-            .map((message) => message.sections ?? {}),
-    ) as Record<string, string>;
-
-    prompt = Object.values(sections).join("\n");
-    const call = (name: string, args: Parameters<typeof fauxToolCall>[1]) =>
-        fauxAssistantMessage([fauxToolCall(name, args)], { stopReason: "toolUse" });
-
-    if (role === "toolResult") {
-        return fauxAssistantMessage([fauxText(`tool said: ${text}`)]);
-    }
-
-    if (text.includes("what time")) {
-        return call("clock", { zone: "UTC" });
-    }
-
-    if (text.includes("force push")) {
-        return call("bash", { command: "git push --force origin main" });
-    }
-
-    if (text.includes("plain push")) {
-        return call("bash", { command: "echo git push origin main" });
-    }
-
-    return fauxAssistantMessage([fauxText(`echo: ${text}`)]);
-};
-
+const data = join(root, "docs-data");
+const dropIns = join(data, "extensions");
 let app: Awaited<ReturnType<typeof openApp>>;
 
 before(async () => {
-    // The examples, copied in as the owner would: into the data folder's extensions/, before the server starts.
-    const data = join(root, "docs-data");
-    const dropIns = join(data, "extensions");
-
     mkdirSync(dropIns, { recursive: true });
 
     for (const file of readdirSync(EXAMPLES).filter((each) => each.endsWith(".ts"))) {
         copyFileSync(join(EXAMPLES, file), join(dropIns, file));
     }
 
-    app = await openApp(scriptedModel(route), data);
+    const config = new ConfigStore(data);
+
+    config.setExtensionEnabled("clock.ts", true);
+    config.setExtensionEnabled("no-force-push.ts", false);
+    app = await openApp(scriptedModel(), data);
 });
 
 after(async () => {
@@ -81,56 +36,143 @@ after(async () => {
     cleanUp();
 });
 
-/** What Pi's last answer in a session says. */
-const answer = async (id: Parameters<typeof say>[1]) => (await modelTexts(app, id)).at(-1) ?? "";
-
-test("the example extensions load as drop-ins, off until the owner turns them on, and work", async () => {
-    const listed = (await app.extensions(owner(app))).modules.filter(
-        (module) => module.source === "drop-in",
-    );
+/** Parse historical code without importing an extension, invoking a factory, or dispatching a tool. */
+function source(path: string): ts.SourceFile {
+    const text = readFileSync(path, "utf8");
+    const checked = ts.transpileModule(text, { fileName: path, reportDiagnostics: true });
 
     assert.deepEqual(
-        listed.map((module) => [module.file, module.enabled]),
-        [
-            ["clock.ts", false],
-            ["no-force-push.ts", false],
-        ],
+        checked.diagnostics?.filter(
+            (diagnostic) => diagnostic.category === ts.DiagnosticCategory.Error,
+        ) ?? [],
+        [],
+        `${path} parses`,
     );
-    assert.ok(listed.every((module) => module.summary.length > 20));
 
-    for (const file of ["clock.ts", "no-force-push.ts"]) {
-        await app.setExtensionEnabled(owner(app), file, true);
+    return ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true);
+}
+
+function definitions(file: ts.SourceFile, factory: string): string[] {
+    const names: string[] = [];
+    const constants = new Map([
+        ["GOALS_EXTENSION", GOALS_EXTENSION],
+        ["SCHEDULES_EXTENSION", SCHEDULES_EXTENSION],
+    ]);
+
+    const collect = (node: ts.Node) => {
+        if (
+            ts.isVariableDeclaration(node) &&
+            ts.isIdentifier(node.name) &&
+            node.initializer &&
+            ts.isStringLiteral(node.initializer)
+        ) {
+            constants.set(node.name.text, node.initializer.text);
+        }
+
+        ts.forEachChild(node, collect);
+    };
+
+    collect(file);
+
+    const visit = (node: ts.Node) => {
+        if (
+            ts.isCallExpression(node) &&
+            ts.isIdentifier(node.expression) &&
+            node.expression.text === factory
+        ) {
+            const argument = node.arguments[0];
+
+            if (argument && ts.isObjectLiteralExpression(argument)) {
+                for (const property of argument.properties) {
+                    if (
+                        ts.isPropertyAssignment(property) &&
+                        property.name.getText(file) === "name"
+                    ) {
+                        const value = ts.isStringLiteral(property.initializer)
+                            ? property.initializer.text
+                            : ts.isIdentifier(property.initializer)
+                              ? constants.get(property.initializer.text)
+                              : undefined;
+
+                        assert.ok(
+                            value,
+                            `resolve the declared ${factory} name without executing source`,
+                        );
+                        names.push(value);
+                    }
+                }
+            }
+        }
+
+        ts.forEachChild(node, visit);
+    };
+
+    visit(file);
+
+    return names;
+}
+
+test("example source and old extension choices survive archive startup without loading", async () => {
+    for (let restart = 0; restart < 2; restart++) {
+        assert.equal(app.loader, undefined);
+        assert.deepEqual(app.config.enabledExtensions, ["clock.ts"]);
+        assert.deepEqual(app.config.disabledExtensions, ["no-force-push.ts"]);
+        assert.equal(existsSync(join(dropIns, "node_modules")), false);
+        await assert.rejects(app.extensions(owner(app)), { status: 404 });
+        await assert.rejects(app.setExtensionEnabled(owner(app), "clock.ts", false), {
+            status: 404,
+        });
+
+        for (const name of ["clock.ts", "no-force-push.ts"]) {
+            assert.equal(
+                readFileSync(join(dropIns, name), "utf8"),
+                readFileSync(join(EXAMPLES, name), "utf8"),
+            );
+            const parsed = source(join(EXAMPLES, name));
+            const comment = ts.getLeadingCommentRanges(parsed.text, 0)?.[0];
+
+            assert.ok(
+                comment && comment.end - comment.pos > 20,
+                "the example retains its descriptive header",
+            );
+            assert.ok(
+                parsed.statements.some(
+                    (statement) =>
+                        ts.canHaveModifiers(statement) &&
+                        ts
+                            .getModifiers(statement)
+                            ?.some((modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword),
+                ),
+                "the example retains its default export",
+            );
+        }
+
+        if (restart === 0) {
+            await app.close();
+            app = await openApp(scriptedModel(), data);
+        }
     }
-
-    const id = await newSession(app);
-
-    await say(app, id, "what time is it in UTC?");
-    assert.match(await answer(id), /tool said: .*\d{4}.*\(UTC\)/);
-    assert.match(prompt, /Do not force-push with git/);
-
-    await say(app, id, "force push it");
-    assert.match(await answer(id), /Force-pushing is turned off here/);
-
-    await say(app, id, "now a plain push");
-    assert.match(await answer(id), /tool said: git push origin main/);
 });
 
-test("extensions.md names every built-in tool and extension a drop-in must not take the name of", async () => {
+test("extensions.md names the reserved historical built-in tools and extension namespaces", () => {
     const doc = readFileSync(join(DOCS, "extensions.md"), "utf8");
-    const builtIn = (await app.extensions(owner(app))).modules.filter(
-        (module) => module.source === "built-in",
-    );
+    const directory = join(APP_ROOT, "src/server/extensions");
+    const files = readdirSync(directory)
+        .filter((name) => name.endsWith(".ts"))
+        .map((name) => source(join(directory, name)));
     const tools = [
         "read",
         "write",
         "edit",
         "bash",
-        ...builtIn.flatMap((module) => module.extensions.flatMap((each) => each.tools)),
+        ...files.flatMap((file) => definitions(file, "defineTool")),
     ];
-    const names = builtIn.flatMap((module) => module.extensions.map((each) => each.name));
+    const names = files.flatMap((file) => definitions(file, "defineExtension"));
 
-    // Lancet Guard starts off: the other modules are on, and Pi Durable's own tools come with them.
-    assert.ok(tools.length >= 9 && names.length >= 8, "the built-ins are installed");
+    assert.ok(
+        tools.length >= 9 && names.length >= 8,
+        "the source scan is nonempty and covers the original built-ins",
+    );
 
     for (const tool of tools) {
         assert.ok(doc.includes(`\`${tool}\``), `the built-in tool ${tool} is named`);
@@ -140,27 +182,46 @@ test("extensions.md names every built-in tool and extension a drop-in must not t
         assert.match(
             name,
             /^(coding-tools|pocket-core|pocket-[a-z-]+)$/,
-            `${name} fits what the doc says`,
+            `${name} fits the documented namespace`,
         );
     }
 });
 
-test("the system prompt says where Pi Pocket's docs are, and every file it names exists", () => {
-    const section = sections.pocket_docs ?? "";
-
-    assert.match(section, /^<pocket_docs>\nPi Pocket documentation \(read only when/);
-    // Every absolute path in it (the code, its docs, the data folder, Pi's docs), and every doc it names.
-    const paths = [...section.matchAll(/(?<=\s)\/[^\s;,()]+/g)].map((match) =>
-        match[0].replace(/\.$/, ""),
+test("the unloaded historical prompt source names existing documentation paths", () => {
+    const parsed = source(join(APP_ROOT, "src/server/extensions/prompt.ts"));
+    const formatter = parsed.statements.find(
+        (statement) => ts.isFunctionDeclaration(statement) && statement.name?.text === "docs",
     );
+
+    assert.ok(formatter, "the actual documentation formatter remains in the historical source");
+    const section = formatter.getText(parsed);
+
+    assert.match(section, /Pi Pocket documentation \(read only when/);
+
+    for (const expression of [
+        "resolve(APP_ROOT)",
+        'join(code, "docs")',
+        "${dataDir}",
+        "getDocsPath()",
+    ]) {
+        assert.ok(section.includes(expression), `the source references ${expression}`);
+    }
+
     const named = [...section.matchAll(/\bdocs\/([a-z-]+(?:\.md|\/))/g)].map((match) =>
         join(DOCS, match[1]!),
     );
 
-    assert.ok(paths.length >= 4, `the paths it gives: ${paths.join(", ")}`);
-    assert.ok(named.length >= 6, "the docs it names");
+    assert.ok(named.length >= 6, "the source names the original guides");
 
-    for (const path of [...paths, ...named]) {
+    for (const path of [
+        APP_ROOT,
+        DOCS,
+        data,
+        getDocsPath(),
+        join(DOCS, "PRODUCT.md"),
+        join(DOCS, "index.md"),
+        ...named,
+    ]) {
         assert.ok(existsSync(path), `${path} exists`);
     }
 });

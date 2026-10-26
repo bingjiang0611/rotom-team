@@ -145,12 +145,28 @@ Uploads are limited to 50 MiB each and 10 files per message. Direct model images
 The fixtures do not establish image understanding on every real provider, image-specific interrupted-run recovery,
 or an OS sandbox between trusted members.
 
+## Legacy read-only archives (D9a)
+
+See [LEGACY-ARCHIVE.md](LEGACY-ARCHIVE.md) for the product boundary, migration scope, 256 MiB atomic-operation limit and rollback procedure.
+
+`node --test test/legacy-archive.test.ts test/legacy-archive-ui.test.ts test/spend.test.ts test/sessions.test.ts`
+checks real saved pre-D9 data, whole-root quarantine, deep ownership, pre-commit failure, lost-ACK reopening,
+private recovery records, immutable archive writes, access/history/export and stream/poll controls.
+Default tests materialize the pinned JSON through public Storage; they do not execute the historical producer or require Git history.
+
+Historical read fixtures, native metadata-only fixtures and native loopback execution are separate.
+`test/team-kernel-proof.ts` additionally checks actual worktree-backed fork cwd/file sharing, foreign-member
+steer/follow-up/model/thinking refusal during a held native run, login refusal while that account is busy,
+and native compact USD-budget rejection without receipts or model calls.
+These are not inferred from Durable-path 409s. Run native application and command proofs with storage worker off and on.
+The exact migration map and final run evidence live under `docs/performance/review-2026-10-23/d9a-*`.
+
 ## Shared agent resources and command inventory
 
 `node --test test/native-service-extensions.test.ts test/app.test.ts test/dropins.test.ts` checks actual Team startup
 without a server extension loader or drop-in dependency link, refusal of the old listing/toggle/reload API, and a
-previously enabled drop-in not executing across reopen. Its source and persisted switch stay unchanged. Legacy tests
-retain their non-Team server module behavior. No model inference or real MCP service is required by the new tests.
+previously enabled drop-in not executing across reopen. Its source and persisted switch stay unchanged in both modes.
+Legacy example tests parse source and verify preservation; they never execute retired extension factories. No model inference or real MCP service is required by these checks.
 
 ```sh
 node --test test/rotom-resources.test.ts test/native-command-menu.test.ts test/team-resource-backup.test.ts

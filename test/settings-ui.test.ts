@@ -1,7 +1,15 @@
 // Settings, in a real browser where this machine has Chromium: everything app-wide has one way in, the settings window,
 // from the sidebar's foot or the folded rail; any of its sheets opened from elsewhere opens there; the session menu keeps
 // only the session's own actions.
-import { type App, cleanUp, newSession, openApp, root, scriptedModel, until } from "./helpers.ts";
+import {
+    type App,
+    cleanUp,
+    seedHistoricalSession,
+    openApp,
+    root,
+    scriptedModel,
+    until,
+} from "./helpers.ts";
 import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
@@ -127,7 +135,7 @@ before(async () => {
         load: async () => undefined,
         save: () => {},
     });
-    session = await newSession(app);
+    session = await seedHistoricalSession(app);
     page = await browsers.open(1);
     await page.setViewport(VIEWPORTS.desktop);
     await page.navigate(`${base}/login?token=${encodeURIComponent(app.config.ownerToken)}`);

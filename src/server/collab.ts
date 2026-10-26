@@ -88,6 +88,7 @@ export class Collab {
         const app = this.#app;
 
         app.requireSee(user, id);
+        app.requireArchiveWriteAllowed(id);
         await app.conversation(id);
         const text = request.text.trim();
 
@@ -280,6 +281,7 @@ export class Collab {
         const app = this.#app;
 
         app.requireSee(user, id);
+        app.requireArchiveWriteAllowed(id);
 
         if (!REACTIONS.includes(emoji)) {
             throw new HttpError(400, `Pick one of ${REACTIONS.join(" ")}`);
@@ -332,6 +334,7 @@ export class Collab {
         const app = this.#app;
 
         app.requireSee(user, id);
+        app.requireArchiveWriteAllowed(id);
         let pin: Pin;
 
         if (target.entryId !== undefined) {
@@ -412,6 +415,7 @@ export class Collab {
         const app = this.#app;
 
         app.requireSee(user, id);
+        app.requireArchiveWriteAllowed(id);
 
         if (text.length > MAX_NOTES) {
             throw new HttpError(413, `Notes are limited to ${MAX_NOTES} characters`);
@@ -452,6 +456,7 @@ export class Collab {
         const app = this.#app;
 
         app.requireSee(user, id);
+        app.requireArchiveWriteAllowed(id);
         app.requireSteer(user);
         const root = app.rootOf(id);
         const room = await app.room(root);

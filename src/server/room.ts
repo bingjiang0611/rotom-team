@@ -20,6 +20,7 @@ import type { TeamKernel } from "./team-kernel.ts";
 import type { Head } from "./branches.ts";
 import type { User } from "./config.ts";
 import {
+    type ArchiveMarker,
     type ArtifactMeta,
     ArtifactsDoc,
     AuthorsDoc,
@@ -43,6 +44,7 @@ import {
     TurnsDoc,
 } from "./docs.ts";
 import { SHELL_ENTRY } from "./entry-format.ts";
+import { ARCHIVE_COPY } from "./constants/copy.ts";
 import { agentInfo } from "./models.ts";
 import { liveUpdate, type LiveSnapshot } from "./live-delta.ts";
 import {
@@ -248,7 +250,7 @@ export class Room {
     notes: Notes = { text: "", rev: 0 };
     turns: Turns = { on: false, asks: [] };
     decisions: Record<string, Decision> = {};
-    plan: { on: boolean; by?: string; at?: number } = { on: false };
+    plan: { on: boolean; by?: string; at?: number; archive?: ArchiveMarker } = { on: false };
     schedules: Record<string, Schedule> = {};
     goal: Goal | undefined;
     /** Who is typing where, by user id. Memory only: it means nothing after a restart. */
@@ -554,15 +556,20 @@ export class Room {
             pins: this.pins,
             turns: this.turns,
             decisions: this.decisions,
+            readOnly:
+                this.#app.sessionBackend(this.id) === "durable"
+                    ? { reason: ARCHIVE_COPY.readOnly }
+                    : null,
             plan: this.plan,
             schedules: Object.values(this.schedules)
                 .sort((a, b) => a.next - b.next)
-                .map(({ id, text, next, every, by, runs }) => ({
+                .map(({ id, text, next, every, by, runs, archive }) => ({
                     id,
                     text,
                     next,
                     ...(every === undefined ? {} : { repeat: describeRepeat(every) }),
                     ...(by === undefined ? {} : { by }),
+                    ...(archive === undefined ? {} : { archive }),
                     runs,
                 })),
             // The branch is read from the repository each time, so one Pi or a person switched to shows on the next update.
@@ -577,6 +584,9 @@ export class Room {
                           tries: this.goal.tries,
                           max: this.goal.max,
                           ...(this.goal.last === undefined ? {} : { last: this.goal.last }),
+                          ...(this.goal.archive === undefined
+                              ? {}
+                              : { archive: this.goal.archive }),
                       },
             ...(this.#native()
                 ? {

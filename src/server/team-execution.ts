@@ -117,6 +117,7 @@ export class TeamExecution {
             throw new HttpError(409, "Native sessions cannot enter Durable execution.");
         }
 
+        app.requireArchiveWriteAllowed(id);
         await app.accounts.forUser(user);
         const state = await app.agentState(id);
         const binding = await app.harness.snapshot(TeamRunDoc, id, context);
@@ -217,6 +218,7 @@ export class TeamExecution {
             throw new Error("Native sessions cannot dispatch through Durable.");
         }
 
+        app.requireArchiveWriteAllowed(id);
         const agent = await app.harness.snapshot(AgentDoc, id, context);
         const run = await app.harness.snapshot(TeamRunDoc, id, context);
         const root = await app.harness.snapshot(TeamRunDoc, app.rootOf(id), context);

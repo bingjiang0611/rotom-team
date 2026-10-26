@@ -4,15 +4,23 @@ import { createServer } from "node:http";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { createHandler } from "../src/server/http.ts";
-import { cleanUp, newSession, openApp, owner, root, scriptedModel, until } from "./helpers.ts";
+import {
+    cleanUp,
+    seedHistoricalSession,
+    openApp,
+    owner,
+    root,
+    scriptedModel,
+    until,
+} from "./helpers.ts";
 
 after(cleanUp);
 let fixtures = 0;
 
 async function fixture() {
     const app = await openApp(scriptedModel(), join(root, `subscriptions-${++fixtures}`));
-    const a = await newSession(app);
-    const b = await newSession(app);
+    const a = await seedHistoricalSession(app);
+    const b = await seedHistoricalSession(app);
     const server = createServer(
         createHandler({ app, listen: { host: "127.0.0.1", port: 0 }, restart() {} }),
     );

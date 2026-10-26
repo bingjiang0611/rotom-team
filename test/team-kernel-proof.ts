@@ -3,6 +3,7 @@ import { root, work, owner, until, context } from "./helpers.ts";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { once } from "node:events";
+import { execFileSync } from "node:child_process";
 import { Worker } from "node:worker_threads";
 import {
     mkdirSync,
@@ -937,6 +938,21 @@ try {
         ).status,
         409,
     );
+    const budgetCalls = calls;
+    const budgetReceipts = await app.kernel!.executions.journal.receipts(String(scoped.id));
+    const compactBudget = await request(carla.token, `c/${scoped.id}/compact`, "POST", {
+        requestId: "budget-compact",
+        instructions: "Do not bypass the USD budget",
+    });
+
+    assert.equal(compactBudget.status, 409);
+    assert.match(await compactBudget.text(), /Native USD budget enforcement/);
+    assert.equal(calls, budgetCalls);
+    assert.deepEqual(
+        await app.kernel!.executions.journal.receipts(String(scoped.id)),
+        budgetReceipts,
+    );
+    report.nativeCompactBudgetAdmission = true;
     app.spend.setPersonBudget(owner(app), carla.user.id, null);
     app.accounts.beginChange(carla.user, "openai");
     app.accounts.endChange(carla.user);
@@ -2246,6 +2262,72 @@ try {
     );
     report.projectSkillRunsByName = true;
 
+    // A real native fork reuses its source checkout; it never invents a default cwd or a new worktree.
+    const worktreeRepo = join(workspace, "fork-worktree-source");
+
+    mkdirSync(join(worktreeRepo, "nested"), { recursive: true });
+    writeFileSync(join(worktreeRepo, "nested", "tracked.txt"), "source-only\n");
+    writeFileSync(join(worktreeRepo, "AGENTS.md"), readFileSync(join(workspace, "AGENTS.md")));
+    const git = (...args: string[]) =>
+        execFileSync("git", args, { cwd: worktreeRepo, encoding: "utf8" });
+
+    git("init", "-q");
+    git("config", "user.email", "fixture@example.test");
+    git("config", "user.name", "Fixture");
+    git("add", ".");
+    git("commit", "-qm", "fixture");
+    const worktreeSession = await app.commands.createSession(owner(app), {
+        backend: "rotom",
+        cwd: join(worktreeRepo, "nested"),
+        worktree: true,
+    });
+    const worktreeReply = await request(aliceToken, `c/${worktreeSession.id}/submit`, "POST", {
+        text: "Write the proof file in this worktree.",
+        requestId: "worktree-source",
+    });
+
+    assert.equal(worktreeReply.status, 200, await worktreeReply.clone().text());
+    assert.equal(((await worktreeReply.json()) as { status: string }).status, "settled");
+    const worktreeCwd = app.cwdOf(worktreeSession.id);
+    const worktreeSnapshot = await app.kernel!.snapshot(worktreeSession.id, owner(app));
+    const worktreeSessionFile = (
+        await app.kernel!.executions.journal.session(String(worktreeSession.id))
+    ).sessionFile;
+
+    assert.ok(worktreeSessionFile);
+    const sourceHistory = readFileSync(worktreeSessionFile);
+    const checkoutNames = readdirSync(join(app.dataDir, "worktrees")).sort();
+    const worktreeForkResponse = await request(aliceToken, `c/${worktreeSession.id}/fork`, "POST", {
+        requestId: "worktree-fork",
+        expectedHead: worktreeSnapshot.segmentId,
+    });
+
+    assert.equal(worktreeForkResponse.status, 200, await worktreeForkResponse.clone().text());
+    const worktreeFork = (await worktreeForkResponse.json()) as { id: number };
+
+    assert.equal(app.cwdOf(worktreeFork.id as never), worktreeCwd);
+    assert.equal(
+        readFileSync(join(app.cwdOf(worktreeFork.id as never), "native-app.txt"), "utf8"),
+        "APP_NATIVE_OK\n",
+    );
+    assert.equal(existsSync(join(worktreeRepo, "nested", "native-app.txt")), false);
+    assert.deepEqual(readdirSync(join(app.dataDir, "worktrees")).sort(), checkoutNames);
+    assert.deepEqual(readFileSync(worktreeSessionFile), sourceHistory);
+    report.nativeForkSharesWorktree = true;
+
+    // Bob may view and continue this project, but cannot change Alice's live payer-bound run.
+    project = app.projects.save(
+        owner(app),
+        {
+            ...project,
+            members: {
+                ...project.members,
+                [bob.user.id]: { view: true, continue: true, fork: true },
+            },
+        },
+        (key) => !!app.config.userById(key),
+    );
+    await app.projectsChanged();
     // One member runs several sessions at once: a run held in one session does not keep another from finishing.
     const heldSession = await app.commands.createSession(a, { backend: "rotom" });
     const otherSession = await app.commands.createSession(a, { backend: "rotom" });
@@ -2261,6 +2343,45 @@ try {
         "NATIVE_UI_HOLD in parallel",
         "the name is saved before the response finishes",
     );
+    const heldBinding = (await app.kernel!.executions.journal.session(String(heldSession.id)))
+        .binding;
+    const heldReceipts = await app.kernel!.executions.journal.receipts(String(heldSession.id));
+
+    for (const mode of ["steer", "followUp"]) {
+        const foreign = await request(bob.token, `c/${heldSession.id}/submit`, "POST", {
+            text: "Do not change Alice's run",
+            requestId: `foreign-${mode}`,
+            mode,
+        });
+
+        assert.equal(foreign.status, 409, await foreign.clone().text());
+    }
+
+    const foreignConfiguration = await request(bob.token, `c/${heldSession.id}/configure`, "POST", {
+        model: app.accounts.choice(app.config.userById(bob.user.id)!),
+    });
+
+    assert.equal(foreignConfiguration.status, 409, await foreignConfiguration.clone().text());
+    const foreignThinking = await request(bob.token, `c/${heldSession.id}/configure`, "POST", {
+        thinkingLevel: "off",
+    });
+
+    assert.equal(foreignThinking.status, 409);
+    assert.match(await foreignThinking.text(), /Only the paying member/);
+    await assert.rejects(
+        app.providers.startLogin(owner(app), "openai", "oauth"),
+        /still running in session/,
+    );
+    assert.deepEqual(
+        (await app.kernel!.executions.journal.session(String(heldSession.id))).binding,
+        heldBinding,
+    );
+    assert.deepEqual(
+        await app.kernel!.executions.journal.receipts(String(heldSession.id)),
+        heldReceipts,
+    );
+    assert.equal(calls, beforeParallel + 1);
+    report.nativeLiveForeignMutationDenied = true;
     const other = await request(aliceToken, `c/${otherSession.id}/submit`, "POST", {
         text: "Write the proof file.",
         requestId: "parallel-other",

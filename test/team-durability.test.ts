@@ -1,4 +1,15 @@
-import { cleanUp, context, openApp, owner, root, scriptedModel, work, say } from "./helpers.ts";
+import {
+    cleanUp,
+    context,
+    openApp,
+    openNativeApp,
+    owner,
+    root,
+    scriptedModel,
+    work,
+    seedHistoricalSession,
+} from "./helpers.ts";
+import { mkdirSync, realpathSync } from "node:fs";
 import assert from "node:assert/strict";
 import { join } from "node:path";
 import { after, test } from "node:test";
@@ -7,6 +18,7 @@ import { serializeConversation } from "../node_modules/@earendil-works/pi-durabl
 import { fauxAssistantMessage, fauxThinking, fauxText } from "@earendil-works/pi-ai/providers/faux";
 import { TeamRunDoc } from "../src/server/team-execution.ts";
 import { TeamUsageDoc } from "../src/server/team-usage.ts";
+import { SessionsDoc } from "../src/server/docs.ts";
 after(cleanUp);
 
 test("public compaction serialization strips thinking before it becomes untyped user text", () => {
@@ -32,9 +44,11 @@ test("atomic usage attribution survives a handoff and restart before the delayed
     try {
         const a = owner(app),
             b = app.config.addUser("Bob", "guest").user;
-        const { id } = await app.commands.createSession(a, { title: "atomic" });
+        const id = await seedHistoricalSession(app);
 
         await app.harness.commit(async (tx) => {
+            (await tx.doc(SessionsDoc)).items[String(id)]!.createdBy = a.id;
+            (await tx.doc(TeamRunDoc, id)).owner = a.id;
             await recordUsage(tx, id, "models", `team:${a.id}:generation:openai/test`, {
                 input: 1,
                 output: 2,
@@ -63,8 +77,11 @@ test("atomic usage attribution survives a handoff and restart before the delayed
     }
 });
 
-test("project grants separate view, continue and fork; forks inherit scope and revocation is immediate", async () => {
-    const app = await openApp(scriptedModel(), join(root, "project-grants"));
+test("native project grants separate view, continue and fork; revocation is immediate", async () => {
+    const data = join(realpathSync(root), "project-grants");
+
+    mkdirSync(data, { mode: 0o700 });
+    const app = await openNativeApp(scriptedModel(), data);
 
     try {
         const a = owner(app),
@@ -79,32 +96,28 @@ test("project grants separate view, continue and fork; forks inherit scope and r
             },
             (id) => app.config.userById(id) !== undefined,
         );
-        const { id } = await app.commands.createSession(a, { title: "project" });
+        const { id } = await app.commands.createSession(a, { title: "project", backend: "rotom" });
 
-        await say(app, id, "shared note");
+        assert.equal(app.sessionMeta(id)?.projectId, project.id);
         assert.equal(app.canSee(c, id), false);
         assert.equal((await app.sessions(c)).length, 0);
         assert.equal(app.canSee(b, id), true);
-        await assert.rejects(
-            app.commands.submit(id, b, { text: "not allowed", requestId: "no-write" }),
-            { status: 403 },
-        );
-        const page = await (await app.conversation(id)).entries({}, 100, undefined, context);
-        const answer = page.items.find((entry) => entry.kind === "pi.assistant")!;
-        const fork = await app.commands.fork(id, b, { entryId: Number(answer.id) });
-
-        assert.equal(app.sessionMeta(fork.id)!.projectId, project.id);
-        assert.equal(app.canSee(c, fork.id), false);
+        await assert.rejects(app.requireDriver(id, b, "rotom"), { status: 403 });
+        assert.doesNotThrow(() => app.commands.requireForkable(id, b, "rotom"));
+        // Actual native fork inheritance/continuation is exercised by team-kernel-proof.ts,
+        // apiForkIdempotencyConfigurationAndPayer and forkAndContinuePermissionsIndependent.
         project = app.projects.save(
             a,
             { ...project, members: { [b.id]: { view: true, continue: true, fork: false } } },
             (id) => app.config.userById(id) !== undefined,
         );
         await app.projectsChanged();
-        await assert.rejects(app.commands.fork(id, b, { entryId: Number(answer.id) }), {
-            status: 403,
-        });
-        await assert.rejects(app.commands.createSession(c, { title: "outsider" }), { status: 403 });
+        assert.throws(() => app.commands.requireForkable(id, b, "rotom"), { status: 403 });
+        await app.requireDriver(id, b, "rotom");
+        await assert.rejects(
+            app.commands.createSession(c, { title: "outsider", backend: "rotom" }),
+            { status: 403 },
+        );
         app.projects.save(
             a,
             { ...project, members: {} },
@@ -112,10 +125,9 @@ test("project grants separate view, continue and fork; forks inherit scope and r
         );
         await app.projectsChanged();
         assert.equal(app.canSee(b, id), false);
-        await assert.rejects(
-            app.commands.submit(fork.id, b, { text: "revoked", requestId: "revoked" }),
-            { status: 404 },
-        );
+        assert.throws(() => app.requireSee(b, id), { status: 404 });
+        await assert.rejects(app.requireDriver(id, b, "rotom"), { status: 403 });
+        assert.throws(() => app.commands.requireForkable(id, b, "rotom"), { status: 404 });
     } finally {
         await app.close();
     }
