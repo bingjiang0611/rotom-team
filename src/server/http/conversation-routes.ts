@@ -1,8 +1,8 @@
 /** `/api/c/:id`: one conversation's routes, for people the API has checked may see it. */
-import { resolve, sep } from "node:path";
 import type { ConversationId } from "@earendil-works/pi-durable";
-import type { Attachment, SubmitRequest } from "../commands.ts";
+import type { SubmitRequest } from "../commands.ts";
 import { HttpError } from "../errors.ts";
+import { ARCHIVE_COPY } from "../constants/copy.ts";
 import { uploadedAttachments } from "../attachments.ts";
 import { teamCommandUsesAdapter } from "../team-command-policy.ts";
 import { serveDownload, serveImage } from "./assets.ts";
@@ -22,6 +22,12 @@ export async function conversationRoutes(
     const { app, request, response, url, user } = api;
     const method = request.method ?? "GET";
     const [, , third, fourth] = parts;
+
+    const rejectRetired = (): never => {
+        app.requireArchiveWriteAllowed(id);
+
+        throw new HttpError(409, ARCHIVE_COPY.executionRetired);
+    };
 
     if (third === "seen" && method === "POST" && fourth === undefined) {
         const body = await readJson<{ finishedAt: number }>(request);
@@ -329,9 +335,7 @@ export async function conversationRoutes(
             );
         }
 
-        await app.commands.applyProfile(id, user);
-
-        return json(response, 200, app.profiles.snapshot(id));
+        return rejectRetired();
     }
 
     if (third === "submit" && method === "POST") {
@@ -345,15 +349,7 @@ export async function conversationRoutes(
             throw new HttpError(400, "attachments must be a list");
         }
 
-        const attachments = (body.attachments ?? []).filter((file): file is Attachment => {
-            // Only files this server stored for this conversation.
-            return (
-                typeof file?.path === "string" &&
-                resolve(file.path).startsWith(app.workspace.uploadDirectory(id) + sep)
-            );
-        });
-
-        return json(response, 200, await app.commands.submit(id, user, { ...body, attachments }));
+        return rejectRetired();
     }
 
     if (third === "chat" && method === "POST") {
@@ -420,55 +416,43 @@ export async function conversationRoutes(
     }
 
     if (third === "abort" && method === "POST") {
-        await app.commands.abort(id, user);
-
-        return json(response, 200, { ok: true });
+        return rejectRetired();
     }
 
     if (third === "withdraw" && method === "POST") {
-        const body = await readJson<{ submissionId?: number }>(request);
+        await readJson<{ submissionId?: number }>(request);
 
-        return json(response, 200, {
-            result: await app.commands.withdraw(id, user, Number(body.submissionId)),
-        });
+        return rejectRetired();
     }
 
     if (third === "configure" && method === "POST") {
-        await app.commands.configure(id, user, await readJson(request));
+        await readJson(request);
 
-        return json(response, 200, { ok: true });
+        return rejectRetired();
     }
 
     if (third === "reset" && method === "POST") {
-        const body = await readJson<{ note?: unknown }>(request);
+        await readJson<{ note?: unknown }>(request);
 
-        await app.commands.reset(id, user, body.note);
-
-        return json(response, 200, { ok: true });
+        return rejectRetired();
     }
 
     if (third === "instructions" && method === "POST") {
-        const body = await readJson<{ text?: unknown }>(request);
+        await readJson<{ text?: unknown }>(request);
 
-        await app.commands.setInstructions(id, user, body.text);
-
-        return json(response, 200, { ok: true });
+        return rejectRetired();
     }
 
     if (third === "plan" && method === "POST") {
-        const body = await readJson<{ on?: unknown; approve?: unknown }>(request);
+        await readJson<{ on?: unknown; approve?: unknown }>(request);
 
-        if (body.approve === true) {
-            return json(response, 200, await app.commands.approvePlan(id, user));
-        }
-
-        await app.commands.setPlan(id, user, body.on);
-
-        return json(response, 200, { ok: true });
+        return rejectRetired();
     }
 
     if (third === "schedules" && fourth === undefined && method === "POST") {
-        return json(response, 200, await app.commands.schedule(id, user, await readJson(request)));
+        await readJson(request);
+
+        return rejectRetired();
     }
 
     if (
@@ -477,21 +461,13 @@ export async function conversationRoutes(
         parts[4] === "cancel" &&
         method === "POST"
     ) {
-        await app.commands.cancelSchedule(id, user, fourth);
-
-        return json(response, 200, { ok: true });
+        return rejectRetired();
     }
 
     if (third === "goal" && method === "POST") {
-        const body = await readJson<{ command?: unknown; clear?: unknown }>(request);
+        await readJson<{ command?: unknown; clear?: unknown }>(request);
 
-        if (body.clear === true) {
-            await app.commands.clearGoal(id, user);
-        } else {
-            await app.commands.setGoal(id, user, body.command);
-        }
-
-        return json(response, 200, { ok: true });
+        return rejectRetired();
     }
 
     if (third === "worktree" && method === "POST") {
@@ -501,17 +477,19 @@ export async function conversationRoutes(
             throw new HttpError(400, "Only removing a worktree is asked for here");
         }
 
-        await app.commands.removeWorktree(id, user, body.force);
-
-        return json(response, 200, { ok: true });
+        return rejectRetired();
     }
 
     if (third === "fork" && method === "POST") {
-        return json(response, 200, await app.commands.fork(id, user, await readJson(request)));
+        await readJson(request);
+
+        return rejectRetired();
     }
 
     if (third === "resend" && method === "POST") {
-        return json(response, 200, await app.commands.resend(id, user, await readJson(request)));
+        await readJson(request);
+
+        return rejectRetired();
     }
 
     if (third === "compact" && method === "POST") {
@@ -525,13 +503,7 @@ export async function conversationRoutes(
             throw new HttpError(400, "instructions must be text");
         }
 
-        await app.commands.compact(
-            id,
-            user,
-            (body.instructions as string | null | undefined)?.trim() || undefined,
-        );
-
-        return json(response, 200, { ok: true });
+        return rejectRetired();
     }
 
     if (third === "image" && fourth !== undefined && (method === "GET" || method === "HEAD")) {
@@ -694,13 +666,13 @@ export async function conversationRoutes(
     }
 
     if (third === "shell" && fourth === undefined && method === "POST") {
-        return json(response, 200, await app.shell.start(id, user, await readJson(request)));
+        await readJson(request);
+
+        return rejectRetired();
     }
 
     if (third === "shell" && fourth !== undefined && parts[4] === "stop" && method === "POST") {
-        await app.shell.stop(id, user, Number(fourth));
-
-        return json(response, 200, { ok: true });
+        return rejectRetired();
     }
 
     if (third === "entries" && method === "GET" && fourth === undefined) {

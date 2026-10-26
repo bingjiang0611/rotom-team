@@ -37,8 +37,6 @@ export class Spend {
     readonly #owed = new Map<ConversationId, Map<string, number>>();
     /** What `SpendDoc` says each person spent, as of the last count. */
     #people: Record<string, number> = {};
-    /** Runs being stopped for a limit, until they end: each is stopped, and announced, once. */
-    readonly #stopping = new Set<ConversationId>();
     #timer: NodeJS.Timeout | undefined;
 
     constructor(app: PocketApp) {
@@ -209,8 +207,6 @@ export class Spend {
 
             throw error;
         }
-
-        this.#stopOverLimit();
     }
 
     /** What a session spent: itself and its subagents. */
@@ -281,39 +277,6 @@ export class Spend {
         return reached.person === undefined
             ? `this session reached its ${dollars(reached.budget)} spend limit`
             : `${reached.person.name} reached their ${dollars(reached.budget)} spend limit`;
-    }
-
-    /** A conversation's run ended: a new one there is stopped again if it goes past a limit. */
-    runEnded(id: ConversationId): void {
-        this.#stopping.delete(id);
-    }
-
-    /** Stop every run that goes on past its session's limit or its payer's. */
-    #stopOverLimit(): void {
-        const app = this.#app;
-
-        for (const id of app.busyConversations()) {
-            if (this.#stopping.has(id)) {
-                continue;
-            }
-
-            const why = this.heldBack(id);
-
-            if (why === undefined) {
-                continue;
-            }
-
-            this.#stopping.add(id);
-            app.notice("warning", `Pi stopped: ${why}.`, id);
-            void app
-                .conversation(id)
-                .then((conversation) => conversation.abort(context))
-                .catch((error: unknown) => {
-                    // The next count tries again.
-                    this.#stopping.delete(id);
-                    app.log(`could not stop ${String(id)}: ${describe(error)}`);
-                });
-        }
     }
 
     /** The owner limits what Pi may spend in a session (`null`: no limit). */

@@ -88,7 +88,7 @@ This is resource-loading policy, not an OS restriction on reading files.
 | `projection.ts`         | Entries as compact JSON for browsers; `usageCost`                                                                                                                                                                               |
 | `entry-format.ts`       | The kinds of Pi Pocket's own entries, and the markers it writes into message text (`[from: …]`, attached files). Stored data and the web app depend on their exact values                                                       |
 | `docs.ts`               | Shared collaborative documents; additional stored contracts include TeamRunDoc (`team-execution.ts`), configuration docs and native mirror/setup docs (`team-kernel.ts`). Preserve every stored kind/scope/history/fork setting |
-| `host.ts`, `reload.ts`  | Legacy `PocketHost` and service `ExtensionLoader`: built-ins/drop-ins and live reload. Kernel mode does not instantiate this loader                                                                                             |
+| `host.ts`, `reload.ts`  | Retained `PocketHost` types/Approvals and shared web `watchTree`; D9b removes the service loader and drop-in preparation                                                                                                        |
 | `lock.ts`               | One process per data folder                                                                                                                                                                                                     |
 | `errors.ts`, `paths.ts` | `HttpError`, `describe`, and input checks; `~` paths                                                                                                                                                                            |
 
@@ -241,7 +241,7 @@ For startup, clean closure and permitted continuation, follow [architecture.md](
 - **A command:** choose the backend first. Native adapters belong with `TeamKernel` and `team-command-policy.ts`; legacy/shared wrappers may use `commands.ts`. Route through `conversationRoutes`/`createApi`, enforce access and request identity, then add the store action/UI.
 - **A sheet:** a component in `web/sheets/`, a case in `sheetBody` (`web/sheets.js`), and `openSheet({ type })` where it opens. An app-wide one also goes in `SETTINGS_PAGES` and the list in `web/sheets/settings.js`, so it opens as a page of the settings window.
 - **Something back should close** (a screen over the conversation, a view that takes another's place on a phone): `useBack(open, close)` from `web/back.js` in the component that shows it. Sheets already have it.
-- **A Team native extension:** follow [AGENT-CONFIGURATION.md](AGENT-CONFIGURATION.md) and the admitted shared/project configuration. Legacy service extension source and `reload.ts` definitions are retained but never loaded or watched; do not add a legacy execution path.
+- **A Team native extension:** follow [AGENT-CONFIGURATION.md](AGENT-CONFIGURATION.md) and the admitted shared/project configuration. Legacy service extension source remains for D9c, but its loader is removed; `reload.ts` retains only the shared web watcher. Do not add a legacy execution path.
 - **A slash command:** `web/commands.js`.
 
 ## Rules that are easy to break

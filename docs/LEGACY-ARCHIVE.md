@@ -1,4 +1,4 @@
-# Legacy Durable archives (D9a)
+# Legacy Durable archives (D9a / D9b)
 
 Only the native rotom backend executes new work. A persisted session without `backend: "rotom"` is a legacy archive. Disabling the kernel never changes that classification or enables Durable execution.
 
@@ -41,7 +41,9 @@ Use [DEPLOYMENT.md](DEPLOYMENT.md), including stopping the service, waiting for 
 
 A code revert alone does not resurrect quarantined tasks. Their complete records remain private recovery data, not a supported import/resume interface. To restore the pre-upgrade product/data pair, stop the service, keep the post-upgrade data as a separate backup, and restore the matching pre-upgrade backup with `scripts/data.mjs restore` before starting the old release. This discards post-backup application changes from the restored copy; the operator must explicitly accept that loss. Do not merge SQLite files or automatically replay externally uncertain work after rollback.
 
-D9a does not remove legacy source, document definitions, extension directories or switch records. Such deletion belongs to a later, separately authorized phase; D9b/D9c are not included.
+D9b deletes the inventoried legacy execution bodies and service loader, not persisted history or definitions. It does not change the journal version or add a data migration. Returning from D9b to D9a (`9562e79`) can open the same post-D9b data without restoring a backup; this was checked with synthetic data in kernel-off, kernel-on and storage-worker modes. D9a still quarantines legacy work, so this code rollback does **not** resurrect archived tasks. The offline backup/restore procedure above applies when returning to a pre-D9a product/data pair.
+
+The extension directory, old test files, user source and enabled/disabled records remain for D9c. `PocketHost` types, standalone Lancet tests, public Storage/Harness, historical task identities/versions/input/checkpoint/result shapes and private archive documents remain. Definitions needed to decode history are not permission to execute it. See [D9b inventory](performance/review-2026-10-23/d9b-inventory.md) and [validation](performance/review-2026-10-23/d9b-validation.md).
 
 ## Evidence and fixture boundaries
 

@@ -24,6 +24,8 @@ import type { User } from "../src/server/config.ts";
 import { AuthorsDoc, ChatDoc, SessionsDoc, SpendDoc } from "../src/server/docs.ts";
 import { TeamRunDoc } from "../src/server/team-execution.ts";
 import { usageCost } from "../src/server/projection.ts";
+import { NOTE_ENTRY } from "../src/server/entry-format.ts";
+import { ownRequest } from "../src/server/requests.ts";
 
 /** Usage worth `dollars`, split between a model and a tool. */
 const costing = (dollars: number) =>
@@ -92,7 +94,28 @@ async function nativeSession(): Promise<ConversationId> {
 }
 
 async function recordRequester(user: User, id: ConversationId, text: string): Promise<void> {
-    await app.commands.note(id, user, text);
+    // Captured passive-write records drive the real commit attribution listener, not a retired command/task.
+    await app.harness.commit(async (tx) => {
+        const entry = await tx.appendEntry(id, {
+            kind: NOTE_ENTRY,
+            data: { text, by: user.id, name: user.name },
+            model: [
+                {
+                    role: "user",
+                    content: [{ type: "text", text: `[note] ${user.name} ${text}` }],
+                    timestamp: Date.now(),
+                },
+            ],
+        });
+
+        await tx.createSubmission({
+            conversationId: id,
+            type: "write",
+            status: "done",
+            entry: entry.id,
+            requestId: ownRequest(user.id, `note-${crypto.randomUUID()}`),
+        });
+    }, context);
 }
 
 test("a conversation's spend is everything its models and tools cost", () => {

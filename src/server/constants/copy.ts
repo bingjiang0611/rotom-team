@@ -6,6 +6,11 @@ export const SUBSCRIPTION_COPY = {
 
 /** Central copy for the legacy Durable archive boundary. Keep this consistent across HTTP and direct API callers. */
 export const ARCHIVE_COPY = {
+    executionRetired: "Legacy Durable execution is retired; use the native backend.",
+    guardUnavailable:
+        "Lancet Guard is unavailable in Team; native Agent Extensions run outside this legacy hook.",
+    extensionsUnavailable:
+        "Team supports Agent Extensions only. Configure team-agent or the project's .pi directory.",
     sessionMissing: "No such session",
     cliMode: "--no-rotom-kernel opens read-only archives; it does not enable legacy execution.",
     kernelUnavailable: (reason: string) =>
