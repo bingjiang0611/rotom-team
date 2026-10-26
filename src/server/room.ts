@@ -471,24 +471,6 @@ export class Room {
             return this.#entrySequence;
         }
 
-        const entries: ClientEntry[] = [];
-        const order: number[] = [];
-
-        for (const entry of source) {
-            const projected = this.#entry(entry);
-
-            if (projected !== null) {
-                entries.push(projected);
-                order.push(projected.id);
-            }
-        }
-
-        if (viewProjectionChannel.hasSubscribers) {
-            viewProjectionChannel.publish({
-                entryVisits: source.length,
-            } satisfies ViewProjectionSignal);
-        }
-
         const previous = this.#entrySequence;
         const previousSource = this.#entrySource;
         const appended =
@@ -499,6 +481,25 @@ export class Room {
                 (source[0] === previousSource[0] &&
                     source[previousSource.length - 1] ===
                         previousSource[previousSource.length - 1]));
+        // Reuse the same immutable prefix as the client cursors. A head change still rebuilds the full sequence.
+        const from = appended ? previousSource.length : 0;
+        const entries: ClientEntry[] = appended ? previous.entries.slice() : [];
+        const order: number[] = appended ? previous.order.slice() : [];
+
+        for (let index = from; index < source.length; index++) {
+            const projected = this.#entry(source[index]!);
+
+            if (projected !== null) {
+                entries.push(projected);
+                order.push(projected.id);
+            }
+        }
+
+        if (viewProjectionChannel.hasSubscribers) {
+            viewProjectionChannel.publish({
+                entryVisits: source.length - from,
+            } satisfies ViewProjectionSignal);
+        }
 
         this.#entrySource = source;
         this.#entrySequence = {
