@@ -43,7 +43,7 @@
 | D6    | D    | 大文件纯移动拆分(C5)                        | 核验通过                      | `3768653`（测量）；实现见执行记录      |
 | D7    | D    | handoff 测量与异步化(C2)                    | 核验通过                      | `2af9690`（测量）；`859c283`（阈值）   |
 | D8    | D    | storage worker(C3)                          | D8a、D8b 核验通过             | `1b0da14`（实现）；测量/限制见执行记录 |
-| D9    | D    | 下线旧后端(C4,只读归档)                     | 待做                          |                                        |
+| D9    | D    | 下线旧后端(C4,只读归档)                     | 已推送待核验（D9a）           | `6c21763`（盘点）；`f162467`（实现）   |
 
 状态取值：`待做` / `进行中` / `已推送待核验` / `核验通过` / `核验未通过` / `放弃（写明原因）`。
 
@@ -1158,6 +1158,18 @@ owner 已批准把 C2–C6 从「只写方案」改为「实现」。C1(进程�
 - 修复了 projection 重复计数与报告导出丢失 V8/传输计数的问题；最终导出 **186** 个真实观测。昂贵公开 SDK 根导出仅为异常分类所需，改为首次 Storage 错误才加载；未使用私有导出。没有修改 WORKLOAD/SCENARIOS/REPORTED、quiet、ledger、容差；workload.ts 仅修正两个 counter 的 source 描述。
 - [验收、失败与负控](d8b-validation.md)、[逐项性能与限制](d8b-performance.md)、[机器可读证据](d8b-performance.json)。原始日志保留在 `/tmp/rotom-review-D8b/`。最终源码摘要 `c00a3abf5a1a40fe253b2ec698beddcbdd84129b02f9e0ed75317a1f6df7328f`。
 - 两份用户文档逐字保留且未提交；不部署、不重启。下一步由 owner 核验 D8b；生产并发/容量与稳定 L2 结论不在本轮已验证范围内。
+
+### D9a — 旧 Durable 后端只读归档，已推送待核验（D9a）
+
+- **推送事实**：盘点 `6c21763` 与独立实现 `f16246752b3bbdbcbe92ce9212a684d4239a2c70` 已推至 `origin/review/2026-10-23-perf-design-arch`，远端分支与实现提交一致。没有 force-push、rebase 或合并 main。
+- **范围**：旧会话保留原后端身份、读取、导出和访问授权；执行、恢复、新建/fork 及普通修改（含直接 note 和 session budget）拒绝。`--no-rotom-kernel` 仅为只读归档模式，两种模式均不加载/监听旧扩展；source/enabled/disabled 记录保留。
+- **启动迁移**：公开 Storage API 在 Harness 接管前按完整 catalog root ownership closure 原子提交；保留私有 task/Live 原件，终结活动任务/未结输入、清除忙碌状态并追加不含原始快照的提示。40 层、提交前失败整组不变、提交成功但 ACK 丢失后重开幂等及 cleanup fencing 均有测试。
+- **覆盖迁移**：明确区分真实旧版本非空 JSON、native metadata-only 与真实 loopback native inference。默认套件不读取 `.git`、不运行旧产品、不启用执行后门；parser、凭据/权限、历史、文件系统和持久化断言独立保留。补齐真实 native 跨成员运行隔离、compact USD-budget admission、worktree fork cwd/文件共享与源历史不变。
+- **最终验收**：check/lint/format:check 通过；默认 `npm test` **723/723**，0 fail/cancel/skip；native app worker off/on 通过（85/86 loopback requests），commands off/on 各 19 inferences/25 checks。396 文件源码 manifest 与最终 proofs/performance 一致。两份用户文件 byte-for-byte 保留且未暂存。
+- **性能**：最终锁内 `perf:ci -- origin/main` exit 0，gating/guard 通过，load 3.07→3.53、`highLoad:false`。对 main 为 63 worse/5 slower；对先前测得的 `7478123` 为 47 worse/1 slower；233 个历史 ledger candidate warning 逐项列出。启动 +6 SQL/+39 rows、每视图 readOnly 字段和压缩资源 +133 B 是明确必要成本；部分聚合字符差异及耗时原因仍未归因，不宣称无回归或加速。未改 workload、ledger、阈值、容差或 quiet 规则。
+- **证据**：[验收总表](d9a-validation.md)、[测试迁移映射](d9a-test-migration.md)、[fixture provenance](d9a-fixture-provenance.md)、[性能逐项说明](d9a-performance.md)、[公开归档/回滚合同](../../LEGACY-ARCHIVE.md)。原 32 层截断的内存负控在当前测试上失败；丢失 readOnly 传播的早期浏览器负控 0/2，修复后 2/2，最终默认套件包含更强断言。
+- **边界**：256 MiB 单根 closure 上限和 catalog 范围明确记录；未测生产规模迁移耗时、真实账号/OAuth/计费或部署。回滚代码不会复活任务，恢复旧产品/数据须匹配离线备份并明确接受备份后数据损失；外部 unknown 不重放。vendor、journal user_version 未改，未部署/重启线上。
+- **下一步归属**：由审查方拉取并独立核验 D9a，重点复查上述残余性能候选和迁移/回滚边界。执行方在此停止；**没有执行 D9b/D9c，也不继续删除旧源文件、目录或记录**。
 
 ## 核验记录（审查方追加）
 
