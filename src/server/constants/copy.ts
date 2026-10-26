@@ -12,7 +12,8 @@ export const ARCHIVE_COPY = {
     extensionsUnavailable:
         "Team supports Agent Extensions only. Configure team-agent or the project's .pi directory.",
     sessionMissing: "No such session",
-    cliMode: "--no-rotom-kernel opens read-only archives; it does not enable legacy execution.",
+    cliMode:
+        "--no-rotom-kernel opens read-only archives; it does not enable legacy execution.\nLegacy service extension modules are not shipped. Data-folder drop-in source and enabled/disabled records are preserved, not loaded. Use native Agent Extensions.",
     kernelUnavailable: (reason: string) =>
         `The pinned rotom runtime is not ready (${reason}). Run \`npm run install:kernel\`, or use --no-rotom-kernel for read-only archive access only.`,
     readOnly:

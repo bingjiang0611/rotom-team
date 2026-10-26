@@ -21,7 +21,6 @@ import { parseKeys } from "../src/server/browser/keys.ts";
 import { SHOT_MAX } from "../src/server/browser/page.ts";
 import { normalizeUrl } from "../src/server/browser/urls.ts";
 import { presetOf, viewportFrom } from "../src/server/browser/viewport.ts";
-import { blockedInPlanMode } from "../src/server/extensions/plan.ts";
 
 /** A JPEG's size in pixels, from its first frame header. */
 function jpegSize(data: string): { width: number; height: number } {
@@ -215,39 +214,6 @@ test("viewports and keys are read the way people and Pi write them", () => {
     assert.deepEqual(parseKeys("Shift++"), { key: "+", modifiers: 8 });
     assert.throws(() => parseKeys("Hyper+a"), /Unknown modifier/);
     assert.throws(() => parseKeys("Launch"), /Unknown key/);
-});
-
-test("plan mode lets Pi look at pages but not act on them", () => {
-    for (const action of [
-        "navigate",
-        "snapshot",
-        "screenshot",
-        "console",
-        "scroll",
-        "viewport",
-        "back",
-        "reload",
-        "wait",
-    ]) {
-        assert.equal(blockedInPlanMode("browser", { action }), undefined, action);
-    }
-
-    for (const action of ["click", "type", "press", "select", "evaluate"]) {
-        assert.match(
-            blockedInPlanMode("browser", { action }) ?? "",
-            /Plan mode is on: The browser's \w+ can change things/,
-            action,
-        );
-    }
-
-    // A data: page is one Pi writes, scripts and all.
-    assert.match(
-        blockedInPlanMode("browser", {
-            action: "navigate",
-            url: "data:text/html,<script>fetch('/x')</script>",
-        }) ?? "",
-        /Plan mode is on/,
-    );
 });
 
 // ─── With a real browser ────────────────────────────────────────────────

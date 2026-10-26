@@ -1,0 +1,8 @@
+After D9c deletion; production/test/script scope; historical comments and native resources are identified separately.
+git grep -n -E server/extensions|extensions/(artifacts|browser|codemode|goals|guard|plan|prompt|schedules|subagents) -- src test scripts bin
+src/server/changes.ts:67:/** The codemode tool's name (`extensions/codemode.ts`): its results list the calls a script made. */
+src/server/config.ts:78:    /** Extension modules (file names in `src/server/extensions/`) the owner turned off. */
+test/agent-resource-list.test.ts:187:    assert.equal(extensions["browser"]!.path, join(product, "extensions/browser/index.ts"));
+git grep -n -E commandWords|readOnlyCommand|blockedInPlanMode|slugify|ExtensionLoader|prepareDropInFolder -- src test scripts bin
+exit=1 (no matches)
+Only remaining old-module paths are historical comments in changes/config; native browser resource path is unrelated. No executable import remains. Shared implementation/test files are unchanged (git diff 2676e7f -- test/helpers.ts src/server/host.ts src/server/lancet.ts src/server/when.ts test/approvals.test.ts test/lancet.test.ts test/schedules.test.ts):

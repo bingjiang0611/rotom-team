@@ -240,10 +240,11 @@ interrupted merely because the process is gone. Tests of closure and recovery ar
   Durable command dispatch, shell/schedule/goal/resend execution bodies and legacy budget-abort loops are gone.
   `reload.ts` retains the shared web `watchTree`. Historical task identities, read helpers, explicit rejection
   methods and shared storage/account ownership remain. Compaction hooks explicitly decline legacy work.
-- **Preserved for D9c:** `src/server/extensions/`, data-folder source and enabled/disabled records remain untouched.
-  `PocketHost` remains a static contract for those sources; Lancet implementation remains for standalone tests,
-  but the app no longer constructs or probes it. Team uses native Agent Extensions;
-  see [AGENT-CONFIGURATION.md](AGENT-CONFIGURATION.md).
+- **D9c removes the nine repository modules in `src/server/extensions/`** and their exclusive execution/source tests.
+  User data-folder source and enabled/disabled records remain untouched and unloaded. Shared `PocketHost`, Approvals,
+  Lancet/parser implementations and their independent tests remain; the app does not construct or probe Lancet.
+  Team uses native Agent Extensions; see [AGENT-CONFIGURATION.md](AGENT-CONFIGURATION.md).
+  D9c changes no persistent format: D9b/D9a can reopen the same data without reviving quarantined work.
 - `Commands.submit`, ordinary mutations and Durable task replay reject legacy archives.
   Shared storage, author records and document definitions remain necessary. Quarantine preserves private task/Live
   recovery records without exposing them in public notes; see [LEGACY-ARCHIVE.md](LEGACY-ARCHIVE.md).

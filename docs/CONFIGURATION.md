@@ -16,10 +16,12 @@ account; the paying member changes model in place, in the same native session. S
 
 ## Shared installation and configuration
 
-Team supports native Agent Extensions only. In both kernel and read-only archive modes, the inherited server extension loader is absent:
-`src/server/extensions/` and `<data>/extensions/` are not loaded or watched, no drop-in dependency link is created,
-and the old `/api/extensions` listing/toggle/reload endpoints return 404 for authorized requests. Existing files and
-switch records are retained. These legacy modules are preserved source, not an enabled runtime or an Agent configuration path.
+Team supports native Agent Extensions only. D9c removes the repository's old `src/server/extensions/` modules.
+In both kernel and read-only archive modes, the server extension loader is absent. User `<data>/extensions/`
+source files and enabled/disabled records are retained but never loaded or watched; no drop-in dependency link is created.
+The old `/api/extensions` listing/toggle/reload endpoints return 404 for authorized requests.
+D9c does not migrate data formats: D9b/D9a can reopen the same data without reviving quarantined tasks.
+For pre-D9a rollback restrictions, see [LEGACY-ARCHIVE.md](LEGACY-ARCHIVE.md).
 For paths, examples, package installation and reload steps, use [AGENT-CONFIGURATION.md](AGENT-CONFIGURATION.md).
 
 The owner manages `<data>/team-agent` using the pinned native resource layout:

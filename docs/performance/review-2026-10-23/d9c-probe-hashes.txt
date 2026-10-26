@@ -1,0 +1,8 @@
+a88327d741d00dbd6a253dd7b4ec9f45ca807ccdce2e42765a6245b16e898dc2  docs/performance/review-2026-10-23/d9a-review-probe-head.ts.txt
+a68b33922bdbed2e387554568b8ef815da95df73e3d4c57bb3adea01da751408  docs/performance/review-2026-10-23/d9a-review-probe-produce.ts.txt
+e5324f60544c3610370dfeec9357ba694a32bf878560f3739efca9909604244d  docs/performance/review-2026-10-23/d9a-review-probe-reopen.ts.txt
+a88327d741d00dbd6a253dd7b4ec9f45ca807ccdce2e42765a6245b16e898dc2  test/zz-d9c-probe.ts
+a68b33922bdbed2e387554568b8ef815da95df73e3d4c57bb3adea01da751408  /tmp/rotom-review-D9b/old-7478123/test/zz-d9c-produce.ts
+e5324f60544c3610370dfeec9357ba694a32bf878560f3739efca9909604244d  /tmp/rotom-review-D9b/old-7478123/test/zz-d9c-positive.ts
+a88327d741d00dbd6a253dd7b4ec9f45ca807ccdce2e42765a6245b16e898dc2  /tmp/rotom-review-D9c/d9a-9562e79/test/zz-d9c-probe.ts
+a88327d741d00dbd6a253dd7b4ec9f45ca807ccdce2e42765a6245b16e898dc2  /tmp/rotom-review-D9c/d9b-2676e7f/test/zz-d9c-probe.ts

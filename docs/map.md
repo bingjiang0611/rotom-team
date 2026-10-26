@@ -171,10 +171,16 @@ This is the browser behind the Pocket service extension (`PocketApp.browserOn`),
 | `lancet.ts`              | Loads Lancet Guard from Pi's install                                                            |
 | `omarchy.ts`             | The Omarchy desktop's current theme and wallpaper, read-only, for Follow desktop (`/api/theme`) |
 
-## Legacy service extensions: `src/server/extensions/`
+## Removed legacy service extensions
 
-`PocketApp.#open` loads these only outside kernel mode; `main.ts` watches them only through the optional loader.
-They are not Team native Agent Extensions. In the legacy loader, each default-exports `(host: PocketHost) => Extension | Extension[]` and is installed in this order: `prompt` (system prompt, with where Pi Pocket's docs are), `artifacts` (artifact tool), `browser` (browser tool and its prompt section; through `host.browsers`), `subagents` (subagent tool and its tasks), `schedules` (schedule tool; installs the schedule task), `goals` (hook after each answer), `plan` (tool hook and prompt section), `guard` (tool hook that asks for approval), `codemode` (codemode tool; a script's calls go through the same hooks).
+D9c deletes the nine repository modules formerly under `src/server/extensions/` and only their exclusive tests/helpers.
+Neither kernel nor read-only archive mode loads or watches old service extensions. User `<data>/extensions/` source
+and enabled/disabled records remain intact and unloaded. Native Agent Extensions use the separate paths documented in
+[AGENT-CONFIGURATION.md](AGENT-CONFIGURATION.md).
+
+Shared Approvals/Lancet/parser implementations, historical task/document definitions, archive/export/auth paths and
+legacy fixtures remain. D9c changes no data format; D9b/D9a can reopen the same data without reviving quarantined work.
+See [LEGACY-ARCHIVE.md](LEGACY-ARCHIVE.md) and the [deletion inventory](performance/review-2026-10-23/d9c-inventory.md).
 
 ## Web: `web/` (Preact and htm, no build)
 
@@ -241,7 +247,7 @@ For startup, clean closure and permitted continuation, follow [architecture.md](
 - **A command:** choose the backend first. Native adapters belong with `TeamKernel` and `team-command-policy.ts`; legacy/shared wrappers may use `commands.ts`. Route through `conversationRoutes`/`createApi`, enforce access and request identity, then add the store action/UI.
 - **A sheet:** a component in `web/sheets/`, a case in `sheetBody` (`web/sheets.js`), and `openSheet({ type })` where it opens. An app-wide one also goes in `SETTINGS_PAGES` and the list in `web/sheets/settings.js`, so it opens as a page of the settings window.
 - **Something back should close** (a screen over the conversation, a view that takes another's place on a phone): `useBack(open, close)` from `web/back.js` in the component that shows it. Sheets already have it.
-- **A Team native extension:** follow [AGENT-CONFIGURATION.md](AGENT-CONFIGURATION.md) and the admitted shared/project configuration. Legacy service extension source remains for D9c, but its loader is removed; `reload.ts` retains only the shared web watcher. Do not add a legacy execution path.
+- **A Team native extension:** follow [AGENT-CONFIGURATION.md](AGENT-CONFIGURATION.md) and the admitted shared/project configuration. D9c removes legacy repository service modules; user drop-in source/switches stay intact and unloaded. `reload.ts` retains only the shared web watcher. Do not add a legacy execution path.
 - **A slash command:** `web/commands.js`.
 
 ## Rules that are easy to break

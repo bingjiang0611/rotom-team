@@ -1,4 +1,4 @@
-# Legacy Durable archives (D9a / D9b)
+# Legacy Durable archives (D9a / D9b / D9c)
 
 Only the native rotom backend executes new work. A persisted session without `backend: "rotom"` is a legacy archive. Disabling the kernel never changes that classification or enables Durable execution.
 
@@ -13,7 +13,7 @@ Archives reject new sessions/forks, model dispatch, replay/resume, shell/tool ca
 
 `--no-rotom-kernel` means **read-only archive access**, not the old product. It still refuses startup when native ownership/pending-work checks would be bypassed. `--storage-worker` cannot be combined with it. No production or test option re-enables legacy execution.
 
-Neither mode loads or watches `src/server/extensions/` or data-folder drop-ins. Existing source files and enabled/disabled records are retained unchanged. Extension management endpoints remain unavailable. Native Agent Extensions use the separate configuration contract in [AGENT-CONFIGURATION.md](AGENT-CONFIGURATION.md).
+D9c removes the repository's nine old `src/server/extensions/` modules. Neither mode loads or watches data-folder drop-ins: user source files and enabled/disabled records are retained unchanged. Extension management endpoints remain unavailable. Native Agent Extensions use the separate configuration contract in [AGENT-CONFIGURATION.md](AGENT-CONFIGURATION.md).
 
 ## Startup quarantine
 
@@ -43,7 +43,7 @@ A code revert alone does not resurrect quarantined tasks. Their complete records
 
 D9b deletes the inventoried legacy execution bodies and service loader, not persisted history or definitions. It does not change the journal version or add a data migration. Returning from D9b to D9a (`9562e79`) can open the same post-D9b data without restoring a backup; this was checked with synthetic data in kernel-off, kernel-on and storage-worker modes. D9a still quarantines legacy work, so this code rollback does **not** resurrect archived tasks. The offline backup/restore procedure above applies when returning to a pre-D9a product/data pair.
 
-The extension directory, old test files, user source and enabled/disabled records remain for D9c. `PocketHost` types, standalone Lancet tests, public Storage/Harness, historical task identities/versions/input/checkpoint/result shapes and private archive documents remain. Definitions needed to decode history are not permission to execute it. See [D9b inventory](performance/review-2026-10-23/d9b-inventory.md) and [validation](performance/review-2026-10-23/d9b-validation.md).
+D9c deletes only the inventoried repository extension modules and their exclusive tests/helpers. It changes no persistent format and adds no migration: D9b (`2676e7f`) and D9a (`9562e79`) can reopen post-D9c data without a restore, and still quarantine rather than resurrect old work. User drop-in source and enabled/disabled records, `PocketHost` types, independent Approvals/Lancet/parser tests, public Storage/Harness, historical task identities/versions/input/checkpoint/result shapes and private archive documents remain. Definitions needed to decode history are not permission to execute it. See the [D9c deletion inventory](performance/review-2026-10-23/d9c-inventory.md), [D9b inventory](performance/review-2026-10-23/d9b-inventory.md) and [D9b validation](performance/review-2026-10-23/d9b-validation.md).
 
 ## Evidence and fixture boundaries
 
