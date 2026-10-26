@@ -42,7 +42,7 @@
 | D5    | D    | 切换会话不重连(C6)                          | 核验通过                      | `229bda2`（测量）；`5acca07`（实现）   |
 | D6    | D    | 大文件纯移动拆分(C5)                        | 核验通过                      | `3768653`（测量）；实现见执行记录      |
 | D7    | D    | handoff 测量与异步化(C2)                    | 核验通过                      | `2af9690`（测量）；`859c283`（阈值）   |
-| D8    | D    | storage worker(C3)                          | D8a 核验通过;D8b 已推送待核验 | `1b0da14`（实现）；测量/限制见执行记录 |
+| D8    | D    | storage worker(C3)                          | D8a、D8b 核验通过             | `1b0da14`（实现）；测量/限制见执行记录 |
 | D9    | D    | 下线旧后端(C4,只读归档)                     | 待做                          |                                        |
 
 状态取值：`待做` / `进行中` / `已推送待核验` / `核验通过` / `核验未通过` / `放弃（写明原因）`。
@@ -1408,6 +1408,31 @@ D8b 暂不开始。
 - `check`、`lint`、`format:check` 通过。默认并行 `npm test` 共 677 项:672 通过、4 跳过、1 失败,失败的仍是环境相关的 snap 那一项。`test:kernel:app` 和 `native-commands-proof` 都通过。
 
 D8a 核验通过,执行方可以开始 D8b(storage worker 默认关闭)。
+
+### 第 14 轮核验:D8b(HEAD `de6766a`,2026-10-26)
+
+**结论:D8b 核验通过。** 默认关闭,开启后单 worker 持有两套数据库,失败时 fail-closed、不重放、不降级为父线程写入、不释放锁。可以进入 D9。
+
+**环境**:linux-x64,Node 24.22.1,pinned rotom 0.1.26,root 运行(浏览器用 `--no-sandbox` 包装)。
+
+| 检查                                      | 结果                                                                                                                                |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `check` / `lint` / `format:check`         | 通过                                                                                                                                |
+| 默认 `npm test`                           | 726 项:721 通过 / 1 失败 / 4 跳过。唯一失败是 `a snap browser comes last…`,原因是设了 `PI_POCKET_BROWSER`,和前几轮相同,属于本机环境 |
+| `test:kernel:app`,worker 关 / 开          | 均 `status: passed`;开启时 `storageWorkerFailureStopsNativeAndRetainsLeases: true`                                                  |
+| `native-commands-proof.ts`,worker 关 / 开 | 均通过                                                                                                                              |
+| 负控 `queue-close`、`env-close-order`     | 带负控时专项失败(1、2 项),去掉后通过,和执行方记录一致                                                                               |
+
+**代码核对**
+
+- 关闭开关时和 D8a 相同:`app.ts`、`TeamKernel.close()` 在未启用 worker 时仍按 D8a 原样立即抛错;`resumeInterrupted` 未启用时直接走原逻辑;`RotomJournal.close()` 默认仍释放租约;`RotomExecutions` 未传 journal 时仍自建本地 journal 和异步 facade。
+- worker 线程:先构造 `RotomJournal`(拿到排他租约)再开 `pocket.sqlite`;journal 方法只允许 `JOURNAL_METHODS`,Storage 只允许公开方法列表;`close` 失败直接抛出让线程崩溃,不回成功;回复编码超过 256 MiB 时同样崩溃,父线程按 unknown 处理。空环境启动,不带凭据。
+- 分页协议:单页在途、偏移和长度严格校验,任何异常包都抛错终止,不存在静默截断。
+- 已知限制(已写入 CONFIGURATION):启动、单个操作 ACK、最终退出各 120 s 期限;超时即整个 worker 失败、所有在途结果为 unknown。默认关闭时不受影响;将来若要默认开启,需要按 D8b 记录里说的另做容量/延迟验收。
+
+**热重载偶发失败复查**:本次全量里 `test/dropins.test.ts` 通过;单独连跑 5 次均 4/4。`src/server/reload.ts` 和 `test/dropins.test.ts` 与 `main` 相比没有改动。同意执行方的判断:是负载下的既有偶发问题,和 D8b 无关,不阻塞。
+
+**下一步**:D9(只读归档),按「C 方案 C4」第 2–4 步分别提交。
 
 ## C 方案（执行方追加）
 
