@@ -10,7 +10,11 @@ real account, deployment or push was authorized or used. Work is isolated on `pe
 ## Measurement
 
 Measurement-only commits: `adf28f9` adds cold/warm HTTP scenarios and candidates; `1bc0cba` adds the following
-operation so deferred work remains visible. The same fixtures run in `test/perf/scenarios.ts` and the focused runner.
+operation so deferred work remains visible. Before publication, the branch was rebased to omit the unrelated,
+unpublished journal-note commit `5bde0dd`. The published measurement equivalents are `9437770` and `2ccde05`;
+production code, tests and measurement fixtures are byte-identical. Original local hashes below identify the recorded
+runs; use the published equivalents to reproduce them from a fresh clone. The same fixtures run in
+`test/perf/scenarios.ts` and the focused runner.
 Fresh sample processes, canonical fixed-length disposable checkouts, synthetic account, real pinned rotom 0.1.26,
 Node 24.18.0, darwin-arm64, 8 cores. No inference in these scenarios. Windows include HTTP completion, handled receipt
 and model projection checks; counters continue through the normal 400 ms quiet interval. Native inference is tested
@@ -18,7 +22,7 @@ separately by `test/model-switch-proof.ts` and `test/native-commands-proof.ts`.
 
 ```sh
 node .agents/skills/rotom-team-performance-climb/scripts/timing-run.mjs base -- \
-  node test/perf/model-switch-measure.ts /tmp/model-switch-base-quiet.json 5 adf28f9
+  node test/perf/model-switch-measure.ts /tmp/model-switch-base-quiet.json 5 9437770
 node .agents/skills/rotom-team-performance-climb/scripts/timing-run.mjs head -- \
   node test/perf/model-switch-measure.ts /tmp/model-switch-final.json 5
 npm run perf:compare -- /tmp/model-switch-base-quiet.json /tmp/model-switch-final.json
