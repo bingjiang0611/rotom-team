@@ -1,5 +1,42 @@
 # D9a — read-only legacy archive validation
 
+## Round 15 test-only repair
+
+Review baseline: `e3ce9889083342bb8e7cce7056a97360287db428`, obtained with `git pull --ff-only`. The reviewer accepted the archive product behavior; this repair changes only `test/perf-web-ui.test.ts` and the validation/handoff records.
+
+The native assistant entry can arrive before its first paint. The test now waits for the next `requestAnimationFrame` and its following zero-delay task before navigating away, matching the scheduling boundary used by `web/perf.js` to record `reply.first`. This is a paint/task barrier, not an arbitrary elapsed-time sleep. The test also polls journal flush/readback until all **9** already-required observations are present. The exact observation list, positive duration checks and ordering assertions are unchanged; `reply.first` remains mandatory. No skip, timeout increase or product-semantic change was added.
+
+### Verification on the repaired test
+
+Environment: Node 24.18.0, macOS arm64. Ten separate Node test processes ran sequentially, without intervening retries or source changes; every run passed its one test with zero failures/skips. Formatting did not change the tested source.
+
+| Run of `node --test test/perf-web-ui.test.ts` | Passed | Exit |
+| --------------------------------------------- | -----: | ---: |
+| 1                                             |    1/1 |    0 |
+| 2                                             |    1/1 |    0 |
+| 3                                             |    1/1 |    0 |
+| 4                                             |    1/1 |    0 |
+| 5                                             |    1/1 |    0 |
+| 6                                             |    1/1 |    0 |
+| 7                                             |    1/1 |    0 |
+| 8                                             |    1/1 |    0 |
+| 9                                             |    1/1 |    0 |
+| 10                                            |    1/1 |    0 |
+
+After those ten runs:
+
+| Command                | Result                                             |
+| ---------------------- | -------------------------------------------------- |
+| `npm test`             | 723/723 passed; 0 fail/cancel/skip/todo; 240974 ms |
+| `npm run check`        | exit 0                                             |
+| `npm run lint`         | exit 0                                             |
+| `npm run format:check` | exit 0                                             |
+
+Test SHA-256: `1e08a458b008b4492cec7643e78322c1dc349805479666c864daa6695da7cb97`.
+Local logs: `/tmp/rotom-d9a-round15.uadYJD/repeat-{1..10}.log`, `npm-test.log`, `check.log`, `lint.log`, and `format-check.log`.
+
+Against the original 396-file manifest, only `test/perf-web-ui.test.ts` differs. In particular, `web/perf.js`, all other product code, package scripts, workload/ledger and expected observation names remain unchanged. The earlier native/performance evidence below remains evidence for its original version, not newly rerun proofs for this repair. User-owned files remain byte-for-byte unchanged and excluded from the commit. No deployment, real-account use or D9b work occurred. Ten successful repetitions are the requested regression check, not a claim that every possible browser scheduling condition has been proved.
+
 ## Delivered scope
 
 Pre-D9 implementation baseline: `7478123983cd9d9a2ff25782f87523043bdfe181`. Inventory was committed first as `6c217635727f3b988fff3f630c39953eccdc6f28`. D9a retains legacy data/backend identity and read/export/access capabilities, but removes its executable product path. D9b/D9c deletion work is not included.

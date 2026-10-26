@@ -129,6 +129,11 @@ test(
                 "the reply on screen",
                 20_000,
             );
+            // Store arrival precedes paint. Let perf.shown's frame/task record reply.first before
+            // navigation cancels the previous conversation's outstanding waits.
+            await page.evaluate(
+                `await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)))`,
+            );
             await page.evaluate(`(await import('/store.js')).navigate(${other})`);
             await until(
                 async () =>
@@ -147,10 +152,12 @@ test(
                     .map((line) => (JSON.parse(line) as PerformanceRecord).observation)
                     .filter((each) => each.kind === "web");
 
-            await journal.journal.flush();
-            const waits = web();
+            await until(async () => {
+                await journal.journal.flush();
 
-            assert.ok(waits.length >= 8, `the tab's report: ${JSON.stringify(waits)}`);
+                return web().length >= 9;
+            }, "the tab's complete report");
+            const waits = web();
 
             // Signing in lands on the session list: that page's open, sent as the page was left.
             assert.deepEqual(waits.map((each) => each.name).sort(), [
