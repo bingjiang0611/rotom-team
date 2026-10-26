@@ -44,6 +44,7 @@ export function imageFixture(width: number, height: number, seed: number): Buffe
 }
 
 type Sample = {
+    settled: Promise<void>;
     started: number;
     lookupMs: number;
     decodeMs: number;
@@ -135,7 +136,9 @@ export function probeImages(
                 return action();
             }
 
+            const settled = Promise.withResolvers<void>();
             const sample: Sample = {
+                settled: settled.promise,
                 started: performance.now(),
                 lookupMs: 0,
                 decodeMs: 0,
@@ -155,14 +158,21 @@ export function probeImages(
             response.once("finish", () => {
                 sample.finishedAt = performance.now();
                 sample.status = response.statusCode;
+                settled.resolve();
             });
             response.once("close", () => {
                 if (sample.finishedAt === undefined) {
                     sample.aborted = true;
                 }
+
+                settled.resolve();
             });
 
             return scope.run({ sample }, action);
+        },
+        // Client body receipt does not order the server's finish callback. Keep this wait inside the measured window.
+        async settled(): Promise<void> {
+            await Promise.all(samples.map((sample) => sample.settled));
         },
         reset() {
             assert.ok(samples.every((sample) => sample.finishedAt !== undefined || sample.aborted));

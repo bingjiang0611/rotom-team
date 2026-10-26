@@ -1,7 +1,8 @@
 // The same image counter must observe older entryImage-only baselines and the shared storedImage path, exactly once.
 import assert from "node:assert/strict";
 import { once } from "node:events";
-import { createServer } from "node:http";
+import { createServer, IncomingMessage, ServerResponse } from "node:http";
+import { Socket } from "node:net";
 import { test } from "node:test";
 import type { ConversationId } from "@earendil-works/pi-durable";
 import { probeImages } from "./perf/images.ts";
@@ -42,6 +43,7 @@ for (const shared of [false, true]) {
             const response = await fetch(`http://127.0.0.1:${port}/api/c/1/image/1/0`);
 
             assert.equal(await response.text(), "x");
+            await probe.settled();
             assert.deepEqual(probe.report(1).counts, {
                 "image.lookup.calls": 1,
                 "image.decode.calls": 1,
@@ -60,5 +62,51 @@ for (const shared of [false, true]) {
             shared,
             "do not add a method to older implementations",
         );
+    });
+}
+
+for (const terminal of ["finish", "close"] as const) {
+    test(`image probe waits for every response and preserves ${terminal} evidence`, async () => {
+        const probe = probeImages({
+            visibleEntry: async () => undefined,
+            entryImage: async () => undefined,
+        });
+        const requests = [new IncomingMessage(new Socket()), new IncomingMessage(new Socket())];
+        const responses = requests.map((request) => {
+            request.url = "/api/c/1/image/1/0";
+            const response = new ServerResponse(request);
+
+            probe.run(request, response, () => response.end("body"));
+
+            return response;
+        });
+
+        try {
+            assert.throws(() => probe.report(2), /unfinished\/aborted/);
+            let completed = false;
+            const waiting = probe.settled().then(() => {
+                completed = true;
+            });
+
+            responses[0]!.emit("finish");
+            // Drain promise reactions too: an immediate no-op wait must fail this assertion.
+            await new Promise<void>((resolve) => queueMicrotask(resolve));
+            assert.equal(completed, false, "one finished response cannot complete the batch");
+            responses[1]!.emit(terminal);
+            await waiting;
+            assert.equal(completed, true);
+
+            if (terminal === "finish") {
+                assert.equal(probe.report(2).counts["image.decode.calls"], 0);
+            } else {
+                assert.throws(() => probe.report(2), /unfinished\/aborted/);
+            }
+        } finally {
+            probe.restore();
+
+            for (const request of requests) {
+                request.destroy();
+            }
+        }
     });
 }
