@@ -67,11 +67,14 @@ if (process.argv[2] === "--sample") {
     const count = Number(process.argv[3] ?? 5);
 
     if (!out || !Number.isInteger(count) || count < 1) {
-        throw new Error("Usage: node test/perf/model-switch-measure.ts <out.json> [runs=5]");
+        throw new Error(
+            "Usage: node test/perf/model-switch-measure.ts <out.json> [runs=5] [base-ref]",
+        );
     }
 
     const scratch = mkdtempSync(join(tmpdir(), "model-switch-measure-"));
-    const checkout = prepareCheckout("HEAD", { workingTree: true });
+    const baseRef = process.argv[4];
+    const checkout = prepareCheckout(baseRef ?? "HEAD", { workingTree: baseRef === undefined });
     const before = loadavg();
     const runs: ScenarioResult[][] = [];
 
@@ -93,7 +96,7 @@ if (process.argv[2] === "--sample") {
         }
 
         const report = buildReport(runs, {
-            revision: revision(),
+            revision: baseRef ?? revision(),
             platform: `${process.platform}-${process.arch}`,
             node: process.versions.node,
             cpu: `${cpus()[0]!.model} (${cpus().length} cores)`,

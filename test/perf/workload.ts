@@ -94,6 +94,8 @@ export const SCENARIOS: Record<string, string> = {
         "after existing scenarios; isolated kernel app and synthetic account, no inference; POST configure from faux-1 to faux-2 before any native process, require handled receipt and matching native model projection",
     "model.switch.warm":
         "same isolated session after cold switch; POST configure from faux-2 to faux-1 with a retained native process; require handled receipt, unchanged native session identity and matching model projection; no inference",
+    "model.switch.next-operation":
+        "same isolated session after warm model switch; POST prompts with a fresh request ID; require handled discovery and unchanged selected model; includes any resource reload deferred by model switching; no inference",
     "assets.validated": `${WORKLOAD.staticAssetBundle}; request each asset again with If-None-Match when the first response supplied an ETag; accept matching empty 304 or decoded-equal full 200; raw node:http body bytes and completed request count are transport observations`,
 };
 
@@ -630,6 +632,7 @@ export const REPORTED: Record<string, string[]> = {
     "assets.validated": ["http.requests", "http.body.bytes"],
     "model.switch.cold": [...common, "subprocess.rotom"],
     "model.switch.warm": [...common, "subprocess.rotom"],
+    "model.switch.next-operation": [...common, "subprocess.rotom"],
 };
 
 export function metricSpec(metric: string): MetricSpec {

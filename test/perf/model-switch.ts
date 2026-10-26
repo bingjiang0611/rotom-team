@@ -72,6 +72,14 @@ export async function measureModelSwitch(scenario: Scenario): Promise<void> {
 
         assert.equal(warm.kernelSessionId, cold.kernelSessionId);
         assert.equal(warm.sessionFile, cold.sessionFile);
+
+        await scenario("model.switch.next-operation", async () => {
+            const result = await call(`c/${id}/prompts`, { requestId: "after-model-switch" });
+
+            assert.equal(result.receipt.status, "handled");
+            assert.equal(result.dynamicReady, true);
+            assert.equal((await journal.session(String(id))).binding.model, "faux-1");
+        });
     } finally {
         await app.close();
         server.closeAllConnections();
