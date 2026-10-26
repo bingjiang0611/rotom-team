@@ -8,6 +8,25 @@ Workload: `test/perf/workload.ts` as of 2026-10-16 (12 seeded turns of 6000-char
 `darwin-arm64` ledger baselines (worst of 10 runs from temporary checkouts) and benchmark medians, Apple M1, load below
 the core count.
 
+## Room append climb — 2026-10-26
+
+**Kept at L1, not a speed claim.** `Room.#sequence` now reuses its existing immutable-prefix test before
+construction and visits only newly appended source entries. Full/head-reset rebuilds, independent client deltas,
+permissions and scheduling stay unchanged. Array copies and order-key joining still scale with history.
+Five base/head runs agree: `view.entry.visits` is **8 → 2** for `turn.warm`, **19 → 2** for `turn.paced`,
+**59 → 2** for `web.paced`, **65 → 3** for `web.send.poll`, **69 → 2** for `web.send.stream`, and **267 → 2**
+for `projection.large.paced`. The last scenario retains 490 SQL statements and 44 view pushes in every run.
+Only these six darwin-arm64 candidate baselines were tightened; guard and gating checks pass.
+
+The loaded head run (`highLoad: true`, ending at 11.58 on 8 cores) cannot establish L2. The unchanged local
+send fixture confirms a message in about 0.1 s, not the production median of 1.55 s. Next owner/action: the agent
+should add a representative remote-send measurement before claiming that journal lead is fixed.
+The full synthetic suite passes **725 tests**, with proxy variables removed for the test command only after the
+unchanged baseline reproduced a proxy-related hang. No production change, account use or push.
+See [the experiment and negative controls](experiments/2026-10-26-room-append-prefix.md),
+[all worse counters](experiments/2026-10-26-room-append-counters.md), and the separate
+[measurement repair](experiments/2026-10-26-image-finish-measurement.md).
+
 ## Journal refresh — 2026-10-26, 12:53 UTC
 
 Read-only snapshot `/tmp/rt-journal-20261026T125348Z`: all four files parsed, **42,394 complete records, zero malformed lines**. The report was run for October 19 onward, separately for the deployed release, and for October 25 onward. Current release `3c0133c5c49e875bb72b64fbc1c84f3082de4480` contributes **19,245 records from one server session**, October 22 11:09 through October 26 12:53 UTC. Environment: Apple M1 (8 cores), darwin-arm64, Node 24.18.0. Deployed source, not this dirty checkout, was used to check timing semantics and the warm/Changes call chains. These are **L3-data leads**, not an L1/L2 experiment or demonstrated L3 improvement. Machine `highLoad` is unavailable; one server session does not meet the two-session improvement contract.

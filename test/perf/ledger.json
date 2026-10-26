@@ -1934,7 +1934,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 8
+                "darwin-arm64": 2
             }
         },
         "turn.paced/view.entry.visits": {
@@ -1948,7 +1948,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 19
+                "darwin-arm64": 2
             }
         },
         "web.open/view.entry.visits": {
@@ -2228,7 +2228,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 267
+                "darwin-arm64": 2
             }
         },
         "projection.large.paced/push.events": {
@@ -2942,7 +2942,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 59
+                "darwin-arm64": 2
             }
         },
         "web.paced/view.client.entry.scans": {
@@ -23550,7 +23550,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 65
+                "darwin-arm64": 3
             }
         },
         "web.send.poll/view.client.entry.scans": {
@@ -24054,7 +24054,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 69
+                "darwin-arm64": 2
             }
         },
         "web.send.stream/view.client.entry.scans": {

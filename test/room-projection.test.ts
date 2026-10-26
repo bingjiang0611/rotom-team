@@ -220,7 +220,7 @@ test("room entry sequence is shared across tabs but invalidates on append and he
         assert.notEqual(room.value!.entries, source);
         const appended = await measuredPush(room, first.client, false);
 
-        assert.equal(appended.entryVisits, room.value!.entries.length);
+        assert.equal(appended.entryVisits, 1, "append projects only the new source suffix");
         assert.equal(appended.clientEntryScans, 1, "append scans only the visible tail");
         assert.deepEqual(first.last("view")!.entries, [projectEntry(added)]);
         assert.deepEqual(
@@ -264,7 +264,7 @@ test("room entry sequence is shared across tabs but invalidates on append and he
         await until(() => room.value!.entries.at(-1)?.id === afterHead.id, "post-reset append");
         const afterReset = await measuredPush(room, first.client, false);
 
-        assert.equal(afterReset.entryVisits, 2);
+        assert.equal(afterReset.entryVisits, 1, "append reuses the rebuilt head prefix");
         assert.equal(afterReset.clientEntryScans, 1);
         assert.deepEqual(first.last("view")!.order, [Number(head.id), Number(afterHead.id)]);
         assert.deepEqual(first.last("view")!.entries, [projectEntry(afterHead)]);
@@ -294,7 +294,10 @@ test("client cursors skip hidden appends and rescan safely after missed sequence
         );
 
         await until(() => room.value!.entries.at(-1)?.id === hidden.id, "hidden append");
-        assert.equal((await measuredPush(room, first.client, false)).clientEntryScans, 0);
+        const hiddenAppend = await measuredPush(room, first.client, false);
+
+        assert.equal(hiddenAppend.entryVisits, 1, "hidden entries are visited once, not retained");
+        assert.equal(hiddenAppend.clientEntryScans, 0);
         assert.deepEqual(first.last("view")!.entries, []);
         assert.ok(!("order" in first.last("view")!));
         const added = await append(app, id, "visible tail");
