@@ -184,6 +184,7 @@ test("image probes measure actual concurrent lookup/decode/finish, preserve bina
             }),
         );
         Buffer.from("dW5yZWxhdGVk", "base64");
+        await probe.settled();
         const measured = probe.report(3);
 
         const uniqueIndices = [...new Set(indices)];
@@ -211,6 +212,7 @@ test("image probes measure actual concurrent lookup/decode/finish, preserve bina
         );
         assert.throws(() => probe.report(4), /every image request/);
 
+        await probe.settled();
         probe.reset();
         duplicateDecode = true;
         // Force this sensitivity control through source decoding even when a later version caches originals.
@@ -226,6 +228,7 @@ test("image probes measure actual concurrent lookup/decode/finish, preserve bina
         const injected = await get(`${id}/image/${entry.id}/0`);
 
         assert.deepEqual(Buffer.from(await injected.arrayBuffer()), bytes[0]);
+        await probe.settled();
         const regression = probe.report(1).counts;
 
         assert.equal(regression["image.lookup.calls"], 1);
@@ -322,19 +325,23 @@ test("image probes measure actual concurrent lookup/decode/finish, preserve bina
             `${id}/image/999999/0`,
             `${foreign.id}/image/${entry.id}/0`,
         ]) {
+            await probe.settled();
             probe.reset();
             const response = await get(path);
 
             assert.equal(response.status, 404);
             await response.arrayBuffer();
+            await probe.settled();
             assert.throws(() => probe.report(1), /error response/);
         }
 
+        await probe.settled();
         probe.reset();
         const denied = await get(`${id}/image/${entry.id}/0`, false);
 
         assert.equal(denied.status, 401);
         await denied.arrayBuffer();
+        await probe.settled();
         assert.throws(() => probe.report(1), /error response/);
 
         // Smaller copies (`?size=`): a large image gets one; a small one is sent as it is; visibility still holds.
@@ -410,6 +417,7 @@ test("image probes measure actual concurrent lookup/decode/finish, preserve bina
 
         // Deterministic lifecycle control: an observed request with neither finish nor a valid body cannot become
         // a measured zero, including when close arrives before finish. No timeout or artificial timing delay.
+        await probe.settled();
         probe.reset();
         const unfinished = new IncomingMessage(new Socket());
         const closed = new ServerResponse(unfinished);
@@ -418,8 +426,31 @@ test("image probes measure actual concurrent lookup/decode/finish, preserve bina
         probe.run(unfinished, closed, () => {});
         assert.throws(() => probe.report(1), /unfinished\/aborted/);
         closed.emit("close");
+        await probe.settled();
         assert.throws(() => probe.report(1), /unfinished\/aborted/);
         unfinished.destroy();
+
+        // A response can have ended while its server finish event has not arrived yet.
+        probe.reset();
+        const pending = new IncomingMessage(new Socket());
+        const finished = new ServerResponse(pending);
+
+        pending.url = `/api/c/${id}/image/${entry.id}/0`;
+        probe.run(pending, finished, () => finished.end("controlled lifecycle only"));
+        let settled = false;
+        const completion = probe.settled().then(() => {
+            settled = true;
+        });
+
+        // Drain a full event-loop turn, not an arbitrary delay or a single microtask.
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        assert.equal(settled, false, "settlement must not acknowledge an unobserved finish");
+        assert.throws(() => probe.report(1), /unfinished\/aborted/);
+        finished.emit("finish");
+        await completion;
+        assert.equal(settled, true);
+        assert.ok(Number.isFinite(probe.report(1).timings.imageServerMs));
+        pending.destroy();
     } finally {
         server.closeAllConnections();
         server.close();
