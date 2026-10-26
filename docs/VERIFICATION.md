@@ -17,6 +17,19 @@ The automated suite uses synthetic providers, local fixtures and isolated test d
 
 For every check, record the exact source commit, exit status, inspected scope and any failure. Do not treat an older passing result as evidence for the current artifact.
 
+## Model switch latency and authorization
+
+`node test/model-switch-proof.ts` uses the pinned native runtime and a loopback provider. It checks a real model-change
+history entry, preserved native session/process, rotated tokens (including denial while a new-model inference is active),
+next-operation auxiliary configuration reload, actual new-model inference, busy/foreign-member refusals, idempotent
+receipt readback and conflict, and injected native model-selection failure staying unknown without replay.
+
+`node test/perf/model-switch-measure.ts /tmp/model-switch.json 5 [base-ref]` runs the same three scenarios as the full
+performance suite, in fresh processes and fixed-length disposable checkouts. Use the timing lock wrapper. The optional
+base ref runs old production code with the current measurement fixture. The switch and the following operation have
+separate windows so a deferred reload cannot disappear from the report. Other scenarios are explicitly unavailable in
+this focused report. Measurements exclude real credentials, network latency and browser painting.
+
 ## Performance
 
 `npm test` covers the ratchet, the journal, and the server's journal end to end. The benchmarks are separate: `npm run perf:measure` (real rotom processes, a loopback model, Chromium where present) and `npm run perf:ci -- <base-ref>` for before and after a change. A gating counter failing `perf:check` fails the change; millisecond numbers are evidence only with the machine's load recorded. See [PERFORMANCE.md](PERFORMANCE.md).

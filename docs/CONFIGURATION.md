@@ -150,8 +150,8 @@ costs memory (about 330 MiB RSS measured) while it waits.
 Tracked shared settings/resource metadata and project configuration changes trigger a native reload on the next
 authorized receipt. This preserves settings-sheet updates without restarting the process. The freshness hint does not
 recursively hash dependency/resource trees; use `/reload` for deeper file changes. Reload may reset extension memory
-and reconnect MCP. The process stays on its admitted payer/model; neither project defaults nor child roles can change
-that authorization.
+and reconnect MCP. Each execution stays on its admitted payer/model; only an explicit idle model-selection receipt
+can rotate the same-account process's model authorization. Neither project defaults nor child roles can change it.
 
 ## Backup and restore of installed packages
 
@@ -268,8 +268,17 @@ from being replayed or making the parent prompt eligible for automatic continuat
 unknown operations still refuse live changes. When idle, the paying member's own change stays in the same native
 session and segment, so project hooks keep seeing one session id. A thinking-only change runs as the native `/thinking`
 command receipt on the retained process. A model or account change of the same member is one `/model` command receipt:
-its intent and the segment's current model commit together, the idle process retires, and native restarts on the same
-session file with the new model, then records `model_change` and reapplies the selected thinking level. The segment's
+its intent and the segment's current model commit together. A ready process is reused only within the same member,
+account generation, provider and model API. The parent rotates the gate token and immutable model identity; native
+re-registers the gated model catalog, applies `set_model`, records `model_change`, and reapplies the selected thinking
+level. Completion requires native model readback, not an optimistic UI label. Old tokens and authorization crossing an
+epoch change are denied. Cold processes, account/provider/API changes and kernel upgrades still take the startup path.
+
+Full extension/resource reload is deferred until the next non-switch operation, under that operation's receipt and
+before its work is dispatched. This refreshes startup-captured auxiliary models (including SoL-Pi); consecutive model
+choices need only one reload. That next operation pays the reload latency. Reload failures remain unknown and retire
+the process. Native reload prepares derived resources from the current gate model, never from a stale startup choice.
+No browser click-to-paint, cold-start or cross-account sub-100-ms guarantee is claimed. The segment's
 original binding stays the immutable identity anchor; each attempt keeps its own binding for response validation and
 usage. A known rejection restores the previous model; an unknown outcome keeps the new one and stays fenced. After a
 kernel pin upgrade, the paying member's own next dispatch (prompt, command, model/thinking change, compaction or

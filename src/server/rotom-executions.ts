@@ -259,6 +259,9 @@ type PersistentKernel = {
     gateFile: string;
     contextFile?: string;
     gateState: { active?: ActiveAttempt };
+    rebind: (binding: Readonly<KernelBinding>, prepared: KernelLaunchContext | undefined) => void;
+    modelApi: string | undefined;
+    needsReload: boolean;
     state: { sessionFile: string; sessionId: string; sessionName?: string; thinkingLevel: string };
 };
 
@@ -985,7 +988,7 @@ export class RotomExecutions {
         );
     }
 
-    /** The paying member's idle model change: same native session, restarted on the new model. */
+    /** The paying member's idle model change: keep the native process only within the same account. */
     setModel(
         sessionId: string,
         requestId: string,
@@ -1071,8 +1074,15 @@ export class RotomExecutions {
 
         const prepared = this.#prepare?.(binding, sessionId);
 
-        if (rebind) {
-            // The retained process is gated to the previous model; the same session file restarts on the new one.
+        if (
+            rebind &&
+            (binding.accountGeneration !== admitted.binding.accountGeneration ||
+                binding.provider !== admitted.binding.provider ||
+                !prepared ||
+                this.#kernels.get(admitted.segmentId)?.modelApi !== prepared.modelDefinition.api)
+        ) {
+            // Account/provider changes retain the stronger process boundary. The journal below
+            // also rejects changes to member, HOME, workspace, kernel or configuration identity.
             await this.#retire(admitted.segmentId);
         }
 
@@ -1102,6 +1112,7 @@ export class RotomExecutions {
         }
 
         let persistent = this.#kernels.get(admitted.segmentId);
+        const reusing = persistent !== undefined;
 
         if (running.timing) {
             running.timing.process = persistent ? "reused" : "started";
@@ -1241,15 +1252,32 @@ export class RotomExecutions {
                 throw new RpcFailure("rejected", "Stopped before prompt dispatch");
             }
 
-            if (persistent.revision !== revision && nativeCommandName(prompt) !== "reload") {
-                // Shared settings edits used to apply on every startup. Reload the same process
-                // under the new receipt instead of silently retaining the old settings.
+            if (rebind && reusing) {
+                // The native model changes now; only extension resource reloading is deferred.
+                // Rotate first so old providers/children cannot spend with the previous token.
+                persistent.rebind(binding, prepared);
+                persistent.needsReload = true;
+                await kernel.command("/team-kernel-rebind");
+                await kernel.barrier();
+
+                if (extensionError) {
+                    throw new RpcFailure("unknown", "Native model rebind failed");
+                }
+            } else if (
+                persistent.needsReload ||
+                (persistent.revision !== revision && nativeCommandName(prompt) !== "reload")
+            ) {
+                // Extensions such as SoL-Pi capture their model at session_start. Reload before
+                // the next non-switch operation, never let those stale resources infer. Rapid
+                // model choices coalesce this work; the next admitted operation pays for it.
                 await kernel.command("/team-kernel-reload");
                 await kernel.barrier();
 
                 if (extensionError) {
                     throw new RpcFailure("unknown", "Native resource reload failed");
                 }
+
+                persistent.needsReload = false;
             }
 
             const catalog = (await kernel.request({ type: "get_commands" })) as {
@@ -1500,7 +1528,16 @@ export class RotomExecutions {
                 sessionFile?: unknown;
                 sessionName?: unknown;
                 thinkingLevel: string;
+                model?: { provider?: unknown; id?: unknown };
             };
+
+            if (
+                rebind &&
+                (finalState.model?.provider !== binding.provider ||
+                    finalState.model?.id !== binding.model)
+            ) {
+                throw new RpcFailure("unknown", "Native model differs from the admitted selection");
+            }
 
             if (
                 finalState.sessionId !== state.sessionId ||
@@ -1682,11 +1719,13 @@ export class RotomExecutions {
         owned: Owned,
         hooks: { beforeStart?: () => void; started?: (kernel: RotomRpc) => void } = {},
     ): Promise<PersistentKernel> {
-        const token = randomBytes(32).toString("base64url");
+        let identity = { binding, prepared, token: randomBytes(32).toString("base64url") };
         const gate = createServer(async (req, res) => {
-            // This process has one immutable binding; only the currently active receipt may spend.
+            // Each model epoch has an immutable binding and a fresh token. Keep this snapshot
+            // across awaits; a rotation invalidates both old tokens and in-flight authorization.
+            const admittedIdentity = identity;
             const authorization = Buffer.from(String(req.headers.authorization ?? "")),
-                expected = Buffer.from(`Bearer ${token}`);
+                expected = Buffer.from(`Bearer ${admittedIdentity.token}`);
 
             if (
                 req.method !== "POST" ||
@@ -1714,14 +1753,15 @@ export class RotomExecutions {
 
                 const active = gateState.active;
 
-                if (!active || active.operation === "discover") {
+                if (!active || active.operation === "discover" || identity !== admittedIdentity) {
                     throw new Error("No active inference receipt");
                 }
 
                 if (
                     !["inference", "refresh", "usage"].includes(value.operation) ||
-                    value.provider !== binding.provider ||
-                    (value.operation !== "refresh" && value.model !== binding.model)
+                    value.provider !== admittedIdentity.binding.provider ||
+                    (value.operation !== "refresh" &&
+                        value.model !== admittedIdentity.binding.model)
                 ) {
                     throw new Error("identity denied");
                 }
@@ -1750,15 +1790,23 @@ export class RotomExecutions {
                     throw new Error("execution stopped");
                 }
 
-                const auth = await this.#authorize(binding, value.operation, sessionId);
+                const auth = await this.#authorize(
+                    admittedIdentity.binding,
+                    value.operation,
+                    sessionId,
+                );
 
                 // No journal await after authorization: that would reopen a revocation/Stop window.
                 // This owner clears active before every finish/fail, so the latch also fences settlement.
-                if (active.running.aborted || gateState.active !== active) {
+                if (
+                    active.running.aborted ||
+                    gateState.active !== active ||
+                    identity !== admittedIdentity
+                ) {
                     throw new Error("attempt ended during authorization");
                 }
 
-                if (prepared && value.operation === "inference") {
+                if (admittedIdentity.prepared && value.operation === "inference") {
                     if (!auth) {
                         throw new Error("No request auth");
                     }
@@ -1803,17 +1851,22 @@ export class RotomExecutions {
 
         const gateFile = join(folder, `${name}.json`);
 
-        writeFileSync(
-            gateFile,
-            JSON.stringify({
-                url: `http://127.0.0.1:${(gate.address() as { port: number }).port}/authorize`,
-                token,
-                provider: binding.provider,
-                model: binding.model,
-                ...(prepared ? { modelDefinition: prepared.modelDefinition } : {}),
-            }),
-            { mode: 0o600, flag: "wx" },
-        );
+        const writeIdentity = (flag: "wx" | "w") =>
+            writeFileSync(
+                gateFile,
+                JSON.stringify({
+                    url: `http://127.0.0.1:${(gate.address() as { port: number }).port}/authorize`,
+                    token: identity.token,
+                    provider: identity.binding.provider,
+                    model: identity.binding.model,
+                    ...(identity.prepared
+                        ? { modelDefinition: identity.prepared.modelDefinition }
+                        : {}),
+                }),
+                { mode: 0o600, flag },
+            );
+
+        writeIdentity("wx");
         owned.gateFile = gateFile;
         let contextFile: string | undefined;
 
@@ -1865,6 +1918,16 @@ export class RotomExecutions {
             gateFile,
             ...(contextFile ? { contextFile } : {}),
             gateState,
+            modelApi: prepared?.modelDefinition.api,
+            needsReload: false,
+            rebind: (nextBinding, nextPrepared) => {
+                identity = {
+                    binding: nextBinding,
+                    prepared: nextPrepared,
+                    token: randomBytes(32).toString("base64url"),
+                };
+                writeIdentity("w");
+            },
             state,
         };
     }

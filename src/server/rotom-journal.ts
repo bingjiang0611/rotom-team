@@ -130,7 +130,7 @@ export function thinkingFromEntries(entries: KernelEntry[], fallback: string): s
             return String(entry.thinkingLevel);
         }
 
-        // A model switch restarts Pi, which clamps silently; the binding holds that clamped level.
+        // Native model selection can clamp silently; the binding holds that clamped level.
         if (entry.type === "model_change") {
             break;
         }

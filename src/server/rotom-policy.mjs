@@ -128,7 +128,7 @@ function contextResult(pi, ctx, view) {
 }
 
 export default function (pi) {
-    const config = JSON.parse(readFileSync(process.env.ROTOM_TEAM_KERNEL_GATE, "utf8"));
+    let config = JSON.parse(readFileSync(process.env.ROTOM_TEAM_KERNEL_GATE, "utf8"));
     let ready = false;
 
     // The product's own context extension owns a TUI-only store. Team keeps a parallel read-only capture so the Web
@@ -157,15 +157,17 @@ export default function (pi) {
     }
 
     const authorize = async (operation, provider, model, signal, usage) => {
-        if (provider !== config.provider || (model !== undefined && model !== config.model)) {
+        const identity = config;
+
+        if (provider !== identity.provider || (model !== undefined && model !== identity.model)) {
             throw new Error("team_kernel_identity_denied");
         }
 
-        const response = await fetch(config.url, {
+        const response = await fetch(identity.url, {
             method: "POST",
             redirect: "error",
             headers: {
-                Authorization: `Bearer ${config.token}`,
+                Authorization: `Bearer ${identity.token}`,
                 "Content-Type": "application/json",
             },
             body: JSON.stringify({ operation, provider, model, ...(usage ? { usage } : {}) }),
@@ -174,9 +176,19 @@ export default function (pi) {
                 : AbortSignal.timeout(10000),
         });
 
-        if (config.modelDefinition && operation === "inference" && response.status === 200) {
+        if (identity !== config) {
+            await response.body?.cancel();
+
+            throw new Error("team_kernel_identity_changed");
+        }
+
+        if (identity.modelDefinition && operation === "inference" && response.status === 200) {
             // A private request credential, never a prompt/event/file. Native streams receive it only as auth options.
             const body = await response.text();
+
+            if (identity !== config) {
+                throw new Error("team_kernel_identity_changed");
+            }
 
             if (Buffer.byteLength(body) > 65536) {
                 throw new Error("team_kernel_auth_too_large");
@@ -336,6 +348,31 @@ export default function (pi) {
             }
 
             ctx.ui.notify(JSON.stringify({ kind: "team-kernel-tree-v1", nonce, result }), "info");
+        },
+    });
+    pi.registerCommand("team-kernel-rebind", {
+        description: "Private Team model authorization rotation",
+        handler: async (_args, ctx) => {
+            await ctx.waitForIdle();
+            const next = JSON.parse(readFileSync(process.env.ROTOM_TEAM_KERNEL_GATE, "utf8"));
+
+            if (
+                children.size !== 0 ||
+                next.provider !== config.provider ||
+                !next.modelDefinition ||
+                next.modelDefinition.api !== config.modelDefinition?.api ||
+                next.modelDefinition.id !== next.model ||
+                next.token === config.token
+            ) {
+                throw new Error("team_kernel_rebind_denied");
+            }
+
+            const provider = ctx.modelRegistry.getProvider(config.provider);
+
+            config = next;
+            // Keep the gated stream methods. Their catalog closures read the new definition;
+            // native registration refreshes its model snapshot without reloading extensions.
+            ctx.modelRegistry.registerProvider(provider);
         },
     });
     pi.registerCommand("team-kernel-reload", {
