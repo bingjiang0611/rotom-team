@@ -90,6 +90,10 @@ export const SCENARIOS: Record<string, string> = {
         "after all other scenarios, real Chromium prepares and uploads one deterministic xorshift-noise 3000x1500 opaque PNG from its clipboard path to the same synthetic session, on a CDP-emulated 4 Mbit/s uplink and 40 ms latency; includes browser resize, HTTP upload, metadata response and decode, excludes fixture construction/module loading; older revisions without the helper upload the original, matching their unchanged paste behavior; no inference, synthetic link",
     "journal.large": `after all other scenarios, a separate RotomJournal with ${WORKLOAD.journalConversations} conversations × ${WORKLOAD.journalAttempts} attempts × ${WORKLOAD.journalEntriesPerAttempt} entries of about ${WORKLOAD.journalEntryChars} characters; measure an entries suffix, segmentEntries and credits`,
     "assets.first": `${WORKLOAD.staticAssetBundle}; request each asset with Accept-Encoding: gzip and retain its decoded body digest and ETag; raw node:http body bytes and completed request count are transport observations`,
+    "model.switch.cold":
+        "after existing scenarios; isolated kernel app and synthetic account, no inference; POST configure from faux-1 to faux-2 before any native process, require handled receipt and matching native model projection",
+    "model.switch.warm":
+        "same isolated session after cold switch; POST configure from faux-2 to faux-1 with a retained native process; require handled receipt, unchanged native session identity and matching model projection; no inference",
     "assets.validated": `${WORKLOAD.staticAssetBundle}; request each asset again with If-None-Match when the first response supplied an ETag; accept matching empty 304 or decoded-equal full 200; raw node:http body bytes and completed request count are transport observations`,
 };
 
@@ -624,6 +628,8 @@ export const REPORTED: Record<string, string[]> = {
     ],
     "assets.first": ["http.requests", "http.body.bytes"],
     "assets.validated": ["http.requests", "http.body.bytes"],
+    "model.switch.cold": [...common, "subprocess.rotom"],
+    "model.switch.warm": [...common, "subprocess.rotom"],
 };
 
 export function metricSpec(metric: string): MetricSpec {

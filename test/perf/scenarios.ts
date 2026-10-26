@@ -44,6 +44,7 @@ import { claimFor } from "./view-claim.ts";
 import { type Transcript, viewTab } from "./view-tab.ts";
 import { createJournalLargeFixture, measureJournalLarge } from "./journal-large.ts";
 import { createStaticAssetsProbe } from "./static-assets.ts";
+import { measureModelSwitch } from "./model-switch.ts";
 
 export type ScenarioResult =
     | { scenario: string; ms: number; counts: Counts; extra?: Record<string, number> }
@@ -1177,6 +1178,8 @@ const staticAssets = createStaticAssetsProbe(base);
 
 await scenario("assets.first", () => staticAssets.first());
 await scenario("assets.validated", () => staticAssets.validated());
+
+await measureModelSwitch(scenario);
 
 writeFileSync(out, raw.stringify({ workload: WORKLOAD, results }, null, 2));
 server.closeAllConnections();
