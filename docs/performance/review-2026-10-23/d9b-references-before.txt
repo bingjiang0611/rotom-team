@@ -1,0 +1,213 @@
+# loader and host
+$ rg -n ExtensionLoader|prepareDropInFolder|ExtensionInfo|ExtensionModule|PocketHost src test docs/examples --glob *.ts --glob *.js
+exit=0
+test/codemode.test.ts:16:import { Approvals, type PocketHost } from "../src/server/host.ts";
+test/codemode.test.ts:84:const host = { approvals: new Approvals(() => undefined) } as unknown as PocketHost;
+test/codemode.test.ts:231:    } as unknown as PocketHost;
+src/server/reload.ts:26:import type { ExtensionModule, PocketHost } from "./host.ts";
+src/server/reload.ts:79:export interface ExtensionInfo {
+src/server/reload.ts:113:export function prepareDropInFolder(directory: string, appModules: string): void {
+src/server/reload.ts:137:export class ExtensionLoader {
+src/server/reload.ts:139:    readonly #host: PocketHost;
+src/server/reload.ts:158:        host: PocketHost,
+src/server/reload.ts:292:    list(): ExtensionInfo[] {
+src/server/reload.ts:328:        const loaded = (await import(url)) as ExtensionModule;
+src/server/host.ts:107:export interface PocketHost {
+src/server/host.ts:129:export type ExtensionModule = {
+src/server/host.ts:130:    default: (host: PocketHost) => Extension | readonly Extension[];
+src/server/extensions/codemode.ts:37:import type { PocketHost } from "../host.ts";
+src/server/extensions/codemode.ts:184:export default function createCodemode(_host: PocketHost) {
+src/server/extensions/plan.ts:10:import type { PocketHost } from "../host.ts";
+src/server/extensions/plan.ts:286:export default function createPlan(_host: PocketHost) {
+src/server/app.ts:84:import { type ExtensionInfo, ExtensionLoader } from "./reload.ts";
+src/server/app.ts:162:    loader: ExtensionLoader | undefined;
+src/server/app.ts:2098:    #serviceExtensionLoader(): ExtensionLoader {
+src/server/app.ts:2132:    ): Promise<{ modules: ExtensionInfo[]; guard: GuardStatus; dropIns?: string }> {
+src/server/app.ts:2135:        const modules = this.#serviceExtensionLoader()
+src/server/app.ts:2160:        const loader = this.#serviceExtensionLoader();
+src/server/app.ts:2203:        const loader = this.#serviceExtensionLoader();
+src/server/extensions/subagents.ts:23:import type { PocketHost } from "../host.ts";
+src/server/extensions/subagents.ts:138:export default function createSubagents(host: PocketHost) {
+src/server/extensions/prompt.ts:18:import type { PocketHost } from "../host.ts";
+src/server/extensions/prompt.ts:51:export default function createPrompt(host: PocketHost) {
+src/server/extensions/guard.ts:7:import type { ApprovalAnswer, PocketHost } from "../host.ts";
+src/server/extensions/guard.ts:15:export default function createGuard(host: PocketHost) {
+src/server/extensions/goals.ts:9:import type { PocketHost } from "../host.ts";
+src/server/extensions/goals.ts:25:export default function createGoals(host: PocketHost) {
+src/server/extensions/schedules.ts:9:import type { PocketHost } from "../host.ts";
+src/server/extensions/schedules.ts:15:export default function createSchedules(host: PocketHost) {
+src/server/extensions/artifacts.ts:9:import type { PocketHost } from "../host.ts";
+src/server/extensions/artifacts.ts:57:export default function createArtifacts(_host: PocketHost) {
+src/server/extensions/browser.ts:14:import type { PocketHost } from "../host.ts";
+src/server/extensions/browser.ts:80:export default function createBrowser(host: PocketHost) {
+
+# loader property and switches
+$ rg -n \.loader\b|guardStatus\(|guardOn\(|browserOn\( src test docs/examples --glob *.ts --glob *.js
+exit=0
+src/server/goals.ts:68:        if (!app.loader?.extensionNames().includes(GOALS_EXTENSION)) {
+src/server/goals.ts:72:        if (app.guardOn()) {
+test/legacy-archive.test.ts:540:        assert.equal(app.loader, undefined);
+test/legacy-archive.test.ts:707:        assert.equal(app.loader, undefined);
+test/legacy-archive.test.ts:759:            assert.equal(app.loader, undefined);
+test/dropins.test.ts:27:    assert.equal(app.loader, undefined);
+test/dropins.test.ts:43:    assert.equal(app.loader, undefined);
+src/server/http/browser-routes.ts:47:    if (!app.browserOn()) {
+src/server/shell.ts:251:        if (user.role !== "owner" && app.guardOn()) {
+test/native-service-extensions.test.ts:30:        assert.equal(app.loader, undefined);
+test/native-service-extensions.test.ts:33:        assert.equal(app.guardOn(), false);
+test/native-service-extensions.test.ts:34:        assert.equal(app.browserOn(), false);
+test/docs-examples.test.ts:117:        assert.equal(app.loader, undefined);
+src/server/commands.ts:1017:        if (on && !app.loader?.extensionNames().includes(PLAN_EXTENSION)) {
+src/server/main.ts:256:    opened.loader?.watch();
+src/server/schedules.ts:217:        return this.#app.loader?.extensionNames().includes(SCHEDULES_EXTENSION) ?? false;
+src/server/app.ts:482:        if (this.guardOn()) {
+src/server/app.ts:1400:            guard: await this.guardStatus(),
+src/server/app.ts:1406:                extensions: this.loader?.extensionNames() ?? [],
+src/server/app.ts:2099:        if (!this.loader) {
+src/server/app.ts:2106:        return this.loader;
+src/server/app.ts:2110:    guardOn(): boolean {
+src/server/app.ts:2111:        return this.loader?.enabled(GUARD_FILE) ?? false;
+src/server/app.ts:2115:    async guardStatus(): Promise<GuardStatus> {
+src/server/app.ts:2118:        if (this.guardOn()) {
+src/server/app.ts:2257:    browserOn(): boolean {
+src/server/app.ts:2258:        return this.loader?.extensionNames().includes(BROWSER_EXTENSION) ?? false;
+src/server/app.ts:2276:            this.loader?.close();
+
+# execution admission
+$ rg -n execution\.(admit|authorize|extension|accountIdle|exclusive|owner|recover) src test docs/examples --glob *.ts --glob *.js
+exit=0
+test/team.test.ts:374:        assert.equal(app.execution.owner(id), b.id);
+src/server/team-kernel.ts:2697:        return app.execution.exclusive(id, async () => {
+src/server/team-kernel.ts:2823:        return app.execution.exclusive(id, async () => {
+test/team-kernel-proof.ts:1708:        app.execution.admit(legacy.id, app.config.userById(bob.user.id)!),
+test/team-kernel-proof.ts:2394:    await assert.rejects(app.execution.accountIdle(a), /still running in session/);
+test/native-warm.test.ts:247:    await app.execution.accountIdle(owner(app));
+src/server/providers.ts:79:        await app.execution.accountIdle(user);
+src/server/providers.ts:231:        await app.execution.accountIdle(user);
+src/server/spend.ts:164:            app.execution.owner(id) ??
+src/server/app.ts:245:            (provider, sessionId) => this.execution.authorize(provider, sessionId),
+src/server/app.ts:375:        registry.install(this.execution.extension());
+src/server/app.ts:437:            await this.execution.recover(conversations);
+src/server/app.ts:1304:            const owner = this.execution.owner(id);
+src/server/commands.ts:502:            this.#app.execution.exclusive(id, () => this.#submit(id, user, request)),
+src/server/commands.ts:539:        await app.execution.admit(id, user);
+src/server/commands.ts:785:            this.#app.execution.exclusive(id, () => this.#configure(id, user, request)),
+src/server/commands.ts:921:            app.execution.exclusive(id, async () => {
+src/server/commands.ts:1554:            this.#app.execution.exclusive(id, () => this.#compact(id, user, instructions)),
+src/server/commands.ts:1568:        await app.execution.admit(id, user);
+
+# legacy callbacks
+$ rg -n ResendTask|resendContent|resendRequest|userContent|envFor\(|runEnded\( src test docs/examples --glob *.ts --glob *.js
+exit=0
+test/storage-worker-app.test.ts:165:        const env = app.envFor(ROOT_CONVERSATION_ID);
+src/server/goals.ts:135:        const env = this.#app.envFor(id);
+test/fixtures/legacy-session.ts:22:import { ResendTask } from "../../src/server/resend.ts";
+test/fixtures/legacy-session.ts:135:                ResendTask.definition,
+src/server/commands.ts:55:import { type Resend, resendContent, resendRequest, ResendTask, userContent } from "./resend.ts";
+src/server/commands.ts:1277:        const original = userContent(entry.model?.[0]);
+src/server/commands.ts:1342:            content: resendContent(text, images),
+src/server/commands.ts:1343:            requestId: resendRequest(resend),
+src/server/commands.ts:1468:                await tx.createTask(ResendTask, fork.resend, {
+src/server/spend.ts:287:    runEnded(id: ConversationId): void {
+src/server/app.ts:85:import { ResendTask } from "./resend.ts";
+src/server/app.ts:370:            defineExtension({ name: "pocket-core", tasks: [ResendTask, this.shell.task] }),
+src/server/app.ts:632:                    this.spend.runEnded(id);
+src/server/app.ts:755:    envFor(id: ConversationId): NodeExecutionEnv {
+src/server/resend.ts:14:export const resendRequest = (resend: Resend) => ownRequest(resend.by, "resend");
+src/server/resend.ts:20:export function userContent(model: unknown): { text: string; images: ImageContent[] } {
+src/server/resend.ts:42:export const resendContent = (text: string, images: readonly ImageContent[]) =>
+src/server/resend.ts:48:export const ResendTask = defineTask<Resend, { phase: "send" }, null>({
+src/server/resend.ts:61:                    images = userContent((await tx.entry(original))?.model?.[0]).images;
+src/server/resend.ts:72:                    content: resendContent(resend.text, images),
+src/server/resend.ts:73:                    requestId: resendRequest(resend),
+
+# legacy commands
+$ rg -n commands\.(submit|note|abort|withdraw|configure|applyProfile|reset|setInstructions|setPlan|approvePlan|schedule|cancelSchedule|setGoal|clearGoal|fork|resend|compact|removeWorktree)\( src test docs/examples --glob *.ts --glob *.js
+exit=0
+test/browser.test.ts:633:            app.commands.submit(id, owner(app), {
+test/browser.test.ts:652:            app.commands.submit(id, owner(app), { text: "look", requestId: "browser-none" }),
+test/helpers.ts:210:    const { submissionId } = await app.commands.submit(id, owner(app), {
+test/real-direct.ts:121:        ({ id } = await app.commands.resend(Number(previous!.conversationId) as typeof id, user, {
+test/real-direct.ts:135:        const receipt = await app.commands.submit(id, user, {
+test/record-collaboration.ts:275:    const fork = await app.commands.fork(created.id, alice, { entryId: Number(answer.id) });
+test/app.test.ts:550:        app.commands.submit(id, owner(), { text: "extension", requestId: "extension-archive" }),
+test/app.test.ts:560:        app.commands.submit(id, owner(), { text: "extension", requestId: "extension-archive" }),
+test/app.test.ts:664:        app.commands.submit(id, viewer, { text: "steer", requestId: "archive-viewer" }),
+test/app.test.ts:668:        app.commands.submit(id, owner(), { text: "steer", requestId: "archive-owner" }),
+src/server/http/conversation-routes.ts:332:        await app.commands.applyProfile(id, user);
+src/server/http/conversation-routes.ts:356:        return json(response, 200, await app.commands.submit(id, user, { ...body, attachments }));
+src/server/http/conversation-routes.ts:423:        await app.commands.abort(id, user);
+src/server/http/conversation-routes.ts:432:            result: await app.commands.withdraw(id, user, Number(body.submissionId)),
+src/server/http/conversation-routes.ts:437:        await app.commands.configure(id, user, await readJson(request));
+src/server/http/conversation-routes.ts:445:        await app.commands.reset(id, user, body.note);
+src/server/http/conversation-routes.ts:453:        await app.commands.setInstructions(id, user, body.text);
+src/server/http/conversation-routes.ts:462:            return json(response, 200, await app.commands.approvePlan(id, user));
+src/server/http/conversation-routes.ts:465:        await app.commands.setPlan(id, user, body.on);
+src/server/http/conversation-routes.ts:471:        return json(response, 200, await app.commands.schedule(id, user, await readJson(request)));
+src/server/http/conversation-routes.ts:480:        await app.commands.cancelSchedule(id, user, fourth);
+src/server/http/conversation-routes.ts:489:            await app.commands.clearGoal(id, user);
+src/server/http/conversation-routes.ts:491:            await app.commands.setGoal(id, user, body.command);
+src/server/http/conversation-routes.ts:504:        await app.commands.removeWorktree(id, user, body.force);
+src/server/http/conversation-routes.ts:510:        return json(response, 200, await app.commands.fork(id, user, await readJson(request)));
+src/server/http/conversation-routes.ts:514:        return json(response, 200, await app.commands.resend(id, user, await readJson(request)));
+src/server/http/conversation-routes.ts:528:        await app.commands.compact(
+test/spend.test.ts:95:    await app.commands.note(id, user, text);
+test/spend.test.ts:191:        await assert.rejects(app.commands.note(id, owner(app), "should not write"), {
+test/spend.test.ts:224:    await assert.rejects(app.commands.submit(id, alex, { text: "more", requestId: "r" }), {
+test/spend.test.ts:246:    await assert.rejects(app.commands.compact(id, owner(app), undefined), {
+test/spend.test.ts:257:        app.commands.submit(id, owner(app), { text: "work slowly", requestId: "slow" }),
+test/legacy-archive.test.ts:719:            app.commands.submit(id, owner, { text: "must not execute", requestId: "archive-test" }),
+test/legacy-archive.test.ts:763:                app.commands.submit(id, owner, {
+test/peeks.test.ts:139:            app.commands.submit(other, owner(app), {
+test/peeks.test.ts:152:            app.commands.submit(other, owner(app), { text: "and again", requestId: "peek-again" }),
+test/peeks.test.ts:173:            app.commands.submit(id, owner(app), { text: "work slowly", requestId: "peek-run" }),
+test/peeks.test.ts:281:            app.commands.submit(second, owner(app), {
+test/peeks.test.ts:393:            app.commands.submit(id, owner(app), { text: "git push", requestId: "peek-approval" }),
+test/peeks.test.ts:411:            app.commands.submit(id, owner(app), {
+test/peeks.test.ts:433:        app.commands.submit(id, owner(app), { text: "hi", requestId: "peek-ended" }),
+test/real-accounts.ts:177:        const receipt = await app.commands.submit(id, user, { text: prompt, requestId });
+test/changes-incremental.test.ts:211:        app.commands.submit(id, owner(app), {
+test/schedules.test.ts:114:            app.commands.schedule(id, owner(app), { when: "in 15m", zone: "UTC" }),
+test/schedules.test.ts:118:            app.commands.cancelSchedule(id, owner(app), "missing"),
+test/schedules.test.ts:124:            app.commands.schedule(id, viewer, { when: "in 15m", zone: "UTC" }),
+test/schedules.test.ts:140:            app.commands.schedule(id, owner(app), { when: "in 10m", zone: "UTC" }),
+test/schedules.test.ts:156:            app.commands.schedule(id, owner(app), { when: "in 10m", zone: "UTC" }),
+test/schedules.test.ts:160:            app.commands.cancelSchedule(id, owner(app), "missing"),
+test/schedules.test.ts:176:            app.commands.schedule(id, guest, { when: "in 10m", zone: "UTC" }),
+test/schedules.test.ts:192:            app.commands.cancelSchedule(id, viewer, "missing"),
+test/team.test.ts:92:                app.commands.submit(id, user, { text: "continue", requestId: user.id }),
+test/team.test.ts:105:            app.commands.submit(id, app.config.userById(b.id)!, {
+test/team.test.ts:360:                app.commands.submit(id, user, { text: "retry", requestId: "same-request" }),
+test/team.test.ts:395:                app.commands.submit(id, user, { text: "steer", requestId: user.id, mode: "steer" }),
+test/team.test.ts:399:                app.commands.configure(id, user, { model: app.accounts.choice(user) }),
+test/team.test.ts:446:                app.commands.submit(child, user, { text: "reuse helper", requestId: user.id }),
+test/prompts.test.ts:157:        app.commands.submit(id, owner(app), { text: "/fix 42", requestId: "t1" }),
+test/prompts.test.ts:161:        app.commands.submit(id, owner(app), { text: "/nothing here", requestId: "t2" }),
+test/team-kernel-proof.ts:672:        app.commands.submit(id as never, a, { text: "legacy bypass", requestId: "legacy" }),
+test/goals.test.ts:37:        app.commands.setGoal(id, owner(app), "touch should-not-run"),
+test/goals.test.ts:62:    await assert.rejects(app.commands.clearGoal(id, owner(app)), /read-only archive/);
+test/running.test.ts:30:        app.commands.schedule(id, owner(app), { when: "in 2h look again", zone: "UTC" }),
+test/sessions.test.ts:210:        app.commands.fork(id, owner(app), { entryId: Number(entry.id) }),
+test/sessions.test.ts:214:        app.commands.resend(id, owner(app), { entryId: Number(entry.id) }),
+test/sessions.test.ts:217:    await assert.rejects(app.commands.reset(id, owner(app), "edited"), /read-only archive/);
+test/sessions.test.ts:218:    await assert.rejects(app.commands.reset(id, owner(app), "new context"), /read-only archive/);
+test/sessions.test.ts:220:        app.commands.setInstructions(id, owner(app), "new instructions"),
+test/qol.test.ts:56:        app.commands.submit(id, owner(app), {
+test/qol.test.ts:76:        app.commands.submit(id, owner(app), { text: "/skill:deploy", requestId: "skill-archive" }),
+test/qol.test.ts:218:        app.commands.submit(id, owner(app), {
+test/peeks-ui.test.ts:319:        app.commands.submit(ids.waiting, owner(app), { text: "allow", requestId: "ui-allow" }),
+test/peeks-ui.test.ts:372:        app.commands.submit(parent, owner(app), {
+test/peeks-ui.test.ts:383:        app.commands.submit(ids.pinned, owner(app), {
+test/profiles.test.ts:82:            app.commands.fork(id, alice, { entryId: Number(answer.id) }),
+test/team-serve.ts:32:const submitted = await app.commands.submit(created.id, owner(app), {
+test/room-projection.test.ts:413:            app.commands.fork(id, owner(app), { entryId: Number(room.value!.entries.at(-1)!.id) }),
+test/real-qoder.ts:215:    const receipt = await app.commands.submit(id, user, {
+test/approvals.test.ts:53:        app.commands.submit(id, alex, { text: "clean up", requestId: "archive-approval" }),
+test/plan.test.ts:150:    await assert.rejects(app.commands.setPlan(id, owner(app), true), /read-only archive/);
+test/plan.test.ts:151:    await assert.rejects(app.commands.approvePlan(id, owner(app)), /read-only archive/);
+test/plan.test.ts:159:    await assert.rejects(app.commands.setPlan(id, owner(app), true), /read-only archive/);
+src/server/workspace.ts:167:        await this.#app.commands.note(id, user, what);
+src/server/workspace.ts:522:        await this.#app.commands.note(id, user, what);
+test/worktrees.test.ts:113:        app.commands.fork(id, owner(app), { entryId: Number(answer.id), worktree: true }),
+test/worktrees.test.ts:162:        await assert.rejects(app.commands.removeWorktree(id, owner(app), force), {
+test/worktrees.test.ts:188:        app.commands.configure(second, owner(app), { cwd: join(repo, "app") }),
