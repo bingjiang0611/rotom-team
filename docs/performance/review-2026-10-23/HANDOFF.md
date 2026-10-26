@@ -43,7 +43,7 @@
 | D6    | D    | 大文件纯移动拆分(C5)                        | 核验通过                      | `3768653`（测量）；实现见执行记录      |
 | D7    | D    | handoff 测量与异步化(C2)                    | 核验通过                      | `2af9690`（测量）；`859c283`（阈值）   |
 | D8    | D    | storage worker(C3)                          | D8a、D8b 核验通过             | `1b0da14`（实现）；测量/限制见执行记录 |
-| D9    | D    | 下线旧后端(C4,只读归档)                     | D9a 核验通过;D9b 待做         | `6c21763`（盘点）；`f162467`（实现）   |
+| D9    | D    | 下线旧后端(C4,只读归档)                     | 已推送待核验(D9b)             | `a3d4d39`（盘点）；`6bc5eea`（实现）   |
 
 状态取值：`待做` / `进行中` / `已推送待核验` / `核验通过` / `核验未通过` / `放弃（写明原因）`。
 
@@ -1499,6 +1499,23 @@ D8a 核验通过,执行方可以开始 D8b(storage worker 默认关闭)。
 - 第 15 轮的其余结论不变。「每次启动都扫描旧会话」那条仍是不阻塞的后续建议。
 
 **下一步**:D9b,删除旧 agent 执行分支和只被它用到的 loader/API。
+
+### D9b 交付 — 2026-10-26
+
+**状态:已推送待核验(D9b)。** 实现 `6bc5eea` 已推送并确认远端同哈希。先行盘点为 `a3d4d39`、澄清为 `f5bd709`。用户另行授权的图像测量修复先盘点 `da28f55`,再单独提交 `c59b1c7`;没有把测量修复混入运行时代码删除。
+
+- 删除盘点 B1–B9 内旧 Durable 执行体、服务 loader/成功 API、旧 shell/schedule/goal/resend 和预算/权限撤销 abort 分支。保留 native 生命周期、个人凭据路由、unknown 不重放、共享存储/归属及历史解码定义。
+- 不改 journal `user_version`、持久文档合同、历史 task 形状或 vendor。扩展目录、旧测试文件、用户 source/enabled/disabled 记录仍保留,不做 D9c。
+- check/lint/format 通过;默认测试 **723/723,零跳过**。native app/commands 的 worker off/on 四项通过。独立 head 探针及 D9a 重开 post-D9b 数据各三模式,合计 **12 次打开**:历史可导出、只读 409、仅一条归档说明、零旧任务/发送/重复执行、sentinel 不变。旧版本正对照确实改变 sentinel,不是空数据验证。
+- 最终锁内 main/head 三组性能配对通过 gating 和 ledger guard,highLoad=false。修复的是客户端已读完不等于服务端 finish 已被观察到的测量顺序缺口;等待发生在原窗口内。去掉等待的负对照失败,恢复后通过。原先三次自然失败的具体缺失字段未捕获,不声称逐次归因。
+- 最终 main 比较 74 个 worse;同一修正测量器重测的 D9a 比较 20 个 worse。必要 guard 文案每个 info 增 9 字节,其余采样差异逐项列出且未强行归因。额外 D9a 对照 highLoad=true,其耗时只作诊断,不作 L2 结论;未改 workload、ledger、容差或 quiet 规则。
+- 回退 D9a 可读取同一数据,但不会复活已归档任务。回退 pre-D9a 仍须匹配离线备份,外部 unknown 不能自动重放。
+
+证据:[D9b validation](d9b-validation.md)、[performance](d9b-performance.md)、[measurement validation](d9b-measurement-validation.md)、[probe results](d9b-probe-results.json)、[source hashes](d9b-source-files.json)、[删除后引用](d9b-references-after.txt)。
+
+**隔离交付:** 并发无关文档提交 `5bde0dd` 意外进入原本地分支。按用户明确选择,在 `/private/tmp/rotom-review-D9b/delivery` 的 `delivery/d9b` 分支只转移本任务提交,再快进推送到 `review/2026-10-23-perf-design-arch`;未 rebase、强推或合并 main,远端不包含该无关提交。394 个运行时/web/test 文件与已验证源逐字节一致,隔离工作区静态检查、kernel 身份及四项文档测试通过。原工作区及用户改动保留,后续请以远端/隔离交付工作区核验,不要将原混合历史直接推送。
+
+**下一步:** 审查方核验 D9b。执行方在此停止,不开始 D9c;不部署或重启线上。
 
 ## C 方案（执行方追加）
 
