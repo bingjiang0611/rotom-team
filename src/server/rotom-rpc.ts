@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { StringDecoder } from "node:string_decoder";
 import type { ImageContent } from "@earendil-works/pi-ai";
 import { parseWithWork } from "./perf-channels.ts";
+import { decodeNativeControl } from "./rotom-control.ts";
 
 export type RpcRecord = { type: string; [key: string]: unknown };
 export class RpcFailure extends Error {
@@ -211,7 +212,16 @@ export class RotomRpc {
                     );
                 }
             } else {
-                const children = childrenReport(value);
+                let children: number | undefined;
+
+                try {
+                    // Validate before any subscriber can consume or acknowledge a control.
+                    children = childrenReport(value);
+                } catch {
+                    this.#fail("invalid native control notification");
+
+                    return;
+                }
 
                 if (children !== undefined) {
                     this.#children = children;
@@ -512,31 +522,11 @@ export class RotomRpc {
         const nonce = randomUUID();
         let result: Record<string, unknown> | undefined;
         const detach = this.onEvent((event) => {
-            if (
-                event.type !== "extension_ui_request" ||
-                event.method !== "notify" ||
-                typeof event.message !== "string"
-            ) {
-                return;
+            const control = decodeNativeControl(event);
+
+            if (control?.kind === "team-kernel-context-v1" && control.nonce === nonce) {
+                result = control.result;
             }
-
-            try {
-                const value = parseWithWork("native-rpc-notify", event.message) as {
-                    kind?: unknown;
-                    nonce?: unknown;
-                    result?: unknown;
-                };
-
-                if (
-                    value.kind === "team-kernel-context-v1" &&
-                    value.nonce === nonce &&
-                    value.result &&
-                    typeof value.result === "object" &&
-                    !Array.isArray(value.result)
-                ) {
-                    result = value.result as Record<string, unknown>;
-                }
-            } catch {}
         });
 
         try {
@@ -570,28 +560,10 @@ export class RotomRpc {
               }
             | undefined;
         const detach = this.onEvent((event) => {
-            if (
-                event.type !== "extension_ui_request" ||
-                event.method !== "notify" ||
-                typeof event.message !== "string"
-            ) {
-                return;
-            }
+            const control = decodeNativeControl(event);
 
-            let value;
-
-            try {
-                value = parseWithWork("native-rpc-notify", event.message);
-            } catch {
-                return;
-            }
-
-            if (
-                value?.kind === "team-kernel-tree-v1" &&
-                value.nonce === nonce &&
-                typeof value.result?.cancelled === "boolean"
-            ) {
-                result = value.result;
+            if (control?.kind === "team-kernel-tree-v1" && control.nonce === nonce) {
+                result = control.result;
             }
         });
 
@@ -620,26 +592,10 @@ export class RotomRpc {
                 extensionError = event;
             }
 
-            if (
-                event.type === "extension_ui_request" &&
-                event.method === "notify" &&
-                typeof event.message === "string"
-            ) {
-                try {
-                    const marker = parseWithWork("native-rpc-notify", event.message) as {
-                        kind?: unknown;
-                        nonce?: unknown;
-                        ok?: unknown;
-                    };
+            const control = decodeNativeControl(event);
 
-                    if (
-                        marker.kind === "team-kernel-barrier-v1" &&
-                        marker.nonce === nonce &&
-                        marker.ok === true
-                    ) {
-                        acknowledged = true;
-                    }
-                } catch {}
+            if (control?.kind === "team-kernel-barrier-v1" && control.nonce === nonce) {
+                acknowledged = true;
             }
         });
 
@@ -744,17 +700,7 @@ export class RotomRpc {
 
 /** The pending-children count in a team policy report, or undefined for any other record. */
 export function childrenReport(record: RpcRecord): number | undefined {
-    if (
-        record.type !== "extension_ui_request" ||
-        record.method !== "notify" ||
-        typeof record.message !== "string" ||
-        !record.message.startsWith('{"kind":"team-kernel-children-v1"')
-    ) {
-        return undefined;
-    }
+    const control = decodeNativeControl(record);
 
-    const pending = (parseWithWork("native-rpc-notify", record.message) as { pending?: unknown })
-        .pending;
-
-    return typeof pending === "number" ? pending : undefined;
+    return control?.kind === "team-kernel-children-v1" ? control.pending : undefined;
 }

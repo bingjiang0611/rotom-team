@@ -1,17 +1,17 @@
-/** Real session/menu rendering with deterministic live state; no native process or model account. */
+/** Native metadata-only sessions with deterministic UI state; no inference. The fork dispatch is a UI stub, not an executed fork. */
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { createServer, type Server } from "node:http";
 import { join } from "node:path";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync, mkdirSync, realpathSync } from "node:fs";
 import { Browsers } from "../src/server/browser.ts";
 import { findBrowser } from "../src/server/browser/discovery.ts";
 import { createHandler } from "../src/server/http.ts";
-import { cleanUp, newSession, openApp, root, scriptedModel, until } from "./helpers.ts";
+import { cleanUp, openNativeApp, owner, root, scriptedModel, until } from "./helpers.ts";
 
 const chromium = findBrowser();
 const real = { skip: chromium === undefined ? "Chromium not installed" : false };
-let app: Awaited<ReturnType<typeof openApp>>;
+let app: Awaited<ReturnType<typeof openNativeApp>>;
 let browsers: Browsers;
 let server: Server;
 let page: Awaited<ReturnType<Browsers["open"]>>;
@@ -23,9 +23,12 @@ before(async () => {
         return;
     }
 
-    app = await openApp(scriptedModel(), join(root, "attention-data"));
-    id = Number(await newSession(app));
-    forkId = Number(await newSession(app));
+    const data = join(realpathSync(root), "attention-data");
+
+    mkdirSync(data, { mode: 0o700 });
+    app = await openNativeApp(scriptedModel(), data);
+    id = Number((await app.commands.createSession(owner(app), { backend: "rotom" })).id);
+    forkId = Number((await app.commands.createSession(owner(app), { backend: "rotom" })).id);
     server = createServer(
         createHandler({ app, listen: { host: "127.0.0.1", port: 0 }, restart: () => {} }),
     );
@@ -117,7 +120,7 @@ test("idle Fork is enabled and dispatches once", real, async () => {
     await until(
         async () =>
             (await page.evaluate(
-                `location.pathname === '/s/${forkId}' && !(await import('/store.js')).store.state.view.kernel`,
+                `location.pathname === '/s/${forkId}' && (await import('/store.js')).store.state.view.conversation?.id === ${forkId} && (await import('/store.js')).store.state.view.kernel?.segmentId !== 'one'`,
             )) === "true",
         "navigation reloads the fixture session",
     );

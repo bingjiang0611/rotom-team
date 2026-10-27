@@ -1,4 +1,13 @@
-import { cleanUp, openApp, owner, root, scriptedModel, context, say } from "./helpers.ts";
+import {
+    appendHistoricalTurn,
+    cleanUp,
+    context,
+    openApp,
+    owner,
+    root,
+    scriptedModel,
+    seedHistoricalSession,
+} from "./helpers.ts";
 import assert from "node:assert/strict";
 import {
     existsSync,
@@ -10,16 +19,22 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { after, test } from "node:test";
+import { ConfigurationDoc } from "../src/server/team-profiles.ts";
 import { backup, restore } from "../scripts/data.mjs";
 after(cleanUp);
 test("offline backup refuses a live writer and restores sessions/configuration without reviving refresh credentials", async () => {
     const data = join(root, "deployment"),
         archive = join(root, "backup");
     let app = await openApp(scriptedModel(), data);
-    const { id } = await app.commands.createSession(owner(app), { title: "restored history" });
+    const id = await seedHistoricalSession(app);
 
-    await say(app, id, "persist me");
-    const digest = app.profiles.snapshot(id)!.digest;
+    await appendHistoricalTurn(app, id, "persist me", "historical answer");
+    const snapshot = app.profiles.capture(owner(app), root, []);
+
+    await app.harness.commit(async (tx) => {
+        (await tx.doc(ConfigurationDoc, id)).snapshot = snapshot;
+    }, context);
+    const digest = snapshot.digest;
 
     assert.throws(() => backup(data, archive), /already running/);
     await app.close();
@@ -56,7 +71,7 @@ test("offline backup refuses a live writer and restores sessions/configuration w
         const history = await (await app.conversation(id)).context(context);
 
         assert.match(JSON.stringify(history.messages), /persist me/);
-        assert.equal(app.sessions().length, 1);
+        assert.equal((await app.sessions()).length, 1);
     } finally {
         await app.close();
     }

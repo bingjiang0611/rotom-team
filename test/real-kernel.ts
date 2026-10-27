@@ -306,7 +306,7 @@ try {
         save();
         assert.equal(receipt.status, "settled");
         const journal = app.kernel!.executions.journal;
-        const entries = journal.entries(String(id)).map((row) => row.entry);
+        const entries = (await journal.entries(String(id))).map((row) => row.entry);
         const messages = entries
             .filter((entry) => entry.type === "message")
             .map(
@@ -332,7 +332,7 @@ try {
             "stop",
         );
         assert.equal(readFileSync(artifact, "utf8"), content);
-        const sessionFile = journal.session(String(id)).sessionFile!;
+        const sessionFile = (await journal.session(String(id))).sessionFile!;
         const serialized = readFileSync(sessionFile, "utf8");
 
         for (const value of [...before, ...members.map((member) => credential(member))]) {
@@ -350,7 +350,7 @@ try {
 
         assert.equal(
             readFileSync(
-                join(journal.session(String(id)).binding.home, ".pi/agent/auth.json"),
+                join((await journal.session(String(id))).binding.home, ".pi/agent/auth.json"),
                 "utf8",
             ).trim(),
             "{}",
@@ -369,8 +369,8 @@ try {
         report.diskAndToolVerified = true;
         report.noCredentialInNativeTranscript = true;
         report.childAuthStoreEmpty = true;
-        report.usage = journal.usage(String(id));
-        report.frozenConfigurationDigest = app.configuration(id)!.digest;
+        report.usage = await journal.usage(String(id));
+        report.frozenConfigurationDigest = (await app.configuration(id))!.digest;
     }
 
     if (
@@ -405,7 +405,7 @@ try {
             thinkingLevel: levels.includes("low") ? "low" : levels[0],
         });
         const journal = app.kernel!.executions.journal;
-        const source = journal.session(String(id));
+        const source = await journal.session(String(id));
         const requestId = randomUUID();
         const oldFileDigest = createHash("sha256")
             .update(readFileSync(source.sessionFile!))
@@ -418,7 +418,7 @@ try {
         save();
 
         if (phase === "--alice-fork") {
-            const sourceUsage = journal.usage(String(id));
+            const sourceUsage = await journal.usage(String(id));
             const target = await app.kernel!.fork(id, user, requestId, source.segmentId);
 
             report.targetId = Number(target.id);
@@ -426,20 +426,20 @@ try {
             save();
             assert.equal(target.receipt?.status, "settled");
             assert.notEqual(target.id, id);
-            const result = journal.session(String(target.id));
+            const result = await journal.session(String(target.id));
 
             assert.equal(result.binding.memberId, user.id);
             assert.equal(result.binding.configurationDigest, base.frozenConfigurationDigest);
             assert.notEqual(result.kernelSessionId, source.kernelSessionId);
-            assert.deepEqual(journal.session(String(id)), source);
+            assert.deepEqual(await journal.session(String(id)), source);
             assert.equal(
                 createHash("sha256").update(readFileSync(source.sessionFile!)).digest("hex"),
                 oldFileDigest,
             );
-            assert.deepEqual(journal.usage(String(id)), sourceUsage);
-            assert.deepEqual(journal.usage(String(target.id)), []);
+            assert.deepEqual(await journal.usage(String(id)), sourceUsage);
+            assert.deepEqual(await journal.usage(String(target.id)), []);
             assert.doesNotMatch(
-                JSON.stringify(journal.segmentEntries(result.segmentId)),
+                JSON.stringify(await journal.segmentEntries(result.segmentId)),
                 /"(?:textSignature|thinkingSignature|thoughtSignature|responseId)"\s*:/,
             );
             assert.equal(admissions, 0);
@@ -451,13 +451,13 @@ try {
                 .digest("hex");
             report.nativeFile = result.sessionFile;
         } else if (phase === "--bob-handoff" || phase === "--alice-return") {
-            const beforeUsage = journal.usage(String(id));
+            const beforeUsage = await journal.usage(String(id));
             const receipt = await app.kernel!.handoff(id, user, requestId, source.segmentId);
 
             report.receipt = receipt;
             save();
             assert.equal(receipt?.status, "settled");
-            const target = journal.session(String(id));
+            const target = await journal.session(String(id));
 
             assert.notEqual(target.segmentId, source.segmentId);
             assert.equal(target.binding.memberId, user.id);
@@ -467,7 +467,7 @@ try {
                 createHash("sha256").update(readFileSync(source.sessionFile!)).digest("hex"),
                 oldFileDigest,
             );
-            const seed = journal.segmentEntries(target.segmentId);
+            const seed = await journal.segmentEntries(target.segmentId);
             const imported = seed
                 .filter((e) => e.type === "message")
                 .map(
@@ -492,7 +492,7 @@ try {
                 JSON.stringify(seed),
                 /"(?:textSignature|thinkingSignature|thoughtSignature|responseId)"\s*:/,
             );
-            assert.deepEqual(journal.usage(String(id)), beforeUsage);
+            assert.deepEqual(await journal.usage(String(id)), beforeUsage);
             assert.equal(admissions, 0);
             report.publicSeedWithoutRebilling = true;
             report.sourceFileUnchanged = true;
@@ -529,8 +529,7 @@ try {
             report.authAdmissions = admissions;
             save();
             assert.equal(receipt.status, "settled");
-            const summary = journal
-                .entries(String(id))
+            const summary = (await journal.entries(String(id)))
                 .filter((row) => row.attemptId === receipt.id)
                 .map((row) => row.entry)
                 .find((entry) => entry.type === "compaction");
@@ -540,20 +539,22 @@ try {
             assert.ok(summary.summary.includes(base.artifact));
             assert.ok(admissions > 0);
             assert.equal(readFileSync(base.artifact, "utf8"), base.expectedContent);
-            const billed = journal.usage(String(id)).filter((row) => row.attemptId === receipt.id);
+            const billed = (await journal.usage(String(id))).filter(
+                (row) => row.attemptId === receipt.id,
+            );
 
             assert.ok(billed.length > 0 && billed.every((row) => row.memberId === user.id));
             report.summaryEntryId = summary.id;
             report.nativeCompactionVerified = true;
             report.inferenceDispatched = true;
             report.usage = billed;
-            report.credits = journal.credits(String(id));
+            report.credits = await journal.credits(String(id));
         } else if (phase === "--bob-resume") {
             assert.equal(source.binding.memberId, user.id);
             assert.ok(
-                journal
-                    .segmentEntries(source.segmentId)
-                    .some((entry) => entry.type === "compaction"),
+                (await journal.segmentEntries(source.segmentId)).some(
+                    (entry) => entry.type === "compaction",
+                ),
             );
             report.inferenceDispatched = "unknown-until-provider-evidence";
             save();
@@ -568,8 +569,7 @@ try {
             report.authAdmissions = admissions;
             save();
             assert.equal(receipt.status, "settled");
-            const messages = journal
-                .entries(String(id))
+            const messages = (await journal.entries(String(id)))
                 .filter((row) => row.attemptId === receipt.id && row.entry.type === "message")
                 .map(
                     (row) =>
@@ -599,8 +599,8 @@ try {
             assert.equal(readFileSync(base.artifact, "utf8"), base.expectedContent);
             report.postRestartCompactedContextVerified = true;
             report.inferenceDispatched = true;
-            report.usage = journal.usage(String(id));
-            report.credits = journal.credits(String(id));
+            report.usage = await journal.usage(String(id));
+            report.credits = await journal.credits(String(id));
         } else {
             assert.equal(source.binding.memberId, user.id);
             report.inferenceDispatched = "unknown-until-provider-evidence";
@@ -616,8 +616,7 @@ try {
             report.authAdmissions = admissions;
             save();
             assert.equal(receipt.status, "settled");
-            const entries = journal
-                .entries(String(id))
+            const entries = (await journal.entries(String(id)))
                 .filter((row) => row.attemptId === receipt.id)
                 .map((row) => row.entry);
             const messages = entries
@@ -665,7 +664,7 @@ try {
                 ),
             );
             assert.equal(readFileSync(base.artifact, "utf8"), base.expectedContent);
-            const nativeFile = journal.session(String(id)).sessionFile!;
+            const nativeFile = (await journal.session(String(id))).sessionFile!;
             const serialized = readFileSync(nativeFile, "utf8");
 
             for (const value of [...before, ...members.map((member) => credential(member))]) {
@@ -686,14 +685,14 @@ try {
                 );
                 assert.equal(
                     createHash("sha256")
-                        .update(JSON.stringify(journal.usage(String(base.conversationId))))
+                        .update(JSON.stringify(await journal.usage(String(base.conversationId))))
                         .digest("hex"),
                     forked.sourceUsageDigest,
                 );
                 assert.ok(
-                    journal
-                        .usage(String(id))
-                        .every((row) => row.memberId === user.id && row.attemptId === receipt.id),
+                    (await journal.usage(String(id))).every(
+                        (row) => row.memberId === user.id && row.attemptId === receipt.id,
+                    ),
                 );
                 report.realChatGPTForkReadAndContext = true;
                 report.sourceUnchangedAfterForkContinuation = true;
@@ -705,8 +704,8 @@ try {
             report.noCredentialInNativeTranscript = true;
             report.childAuthStoreEmpty = true;
             report.nativeFile = nativeFile;
-            report.usage = journal.usage(String(id));
-            report.credits = journal.credits(String(id));
+            report.usage = await journal.usage(String(id));
+            report.credits = await journal.credits(String(id));
         }
     }
 

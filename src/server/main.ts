@@ -14,6 +14,7 @@ import { join, resolve } from "node:path";
 // Only types from the app here: its modules load below, after the signal handlers (loading takes a moment).
 import type { AccessInfo, PocketApp } from "./app.ts";
 import { APP_ROOT, dataDir } from "./config.ts";
+import { ARCHIVE_COPY } from "./constants/copy.ts";
 import type { createHandler } from "./http.ts";
 import { createListener, readTls } from "./listener.ts";
 
@@ -32,8 +33,9 @@ function parseArgs(argv: string[]) {
         cwd: process.cwd(),
         data: dataDir(),
         rotateToken: false,
-        // rotom runs every new session. `--no-rotom-kernel` keeps a server on Pi Durable only.
+        // rotom runs every new session. `--no-rotom-kernel` provides read-only archive access.
         kernel: true,
+        storageWorker: false,
         tlsCert: undefined as string | undefined,
         tlsKey: undefined as string | undefined,
     };
@@ -63,6 +65,10 @@ function parseArgs(argv: string[]) {
             options.kernel = true;
         } else if (arg === "--no-rotom-kernel") {
             options.kernel = false;
+        } else if (arg === "--storage-worker") {
+            options.storageWorker = true;
+        } else if (arg === "--no-storage-worker") {
+            options.storageWorker = false;
         } else if (arg === "--tls-cert") {
             options.tlsCert = resolve(value());
         } else if (arg === "--tls-key") {
@@ -71,8 +77,9 @@ function parseArgs(argv: string[]) {
             options.rotateToken = true;
         } else if (arg === "--help" || arg === "-h") {
             console.log(
-                "rotom-team [--host 127.0.0.1] [--port 8787] [--cwd DIR] [--data DIR] [--rotate-token] [--no-rotom-kernel] [--tls-cert FILE --tls-key FILE]",
+                "rotom-team [--host 127.0.0.1] [--port 8787] [--cwd DIR] [--data DIR] [--rotate-token] [--no-rotom-kernel] [--storage-worker | --no-storage-worker] [--tls-cert FILE --tls-key FILE]",
             );
+            console.log(ARCHIVE_COPY.cliMode);
             process.exit(0);
         } else {
             throw new Error(`Unknown argument: ${arg}`);
@@ -217,9 +224,7 @@ if (options.kernel) {
     try {
         verifyRotomKernel();
     } catch (error) {
-        throw new Error(
-            `The pinned rotom runtime is not ready (${(error as Error).message}). Run \`npm run install:kernel\`, or start with --no-rotom-kernel.`,
-        );
+        throw new Error(ARCHIVE_COPY.kernelUnavailable((error as Error).message));
     }
 }
 
@@ -229,6 +234,7 @@ const opened = await App.open({
     defaultCwd: options.cwd,
     supervised: process.env.PI_POCKET_SUPERVISED === "1",
     kernel: options.kernel,
+    storageWorker: options.storageWorker,
 });
 
 app = opened;
@@ -246,8 +252,6 @@ handle = makeHandler({
 });
 stopWatching = (() => {
     const stops = [watchTree(join(APP_ROOT, "web"), (file) => opened.reloadClients(file))];
-
-    opened.loader?.watch();
 
     return () => {
         for (const each of stops) {

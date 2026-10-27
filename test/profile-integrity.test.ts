@@ -2,10 +2,19 @@ import assert from "node:assert/strict";
 import { mkdirSync, readdirSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { ProviderDoc } from "@earendil-works/pi-durable";
+import { ConfigurationDoc } from "../src/server/team-profiles.ts";
 import { TeamProfiles } from "../src/server/team-profiles.ts";
 import { PocketApp } from "../src/server/app.ts";
-import { cleanUp, context, owner, root, work, scriptedModel, say } from "./helpers.ts";
+import {
+    appendHistoricalTurn,
+    cleanUp,
+    context,
+    owner,
+    root,
+    seedHistoricalSession,
+    work,
+    scriptedModel,
+} from "./helpers.ts";
 after(cleanUp);
 test("snapshot restart accepts canonical ancestor aliases without changing its digest", async () => {
     const parent = join(root, "profile-canonical-parent"),
@@ -31,8 +40,12 @@ test("snapshot restart accepts canonical ancestor aliases without changing its d
     const member = owner(app);
 
     app.profiles.save(member, { name: "Canonical", instructions: "", skillDirectories: [skill] });
-    const { id } = await app.commands.createSession(member, { title: "Canonical restart" });
-    const snapshot = app.profiles.snapshot(id)!;
+    const id = await seedHistoricalSession(app);
+    const snapshot = app.profiles.capture(member, work, []);
+
+    await app.harness.commit(async (tx) => {
+        (await tx.doc(ConfigurationDoc, id)).snapshot = snapshot;
+    }, context);
     const canonical = realpathSync(join(alias, "data"));
 
     await app.close();
@@ -71,26 +84,20 @@ test("a changed snapshot refuses dispatch; failed captures remove partial asset 
             instructions: "",
             skillDirectories: [skill],
         });
-        const { id } = await app.commands.createSession(member, { title: "Integrity" });
+        const id = await seedHistoricalSession(app);
+        const captured = app.profiles.capture(member, work, []);
 
-        await say(app, id, "initial turn");
-        const captured = app.profiles.snapshot(id)!;
-        const model = (await app.agentState(id))!.model!;
-        const provider = (await app.harness.snapshot(ProviderDoc, id, context))!;
+        await app.harness.commit(async (tx) => {
+            (await tx.doc(ConfigurationDoc, id)).snapshot = captured;
+        }, context);
+        await appendHistoricalTurn(app, id, "initial turn", "historical answer");
 
         writeFileSync(captured.skills[0]!.path, "Changed after capture.");
         assert.throws(() => app.profiles.snapshot(id), /snapshot content changed/);
-        await assert.rejects(
-            app.execution.authorize(model.provider, provider.sessionId),
-            /snapshot content changed/,
-        );
         const before = readdirSync(join(data, "configuration-snapshots"));
 
         symlinkSync(join(skill, "SKILL.md"), join(skill, "unsafe-link"));
-        await assert.rejects(
-            app.commands.createSession(member, { title: "Refused capture" }),
-            /contains a symlink/,
-        );
+        assert.throws(() => app.profiles.capture(member, work, []), /contains a symlink/);
         assert.deepEqual(readdirSync(join(data, "configuration-snapshots")), before);
     } finally {
         await app.close();

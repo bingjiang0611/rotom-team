@@ -25,11 +25,11 @@ npm start -- --data /absolute/path/to/team-data --port 8787 --cwd /absolute/path
 # synthetic accounts / loopback model，无真实模型请求
 npm run demo:kernel
 
-# 仅使用旧 Durable 后端
+# 只读归档模式（不启动旧执行）
 npm start -- --no-rotom-kernel --cwd /absolute/path/to/project
 ```
 
-演示使用独立临时数据，不证明真实 Provider 的 OAuth、计费或恢复。既有 Durable 会话保持原后端，不自动迁移。远程入口需另行配置 HTTPS 或可信 SSH 转发；不要直接将服务暴露给不信任的人。
+演示使用独立临时数据，不证明真实 Provider 的 OAuth、计费或恢复。既有 Durable 会话保持原后端，作为只读归档保留读取、导出和授权，不再执行或恢复。迁移与回滚见 [归档说明](docs/LEGACY-ARCHIVE.md)。远程入口需另行配置 HTTPS 或可信 SSH 转发；不要直接将服务暴露给不信任的人。
 
 ## 使用
 

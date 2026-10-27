@@ -1,6 +1,6 @@
 /** Private execution receipts. RPC correlation IDs are not durable idempotency keys. */
 import { randomUUID, createHash } from "node:crypto";
-import { DatabaseSync, type SQLOutputValue } from "node:sqlite";
+import { DatabaseSync, type SQLOutputValue, type StatementSync } from "node:sqlite";
 import {
     closeSync,
     existsSync,
@@ -14,6 +14,7 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { createRequire } from "node:module";
+import { isDeepStrictEqual } from "node:util";
 
 // Reuse the hash-recorded Qoder reducer without requiring the optional installed kernel at module load.
 const { creditSummary, CREDIT_ENTRY } = createRequire(import.meta.url)(
@@ -112,11 +113,46 @@ export function requireNoPendingKernel(data: string): void {
     }
 }
 
+export type ThinkingSnapshot = {
+    segmentId: string;
+    rowid: number;
+    fallback: string;
+    version: string;
+    value?: string;
+};
+
+export function thinkingFromEntries(entries: KernelEntry[], fallback: string): string {
+    const byId = new Map(entries.map((entry) => [entry.id, entry]));
+    let entry = entries.at(-1);
+
+    while (entry) {
+        if (entry.type === "thinking_level_change") {
+            return String(entry.thinkingLevel);
+        }
+
+        // A model switch restarts Pi, which clamps silently; the binding holds that clamped level.
+        if (entry.type === "model_change") {
+            break;
+        }
+
+        entry = typeof entry.parentId === "string" ? byId.get(entry.parentId) : undefined;
+    }
+
+    return fallback;
+}
+
 export class RotomJournal {
     readonly #db: DatabaseSync;
+    // SQL is a finite set of literal statements (plus the two usage table names), never user text.
+    readonly #statements = new Map<string, StatementSync>();
     readonly #lock: string;
     readonly #data: string;
     #closed = false;
+    // Only derived scalars, at most 128 recently read segments; history itself is never retained here.
+    readonly #thinking = new Map<
+        string,
+        { rowid: number; fallback: string; version: string; value: string }
+    >();
     constructor(data: string) {
         if (
             realpathSync(data) !== data ||
@@ -163,7 +199,7 @@ export class RotomJournal {
             }
 
             this.#db = opened = new DatabaseSync(path);
-            const version = Number(this.#db.prepare("PRAGMA user_version").get()!.user_version);
+            const version = Number(this.#prepare("PRAGMA user_version").get()!.user_version);
 
             if (![0, 1, 2, 3, 4, 5, 6].includes(version)) {
                 throw new Error("Unsupported kernel journal version");
@@ -226,6 +262,14 @@ export class RotomJournal {
                 "CREATE TABLE IF NOT EXISTS kernel_segment_models (segment_id TEXT PRIMARY KEY REFERENCES kernel_sessions(id), binding TEXT NOT NULL)",
             );
 
+            // Additive, unversioned indexes: schema-6 releases can still open this journal on rollback.
+            this.#db.exec(`
+                CREATE INDEX IF NOT EXISTS kernel_entries_attempt ON kernel_entries(attempt_id);
+                CREATE INDEX IF NOT EXISTS kernel_entries_session ON kernel_entries(session_id);
+                CREATE INDEX IF NOT EXISTS kernel_usage_attempt ON kernel_usage(attempt_id);
+                CREATE INDEX IF NOT EXISTS kernel_child_usage_attempt ON kernel_child_usage(attempt_id);
+            `);
+
             // A cleanly released parent lock is not evidence that an unfinished dispatch never happened.
             this.#db.exec(
                 "UPDATE kernel_attempts SET status='unknown' WHERE status='dispatch-intent'",
@@ -238,15 +282,26 @@ export class RotomJournal {
         }
     }
 
+    #prepare(sql: string): StatementSync {
+        let statement = this.#statements.get(sql);
+
+        if (!statement) {
+            statement = this.#db.prepare(sql);
+            this.#statements.set(sql, statement);
+        }
+
+        return statement;
+    }
+
     bind(sessionId: string, binding: KernelBinding): void {
         if (!sessionId || sessionId.length > 128) {
             throw new Error("Invalid team session identity");
         }
 
         const normalized = this.#binding(binding);
-        const existing = this.#db
-            .prepare("SELECT binding FROM kernel_sessions WHERE id=?")
-            .get(sessionId);
+        const existing = this.#prepare("SELECT binding FROM kernel_sessions WHERE id=?").get(
+            sessionId,
+        );
 
         if (existing) {
             if (existing.binding !== JSON.stringify(normalized)) {
@@ -261,10 +316,10 @@ export class RotomJournal {
         this.#db.exec("BEGIN IMMEDIATE");
 
         try {
-            this.#db
-                .prepare("INSERT INTO kernel_sessions(id,binding,conversation_id) VALUES (?,?,?)")
-                .run(sessionId, JSON.stringify(normalized), sessionId);
-            this.#db.prepare("INSERT INTO kernel_heads VALUES (?,?)").run(sessionId, sessionId);
+            this.#prepare(
+                "INSERT INTO kernel_sessions(id,binding,conversation_id) VALUES (?,?,?)",
+            ).run(sessionId, JSON.stringify(normalized), sessionId);
+            this.#prepare("INSERT INTO kernel_heads VALUES (?,?)").run(sessionId, sessionId);
             this.#db.exec("COMMIT");
         } catch (error) {
             this.#db.exec("ROLLBACK");
@@ -343,16 +398,14 @@ export class RotomJournal {
 
     /** Current head models for sidebar projection in one read; never mutate identity/receipt bindings. */
     modelNames(): Map<string, string> {
-        const rows = this.#db
-            .prepare(
-                `
+        const rows = this.#prepare(
+            `
             SELECT h.conversation_id AS id, json_extract(COALESCE(m.binding, s.binding), '$.model') AS model
             FROM kernel_heads h
             JOIN kernel_sessions s ON s.id=h.session_id
             LEFT JOIN kernel_segment_models m ON m.segment_id=s.id
         `,
-            )
-            .all();
+        ).all();
         const models = new Map<string, string>();
 
         for (const row of rows) {
@@ -366,15 +419,14 @@ export class RotomJournal {
 
     hasConversation(id: string): boolean {
         return (
-            this.#db.prepare("SELECT 1 FROM kernel_heads WHERE conversation_id=?").get(id) !==
+            this.#prepare("SELECT 1 FROM kernel_heads WHERE conversation_id=?").get(id) !==
             undefined
         );
     }
 
     /** Startup only, against the app's complete committed native-session set. Never discard execution evidence. */
     reconcileOrphans(known: ReadonlySet<string>): void {
-        const orphans = this.#db
-            .prepare("SELECT conversation_id FROM kernel_heads")
+        const orphans = this.#prepare("SELECT conversation_id FROM kernel_heads")
             .all()
             .map((row) => String(row.conversation_id))
             .filter((id) => !known.has(id));
@@ -383,12 +435,12 @@ export class RotomJournal {
 
         try {
             for (const id of orphans) {
-                const attempts = this.#db
-                    .prepare("SELECT 1 FROM kernel_attempts WHERE conversation_id=? LIMIT 1")
-                    .get(id);
-                const segments = this.#db
-                    .prepare("SELECT id,session_file FROM kernel_sessions WHERE conversation_id=?")
-                    .all(id);
+                const attempts = this.#prepare(
+                    "SELECT 1 FROM kernel_attempts WHERE conversation_id=? LIMIT 1",
+                ).get(id);
+                const segments = this.#prepare(
+                    "SELECT id,session_file FROM kernel_sessions WHERE conversation_id=?",
+                ).all(id);
 
                 if (
                     attempts ||
@@ -401,9 +453,9 @@ export class RotomJournal {
                     );
                 }
 
-                this.#db.prepare("DELETE FROM kernel_heads WHERE conversation_id=?").run(id);
-                this.#db.prepare("DELETE FROM kernel_segment_models WHERE segment_id=?").run(id);
-                this.#db.prepare("DELETE FROM kernel_sessions WHERE id=?").run(id);
+                this.#prepare("DELETE FROM kernel_heads WHERE conversation_id=?").run(id);
+                this.#prepare("DELETE FROM kernel_segment_models WHERE segment_id=?").run(id);
+                this.#prepare("DELETE FROM kernel_sessions WHERE id=?").run(id);
             }
 
             this.#db.exec("COMMIT");
@@ -415,9 +467,9 @@ export class RotomJournal {
     }
 
     session(id: string) {
-        const head = this.#db
-            .prepare("SELECT session_id FROM kernel_heads WHERE conversation_id=?")
-            .get(id);
+        const head = this.#prepare(
+            "SELECT session_id FROM kernel_heads WHERE conversation_id=?",
+        ).get(id);
 
         if (!head) {
             throw new Error("Unknown kernel session");
@@ -428,11 +480,9 @@ export class RotomJournal {
 
     /** One fresh projection read: absence is expected during setup, but a dangling head remains corruption. */
     sessionIfPresent(id: string) {
-        const row = this.#db
-            .prepare(
-                "SELECT h.session_id,s.binding,s.session_file,s.kernel_session_id,m.binding AS model_binding FROM kernel_heads h LEFT JOIN kernel_sessions s ON s.id=h.session_id LEFT JOIN kernel_segment_models m ON m.segment_id=s.id WHERE h.conversation_id=?",
-            )
-            .get(id);
+        const row = this.#prepare(
+            "SELECT h.session_id,s.binding,s.session_file,s.kernel_session_id,m.binding AS model_binding FROM kernel_heads h LEFT JOIN kernel_sessions s ON s.id=h.session_id LEFT JOIN kernel_segment_models m ON m.segment_id=s.id WHERE h.conversation_id=?",
+        ).get(id);
 
         if (!row) {
             return undefined;
@@ -451,11 +501,9 @@ export class RotomJournal {
         sessionFile?: string;
         kernelSessionId?: string;
     } {
-        const row = this.#db
-            .prepare(
-                "SELECT s.*,m.binding AS model_binding FROM kernel_sessions s LEFT JOIN kernel_segment_models m ON m.segment_id=s.id WHERE s.id=?",
-            )
-            .get(id);
+        const row = this.#prepare(
+            "SELECT s.*,m.binding AS model_binding FROM kernel_sessions s LEFT JOIN kernel_segment_models m ON m.segment_id=s.id WHERE s.id=?",
+        ).get(id);
 
         if (!row) {
             throw new Error("Unknown kernel session");
@@ -486,7 +534,7 @@ export class RotomJournal {
     }
 
     receipt(id: string): KernelReceipt {
-        const row = this.#db.prepare("SELECT * FROM kernel_attempts WHERE id=?").get(id);
+        const row = this.#prepare("SELECT * FROM kernel_attempts WHERE id=?").get(id);
 
         if (!row) {
             throw new Error("Unknown kernel receipt");
@@ -515,41 +563,44 @@ export class RotomJournal {
     }
 
     /** Durable before queued side-effect dispatch; only a confirmed handled response clears this fence. */
-    beginCommandInput(attemptId: string, command: string): string {
+    beginCommandInput(attemptId: string, command: string, phase?: "execution"): string {
+        const attempt = this.receipt(attemptId);
+
         if (
-            this.receipt(attemptId).status !== "dispatch-intent" ||
-            this.hasUnresolvedCommandInput(attemptId)
+            attempt.status !== "dispatch-intent" ||
+            (phase !== undefined && attempt.phase !== phase) ||
+            attempt.unresolvedCommandInput
         ) {
             throw new KernelRequestConflict(
-                "The owning attempt is finished or has an unresolved queued command",
+                "The owning attempt is finished, outside execution or has an unresolved queued command",
             );
         }
 
         const id = randomUUID();
 
-        this.#db
-            .prepare("INSERT INTO kernel_command_inputs VALUES (?,?,?)")
-            .run(id, attemptId, digest(command));
+        this.#prepare("INSERT INTO kernel_command_inputs VALUES (?,?,?)").run(
+            id,
+            attemptId,
+            digest(command),
+        );
 
         return id;
     }
 
     completeCommandInput(id: string): void {
-        this.#db.prepare("DELETE FROM kernel_command_inputs WHERE id=?").run(id);
+        this.#prepare("DELETE FROM kernel_command_inputs WHERE id=?").run(id);
     }
 
     hasUnresolvedCommandInput(attemptId: string): boolean {
         return Boolean(
-            this.#db
-                .prepare("SELECT id FROM kernel_command_inputs WHERE attempt_id=?")
-                .get(attemptId),
+            this.#prepare("SELECT id FROM kernel_command_inputs WHERE attempt_id=?").get(attemptId),
         );
     }
 
     request(sessionId: string, requestId: string): KernelReceipt | undefined {
-        const row = this.#db
-            .prepare("SELECT id FROM kernel_attempts WHERE conversation_id=? AND request_id=?")
-            .get(sessionId, requestId);
+        const row = this.#prepare(
+            "SELECT id FROM kernel_attempts WHERE conversation_id=? AND request_id=?",
+        ).get(sessionId, requestId);
 
         return row ? this.receipt(String(row.id)) : undefined;
     }
@@ -560,11 +611,9 @@ export class RotomJournal {
         prompt: string,
         operation: KernelOperation = "prompt",
     ): KernelReceipt | undefined {
-        const row = this.#db
-            .prepare(
-                "SELECT id,prompt_hash,operation FROM kernel_attempts WHERE conversation_id=? AND request_id=?",
-            )
-            .get(sessionId, requestId);
+        const row = this.#prepare(
+            "SELECT id,prompt_hash,operation FROM kernel_attempts WHERE conversation_id=? AND request_id=?",
+        ).get(sessionId, requestId);
 
         if (!row) {
             return undefined;
@@ -589,6 +638,8 @@ export class RotomJournal {
         prompt: string,
         operation: "prompt" | "compact" | "fork" | "discover" | "command" = "prompt",
         rebind?: KernelRebind,
+        expectedHead?: string,
+        expectedBinding?: KernelBinding,
     ): KernelReceipt {
         const existing = this.existing(sessionId, requestId, prompt, operation);
 
@@ -601,18 +652,133 @@ export class RotomJournal {
         }
 
         if (rebind) {
-            return this.#rebind(sessionId, requestId, prompt, rebind);
+            if (expectedHead !== undefined && expectedHead !== rebind.expectedHead) {
+                throw new KernelRequestConflict("Conversation head changed during admission");
+            }
+
+            return this.#rebind(sessionId, requestId, prompt, rebind, expectedBinding);
         }
 
-        const { binding, segmentId, sessionFile } = this.session(sessionId);
+        this.#db.exec("BEGIN IMMEDIATE");
 
-        if (operation === "fork" && sessionFile) {
-            throw new Error("Fork seed requires a fresh native segment");
+        try {
+            const { binding, segmentId, sessionFile } = this.session(sessionId);
+
+            if (expectedHead !== undefined && segmentId !== expectedHead) {
+                throw new KernelRequestConflict("Conversation head changed during admission");
+            }
+
+            if (expectedBinding && !isDeepStrictEqual(binding, expectedBinding)) {
+                throw new KernelRequestConflict("Conversation binding changed during admission");
+            }
+
+            if (operation === "fork" && sessionFile) {
+                throw new Error("Fork seed requires a fresh native segment");
+            }
+
+            this.#unblocked(sessionId);
+            const receipt = this.#intent(
+                sessionId,
+                segmentId,
+                requestId,
+                prompt,
+                binding,
+                operation,
+            );
+
+            this.#db.exec("COMMIT");
+
+            return receipt;
+        } catch (error) {
+            this.#db.exec("ROLLBACK");
+
+            throw error;
+        }
+    }
+
+    /** Validate a clone's loaded native snapshot against the journal revision captured at reservation. */
+    forkSource(sessionId: string, expectedHead: string, expectedRevision?: number) {
+        const source = this.session(sessionId);
+
+        if (source.segmentId !== expectedHead) {
+            throw new KernelRequestConflict("Source head changed; refresh before fork");
         }
 
         this.#unblocked(sessionId);
+        const revision = this.segmentRevision(expectedHead);
 
-        return this.#intent(sessionId, segmentId, requestId, prompt, binding, operation);
+        if (expectedRevision !== undefined && revision !== expectedRevision) {
+            throw new KernelRequestConflict("Source history changed; refresh before fork");
+        }
+
+        return { ...source, revision };
+    }
+
+    /** Check the source, capture its immutable prefix and reserve the target in one FIFO operation. */
+    forkSeed(
+        sessionId: string,
+        requestId: string,
+        identity: string,
+        expectedHead: string,
+        source: { sessionId: string; expectedHead: string; entryId?: string },
+        expectedBinding?: KernelBinding,
+    ) {
+        const existing = this.existing(sessionId, requestId, identity, "fork");
+
+        if (existing) {
+            return { receipt: existing };
+        }
+
+        const head = this.forkSource(source.sessionId, source.expectedHead);
+        const entries = this.segmentEntries(head.segmentId);
+        const selected = source.entryId
+            ? entries.find((entry) => entry.id === source.entryId)
+            : undefined;
+
+        if (
+            source.entryId &&
+            (!selected ||
+                selected.type !== "message" ||
+                (selected.message as { role?: unknown } | undefined)?.role !== "user")
+        ) {
+            throw new KernelRequestConflict(
+                "Fork requires a selected user message in this segment",
+            );
+        }
+
+        // No await or external writer can intervene between source reads and this target transaction.
+        const receipt = this.reserve(
+            sessionId,
+            requestId,
+            identity,
+            "fork",
+            undefined,
+            expectedHead,
+            expectedBinding,
+        );
+
+        return { receipt, seed: { source: head, entries, parentId: selected?.parentId } };
+    }
+
+    /** Capture handoff history and reserve against that exact source state without yielding. */
+    handoffSeed(
+        sessionId: string,
+        requestId: string,
+        expectedHead: string,
+        binding: KernelBinding,
+    ) {
+        if (this.request(sessionId, requestId)) {
+            return { receipt: this.handoff(sessionId, requestId, expectedHead, binding) };
+        }
+
+        if (this.session(sessionId).segmentId !== expectedHead) {
+            throw new KernelRequestConflict("Conversation head changed; refresh before handoff");
+        }
+
+        const entries = this.segmentEntries(expectedHead);
+        const receipt = this.handoff(sessionId, requestId, expectedHead, binding);
+
+        return { receipt, entries };
     }
 
     /**
@@ -625,6 +791,7 @@ export class RotomJournal {
         requestId: string,
         prompt: string,
         { expectedHead, binding }: KernelRebind,
+        expectedBinding?: KernelBinding,
     ): KernelReceipt {
         const normalized = this.#binding(binding);
 
@@ -637,6 +804,10 @@ export class RotomJournal {
                 throw new KernelRequestConflict(
                     "Conversation head changed; refresh before switching the model",
                 );
+            }
+
+            if (expectedBinding && !isDeepStrictEqual(head.binding, expectedBinding)) {
+                throw new KernelRequestConflict("Conversation binding changed during admission");
             }
 
             for (const key of [
@@ -654,11 +825,9 @@ export class RotomJournal {
             }
 
             this.#unblocked(sessionId);
-            this.#db
-                .prepare(
-                    "INSERT INTO kernel_segment_models VALUES (?,?) ON CONFLICT(segment_id) DO UPDATE SET binding=excluded.binding",
-                )
-                .run(expectedHead, JSON.stringify(normalized));
+            this.#prepare(
+                "INSERT INTO kernel_segment_models VALUES (?,?) ON CONFLICT(segment_id) DO UPDATE SET binding=excluded.binding",
+            ).run(expectedHead, JSON.stringify(normalized));
             const receipt = this.#intent(
                 sessionId,
                 expectedHead,
@@ -700,14 +869,12 @@ export class RotomJournal {
                 const next = JSON.stringify(this.#binding({ ...head.binding, kernelVersion }));
 
                 // A binding equal to the anchor needs no override row, as after a restored model change.
-                this.#db
-                    .prepare("DELETE FROM kernel_segment_models WHERE segment_id=?")
-                    .run(expectedHead);
-                this.#db
-                    .prepare(
-                        "INSERT INTO kernel_segment_models SELECT id,? FROM kernel_sessions WHERE id=? AND binding<>?",
-                    )
-                    .run(next, expectedHead, next);
+                this.#prepare("DELETE FROM kernel_segment_models WHERE segment_id=?").run(
+                    expectedHead,
+                );
+                this.#prepare(
+                    "INSERT INTO kernel_segment_models SELECT id,? FROM kernel_sessions WHERE id=? AND binding<>?",
+                ).run(next, expectedHead, next);
             }
 
             this.#db.exec("COMMIT");
@@ -720,11 +887,9 @@ export class RotomJournal {
 
     /** Only authoritative native prompt/skill discovery may make a reserved slash eligible for prompt recovery. */
     classifyPromptExpansion(id: string): void {
-        const result = this.#db
-            .prepare(
-                "UPDATE kernel_attempts SET operation='prompt' WHERE id=? AND operation='command' AND status='dispatch-intent'",
-            )
-            .run(id);
+        const result = this.#prepare(
+            "UPDATE kernel_attempts SET operation='prompt' WHERE id=? AND operation='command' AND status='dispatch-intent'",
+        ).run(id);
 
         if (result.changes !== 1) {
             throw new Error("Only an undispatched native command may become a prompt expansion");
@@ -762,11 +927,9 @@ export class RotomJournal {
             this.#unblocked(sessionId);
             const segmentId = randomUUID();
 
-            this.#db
-                .prepare(
-                    "INSERT INTO kernel_sessions(id,binding,conversation_id,parent_segment_id) VALUES (?,?,?,?)",
-                )
-                .run(segmentId, JSON.stringify(normalized), sessionId, expectedHead);
+            this.#prepare(
+                "INSERT INTO kernel_sessions(id,binding,conversation_id,parent_segment_id) VALUES (?,?,?,?)",
+            ).run(segmentId, JSON.stringify(normalized), sessionId, expectedHead);
             const receipt = this.#intent(
                 sessionId,
                 segmentId,
@@ -787,11 +950,9 @@ export class RotomJournal {
     }
 
     #unblocked(sessionId: string): void {
-        const blocked = this.#db
-            .prepare(
-                "SELECT id FROM kernel_attempts WHERE conversation_id=? AND status IN ('dispatch-intent','unknown')",
-            )
-            .get(sessionId);
+        const blocked = this.#prepare(
+            "SELECT id FROM kernel_attempts WHERE conversation_id=? AND status IN ('dispatch-intent','unknown')",
+        ).get(sessionId);
 
         if (blocked) {
             throw new KernelRequestConflict(
@@ -811,20 +972,18 @@ export class RotomJournal {
         const id = randomUUID();
 
         // Synchronous FULL SQLite commit completes before any child launch or stdin send.
-        this.#db
-            .prepare(
-                "INSERT INTO kernel_attempts(id,session_id,request_id,prompt_hash,binding,home,status,conversation_id,operation,phase) VALUES (?,?,?,?,?,?,'dispatch-intent',?,?,'execution')",
-            )
-            .run(
-                id,
-                segmentId,
-                requestId,
-                digest(prompt),
-                JSON.stringify(binding),
-                binding.home,
-                sessionId,
-                operation,
-            );
+        this.#prepare(
+            "INSERT INTO kernel_attempts(id,session_id,request_id,prompt_hash,binding,home,status,conversation_id,operation,phase) VALUES (?,?,?,?,?,?,'dispatch-intent',?,?,'execution')",
+        ).run(
+            id,
+            segmentId,
+            requestId,
+            digest(prompt),
+            JSON.stringify(binding),
+            binding.home,
+            sessionId,
+            operation,
+        );
 
         return this.receipt(id);
     }
@@ -844,29 +1003,27 @@ export class RotomJournal {
             throw new Error("Kernel session changed unexpectedly");
         }
 
-        this.#db
-            .prepare("UPDATE kernel_sessions SET session_file=?,kernel_session_id=? WHERE id=?")
-            .run(sessionFile, kernelSessionId, receipt.segmentId);
+        this.#prepare(
+            "UPDATE kernel_sessions SET session_file=?,kernel_session_id=? WHERE id=?",
+        ).run(sessionFile, kernelSessionId, receipt.segmentId);
 
         if (pid !== undefined) {
             // PID is diagnostic evidence only; a dead process never authorizes replay of an unknown run.
-            this.#db.prepare("UPDATE kernel_attempts SET pid=? WHERE id=?").run(pid, id);
+            this.#prepare("UPDATE kernel_attempts SET pid=? WHERE id=?").run(pid, id);
         }
     }
 
     /** Persist the completion boundary before readback; a crash here must not start another model turn. */
     setPhase(id: string, phase: "execution" | "finalization"): void {
-        this.#db
-            .prepare("UPDATE kernel_attempts SET phase=? WHERE id=? AND status='dispatch-intent'")
-            .run(phase, id);
+        this.#prepare(
+            "UPDATE kernel_attempts SET phase=? WHERE id=? AND status='dispatch-intent'",
+        ).run(phase, id);
     }
 
     recordFailure(id: string, failure: KernelFailure): void {
-        this.#db
-            .prepare(
-                "UPDATE kernel_attempts SET failure=COALESCE(failure,?) WHERE id=? AND status='dispatch-intent'",
-            )
-            .run(failure, id);
+        this.#prepare(
+            "UPDATE kernel_attempts SET failure=COALESCE(failure,?) WHERE id=? AND status='dispatch-intent'",
+        ).run(failure, id);
     }
 
     /** Eligibility for planning a clean stop; startup additionally requires an already settled receipt. */
@@ -899,22 +1056,27 @@ export class RotomJournal {
         const previous = /:#resume-(.+)$/.exec(attempt.requestId)?.[1];
         const chain = previous ? (this.resume(previous)?.chain ?? 0) + 1 : 1;
 
-        this.#db
-            .prepare("INSERT OR IGNORE INTO kernel_resume VALUES (?,?,?,?)")
-            .run(
-                attemptId,
-                attempt.sessionId,
-                chain,
-                chain > MAX_RESUME_CHAIN ? "capped" : "pending",
-            );
+        this.#prepare("INSERT OR IGNORE INTO kernel_resume VALUES (?,?,?,?)").run(
+            attemptId,
+            attempt.sessionId,
+            chain,
+            chain > MAX_RESUME_CHAIN ? "capped" : "pending",
+        );
 
         return this.resume(attemptId)!;
     }
 
+    /** A clean shutdown skips a prompt that became ineligible, but never swallows a storage failure. */
+    planPendingResume(sessionId: string): KernelResume | undefined {
+        const pending = this.pendingConversation(sessionId);
+
+        return pending?.operation === "prompt" && this.canResume(pending.id)
+            ? this.planResume(pending.id)
+            : undefined;
+    }
+
     resume(attemptId: string): KernelResume | undefined {
-        const row = this.#db
-            .prepare("SELECT * FROM kernel_resume WHERE attempt_id=?")
-            .get(attemptId);
+        const row = this.#prepare("SELECT * FROM kernel_resume WHERE attempt_id=?").get(attemptId);
 
         return row
             ? {
@@ -927,53 +1089,101 @@ export class RotomJournal {
     }
 
     resumes(state: KernelResume["state"]): KernelResume[] {
-        return this.#db
-            .prepare("SELECT attempt_id FROM kernel_resume WHERE state=? ORDER BY rowid")
+        return this.#prepare("SELECT attempt_id FROM kernel_resume WHERE state=? ORDER BY rowid")
             .all(state)
             .map((row) => this.resume(String(row.attempt_id))!);
     }
 
     markResume(attemptId: string, state: "started" | "skipped"): void {
-        this.#db
-            .prepare("UPDATE kernel_resume SET state=? WHERE attempt_id=?")
-            .run(state, attemptId);
+        this.#prepare("UPDATE kernel_resume SET state=? WHERE attempt_id=?").run(state, attemptId);
+    }
+
+    #latestRow(sessionId: string) {
+        return this.#prepare(
+            "SELECT * FROM kernel_attempts WHERE conversation_id=? ORDER BY rowid DESC LIMIT 1",
+        ).get(sessionId);
     }
 
     /** The conversation's newest attempt, whatever its operation. */
     latest(sessionId: string): KernelReceipt | undefined {
-        const row = this.#db
-            .prepare(
-                "SELECT * FROM kernel_attempts WHERE conversation_id=? ORDER BY rowid DESC LIMIT 1",
-            )
-            .get(sessionId);
+        const row = this.#latestRow(sessionId);
 
         return row ? this.#receipt(row) : undefined;
     }
 
+    /** One consistent room read, without duplicate receipt decoding or async round trips. */
+    roomSnapshot(sessionId: string) {
+        const session = this.sessionIfPresent(sessionId);
+
+        if (!session) {
+            return undefined;
+        }
+
+        const pending = this.pendingConversation(sessionId);
+        const row = this.#latestRow(sessionId);
+        let latest: KernelReceipt | undefined;
+
+        if (row) {
+            latest = pending?.id === String(row.id) ? pending : this.#receipt(row);
+        }
+
+        return { ...session, pending, latest };
+    }
+
+    /** Append-only history revision, using the segment index; empty history has revision zero. */
+    segmentRevision(segmentId: string): number {
+        return Number(
+            this.#prepare(
+                "SELECT COALESCE(MAX(rowid),0) AS revision FROM kernel_entries WHERE session_id=?",
+            ).get(segmentId)!.revision,
+        );
+    }
+
     /** Thinking is mutable native session state; the receipt binding retains its initial value. */
+    thinkingSnapshot(sessionId: string): ThinkingSnapshot {
+        const { segmentId, binding } = this.session(sessionId);
+        const rowid = this.segmentRevision(segmentId);
+        const fallback = binding.thinkingLevel ?? "off";
+        const cached = this.#thinking.get(segmentId);
+        const snapshot = { segmentId, rowid, fallback, version: binding.kernelVersion };
+
+        if (
+            cached?.rowid === rowid &&
+            cached.fallback === fallback &&
+            cached.version === binding.kernelVersion
+        ) {
+            return { ...snapshot, value: cached.value };
+        }
+
+        return snapshot;
+    }
+
+    rememberThinking(snapshot: ThinkingSnapshot, value: string): void {
+        const { segmentId, rowid, fallback, version } = snapshot;
+
+        this.#thinking.delete(segmentId);
+        this.#thinking.set(segmentId, { rowid, fallback, version, value });
+
+        if (this.#thinking.size > 128) {
+            this.#thinking.delete(this.#thinking.keys().next().value!);
+        }
+    }
+
     thinkingLevel(
         sessionId: string,
         readEntries: (segmentId: string) => KernelEntry[] = (id) => this.segmentEntries(id),
     ): string {
-        const { segmentId, binding } = this.session(sessionId);
-        const entries = readEntries(segmentId);
-        const byId = new Map(entries.map((entry) => [entry.id, entry]));
-        let entry = entries.at(-1);
+        const snapshot = this.thinkingSnapshot(sessionId);
 
-        while (entry) {
-            if (entry.type === "thinking_level_change") {
-                return String(entry.thinkingLevel);
-            }
-
-            // A model switch restarts Pi, which clamps silently; the binding holds that clamped level.
-            if (entry.type === "model_change") {
-                break;
-            }
-
-            entry = typeof entry.parentId === "string" ? byId.get(entry.parentId) : undefined;
+        if (snapshot.value !== undefined) {
+            return snapshot.value;
         }
 
-        return binding.thinkingLevel ?? "off";
+        const value = thinkingFromEntries(readEntries(snapshot.segmentId), snapshot.fallback);
+
+        this.rememberThinking(snapshot, value);
+
+        return value;
     }
 
     /** Provisional ingestion while a prompt runs: records each persisted message once, never settles the attempt. */
@@ -1048,21 +1258,19 @@ export class RotomJournal {
                     throw new Error("Handoff requires a committed public seed");
                 }
 
-                const target = this.#db
-                    .prepare("SELECT parent_segment_id FROM kernel_sessions WHERE id=?")
-                    .get(attempt.segmentId)!;
-                const changed = this.#db
-                    .prepare(
-                        "UPDATE kernel_heads SET session_id=? WHERE conversation_id=? AND session_id=?",
-                    )
-                    .run(attempt.segmentId, attempt.sessionId, target.parent_segment_id!);
+                const target = this.#prepare(
+                    "SELECT parent_segment_id FROM kernel_sessions WHERE id=?",
+                ).get(attempt.segmentId)!;
+                const changed = this.#prepare(
+                    "UPDATE kernel_heads SET session_id=? WHERE conversation_id=? AND session_id=?",
+                ).run(attempt.segmentId, attempt.sessionId, target.parent_segment_id!);
 
                 if (changed.changes !== 1) {
                     throw new Error("Conversation head changed during handoff");
                 }
             }
 
-            this.#db.prepare("UPDATE kernel_attempts SET status=? WHERE id=?").run(status, id);
+            this.#prepare("UPDATE kernel_attempts SET status=? WHERE id=?").run(status, id);
             this.#db.exec("COMMIT");
         } catch (error) {
             this.#db.exec("ROLLBACK");
@@ -1095,11 +1303,9 @@ export class RotomJournal {
             seen.add(entry.id);
             const body = JSON.stringify(entry),
                 hash = digest(body);
-            const previous = this.#db
-                .prepare(
-                    "SELECT digest FROM kernel_entries WHERE kernel_session_id=? AND entry_id=?",
-                )
-                .get(kernelSessionId, entry.id);
+            const previous = this.#prepare(
+                "SELECT digest FROM kernel_entries WHERE kernel_session_id=? AND entry_id=?",
+            ).get(kernelSessionId, entry.id);
 
             if (previous) {
                 if (previous.digest !== hash) {
@@ -1109,9 +1315,14 @@ export class RotomJournal {
                 continue;
             }
 
-            this.#db
-                .prepare("INSERT INTO kernel_entries VALUES (?,?,?,?,?,?)")
-                .run(kernelSessionId, entry.id, attempt.segmentId, attempt.id, body, hash);
+            this.#prepare("INSERT INTO kernel_entries VALUES (?,?,?,?,?,?)").run(
+                kernelSessionId,
+                entry.id,
+                attempt.segmentId,
+                attempt.id,
+                body,
+                hash,
+            );
             added++;
 
             // Inherited context is not a new invocation by the receiving payer.
@@ -1124,24 +1335,20 @@ export class RotomJournal {
                     typeof entry.summary !== "string" ||
                     !entry.summary.trim() ||
                     (entry.firstKeptEntryId !== null &&
-                        !this.#db
-                            .prepare(
-                                "SELECT 1 FROM kernel_entries WHERE kernel_session_id=? AND entry_id=?",
-                            )
-                            .get(kernelSessionId, String(entry.firstKeptEntryId)))
+                        !this.#prepare(
+                            "SELECT 1 FROM kernel_entries WHERE kernel_session_id=? AND entry_id=?",
+                        ).get(kernelSessionId, String(entry.firstKeptEntryId)))
                 ) {
                     throw new Error("Invalid persisted compaction");
                 }
 
-                this.#db
-                    .prepare("INSERT INTO kernel_usage VALUES (?,?,?,?,?)")
-                    .run(
-                        kernelSessionId,
-                        entry.id,
-                        attempt.id,
-                        attempt.binding.memberId,
-                        entry.usage ? JSON.stringify(entry.usage) : null,
-                    );
+                this.#prepare("INSERT INTO kernel_usage VALUES (?,?,?,?,?)").run(
+                    kernelSessionId,
+                    entry.id,
+                    attempt.id,
+                    attempt.binding.memberId,
+                    entry.usage ? JSON.stringify(entry.usage) : null,
+                );
             }
 
             if (attempt.operation === "command" && entry.type === "branch_summary") {
@@ -1149,15 +1356,13 @@ export class RotomJournal {
                     throw new Error("Invalid persisted native branch summary");
                 }
 
-                this.#db
-                    .prepare("INSERT INTO kernel_usage VALUES (?,?,?,?,?)")
-                    .run(
-                        kernelSessionId,
-                        entry.id,
-                        attempt.id,
-                        attempt.binding.memberId,
-                        entry.usage ? JSON.stringify(entry.usage) : null,
-                    );
+                this.#prepare("INSERT INTO kernel_usage VALUES (?,?,?,?,?)").run(
+                    kernelSessionId,
+                    entry.id,
+                    attempt.id,
+                    attempt.binding.memberId,
+                    entry.usage ? JSON.stringify(entry.usage) : null,
+                );
             }
 
             // Native auxiliary inference (for example SoL-Pi reduction) records usage outside assistant messages.
@@ -1176,15 +1381,13 @@ export class RotomJournal {
                 }
 
                 // Preserve raw kernel usage. Pi's zero placeholders do not establish reported cost/credits.
-                this.#db
-                    .prepare("INSERT INTO kernel_usage VALUES (?,?,?,?,?)")
-                    .run(
-                        kernelSessionId,
-                        entry.id,
-                        attempt.id,
-                        attempt.binding.memberId,
-                        message.usage ? JSON.stringify(message.usage) : null,
-                    );
+                this.#prepare("INSERT INTO kernel_usage VALUES (?,?,?,?,?)").run(
+                    kernelSessionId,
+                    entry.id,
+                    attempt.id,
+                    attempt.binding.memberId,
+                    message.usage ? JSON.stringify(message.usage) : null,
+                );
             }
         }
 
@@ -1195,9 +1398,9 @@ export class RotomJournal {
     #terminal(attempt: KernelReceipt): boolean {
         let terminal = false;
 
-        for (const row of this.#db
-            .prepare("SELECT body FROM kernel_entries WHERE attempt_id=? ORDER BY rowid")
-            .all(attempt.id)) {
+        for (const row of this.#prepare(
+            "SELECT body FROM kernel_entries WHERE attempt_id=? ORDER BY rowid",
+        ).all(attempt.id)) {
             const entry = JSON.parse(String(row.body)) as KernelEntry;
             const message = entry.message as { role?: string; stopReason?: string } | undefined;
 
@@ -1220,19 +1423,17 @@ export class RotomJournal {
     }
 
     #forgetUnmaterialized(sessionId: string): void {
-        const prior = this.#db
-            .prepare("SELECT entry_id FROM kernel_entries WHERE session_id=? LIMIT 1")
-            .get(sessionId);
+        const prior = this.#prepare(
+            "SELECT entry_id FROM kernel_entries WHERE session_id=? LIMIT 1",
+        ).get(sessionId);
 
         if (prior) {
             throw new Error("Cannot clear a materialized session binding");
         }
 
-        this.#db
-            .prepare(
-                "UPDATE kernel_sessions SET session_file=NULL,kernel_session_id=NULL WHERE id=?",
-            )
-            .run(sessionId);
+        this.#prepare(
+            "UPDATE kernel_sessions SET session_file=NULL,kernel_session_id=NULL WHERE id=?",
+        ).run(sessionId);
     }
 
     fail(
@@ -1262,17 +1463,15 @@ export class RotomJournal {
             if (restore && status === "rejected") {
                 const previous = JSON.stringify(restore);
 
-                this.#db
-                    .prepare("DELETE FROM kernel_segment_models WHERE segment_id=?")
-                    .run(attempt.segmentId);
-                this.#db
-                    .prepare(
-                        "INSERT INTO kernel_segment_models SELECT id,? FROM kernel_sessions WHERE id=? AND binding<>?",
-                    )
-                    .run(previous, attempt.segmentId, previous);
+                this.#prepare("DELETE FROM kernel_segment_models WHERE segment_id=?").run(
+                    attempt.segmentId,
+                );
+                this.#prepare(
+                    "INSERT INTO kernel_segment_models SELECT id,? FROM kernel_sessions WHERE id=? AND binding<>?",
+                ).run(previous, attempt.segmentId, previous);
             }
 
-            this.#db.prepare("UPDATE kernel_attempts SET status=? WHERE id=?").run(status, id);
+            this.#prepare("UPDATE kernel_attempts SET status=? WHERE id=?").run(status, id);
             this.#db.exec("COMMIT");
         } catch (error) {
             this.#db.exec("ROLLBACK");
@@ -1284,32 +1483,79 @@ export class RotomJournal {
     }
 
     receipts(sessionId: string): KernelReceipt[] {
-        return this.#db
-            .prepare(
-                "SELECT id FROM kernel_attempts WHERE conversation_id=? ORDER BY rowid DESC LIMIT 100",
-            )
+        return this.#prepare(
+            "SELECT id FROM kernel_attempts WHERE conversation_id=? ORDER BY rowid DESC LIMIT 100",
+        )
             .all(sessionId)
             .map((row) => this.receipt(String(row.id)));
     }
 
     pendingConversation(sessionId: string): KernelReceipt | undefined {
-        const row = this.#db
-            .prepare(
-                "SELECT * FROM kernel_attempts WHERE conversation_id=? AND status IN ('dispatch-intent','unknown') LIMIT 1",
-            )
-            .get(sessionId);
+        const row = this.#prepare(
+            "SELECT * FROM kernel_attempts WHERE conversation_id=? AND status IN ('dispatch-intent','unknown') LIMIT 1",
+        ).get(sessionId);
 
         return row ? this.#receipt(row) : undefined;
     }
 
     pending(memberId: string): KernelReceipt | undefined {
-        const row = this.#db
-            .prepare(
-                "SELECT id FROM kernel_attempts WHERE home=? AND status IN ('dispatch-intent','unknown') LIMIT 1",
-            )
-            .get(join(this.#data, "kernel-homes", memberId));
+        const row = this.#prepare(
+            "SELECT id FROM kernel_attempts WHERE home=? AND status IN ('dispatch-intent','unknown') LIMIT 1",
+        ).get(join(this.#data, "kernel-homes", memberId));
 
         return row ? this.receipt(String(row.id)) : undefined;
+    }
+
+    /** Historical branch notice, without transferring or parsing the already mirrored prefix. */
+    hasBranchedHistory(sessionId: string): boolean {
+        return Boolean(
+            this.#prepare(
+                "SELECT EXISTS(SELECT 1 FROM kernel_attempts a CROSS JOIN kernel_entries e ON e.attempt_id=a.id WHERE a.conversation_id=? AND a.operation<>'handoff' AND json_extract(e.body,'$.customType')='team-kernel-branch') AS found",
+            ).get(sessionId)!.found,
+        );
+    }
+
+    /** Resolve the persisted mirror count once after restart; handoff seeds never count. */
+    entryCursor(sessionId: string, count: number): number {
+        if (!Number.isSafeInteger(count) || count < 0) {
+            throw new RangeError("Native history count must be a non-negative safe integer");
+        }
+
+        if (count === 0) {
+            return 0;
+        }
+
+        const row = this.#prepare(
+            "SELECT e.rowid FROM kernel_attempts a CROSS JOIN kernel_entries e ON e.attempt_id=a.id WHERE a.conversation_id=? AND a.operation<>'handoff' ORDER BY e.rowid LIMIT 1 OFFSET ?",
+        ).get(sessionId, count - 1);
+
+        if (!row) {
+            throw new Error("Native mirror count exceeds journal history");
+        }
+
+        return Number(row.rowid);
+    }
+
+    /** Warm mirror suffix. Start with this conversation's attempts, not a rowid scan of other histories. */
+    entriesAfter(sessionId: string, cursor: number) {
+        return this.#prepare(
+            "SELECT e.rowid,e.attempt_id,e.body,a.operation,a.request_id,a.binding FROM kernel_attempts a CROSS JOIN kernel_entries e ON e.attempt_id=a.id WHERE a.conversation_id=? AND a.operation<>'handoff' AND e.rowid>? ORDER BY e.rowid",
+        )
+            .all(sessionId, cursor)
+            .map((row) => ({
+                rowid: Number(row.rowid),
+                ...this.#historyEntry(row),
+            }));
+    }
+
+    #historyEntry(row: Record<string, SQLOutputValue>) {
+        return {
+            attemptId: String(row.attempt_id),
+            entry: JSON.parse(String(row.body)) as KernelEntry,
+            operation: row.operation as KernelOperation,
+            requestId: String(row.request_id),
+            memberId: (JSON.parse(String(row.binding)) as KernelBinding).memberId,
+        };
     }
 
     /** Own history in append-only order, skipping an already-consumed prefix (never handoff seed copies). */
@@ -1327,24 +1573,16 @@ export class RotomJournal {
             throw new RangeError("Native history offset must be a non-negative safe integer");
         }
 
-        return this.#db
-            .prepare(
-                "SELECT e.attempt_id,e.body,a.operation,a.request_id,a.binding FROM kernel_entries e JOIN kernel_attempts a ON a.id=e.attempt_id WHERE a.conversation_id=? AND a.operation<>'handoff' ORDER BY e.rowid LIMIT -1 OFFSET ?",
-            )
+        return this.#prepare(
+            "SELECT e.attempt_id,e.body,a.operation,a.request_id,a.binding FROM kernel_attempts a CROSS JOIN kernel_entries e ON e.attempt_id=a.id WHERE a.conversation_id=? AND a.operation<>'handoff' ORDER BY e.rowid LIMIT -1 OFFSET ?",
+        )
             .all(sessionId, skip)
-            .map((row) => ({
-                attemptId: String(row.attempt_id),
-                entry: JSON.parse(String(row.body)),
-                operation: row.operation as KernelOperation,
-                requestId: String(row.request_id),
-                memberId: (JSON.parse(String(row.binding)) as KernelBinding).memberId,
-            }));
+            .map((row) => this.#historyEntry(row));
     }
 
     /** Full native entries for exactly one segment, including inherited seed entries. */
     segmentEntries(segmentId: string): KernelEntry[] {
-        return this.#db
-            .prepare("SELECT body FROM kernel_entries WHERE session_id=? ORDER BY rowid")
+        return this.#prepare("SELECT body FROM kernel_entries WHERE session_id=? ORDER BY rowid")
             .all(segmentId)
             .map((row) => JSON.parse(String(row.body)));
     }
@@ -1357,9 +1595,11 @@ export class RotomJournal {
             throw new Error("Subagent usage arrived after its run ended");
         }
 
-        this.#db
-            .prepare("INSERT INTO kernel_child_usage VALUES (?,?,?)")
-            .run(attemptId, attempt.binding.memberId, JSON.stringify(raw));
+        this.#prepare("INSERT INTO kernel_child_usage VALUES (?,?,?)").run(
+            attemptId,
+            attempt.binding.memberId,
+            JSON.stringify(raw),
+        );
     }
 
     usage(sessionId: string): {
@@ -1370,11 +1610,9 @@ export class RotomJournal {
         subagent?: true;
     }[] {
         const rows = (table: string) =>
-            this.#db
-                .prepare(
-                    `SELECT u.* FROM ${table} u JOIN kernel_attempts a ON a.id=u.attempt_id WHERE a.conversation_id=? ORDER BY u.rowid`,
-                )
-                .all(sessionId);
+            this.#prepare(
+                `SELECT u.* FROM ${table} u JOIN kernel_attempts a ON a.id=u.attempt_id WHERE a.conversation_id=? ORDER BY u.rowid`,
+            ).all(sessionId);
 
         return [
             ...rows("kernel_usage").map((row) => ({
@@ -1404,14 +1642,12 @@ export class RotomJournal {
                 attempts: Map<string, { status: string; observed: boolean }>;
             }
         >();
-        const rows = this.#db
-            .prepare(
-                `SELECT a.id,a.session_id,a.binding,a.status,s.kernel_session_id,e.body
+        const rows = this.#prepare(
+            `SELECT a.id,a.session_id,a.binding,a.status,s.kernel_session_id,e.body
             FROM kernel_attempts a JOIN kernel_sessions s ON s.id=a.session_id
             LEFT JOIN kernel_entries e ON e.attempt_id=a.id AND json_extract(e.body,'$.customType')=?
             WHERE a.conversation_id=? AND a.operation IN ('prompt','compact','command') ORDER BY a.rowid,e.rowid`,
-            )
-            .all(CREDIT_ENTRY, sessionId);
+        ).all(CREDIT_ENTRY, sessionId);
 
         for (const row of rows) {
             const binding = JSON.parse(String(row.binding)) as KernelBinding;
@@ -1473,13 +1709,60 @@ export class RotomJournal {
         }));
     }
 
-    close(): void {
+    close(releaseLease = true): void {
         if (this.#closed) {
             return;
         }
 
         this.#closed = true;
+        this.#thinking.clear();
+        this.#statements.clear();
         this.#db.close();
-        rmSync(this.#lock);
+
+        if (releaseLease) {
+            rmSync(this.#lock);
+        }
     }
+}
+
+type JournalMethodName = {
+    [K in keyof RotomJournal]: RotomJournal[K] extends (...args: never[]) => unknown ? K : never;
+}[keyof RotomJournal];
+
+/**
+ * Explicit async boundary for journal callers. The core remains synchronous so each SQL transaction stays
+ * contiguous; this facade only schedules one complete core call and never awaits inside a transaction.
+ */
+export type AsyncRotomJournal = {
+    [K in JournalMethodName]: K extends "thinkingLevel"
+        ? (sessionId: string) => Promise<string>
+        : RotomJournal[K] extends (...args: infer A) => infer R
+          ? (...args: A) => Promise<Awaited<R>>
+          : never;
+};
+
+export const JOURNAL_METHODS = new Set(
+    Object.getOwnPropertyNames(RotomJournal.prototype).filter((name) => name !== "constructor"),
+);
+
+export function createAsyncRotomJournal(core: RotomJournal): AsyncRotomJournal {
+    let tail = Promise.resolve();
+
+    return Object.fromEntries(
+        [...JOURNAL_METHODS].map((name) => [
+            name,
+            (...args: unknown[]) => {
+                const operation = tail.then(() =>
+                    Reflect.apply(Reflect.get(core, name), core, args),
+                );
+
+                tail = operation.then(
+                    () => undefined,
+                    () => undefined,
+                );
+
+                return operation;
+            },
+        ]),
+    ) as AsyncRotomJournal;
 }

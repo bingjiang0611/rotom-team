@@ -1,0 +1,700 @@
+{
+    "baseline": "2676e7f854b8ddd2c9efdb17e51740971db870ca",
+    "removedTests": [
+        {
+            "file": "test/codemode.test.ts",
+            "name": "a script calls tools, gets their text, and returns a value"
+        },
+        {
+            "file": "test/codemode.test.ts",
+            "name": "nested calls are checked like direct ones: bad arguments, errors, and hooks that rewrite or block"
+        },
+        {
+            "file": "test/codemode.test.ts",
+            "name": "store() values last across scripts; failed scripts keep their output and change nothing"
+        },
+        {
+            "file": "test/codemode.test.ts",
+            "name": "output over the budget keeps its start and end, and saves the whole"
+        },
+        {
+            "file": "test/codemode.test.ts",
+            "name": "with Lancet Guard asking, each nested call waits for its own answer, even in parallel"
+        },
+        {
+            "file": "test/docs-examples.test.ts",
+            "name": "extensions.md names the reserved historical built-in tools and extension namespaces"
+        },
+        {
+            "file": "test/docs-examples.test.ts",
+            "name": "the unloaded historical prompt source names existing documentation paths"
+        },
+        {
+            "file": "test/projection.test.ts",
+            "name": "artifact ids become kebab-case slugs"
+        },
+        {
+            "file": "test/plan.test.ts",
+            "name": "command lines split into words the way bash would, and anything beyond plain words is refused"
+        },
+        {
+            "file": "test/plan.test.ts",
+            "name": "only commands that read pass, with arguments that keep them reading"
+        },
+        {
+            "file": "test/plan.test.ts",
+            "name": "in plan mode only reading tools pass"
+        },
+        {
+            "file": "test/browser.test.ts",
+            "name": "plan mode lets Pi look at pages but not act on them"
+        }
+    ],
+    "addedTests": [
+        {
+            "file": "test/legacy-archive.test.ts",
+            "name": "CLI help explains removed service extensions without changing retained drop-ins"
+        }
+    ],
+    "unchangedRetainedBodiesInEditedFiles": 31,
+    "defaultTests": {
+        "before": 723,
+        "after": 712,
+        "failed": 0,
+        "skipped": 0,
+        "cancelled": 0
+    },
+    "pendingFixture": {
+        "scanTasks.pending": 0,
+        "scanTasks.running": 2,
+        "scanTasks.waiting": 1,
+        "scanTasks.completing": 0,
+        "scanSubmissions.queued": 1,
+        "scanSubmissions.placed": 1
+    },
+    "positiveControl": {
+        "sentinelChanged": true
+    },
+    "proofs": {
+        "head/off": {
+            "log": "probe-head-off.log",
+            "sha256": "dc574115cfc0bff72305e70b13750578eca7bec826cd9e622271cde3ff991560",
+            "result": {
+                "mode": "off",
+                "r1.exportHasHistory": true,
+                "r1.submit": "409 This legacy Durable session is a read-only archive. Open, read, export, and access grants remain available; execution and mutation are disabled.",
+                "r1.archiveNotes": 1,
+                "r1.scheduledSent": 0,
+                "r1.newWork": false,
+                "r1.activeTasks": 0,
+                "r1.openSubmissions": 0,
+                "r1.locks": [],
+                "r2.exportHasHistory": true,
+                "r2.submit": "409 This legacy Durable session is a read-only archive. Open, read, export, and access grants remain available; execution and mutation are disabled.",
+                "r2.archiveNotes": 1,
+                "r2.scheduledSent": 0,
+                "r2.newWork": false,
+                "r2.activeTasks": 0,
+                "r2.openSubmissions": 0,
+                "r2.locks": [],
+                "sentinelUnchanged": true
+            }
+        },
+        "d9b/off": {
+            "log": "probe-d9b-off.log",
+            "sha256": "dc574115cfc0bff72305e70b13750578eca7bec826cd9e622271cde3ff991560",
+            "result": {
+                "mode": "off",
+                "r1.exportHasHistory": true,
+                "r1.submit": "409 This legacy Durable session is a read-only archive. Open, read, export, and access grants remain available; execution and mutation are disabled.",
+                "r1.archiveNotes": 1,
+                "r1.scheduledSent": 0,
+                "r1.newWork": false,
+                "r1.activeTasks": 0,
+                "r1.openSubmissions": 0,
+                "r1.locks": [],
+                "r2.exportHasHistory": true,
+                "r2.submit": "409 This legacy Durable session is a read-only archive. Open, read, export, and access grants remain available; execution and mutation are disabled.",
+                "r2.archiveNotes": 1,
+                "r2.scheduledSent": 0,
+                "r2.newWork": false,
+                "r2.activeTasks": 0,
+                "r2.openSubmissions": 0,
+                "r2.locks": [],
+                "sentinelUnchanged": true
+            }
+        },
+        "d9a/off": {
+            "log": "probe-d9a-off.log",
+            "sha256": "dc574115cfc0bff72305e70b13750578eca7bec826cd9e622271cde3ff991560",
+            "result": {
+                "mode": "off",
+                "r1.exportHasHistory": true,
+                "r1.submit": "409 This legacy Durable session is a read-only archive. Open, read, export, and access grants remain available; execution and mutation are disabled.",
+                "r1.archiveNotes": 1,
+                "r1.scheduledSent": 0,
+                "r1.newWork": false,
+                "r1.activeTasks": 0,
+                "r1.openSubmissions": 0,
+                "r1.locks": [],
+                "r2.exportHasHistory": true,
+                "r2.submit": "409 This legacy Durable session is a read-only archive. Open, read, export, and access grants remain available; execution and mutation are disabled.",
+                "r2.archiveNotes": 1,
+                "r2.scheduledSent": 0,
+                "r2.newWork": false,
+                "r2.activeTasks": 0,
+                "r2.openSubmissions": 0,
+                "r2.locks": [],
+                "sentinelUnchanged": true
+            }
+        },
+        "head/on": {
+            "log": "probe-head-on-final.log",
+            "sha256": "2fd075c0b5d41cbf52d616a6e4b1d9187bd694181cebbdcbb91c7abcd6692ebc",
+            "result": {
+                "mode": "on",
+                "r1.exportHasHistory": true,
+                "r1.submit": "409 This legacy Durable session is a read-only archive. Open, read, export, and access grants remain available; execution and mutation are disabled.",
+                "r1.archiveNotes": 1,
+                "r1.scheduledSent": 0,
+                "r1.newWork": false,
+                "r1.activeTasks": 0,
+                "r1.openSubmissions": 0,
+                "r1.locks": [],
+                "r2.exportHasHistory": true,
+                "r2.submit": "409 This legacy Durable session is a read-only archive. Open, read, export, and access grants remain available; execution and mutation are disabled.",
+                "r2.archiveNotes": 1,
+                "r2.scheduledSent": 0,
+                "r2.newWork": false,
+                "r2.activeTasks": 0,
+                "r2.openSubmissions": 0,
+                "r2.locks": [],
+                "sentinelUnchanged": true
+            }
+        },
+        "d9b/on": {
+            "log": "probe-d9b-on.log",
+            "sha256": "2fd075c0b5d41cbf52d616a6e4b1d9187bd694181cebbdcbb91c7abcd6692ebc",
+            "result": {
+                "mode": "on",
+                "r1.exportHasHistory": true,
+                "r1.submit": "409 This legacy Durable session is a read-only archive. Open, read, export, and access grants remain available; execution and mutation are disabled.",
+                "r1.archiveNotes": 1,
+                "r1.scheduledSent": 0,
+                "r1.newWork": false,
+                "r1.activeTasks": 0,
+                "r1.openSubmissions": 0,
+                "r1.locks": [],
+                "r2.exportHasHistory": true,
+                "r2.submit": "409 This legacy Durable session is a read-only archive. Open, read, export, and access grants remain available; execution and mutation are disabled.",
+                "r2.archiveNotes": 1,
+                "r2.scheduledSent": 0,
+                "r2.newWork": false,
+                "r2.activeTasks": 0,
+                "r2.openSubmissions": 0,
+                "r2.locks": [],
+                "sentinelUnchanged": true
+            }
+        },
+        "d9a/on": {
+            "log": "probe-d9a-on.log",
+            "sha256": "2fd075c0b5d41cbf52d616a6e4b1d9187bd694181cebbdcbb91c7abcd6692ebc",
+            "result": {
+                "mode": "on",
+                "r1.exportHasHistory": true,
+                "r1.submit": "409 This legacy Durable session is a read-only archive. Open, read, export, and access grants remain available; execution and mutation are disabled.",
+                "r1.archiveNotes": 1,
+                "r1.scheduledSent": 0,
+                "r1.newWork": false,
+                "r1.activeTasks": 0,
+                "r1.openSubmissions": 0,
+                "r1.locks": [],
+                "r2.exportHasHistory": true,
+                "r2.submit": "409 This legacy Durable session is a read-only archive. Open, read, export, and access grants remain available; execution and mutation are disabled.",
+                "r2.archiveNotes": 1,
+                "r2.scheduledSent": 0,
+                "r2.newWork": false,
+                "r2.activeTasks": 0,
+                "r2.openSubmissions": 0,
+                "r2.locks": [],
+                "sentinelUnchanged": true
+            }
+        },
+        "head/worker": {
+            "log": "probe-head-worker-final.log",
+            "sha256": "1d6f62b8899b2c193eadd37ac1312fdbda67d640120ad6e85694be9e6d3f3a58",
+            "result": {
+                "mode": "worker",
+                "r1.exportHasHistory": true,
+                "r1.submit": "409 This legacy Durable session is a read-only archive. Open, read, export, and access grants remain available; execution and mutation are disabled.",
+                "r1.archiveNotes": 1,
+                "r1.scheduledSent": 0,
+                "r1.newWork": false,
+                "r1.activeTasks": 0,
+                "r1.openSubmissions": 0,
+                "r1.locks": [],
+                "r2.exportHasHistory": true,
+                "r2.submit": "409 This legacy Durable session is a read-only archive. Open, read, export, and access grants remain available; execution and mutation are disabled.",
+                "r2.archiveNotes": 1,
+                "r2.scheduledSent": 0,
+                "r2.newWork": false,
+                "r2.activeTasks": 0,
+                "r2.openSubmissions": 0,
+                "r2.locks": [],
+                "sentinelUnchanged": true
+            }
+        },
+        "d9b/worker": {
+            "log": "probe-d9b-worker.log",
+            "sha256": "1d6f62b8899b2c193eadd37ac1312fdbda67d640120ad6e85694be9e6d3f3a58",
+            "result": {
+                "mode": "worker",
+                "r1.exportHasHistory": true,
+                "r1.submit": "409 This legacy Durable session is a read-only archive. Open, read, export, and access grants remain available; execution and mutation are disabled.",
+                "r1.archiveNotes": 1,
+                "r1.scheduledSent": 0,
+                "r1.newWork": false,
+                "r1.activeTasks": 0,
+                "r1.openSubmissions": 0,
+                "r1.locks": [],
+                "r2.exportHasHistory": true,
+                "r2.submit": "409 This legacy Durable session is a read-only archive. Open, read, export, and access grants remain available; execution and mutation are disabled.",
+                "r2.archiveNotes": 1,
+                "r2.scheduledSent": 0,
+                "r2.newWork": false,
+                "r2.activeTasks": 0,
+                "r2.openSubmissions": 0,
+                "r2.locks": [],
+                "sentinelUnchanged": true
+            }
+        },
+        "d9a/worker": {
+            "log": "probe-d9a-worker.log",
+            "sha256": "1d6f62b8899b2c193eadd37ac1312fdbda67d640120ad6e85694be9e6d3f3a58",
+            "result": {
+                "mode": "worker",
+                "r1.exportHasHistory": true,
+                "r1.submit": "409 This legacy Durable session is a read-only archive. Open, read, export, and access grants remain available; execution and mutation are disabled.",
+                "r1.archiveNotes": 1,
+                "r1.scheduledSent": 0,
+                "r1.newWork": false,
+                "r1.activeTasks": 0,
+                "r1.openSubmissions": 0,
+                "r1.locks": [],
+                "r2.exportHasHistory": true,
+                "r2.submit": "409 This legacy Durable session is a read-only archive. Open, read, export, and access grants remain available; execution and mutation are disabled.",
+                "r2.archiveNotes": 1,
+                "r2.scheduledSent": 0,
+                "r2.newWork": false,
+                "r2.activeTasks": 0,
+                "r2.openSubmissions": 0,
+                "r2.locks": [],
+                "sentinelUnchanged": true
+            }
+        }
+    },
+    "native": {
+        "native-app-off": {
+            "sha256": "c01f201cc3893d9ae2e58cd7e3b43cdbedd7b496c239b44434be9ff404f70943",
+            "result": {
+                "realProvider": false,
+                "status": "passed",
+                "webUiVerified": false,
+                "invalidBackendRejectedWithoutFallback": true,
+                "creationGapRecoveredWithoutDispatch": true,
+                "lostInitializedJournalFailsClosed": true,
+                "legacyNativeSetupBackfilledFromJournal": true,
+                "mcpSheetReportsProjectServers": true,
+                "nativeCompactBudgetAdmission": true,
+                "apiHandoffAndCompaction": true,
+                "handoffHistoricalUsagePreserved": true,
+                "apiForkIdempotencyConfigurationAndPayer": true,
+                "forkAndContinuePermissionsIndependent": true,
+                "concurrentConfigurationIdentityProtected": true,
+                "sameDigestStagingPreservesSnapshotIdentity": true,
+                "nativeConfigurationActivationAndFork": true,
+                "forkGapAndUnknownSourceNotReplayed": true,
+                "configurationGapNotReplayed": true,
+                "preparedOnlyReadbackExcludesLiveAndUnknown": true,
+                "readOnlyExactReceiptLookup": true,
+                "submitTakesOverWithSendersAccount": true,
+                "kernelUpgradeKeepsNativeSession": true,
+                "unifiedTranscriptLiveAndMirrored": true,
+                "extensionDialogsReachThePayer": true,
+                "messagesJoinTheRunningPrompt": true,
+                "projectMcpConnectedByChild": true,
+                "personalSkillsIgnoredByParentAndChild": true,
+                "subagentsThroughTheGate": true,
+                "stopEndsSubagents": true,
+                "cleanRestartContinues": true,
+                "projectSkillRunsByName": true,
+                "nativeForkSharesWorktree": true,
+                "nativeLiveForeignMutationDenied": true,
+                "oneMemberRunsSessionsInParallel": true,
+                "projectViewAndContinue": true,
+                "accountGenerationChecked": true,
+                "budgetNotBypassed": true,
+                "excludedSlashAndLongRequestRejectedBeforeIntent": true,
+                "disablingCannotBypassUnknownFence": true,
+                "apiCreateSubmitReadAbort": true,
+                "roleRevocation": true,
+                "projectConfiguration": true,
+                "fixedPayer": true,
+                "restartIdempotency": true,
+                "nativeHistoryResume": true,
+                "noDurableFallback": true,
+                "privateRequestAuthNotPersisted": true,
+                "loopbackRequests": 85,
+                "nativeDeliveredFileReadback": true,
+                "nativeAttachmentsImagesAndHistory": true,
+                "firstMessageNamesSession": true,
+                "nativeSubagentInjections": [
+                    {
+                        "kind": "SKILL",
+                        "childInferences": 2,
+                        "descriptor": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-lZoy9c/native-app/kernel-homes/ee167730-8ee5-4450-aca8-70e716402cac/.local/state/rotom/subagent-store/owned-process-groups-v2/async-subagent-runs/86be6c5b-54d0-4f99-9370-cb52107f7506/recovery-descriptor.json"
+                    },
+                    {
+                        "kind": "MEMORY",
+                        "childInferences": 1,
+                        "descriptor": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-lZoy9c/native-app/kernel-homes/ee167730-8ee5-4450-aca8-70e716402cac/.local/state/rotom/subagent-store/owned-process-groups-v2/async-subagent-runs/feba9952-fd9d-4ead-a1b2-4aa9e919c003/recovery-descriptor.json"
+                    },
+                    {
+                        "kind": "PROJECT_MEMORY",
+                        "childInferences": 1,
+                        "descriptor": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-lZoy9c/native-app/kernel-homes/ee167730-8ee5-4450-aca8-70e716402cac/.local/state/rotom/subagent-store/owned-process-groups-v2/async-subagent-runs/d3cd8756-c1bf-4c9b-a93d-1bbe6291c30b/recovery-descriptor.json"
+                    },
+                    {
+                        "kind": "REFINEMENT",
+                        "childInferences": 1,
+                        "descriptor": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-lZoy9c/native-app/kernel-homes/ee167730-8ee5-4450-aca8-70e716402cac/.local/state/rotom/subagent-store/owned-process-groups-v2/async-subagent-runs/a08a2617-6807-427a-899c-41038a484c02/recovery-descriptor.json"
+                    },
+                    {
+                        "kind": "ASYNC_WORKFLOW",
+                        "childInferences": 0
+                    },
+                    {
+                        "kind": "WORKFLOW",
+                        "childInferences": 0
+                    },
+                    {
+                        "kind": "WORKER",
+                        "childInferences": 1,
+                        "descriptor": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-lZoy9c/native-app/kernel-homes/ee167730-8ee5-4450-aca8-70e716402cac/.local/state/rotom/subagent-store/owned-process-groups-v2/async-subagent-runs/4bdcf533-ea31-4b3f-a76b-7bfe6151d6e2/recovery-descriptor.json"
+                    },
+                    {
+                        "kind": "MEMORY",
+                        "childInferences": 1,
+                        "descriptor": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-lZoy9c/native-app/kernel-homes/2185b1c0-efe1-475e-902e-dec4cfc825ff/.local/state/rotom/subagent-store/owned-process-groups-v2/async-subagent-runs/6a22043b-9017-4b8f-a7c2-a3c91d21287e/recovery-descriptor.json"
+                    },
+                    {
+                        "kind": "PROJECT_MEMORY",
+                        "childInferences": 1,
+                        "descriptor": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-lZoy9c/native-app/kernel-homes/2185b1c0-efe1-475e-902e-dec4cfc825ff/.local/state/rotom/subagent-store/owned-process-groups-v2/async-subagent-runs/ce10ee2c-27e7-41c1-b67c-6a2d1e419f3b/recovery-descriptor.json"
+                    }
+                ],
+                "userProvidedWorkflowScripts": "unsupported: native scoped sync refusal and async lifetime/result-delivery gap",
+                "crashedKernelRemainsUnknownWithoutContinuation": true,
+                "evidence": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-lZoy9c/team-kernel-report.json"
+            }
+        },
+        "native-app-on": {
+            "sha256": "3ffe1b6f3a815ee6b82813f60c76eede29d6c97b3ad4830c4bcbb55e6e666ad2",
+            "result": {
+                "realProvider": false,
+                "status": "passed",
+                "webUiVerified": false,
+                "invalidBackendRejectedWithoutFallback": true,
+                "creationGapRecoveredWithoutDispatch": true,
+                "lostInitializedJournalFailsClosed": true,
+                "legacyNativeSetupBackfilledFromJournal": true,
+                "mcpSheetReportsProjectServers": true,
+                "nativeCompactBudgetAdmission": true,
+                "apiHandoffAndCompaction": true,
+                "handoffHistoricalUsagePreserved": true,
+                "apiForkIdempotencyConfigurationAndPayer": true,
+                "forkAndContinuePermissionsIndependent": true,
+                "concurrentConfigurationIdentityProtected": true,
+                "sameDigestStagingPreservesSnapshotIdentity": true,
+                "nativeConfigurationActivationAndFork": true,
+                "forkGapAndUnknownSourceNotReplayed": true,
+                "configurationGapNotReplayed": true,
+                "preparedOnlyReadbackExcludesLiveAndUnknown": true,
+                "readOnlyExactReceiptLookup": true,
+                "submitTakesOverWithSendersAccount": true,
+                "kernelUpgradeKeepsNativeSession": true,
+                "unifiedTranscriptLiveAndMirrored": true,
+                "extensionDialogsReachThePayer": true,
+                "messagesJoinTheRunningPrompt": true,
+                "projectMcpConnectedByChild": true,
+                "personalSkillsIgnoredByParentAndChild": true,
+                "subagentsThroughTheGate": true,
+                "stopEndsSubagents": true,
+                "cleanRestartContinues": true,
+                "projectSkillRunsByName": true,
+                "nativeForkSharesWorktree": true,
+                "nativeLiveForeignMutationDenied": true,
+                "oneMemberRunsSessionsInParallel": true,
+                "projectViewAndContinue": true,
+                "accountGenerationChecked": true,
+                "budgetNotBypassed": true,
+                "excludedSlashAndLongRequestRejectedBeforeIntent": true,
+                "disablingCannotBypassUnknownFence": true,
+                "apiCreateSubmitReadAbort": true,
+                "roleRevocation": true,
+                "projectConfiguration": true,
+                "fixedPayer": true,
+                "restartIdempotency": true,
+                "nativeHistoryResume": true,
+                "noDurableFallback": true,
+                "privateRequestAuthNotPersisted": true,
+                "loopbackRequests": 86,
+                "nativeDeliveredFileReadback": true,
+                "nativeAttachmentsImagesAndHistory": true,
+                "firstMessageNamesSession": true,
+                "nativeSubagentInjections": [
+                    {
+                        "kind": "SKILL",
+                        "childInferences": 2,
+                        "descriptor": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-feZZbR/native-app/kernel-homes/7c5aa555-4f8c-46f5-a9f0-db790decabb7/.local/state/rotom/subagent-store/owned-process-groups-v2/async-subagent-runs/d8c7d2cb-262e-4cac-a7b9-550f309b684c/recovery-descriptor.json"
+                    },
+                    {
+                        "kind": "MEMORY",
+                        "childInferences": 1,
+                        "descriptor": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-feZZbR/native-app/kernel-homes/7c5aa555-4f8c-46f5-a9f0-db790decabb7/.local/state/rotom/subagent-store/owned-process-groups-v2/async-subagent-runs/86002a7b-ac23-4a85-911d-e6fa314f004b/recovery-descriptor.json"
+                    },
+                    {
+                        "kind": "PROJECT_MEMORY",
+                        "childInferences": 1,
+                        "descriptor": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-feZZbR/native-app/kernel-homes/7c5aa555-4f8c-46f5-a9f0-db790decabb7/.local/state/rotom/subagent-store/owned-process-groups-v2/async-subagent-runs/40455120-2819-45af-bc3a-3031defd57bf/recovery-descriptor.json"
+                    },
+                    {
+                        "kind": "REFINEMENT",
+                        "childInferences": 1,
+                        "descriptor": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-feZZbR/native-app/kernel-homes/7c5aa555-4f8c-46f5-a9f0-db790decabb7/.local/state/rotom/subagent-store/owned-process-groups-v2/async-subagent-runs/61f4a5e0-0c71-49ff-a414-6ae6d432b9f3/recovery-descriptor.json"
+                    },
+                    {
+                        "kind": "ASYNC_WORKFLOW",
+                        "childInferences": 0
+                    },
+                    {
+                        "kind": "WORKFLOW",
+                        "childInferences": 0
+                    },
+                    {
+                        "kind": "WORKER",
+                        "childInferences": 1,
+                        "descriptor": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-feZZbR/native-app/kernel-homes/7c5aa555-4f8c-46f5-a9f0-db790decabb7/.local/state/rotom/subagent-store/owned-process-groups-v2/async-subagent-runs/aa7f106f-da14-4708-9cc1-f2853932e05d/recovery-descriptor.json"
+                    },
+                    {
+                        "kind": "MEMORY",
+                        "childInferences": 1,
+                        "descriptor": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-feZZbR/native-app/kernel-homes/b9a15005-2330-46a2-996f-df12d1834b71/.local/state/rotom/subagent-store/owned-process-groups-v2/async-subagent-runs/722564ef-8d58-4fcf-bcf3-ca39a6c44bfb/recovery-descriptor.json"
+                    },
+                    {
+                        "kind": "PROJECT_MEMORY",
+                        "childInferences": 1,
+                        "descriptor": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-feZZbR/native-app/kernel-homes/b9a15005-2330-46a2-996f-df12d1834b71/.local/state/rotom/subagent-store/owned-process-groups-v2/async-subagent-runs/8fb0996b-6bac-4725-b5a6-29dd5dd538d4/recovery-descriptor.json"
+                    }
+                ],
+                "userProvidedWorkflowScripts": "unsupported: native scoped sync refusal and async lifetime/result-delivery gap",
+                "crashedKernelRemainsUnknownWithoutContinuation": true,
+                "storageWorkerFailureStopsNativeAndRetainsLeases": true,
+                "evidence": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-feZZbR/team-kernel-report.json"
+            }
+        },
+        "native-commands-off": {
+            "sha256": "b1268f978f83b38164e9c39a0003b9b6fe33d356db94729712e1e97fc5f99c6e",
+            "result": {
+                "realAccounts": false,
+                "data": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-Z2152F/native-commands",
+                "context": {
+                    "usage": true,
+                    "injections": true,
+                    "noInference": true,
+                    "idempotentReadback": true
+                },
+                "dynamicCommands": {
+                    "shipped": 15,
+                    "metadata": true,
+                    "rejectedWithoutEffects": true,
+                    "readOnlyHandlers": 8,
+                    "noInference": true
+                },
+                "compaction": {
+                    "calls": 2,
+                    "usage": {
+                        "input": 22,
+                        "output": 14,
+                        "cacheRead": 0,
+                        "cacheWrite": 0,
+                        "reasoning": 0,
+                        "totalTokens": 36,
+                        "cost": {
+                            "input": 0,
+                            "output": 0,
+                            "cacheRead": 0,
+                            "cacheWrite": 0,
+                            "total": 0
+                        }
+                    }
+                },
+                "queuedCommand": {
+                    "operation": "prompt",
+                    "status": "unknown",
+                    "unresolvedCommandInput": true,
+                    "effectCount": 1,
+                    "recoveryEligible": false,
+                    "restartedWithoutReplay": true
+                },
+                "largeReadback": {
+                    "persistedHistoryOver64MiB": "settled",
+                    "unflushedSuffix": "rpc-record-limit",
+                    "finalizationFencedAfterRestart": true
+                },
+                "passed": true,
+                "inferences": 19,
+                "checks": [
+                    "trusted executor fixture command effects remain unknown without restart/retry replay (below HTTP admission)",
+                    "queued effect-then-error durably fences the existing prompt; no duplicate effect or automatic resume",
+                    "actual unknown discovery cannot start a second native process with same or new request ID",
+                    "catalog retained after 30 seconds/restart without native startup; owner-only shared settings",
+                    "live native extensions exposed without a Team allowlist; protected account/upload/lifecycle commands rejected",
+                    "native context usage/injections before first message and after inference; no paid probe or raw text result",
+                    "first-session no-inference discovery and member-private snapshots",
+                    "Qoder account API private results",
+                    "native title readback before first message and after handoff",
+                    "model A→B then inference B and Alice payer",
+                    "thinking high persisted",
+                    "skill admission clears before held inference completes",
+                    "live thinking changes next provider request without replacing process, segment or receipt binding",
+                    "native thinking clamping, payer-only admission and unknown/mixed-model fences",
+                    "live thinking survives native process retirement and server restart",
+                    "fixture native title and Team rename persist across handoff",
+                    "native JSONL entries and HTML export/member privacy",
+                    "selected earlier-user fork with Bob payer",
+                    "native tree navigation and explicit branch summary usage",
+                    "native slash compaction receipt, persisted summary/usage and idempotency",
+                    "clone and selected-message fork create independent Team sessions; removed lifecycle commands rejected",
+                    "settings persist to real native startup",
+                    "unknown/private/excluded commands no inference",
+                    "busy model mutation rejected without preference change",
+                    "restart persistence"
+                ]
+            }
+        },
+        "native-commands-on-final": {
+            "sha256": "f037b6b3a539cc555a1cff778e89dff0df634028fb9710366474cea85b1bac81",
+            "result": {
+                "realAccounts": false,
+                "data": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-dgqB8I/native-commands",
+                "context": {
+                    "usage": true,
+                    "injections": true,
+                    "noInference": true,
+                    "idempotentReadback": true
+                },
+                "dynamicCommands": {
+                    "shipped": 15,
+                    "metadata": true,
+                    "rejectedWithoutEffects": true,
+                    "readOnlyHandlers": 8,
+                    "noInference": true
+                },
+                "compaction": {
+                    "calls": 2,
+                    "usage": {
+                        "input": 22,
+                        "output": 14,
+                        "cacheRead": 0,
+                        "cacheWrite": 0,
+                        "reasoning": 0,
+                        "totalTokens": 36,
+                        "cost": {
+                            "input": 0,
+                            "output": 0,
+                            "cacheRead": 0,
+                            "cacheWrite": 0,
+                            "total": 0
+                        }
+                    }
+                },
+                "queuedCommand": {
+                    "operation": "prompt",
+                    "status": "unknown",
+                    "unresolvedCommandInput": true,
+                    "effectCount": 1,
+                    "recoveryEligible": false,
+                    "restartedWithoutReplay": true
+                },
+                "largeReadback": {
+                    "persistedHistoryOver64MiB": "settled",
+                    "unflushedSuffix": "rpc-record-limit",
+                    "finalizationFencedAfterRestart": true
+                },
+                "passed": true,
+                "inferences": 19,
+                "checks": [
+                    "trusted executor fixture command effects remain unknown without restart/retry replay (below HTTP admission)",
+                    "queued effect-then-error durably fences the existing prompt; no duplicate effect or automatic resume",
+                    "actual unknown discovery cannot start a second native process with same or new request ID",
+                    "catalog retained after 30 seconds/restart without native startup; owner-only shared settings",
+                    "live native extensions exposed without a Team allowlist; protected account/upload/lifecycle commands rejected",
+                    "native context usage/injections before first message and after inference; no paid probe or raw text result",
+                    "first-session no-inference discovery and member-private snapshots",
+                    "Qoder account API private results",
+                    "native title readback before first message and after handoff",
+                    "model A→B then inference B and Alice payer",
+                    "thinking high persisted",
+                    "skill admission clears before held inference completes",
+                    "live thinking changes next provider request without replacing process, segment or receipt binding",
+                    "native thinking clamping, payer-only admission and unknown/mixed-model fences",
+                    "live thinking survives native process retirement and server restart",
+                    "fixture native title and Team rename persist across handoff",
+                    "native JSONL entries and HTML export/member privacy",
+                    "selected earlier-user fork with Bob payer",
+                    "native tree navigation and explicit branch summary usage",
+                    "native slash compaction receipt, persisted summary/usage and idempotency",
+                    "clone and selected-message fork create independent Team sessions; removed lifecycle commands rejected",
+                    "settings persist to real native startup",
+                    "unknown/private/excluded commands no inference",
+                    "busy model mutation rejected without preference change",
+                    "restart persistence"
+                ]
+            }
+        }
+    },
+    "dropInSourceAndSwitchesPreserved": true,
+    "logs": {
+        "baseline-test.log": {
+            "sha256": "484e4b073110f5f4c205d8098cf4169df4478e9763b3fe18e837686bc645a199"
+        },
+        "final-test.log": {
+            "sha256": "39664270b0562e84d15ed10658fe215812c63a186429e994b6e2fb2e3b654f07"
+        },
+        "final-check.log": {
+            "sha256": "215a27934c039f6c6e22837000b5f45f6919b2bded051a0cb5b5b2dcb3230072"
+        },
+        "final-lint.log": {
+            "sha256": "ea94ffbe6d2c9a4f5e7a8fc55c448ea597badd9dbb0cd8fefda70ec366246bcc"
+        },
+        "final-format-check.log": {
+            "sha256": "d9c06eb030354cc300269dd3e43394caced83d403272a83760d0e51fe0549883"
+        },
+        "legacy-archive-final.log": {
+            "sha256": "789810efff56db0991b2307a2c8ac3f279b6ac08c2fbe43530a6a6bd2f914364"
+        },
+        "cli-negative.log": {
+            "sha256": "18a6ddeee64f10b5549605a2b2af1864cfe819037067d520bc94b8c418fc08d2"
+        },
+        "retained-contracts.log": {
+            "sha256": "90e0f3bbbf263b34ae2215ef3842c6306d74defb51ddca7a02fd925eaf1978bf"
+        },
+        "native-commands-on.log": {
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "probe-head-on.log": {
+            "sha256": "a3e4aee73368dec79c3dd4ccd5816067a89ff819d8ea0278b61ccba7f9500264"
+        }
+    }
+}

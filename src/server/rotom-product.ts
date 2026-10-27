@@ -104,3 +104,22 @@ export async function nativeResourcePolicyApi() {
         SettingsManager: settings.SettingsManager,
     };
 }
+
+/** Pinned session-file API without the process client. The SDK still imports pi-ai transitively. */
+export async function nativeSessionDataApi() {
+    verifyRotomKernel();
+    const { resolveInstalledPi } = await import(
+        pathToFileURL(join(product, "runtime/resolve-installed-pi.mjs")).href
+    );
+
+    await withParseWork("native-resolver", () => resolveInstalledPi(product));
+    const entry = canonical(
+        join(
+            product,
+            "runtime/pi/node_modules/@earendil-works/pi-coding-agent/dist/core/session-manager.js",
+        ),
+        "file",
+    );
+
+    return import(pathToFileURL(entry).href);
+}

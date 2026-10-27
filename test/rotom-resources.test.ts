@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
 import {
     existsSync,
     mkdtempSync,
@@ -39,6 +41,53 @@ function fixture() {
 
     return { root, home, shared, project };
 }
+
+test("resource revision reuses unchanged large file hashes but observes edits, replacement and deletion", (t) => {
+    const f = fixture();
+    const file = join(f.shared, "npm/package-lock.json");
+
+    mkdirSync(join(f.shared, "npm"));
+    writeFileSync(file, "a".repeat(2 * 1024 * 1024));
+    const original = fs.readFileSync;
+    let reads = 0;
+    const mocked = t.mock.method(fs, "readFileSync", (...args: Parameters<typeof readFileSync>) => {
+        if (String(args[0]) === file) {
+            reads++;
+        }
+
+        return Reflect.apply(original, fs, args);
+    });
+
+    syncBuiltinESMExports();
+
+    try {
+        const before = teamResourceRevision(f.shared, f.project);
+
+        assert.equal(reads, 1);
+        assert.equal(teamResourceRevision(f.shared, f.project), before);
+        assert.equal(reads, 1, "unchanged large files are not read again");
+        writeFileSync(file, "b".repeat(2 * 1024 * 1024));
+        const changed = teamResourceRevision(f.shared, f.project);
+
+        assert.notEqual(changed, before);
+        assert.equal(reads, 2);
+        writeFileSync(`${file}.new`, "c".repeat(2 * 1024 * 1024));
+        fs.renameSync(`${file}.new`, file);
+        assert.notEqual(teamResourceRevision(f.shared, f.project), changed);
+        assert.equal(reads, 3);
+        rmSync(file);
+        const removed = teamResourceRevision(f.shared, f.project);
+
+        assert.notEqual(removed, changed);
+        assert.equal(reads, 3);
+        writeFileSync(file, "");
+        assert.notEqual(teamResourceRevision(f.shared, f.project), removed);
+    } finally {
+        mocked.mock.restore();
+        syncBuiltinESMExports();
+        rmSync(f.root, { recursive: true, force: true });
+    }
+});
 
 test("shared resources replace member settings without reading project packages or changing private state", async () => {
     const { home, shared, project } = fixture();

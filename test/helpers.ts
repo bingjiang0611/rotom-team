@@ -1,16 +1,16 @@
 // What the server tests share: an isolated Pi install and data folder, a scripted model, and small helpers. Import
 // this before anything from src/: it points Pi's config at a temporary folder first.
-import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { FauxResponseStep } from "@earendil-works/pi-ai";
 import { fauxAssistantMessage, fauxProvider, fauxText } from "@earendil-works/pi-ai/providers/faux";
-import { type ConversationId, UsageDoc } from "@earendil-works/pi-durable";
+import { AgentDoc, type ConversationId, UsageDoc } from "@earendil-works/pi-durable";
 import type { Attachment } from "../src/server/commands.ts";
 import type { User } from "../src/server/config.ts";
-import type { ExtensionLoader } from "../src/server/reload.ts";
+import { SessionsDoc } from "../src/server/docs.ts";
+import { ConfigurationDoc } from "../src/server/team-profiles.ts";
 import type { Client } from "../src/server/room.ts";
 import type { Runtime as ModelRuntime } from "../src/server/team-accounts.ts";
 
@@ -28,7 +28,6 @@ mkdirSync(work);
 const { PocketApp } = await import("../src/server/app.ts");
 
 export type App = Awaited<ReturnType<typeof PocketApp.open>>;
-export type LegacyApp = App & { loader: ExtensionLoader };
 
 /** The text of the newest message a model request carries, and who sent it. */
 export function lastText(context: { messages: readonly { role: string; content: unknown }[] }): {
@@ -72,7 +71,7 @@ export async function openApp(
     model: ReturnType<typeof scriptedModel>,
     dataDir = join(root, "data"),
     now?: () => number,
-): Promise<LegacyApp> {
+): Promise<App> {
     const app = await PocketApp.open({
         dataDir,
         defaultCwd: work,
@@ -82,10 +81,37 @@ export async function openApp(
         ...(now === undefined ? {} : { now }),
     });
 
-    // This helper starts the non-Team legacy runtime; its tests require server extensions.
-    assert.ok(app.loader);
+    return app;
+}
 
-    return app as LegacyApp;
+/** Open the app with the genuine native kernel enabled for positive mutation tests. */
+export async function openNativeApp(
+    model: ReturnType<typeof scriptedModel>,
+    dataDir = join(root, "native-data"),
+    now?: () => number,
+): Promise<App> {
+    const nativeProvider = {
+        ...model.provider,
+        id: "openai",
+        name: "Synthetic native fixture",
+        getModels: () =>
+            model.provider.getModels().map((each) => ({
+                ...each,
+                provider: "openai",
+                api: "openai-completions",
+                baseUrl: "http://127.0.0.1:1/v1",
+            })),
+    };
+    const app = await PocketApp.open({
+        dataDir,
+        defaultCwd: realpathSync(work),
+        supervised: false,
+        kernel: true,
+        configureUserModels: (models) => models.registerNativeProvider(nativeProvider),
+        ...(now === undefined ? {} : { now }),
+    });
+
+    return app;
 }
 
 /** Wait until `check` holds, polling. */
@@ -125,19 +151,56 @@ export async function recordCost(app: App, id: ConversationId, dollars: number):
 
 export const owner = (app: App) => app.config.users.find((user) => user.role === "owner")!;
 
-/** A session in `cwd` with the scripted model, no thinking. */
-export async function newSession(app: App, cwd = work): Promise<ConversationId> {
-    const { id } = await app.commands.createSession(owner(app), { cwd });
+/** Seed a historical Durable conversation without invoking commands, submit, or any legacy callback. */
+export async function seedHistoricalSession(app: App, cwd = work): Promise<ConversationId> {
+    const conversation = await app.harness.createConversation(
+        {
+            ownership: { kind: "ownerless" },
+            agent: {
+                cwd,
+                model: { provider: "faux", modelId: "faux-1" },
+                thinkingLevel: "off",
+            },
+            init: async (tx, id) => {
+                const sessions = await tx.doc(SessionsDoc);
+                const now = Date.now();
 
-    await app.commands.configure(id, owner(app), {
-        model: { provider: "faux", modelId: "faux-1" },
-        thinkingLevel: "off",
-    });
+                sessions.items[String(id)] = {
+                    cwd,
+                    createdAt: now,
+                    updatedAt: now,
+                    title: "Historical test session",
+                };
+                await tx.doc(ConfigurationDoc, id);
+                await tx.doc(AgentDoc, id);
+            },
+        },
+        context,
+    );
 
-    return id;
+    return conversation.id;
 }
 
-/** Send a message as the owner and wait for Pi's answer. */
+/** Append captured historical transcript data without dispatching a model or task. */
+export async function appendHistoricalTurn(
+    app: App,
+    id: ConversationId,
+    input: string,
+    answer: string,
+): Promise<void> {
+    await app.harness.commit(async (tx) => {
+        await tx.appendEntry(id, {
+            kind: "pi.user",
+            model: [{ role: "user", content: input, timestamp: Date.now() }],
+        });
+        await tx.appendEntry(id, {
+            kind: "pi.assistant",
+            model: [fauxAssistantMessage([fauxText(answer)])],
+        });
+    }, context);
+}
+
+/** Send a message as the owner and wait for Pi's answer. Legacy archive tests must not call this. */
 export async function say(
     app: App,
     id: ConversationId,

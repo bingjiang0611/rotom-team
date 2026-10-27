@@ -1,6 +1,6 @@
 import type { Context } from "@earendil-works/chord";
 import { awaitWithContext } from "@earendil-works/chord/context";
-import type { ConversationId, Extension, ModelRef, TaskId } from "@earendil-works/pi-durable";
+import type { ConversationId, ModelRef, TaskId } from "@earendil-works/pi-durable";
 import type { Browsers } from "./browser.ts";
 import type { Goals } from "./goals.ts";
 import type { LancetGuard } from "./lancet.ts";
@@ -124,8 +124,3 @@ export interface PocketHost {
     /** The built-in browser: a page per conversation, which the people in it watch and use too. */
     readonly browsers: Pick<Browsers, "open">;
 }
-
-/** The shape of every module in `src/server/extensions/`: a default export building one or more extensions. */
-export type ExtensionModule = {
-    default: (host: PocketHost) => Extension | readonly Extension[];
-};

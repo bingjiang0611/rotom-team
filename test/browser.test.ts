@@ -1,15 +1,11 @@
 // The built-in browser: addresses, keys, and plan mode; then, where this machine has Chromium, the page engine, Pi's
 // browser tool, and the Browser panel's routes against a real browser and a small local site.
 import {
-    type App,
     cleanUp,
-    fakeTab,
-    lastText,
-    newSession,
+    seedHistoricalSession,
     openApp,
     owner,
     root,
-    say,
     scriptedModel,
     until,
 } from "./helpers.ts";
@@ -19,17 +15,12 @@ import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import type { FauxResponseStep } from "@earendil-works/pi-ai";
-import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai/providers/faux";
-import type { ConversationId } from "@earendil-works/pi-durable";
 import { Browsers } from "../src/server/browser.ts";
 import { findBrowser, profileFolder, snapOf } from "../src/server/browser/discovery.ts";
 import { parseKeys } from "../src/server/browser/keys.ts";
 import { SHOT_MAX } from "../src/server/browser/page.ts";
 import { normalizeUrl } from "../src/server/browser/urls.ts";
 import { presetOf, viewportFrom } from "../src/server/browser/viewport.ts";
-import { blockedInPlanMode } from "../src/server/extensions/plan.ts";
 
 /** A JPEG's size in pixels, from its first frame header. */
 function jpegSize(data: string): { width: number; height: number } {
@@ -223,39 +214,6 @@ test("viewports and keys are read the way people and Pi write them", () => {
     assert.deepEqual(parseKeys("Shift++"), { key: "+", modifiers: 8 });
     assert.throws(() => parseKeys("Hyper+a"), /Unknown modifier/);
     assert.throws(() => parseKeys("Launch"), /Unknown key/);
-});
-
-test("plan mode lets Pi look at pages but not act on them", () => {
-    for (const action of [
-        "navigate",
-        "snapshot",
-        "screenshot",
-        "console",
-        "scroll",
-        "viewport",
-        "back",
-        "reload",
-        "wait",
-    ]) {
-        assert.equal(blockedInPlanMode("browser", { action }), undefined, action);
-    }
-
-    for (const action of ["click", "type", "press", "select", "evaluate"]) {
-        assert.match(
-            blockedInPlanMode("browser", { action }) ?? "",
-            /Plan mode is on: The browser's \w+ can change things/,
-            action,
-        );
-    }
-
-    // A data: page is one Pi writes, scripts and all.
-    assert.match(
-        blockedInPlanMode("browser", {
-            action: "navigate",
-            url: "data:text/html,<script>fetch('/x')</script>",
-        }) ?? "",
-        /Plan mode is on/,
-    );
 });
 
 // ─── With a real browser ────────────────────────────────────────────────
@@ -630,279 +588,37 @@ test("a command sent while a navigation swaps the page waits for it", real, asyn
     }
 });
 
-test(
-    "Pi uses the browser tool, and people watch and use the same page in the panel",
-    real,
-    async () => {
-        const results: string[] = [];
-
-        const route: FauxResponseStep = (context) => {
-            const { role, text } = lastText(context as never);
-            const call = (args: Parameters<typeof fauxToolCall>[1]) =>
-                fauxAssistantMessage([fauxToolCall("browser", args)], { stopReason: "toolUse" });
-
-            if (role === "toolResult") {
-                results.push(text);
-
-                return fauxAssistantMessage([fauxText("done")]);
-            }
-
-            if (text.includes("open the test page")) {
-                return call({
-                    action: "navigate",
-                    url: base.replace("http://", ""),
-                    snapshot: true,
-                });
-            }
-
-            if (text.includes("take a screenshot")) {
-                return call({ action: "screenshot" });
-            }
-
-            if (text.includes("click send")) {
-                return call({ action: "click", label: "Send" });
-            }
-
-            if (text.includes("open a closed port")) {
-                return call({ action: "navigate", url: "127.0.0.1:9" });
-            }
-
-            return fauxAssistantMessage([fauxText("ok")]);
-        };
-
-        const app: App = await openApp(scriptedModel(route), join(root, "app"));
-        const { createHandler } = await import("../src/server/http.ts");
-        const server = createServer(
-            createHandler({ app, listen: { host: "127.0.0.1", port: 0 }, restart: () => {} }),
-        );
-
-        await new Promise<void>((done) => server.listen(0, "127.0.0.1", done));
-        const api = `http://127.0.0.1:${(server.address() as { port: number }).port}/api`;
-        const viewer = app.config.addUser("Vee", "viewer");
-        const guest = app.config.addUser("Gus", "guest");
-        const request = (token: string, path: string, body?: unknown) =>
-            fetch(
-                `${api}/${path}`,
-                body === undefined
-                    ? { headers: { authorization: `Bearer ${token}` } }
-                    : {
-                          method: "POST",
-                          headers: {
-                              authorization: `Bearer ${token}`,
-                              "x-pocket": "1",
-                              "content-type": "application/json",
-                          },
-                          body: JSON.stringify(body),
-                      },
-            );
-
-        try {
-            const id = await newSession(app);
-
-            // A model that takes images keeps the screenshot in the transcript.
-            await app.commands.configure(id, owner(app), {
-                model: { provider: "faux", modelId: "faux-vision" },
-            });
-            const tab = fakeTab(id, owner(app));
-
-            await app.attach(tab.client);
-            assert.equal(tab.last("browser")?.open, false);
-
-            await say(app, id, "open the test page");
-            await until(() => results.length === 1, "the navigate result");
-            assert.match(results[0]!, new RegExp(`^Opened ${base}/ \\(HTTP 200\\)\\.`));
-            assert.match(results[0]!, /\[e\d+\] button "Send"/);
-            assert.match(
-                results[0]!,
-                /Console errors and dialogs during this call:\n- \[error\] boom/,
-            );
-            assert.match(
-                results[0]!,
-                /Page: "Smoke test" · http:\/\/127\.0\.0\.1:\d+\/ · desktop 1280×800$/,
-            );
-            await until(() => tab.last("browser")?.url === `${base}/`, "the page reaching the tab");
-
-            await say(app, id, "take a screenshot");
-            await until(() => results.length === 2, "the screenshot result");
-            const visual = JSON.parse(
-                await app.browsers
-                    .page(Number(id))!
-                    .evaluate(
-                        "JSON.stringify({width:visualViewport.width,height:visualViewport.height})",
-                    ),
-            );
-
-            assert.equal(visual.height, 800);
-            assert.ok(visual.width <= 1280 && visual.width > 1200);
-            assert.ok(
-                results[1]!.startsWith(
-                    `Screenshot of the viewport, ${visual.width}×${visual.height} CSS pixels.`,
-                ),
-            );
-            const conversation = (await app.harness.conversation(id, BACKGROUND_CONTEXT))!;
-            const entries = await conversation.entries({}, 256, undefined, BACKGROUND_CONTEXT);
-            const shot = entries.items.find(
-                (entry) =>
-                    entry.kind === "pi.tool-result" &&
-                    JSON.stringify(entry.model).includes("Screenshot of the viewport"),
-            )!;
-
-            const storedImage = (await app.transcripts.entryImage(
-                id,
-                shot.id as unknown as number,
-                0,
-            ))!;
-
-            assert.equal(storedImage.mimeType, "image/jpeg", "Pi sees the screenshot");
-            assert.deepEqual(jpegSize(storedImage.data.toString("base64")), visual);
-
-            await say(app, id, "open a closed port");
-            await until(() => results.length === 3, "the failed navigate");
-            assert.match(results[2]!, /^Could not open http:\/\/127\.0\.0\.1:9\/: net::ERR_/);
-
-            // Everyone who sees the session watches; only people who can steer use the page, and files are the owner's.
-            await request(app.config.ownerToken, `c/${id}/browser/navigate`, { url: `${base}/` });
-            const state = (await (await request(viewer.token, `c/${id}/browser`)).json()) as {
-                open: boolean;
-            };
-
-            assert.equal(state.open, true);
-            const frame = await request(viewer.token, `c/${id}/browser/frame?after=0`);
-
-            assert.equal(frame.status, 200);
-            assert.equal(frame.headers.get("content-type"), "image/jpeg");
-            assert.ok(Number(frame.headers.get("x-seq")) > 0);
-            const framePixels = jpegSize(Buffer.from(await frame.arrayBuffer()).toString("base64"));
-
-            assert.equal(Number(frame.headers.get("x-width")), framePixels.width);
-            assert.equal(Number(frame.headers.get("x-height")), framePixels.height);
-            assert.equal(
-                (await request(viewer.token, `c/${id}/browser/navigate`, { url: "example.com" }))
-                    .status,
-                403,
-            );
-            assert.equal(
-                (await request(viewer.token, `c/${id}/browser/input`, { events: [] })).status,
-                403,
-            );
-            const file = await request(guest.token, `c/${id}/browser/navigate`, {
-                url: "file:///etc/hosts",
-            });
-
-            assert.equal(file.status, 400);
-            assert.match(((await file.json()) as { error: string }).error, /not a web address/);
-            assert.equal(
-                (
-                    await request(guest.token, `c/${id}/browser/navigate`, {
-                        url: `${base.replace("http://", "")}/two`,
-                    })
-                ).status,
-                200,
-            );
-            await until(
-                () => app.browsers.page(Number(id))?.url === `${base}/two`,
-                "the guest's address",
-            );
-            // What people open shows in the chat; the servers running here are the owner's to see.
-            const opened = `Gus opened ${base.replace("http://", "")}/two in the browser`;
-
-            await until(
-                () =>
-                    tab.events.some(
-                        (each) =>
-                            each.event === "chat" &&
-                            (each.data.messages as { name: string; text: string }[]).some(
-                                (message) => `${message.name} ${message.text}` === opened,
-                            ),
-                    ),
-                "the activity line",
-            );
-            assert.deepEqual(await (await request(guest.token, `c/${id}/browser/servers`)).json(), {
-                servers: [],
-            });
-            assert.equal((await request(guest.token, `c/${id}/browser/teleport`, {})).status, 404);
-            assert.equal((await request(guest.token, `c/${id}/browser/back`, {})).status, 200);
-            await until(() => app.browsers.page(Number(id))?.url === `${base}/`, "going back");
-            assert.equal(
-                (await request(guest.token, `c/${id}/browser/viewport`, { viewport: "tablet" }))
-                    .status,
-                200,
-            );
-            assert.equal(app.browsers.state(Number(id)).preset, "tablet");
-            const consoleLines = (await (
-                await request(viewer.token, `c/${id}/browser/console`)
-            ).json()) as { entries: { text: string }[] };
-
-            assert.ok(consoleLines.entries.some((entry) => entry.text === "boom"));
-
-            // Turning the Browser extension off closes the pages and the panel.
-            await app.setExtensionEnabled(owner(app), "browser.ts", false);
-            assert.equal(app.browsers.page(Number(id)), undefined);
-            assert.equal((await request(app.config.ownerToken, `c/${id}/browser`)).status, 404);
-            await app.setExtensionEnabled(owner(app), "browser.ts", true);
-            // Input for a page that is not open opens nothing.
-            assert.equal(
-                (
-                    await request(app.config.ownerToken, `c/${id}/browser/input`, {
-                        events: [{ type: "click", x: 1, y: 1 }],
-                    })
-                ).status,
-                409,
-            );
-            assert.equal(app.browsers.page(Number(id)), undefined);
-            const reopened = (await (
-                await request(app.config.ownerToken, `c/${id}/browser/open`, {})
-            ).json()) as { open: boolean };
-
-            assert.equal(reopened.open, true);
-            await until(
-                () => app.browsers.page(Number(id))?.url === `${base}/`,
-                "the page opening where it was",
-            );
-            app.detach(tab.client);
-        } finally {
-            server.closeAllConnections();
-            server.close();
-            await app.close();
-        }
-    },
-);
-
-test("the browser tool says so when this machine has no browser", async () => {
-    const results: string[] = [];
-
-    const route: FauxResponseStep = (context) => {
-        const { role, text } = lastText(context as never);
-
-        if (role === "toolResult") {
-            results.push(text);
-
-            return fauxAssistantMessage([fauxText("done")]);
-        }
-
-        return fauxAssistantMessage([fauxToolCall("browser", { action: "snapshot" })], {
-            stopReason: "toolUse",
-        });
-    };
-
-    const { PocketApp } = await import("../src/server/app.ts");
-    const model = scriptedModel(route);
-    const app = await PocketApp.open({
-        dataDir: mkdtempSync(join(root, "none-")),
-        defaultCwd: root,
-        supervised: false,
-        log: () => {},
-        configureModels: (models) => models.registerNativeProvider(model.provider),
-        browser: null,
-    });
+test("legacy archive rejects browser tool dispatch without opening a page", async () => {
+    const app = await openApp(scriptedModel(), join(root, "browser-archive"));
 
     try {
-        const id = (await newSession(app)) as ConversationId;
+        const id = await seedHistoricalSession(app);
 
-        assert.equal(app.browsers.available, false);
-        await say(app, id, "look");
-        await until(() => results.length === 1, "the result");
-        assert.match(results[0]!, /No Chromium-based browser was found on this machine/);
+        assert.equal(app.browsers.page(Number(id)), undefined);
+        await assert.rejects(
+            app.commands.submit(id, owner(app), {
+                text: "open the test page",
+                requestId: "browser-archive",
+            }),
+            /read-only archive/,
+        );
+        assert.equal(app.browsers.page(Number(id)), undefined);
+    } finally {
+        await app.close();
+    }
+});
+
+test("archive browser requests are rejected without probing browser availability", async () => {
+    const app = await openApp(scriptedModel(), join(root, "browser-none-"));
+
+    try {
+        const id = await seedHistoricalSession(app);
+
+        await assert.rejects(
+            app.commands.submit(id, owner(app), { text: "look", requestId: "browser-none" }),
+            /read-only archive/,
+        );
+        assert.equal(app.browsers.page(Number(id)), undefined);
     } finally {
         await app.close();
     }

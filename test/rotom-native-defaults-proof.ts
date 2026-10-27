@@ -107,12 +107,14 @@ const events = new Map<string, RpcRecord[]>();
 async function run(name: string, settings: Record<string, unknown> = {}) {
     phase = name;
     writeFileSync(join(shared, "settings.json"), JSON.stringify(settings));
-    executions.journal.bind(name, binding);
+    await executions.journal.bind(name, binding);
     const observed: RpcRecord[] = [];
 
     events.set(name, observed);
     const result = await executions.run(name, "once", "Explain this synthetic test context.", {
-        onEvent: (event) => observed.push(event),
+        onEvent: (event) => {
+            observed.push(event);
+        },
     });
 
     assert.equal(result.status, "settled", JSON.stringify(result));
@@ -161,9 +163,9 @@ try {
     const compact = await run("compaction", {
         compaction: { reserveTokens: 1024, keepRecentTokens: 1 },
     });
-    const summaries = executions.journal
-        .entries(phase)
-        .filter(({ entry }) => entry.type === "compaction");
+    const summaries = (await executions.journal.entries(phase)).filter(
+        ({ entry }) => entry.type === "compaction",
+    );
 
     assert.equal(summaries.length, 1, "native threshold actually persisted a compaction");
     assert.equal(
@@ -181,7 +183,7 @@ try {
             .get(phase)!
             .some((event) => event.type === "compaction_end" && event.aborted === false),
     );
-    const usage = executions.journal.usage(phase);
+    const usage = await executions.journal.usage(phase);
 
     assert.ok(usage.every((row) => row.memberId === "alice" && row.attemptId === compact.id));
     assert.equal(usage.length, 2, "assistant and automatic summary both have usage rows");

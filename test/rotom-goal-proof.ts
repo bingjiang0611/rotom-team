@@ -156,7 +156,7 @@ try {
             authorizations.push({ member: binding.memberId, operation, session });
         });
 
-        executions.journal.bind("goal-room", {
+        await executions.journal.bind("goal-room", {
             memberId: "alice",
             kernelVersion: verifyRotomKernel().version,
             accountGeneration: "synthetic-goal-fixture",
@@ -257,7 +257,10 @@ try {
                     "rejected",
                     "low-level execution must never mutate the admitted Team model",
                 );
-                assert.equal(executions.journal.session("goal-room").binding.model, "goal-fixture");
+                assert.equal(
+                    (await executions.journal.session("goal-room")).binding.model,
+                    "goal-fixture",
+                );
                 assert.equal(calls, beforeModel);
             } else if (["pause", "wake", "skill-wake"].includes(scenario)) {
                 assert.equal(result.status, "handled");

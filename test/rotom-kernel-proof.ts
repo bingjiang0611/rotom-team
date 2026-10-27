@@ -8,6 +8,7 @@ import {
     mkdtempSync,
     mkdirSync,
     readFileSync,
+    readdirSync,
     realpathSync,
     rmSync,
     writeFileSync,
@@ -15,6 +16,7 @@ import {
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { once } from "node:events";
+import { setImmediate } from "node:timers/promises";
 import { connect } from "node:net";
 import type { Duplex } from "node:stream";
 import { startRotomKernel, verifyRotomKernel } from "../src/server/rotom-kernel.ts";
@@ -607,13 +609,38 @@ try {
     };
 
     try {
-        executions.journal.bind("team-conversation", binding);
+        await executions.journal.bind("team-conversation", binding);
         const before = requests;
         // Journal size observed when each provisional import lands, and while each tool still runs.
         const progressed: number[] = [];
         const duringTools: number[] = [];
         let reserved: string | undefined;
-        const first = await executions.run(
+        const progressEntered = Promise.withResolvers<void>();
+        const progressAck = Promise.withResolvers<void>();
+        const usageEntered = Promise.withResolvers<void>();
+        const usageAck = Promise.withResolvers<void>();
+        const progress = executions.journal.progress.bind(executions.journal);
+        const childUsage = executions.journal.childUsage.bind(executions.journal);
+        let writes = 0;
+
+        executions.journal.progress = async (...args) => {
+            const count = await progress(...args);
+
+            if (++writes === 3) {
+                progressEntered.resolve();
+                await progressAck.promise;
+            }
+
+            return count;
+        };
+
+        executions.journal.childUsage = async (...args) => {
+            await childUsage(...args);
+            usageEntered.resolve();
+            await usageAck.promise;
+        };
+
+        const firstPending = executions.run(
             "team-conversation",
             "request-once",
             "Write and read proof.txt, then finish.",
@@ -621,16 +648,86 @@ try {
                 onReserved: (receipt) => {
                     reserved = receipt.id;
                 },
-                onProgress: () =>
-                    progressed.push(executions.journal.entries("team-conversation").length),
-                onEvent: (event) => {
+                onProgress: async () =>
+                    progressed.push((await executions.journal.entries("team-conversation")).length),
+                onEvent: async (event) => {
                     if (event.type === "tool_execution_start") {
-                        duringTools.push(executions.journal.entries("team-conversation").length);
+                        duringTools.push(
+                            (await executions.journal.entries("team-conversation")).length,
+                        );
                     }
                 },
             },
         );
 
+        let usageResponse: Promise<Response> | undefined;
+
+        try {
+            await Promise.race([
+                progressEntered.promise,
+                firstPending.then(() => {
+                    throw new Error("Run ended without reaching the progress ACK barrier");
+                }),
+            ]);
+            assert.equal((await executions.journal.receipt(reserved!)).status, "dispatch-intent");
+            assert.throws(() => executions.close(), /still active/);
+            const gates = readdirSync(join(data, "kernel-gates")).filter((name) =>
+                name.endsWith(".json"),
+            );
+
+            assert.equal(gates.length, 1);
+            const gate = JSON.parse(readFileSync(join(data, "kernel-gates", gates[0]!), "utf8"));
+            const gateRequest = (operation: string) =>
+                fetch(gate.url, {
+                    method: "POST",
+                    headers: {
+                        authorization: `Bearer ${gate.token}`,
+                        "content-type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        operation,
+                        provider: binding.provider,
+                        model: binding.model,
+                        usage: { totalTokens: 2 },
+                    }),
+                });
+
+            usageResponse = gateRequest("usage");
+            await Promise.race([
+                usageEntered.promise,
+                usageResponse.then((response) => {
+                    throw new Error(`Usage returned before its ACK barrier: ${response.status}`);
+                }),
+            ]);
+            progressAck.resolve();
+
+            // Observe actual admission closure, not a sleep: refresh is a no-op authorization in this fixture.
+            const deadline = performance.now() + 5000;
+
+            while ((await gateRequest("refresh")).status === 204) {
+                assert.ok(
+                    performance.now() < deadline,
+                    "native completion reaches the usage drain",
+                );
+                await setImmediate();
+            }
+
+            assert.equal(
+                (await executions.journal.receipt(reserved!)).status,
+                "dispatch-intent",
+                "usage must be acknowledged before settlement",
+            );
+            assert.throws(() => executions.close(), /still active/);
+        } finally {
+            progressAck.resolve();
+            usageAck.resolve();
+            await Promise.allSettled([firstPending, usageResponse]);
+        }
+
+        const first = await firstPending;
+
+        assert.equal((await usageResponse)!.status, 204);
+        report.asyncJournalAckOrdering = true;
         assert.equal(first.status, "settled");
         assert.equal(reserved, first.id);
         // The tool-calling assistant message is journaled before its tool runs: restart loses at most one message.
@@ -642,11 +739,18 @@ try {
         report.messageLevelJournal = { duringTools, progressed };
         assert.equal(requests, before + 3);
         assert.equal(inferenceChecks, 3);
-        assert.equal(executions.journal.usage("team-conversation").length, 3);
+        const usage = await executions.journal.usage("team-conversation");
+
+        assert.equal(usage.length, 4);
+        assert.equal(usage.filter((row) => !row.subagent).length, 3);
+        assert.deepEqual(
+            usage.filter((row) => row.subagent).map((row) => row.raw),
+            [{ totalTokens: 2 }],
+        );
         assert.ok(
-            executions.journal
-                .usage("team-conversation")
-                .every((row) => row.memberId === "alice" && row.costStatus === "unknown"),
+            (await executions.journal.usage("team-conversation")).every(
+                (row) => row.memberId === "alice" && row.costStatus === "unknown",
+            ),
         );
         await executions.close();
         executions = new RotomExecutions(data, authorize);
@@ -666,12 +770,16 @@ try {
 
         assert.equal(resumed.status, "settled");
         assert.equal(requests, before + 4, "resumed context already contains both tool results");
+        const resumedUsage = await executions.journal.usage("team-conversation");
+
         assert.equal(
-            executions.journal.usage("team-conversation").length,
-            4,
+            resumedUsage.length,
+            5,
             "old usage is not attributed to the latest attempt again",
         );
-        executions.journal.bind("revocation-conversation", binding);
+        assert.equal(resumedUsage.filter((row) => !row.subagent).length, 4);
+        assert.equal(resumedUsage.filter((row) => row.subagent).length, 1);
+        await executions.journal.bind("revocation-conversation", binding);
         const beforeRevocation = requests;
         const revoked = await executions.run(
             "revocation-conversation",
@@ -697,13 +805,11 @@ try {
             "second inference must be denied at native dispatch after permission revocation",
         );
         assert.ok(
-            executions.journal
-                .entries("revocation-conversation")
-                .some(
-                    (row) =>
-                        (row.entry.message as { stopReason?: string } | undefined)?.stopReason ===
-                        "error",
-                ),
+            (await executions.journal.entries("revocation-conversation")).some(
+                (row) =>
+                    (row.entry.message as { stopReason?: string } | undefined)?.stopReason ===
+                    "error",
+            ),
         );
         allowed = true;
         assert.equal(
@@ -727,7 +833,7 @@ try {
             const id = `http-${status}`;
             const beforeRejected: number = requests;
 
-            executions.journal.bind(id, binding);
+            await executions.journal.bind(id, binding);
             assert.equal(
                 (await executions.run(id, `request-${status}`, "One dispatch only.")).status,
                 "settled",
@@ -738,18 +844,16 @@ try {
                 "native SDK must not redispatch HTTP failures",
             );
             assert.ok(
-                executions.journal
-                    .entries(id)
-                    .some(
-                        (row) =>
-                            (row.entry.message as { stopReason?: string } | undefined)
-                                ?.stopReason === "error",
-                    ),
+                (await executions.journal.entries(id)).some(
+                    (row) =>
+                        (row.entry.message as { stopReason?: string } | undefined)?.stopReason ===
+                        "error",
+                ),
             );
         }
 
         rejectStatus = 0;
-        executions.journal.bind("oversized-first", binding);
+        await executions.journal.bind("oversized-first", binding);
         const beforeOversized: number = requests;
         const oversized = await executions.run(
             "oversized-first",
@@ -768,7 +872,7 @@ try {
         assert.equal(validAfterRejection.status, "settled");
         assert.equal(requests, beforeOversized + 3);
 
-        executions.journal.bind("delayed-admission", binding);
+        await executions.journal.bind("delayed-admission", binding);
         let release!: () => void;
 
         admissionBarrier = {
@@ -801,7 +905,7 @@ try {
             beforeConcurrent + 4,
             "late admission must resume the newly materialized session, not start a fresh one",
         );
-        assert.equal(executions.journal.usage("delayed-admission").length, 4);
+        assert.equal((await executions.journal.usage("delayed-admission")).length, 4);
         report.guardedExecution = {
             immutablePayer: true,
             atomicEntryUsageImport: true,

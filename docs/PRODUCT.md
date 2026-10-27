@@ -13,10 +13,11 @@ flowchart LR
     T --> D[(Durable: 共享会话与 Transcript 镜像)]
 ```
 
-- 新会话默认由 rotom 执行。`--no-rotom-kernel` 启动仅使用 Pi Durable 的服务；既有 Durable 会话保持原后端，不自动迁移。
+- 新会话只由 rotom 执行。既有 Durable 会话保留原后端并成为只读归档，不转换为 native 会话。`--no-rotom-kernel` 仅提供只读归档访问，不恢复旧执行。
 - rotom 版本及文件摘要由 [`runtime/rotom/pin.json`](../runtime/rotom/pin.json) 固定。团队包版本与 rotom 版本不是同一个版本号。
-- Durable 只为 rotom 会话提供共享状态、权限和 Transcript 镜像，不另运行一个 Agent 循环。它自己的会话仍使用旧后端。
+- Durable 为 rotom 会话提供共享状态、权限和 Transcript 镜像，不运行另一个 Agent 循环。旧会话保留读取、导出和访问授权；创建、执行、恢复及普通修改（含会话预算）被拒绝。启动归档的原子性、私有恢复记录及回滚限制见 [LEGACY-ARCHIVE.md](LEGACY-ARCHIVE.md)。
 - rotom 的工具、扩展消息和问题进入同一 Transcript。只有本轮付费成员可以回答该轮交互问题。
+- 可用 `--storage-worker` 将 journal 与公开 Durable Storage 放入单个数据库 worker，**默认关闭**；关闭时保持 D8a 路径。Harness、镜像协调、权限、个人凭据及 native/payer gate 仍在父线程。worker 失联不自动重启或重放；关闭必须先排空 native 所有权，再等数据库 ACK 和 worker 退出。失败保留租约。此开关仅用于 native kernel 模式，不开启旧后端执行，也不形成安全沙箱。
 
 ## 执行归属与历史
 
@@ -31,7 +32,7 @@ flowchart LR
 
 团队只有一个共享基础 Agent，配置分两层：Owner 管理 `<data>/team-agent` 的扩展、MCP、skills 和设置；可信项目提供原生设置、扩展、包、模板、主题、system 文件、上下文、skills 和 MCP；项目覆盖规则由原生加载器处理。成员 HOME 保留凭据、会话和未分类运行状态，不是可定制的个人资源配置。成员仍用自己的账号选择模型，固定付费人和模型绑定不变。完整规则与仍不支持的能力见 [CONFIGURATION.md](CONFIGURATION.md)。
 
-- Team 只支持原生 Agent Extension。旧 `src/server/extensions/` 与 `<data>/extensions/` 不加载、不监听，旧服务扩展管理 API 不可用；历史文件和开关记录保留。全局与项目配置步骤见 [AGENT-CONFIGURATION.md](AGENT-CONFIGURATION.md)。
+- Team 只支持原生 Agent Extension。D9c 已删除仓库的旧 `src/server/extensions/` 模块；用户 `<data>/extensions/` 源码和启用/停用记录仍保留，不加载、不监听，旧服务扩展管理 API 不可用。全局与项目配置步骤见 [AGENT-CONFIGURATION.md](AGENT-CONFIGURATION.md)。
 - 工作区按原生 `--approve` 加载。共享和项目扩展都以服务 OS 用户执行，必须信任代码，不是沙箱。项目角色和配置恢复原生加载；成员基础资源仍从共享配置派生。未知插件状态不猜测、不清空。
 - 同一固定绑定的成功任务复用原生进程、MCP 连接和扩展内存；空闲时 gate 拒绝推理。失败、Stop、接力和服务关闭回收相应进程；跨重启恢复持久化会话，不恢复内存。资源/设置修改后执行 `/reload`。
 - OAuth 型 MCP 由各成员在 **MCP sign-ins** 独立登录。MCP 授权与模型授权不同；文件分开不构成成员间 OS 隔离。

@@ -1,0 +1,4079 @@
+{
+    "sourceBase": "230ec01",
+    "sourceRevision": "0a3ab1ac1f10cc10da55f0920edaafc3c2691ff9",
+    "productFiles": [
+        "src/server/app.ts",
+        "src/server/main.ts",
+        "src/server/perf-channels.ts",
+        "src/server/rotom-executions.ts",
+        "src/server/rotom-journal.ts",
+        "src/server/storage-protocol.ts",
+        "src/server/storage-worker-thread.ts",
+        "src/server/storage-worker.ts",
+        "src/server/team-kernel.ts"
+    ],
+    "productSha256": "c00a3abf5a1a40fe253b2ec698beddcbdd84129b02f9e0ed75317a1f6df7328f",
+    "environment": {
+        "platform": "darwin-arm64",
+        "node": "24.18.0",
+        "cpu": "Apple M1 (8 cores)"
+    },
+    "load": {
+        "main": {
+            "before": [4.53173828125, 5.05517578125, 4.13330078125],
+            "after": [3.81201171875, 4.681640625, 4.19091796875],
+            "cores": 8
+        },
+        "off": {
+            "before": [1.48828125, 2.056640625, 2.90576171875],
+            "after": [6.5087890625, 4.17333984375, 3.6123046875],
+            "cores": 8
+        },
+        "on": {
+            "before": [5.72509765625, 4.115234375, 3.6005859375],
+            "after": [4.5498046875, 4.07958984375, 3.6376953125],
+            "cores": 8
+        }
+    },
+    "runs": {
+        "main": 1,
+        "off": 1,
+        "on": 1
+    },
+    "gating": {
+        "off": true,
+        "on": true
+    },
+    "mainToOff": {
+        "worse": [
+            {
+                "key": "startup.restart/sql.statements",
+                "base": 848,
+                "head": 851,
+                "delta": 3,
+                "verdict": "worse",
+                "explanation": "沿用已核验 D8a 的历史说明（不是本轮重新归因）：既有成本/采样来源（历史说明）：既有D6记录：main 含 A1–A3 等既有查询/窗口差异；D6 隔离此项未判 worse。无新增 SQL，完整 owner/状态顺序等价。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+            },
+            {
+                "key": "startup.restart/json.parse.durableStorage.calls",
+                "base": 458,
+                "head": 459,
+                "delta": 1,
+                "verdict": "worse",
+                "explanation": "本轮多一次公开 Storage JSON 解码、19 字符；没有该值的原始调用栈。默认 off 仍用原 Storage，不能将额外解码擅自解释为固定算法回归或宣称其不存在。"
+            },
+            {
+                "key": "startup.restart/json.parse.durableStorage.chars",
+                "base": 51416,
+                "head": 51435,
+                "delta": 19,
+                "verdict": "worse",
+                "explanation": "本轮多一次公开 Storage JSON 解码、19 字符；没有该值的原始调用栈。默认 off 仍用原 Storage，不能将额外解码擅自解释为固定算法回归或宣称其不存在。"
+            },
+            {
+                "key": "session.open/sql.rows",
+                "base": 94,
+                "head": 105,
+                "delta": 11,
+                "verdict": "worse",
+                "explanation": "该窗口 events 9→10、rows 92→105；异步 view/warm 完成跨窗口会改变观察的状态。数据说明多观察了一批内容，但未保留其逐条 payload，不能把每个字节差都归于 RPC。静态同数据跨开关完整 room payload 等价测试通过。"
+            },
+            {
+                "key": "session.open/json.stringify.chars",
+                "base": 84622,
+                "head": 88107,
+                "delta": 3485,
+                "verdict": "worse",
+                "explanation": "该窗口 events 9→10、rows 92→105；异步 view/warm 完成跨窗口会改变观察的状态。数据说明多观察了一批内容，但未保留其逐条 payload，不能把每个字节差都归于 RPC。静态同数据跨开关完整 room payload 等价测试通过。"
+            },
+            {
+                "key": "session.open/push.events",
+                "base": 9,
+                "head": 10,
+                "delta": 1,
+                "verdict": "worse",
+                "explanation": "该窗口 events 9→10、rows 92→105；异步 view/warm 完成跨窗口会改变观察的状态。数据说明多观察了一批内容，但未保留其逐条 payload，不能把每个字节差都归于 RPC。静态同数据跨开关完整 room payload 等价测试通过。"
+            },
+            {
+                "key": "session.open/push.bytes",
+                "base": 82236,
+                "head": 86312,
+                "delta": 4076,
+                "verdict": "worse",
+                "explanation": "该窗口 events 9→10、rows 92→105；异步 view/warm 完成跨窗口会改变观察的状态。数据说明多观察了一批内容，但未保留其逐条 payload，不能把每个字节差都归于 RPC。静态同数据跨开关完整 room payload 等价测试通过。"
+            },
+            {
+                "key": "web.open/push.events",
+                "base": 10,
+                "head": 11,
+                "delta": 1,
+                "verdict": "worse",
+                "explanation": "沿用已核验 D8a 的历史说明（不是本轮重新归因）：既有成本/采样来源（历史说明）：既有D6记录：main 含 D5 初连 ACK/room generation 包装；D6 协议未变，隔离此项未判 worse。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+            },
+            {
+                "key": "web.open/push.bytes",
+                "base": 83736,
+                "head": 83964,
+                "delta": 228,
+                "verdict": "worse",
+                "explanation": "沿用已核验 D8a 的历史说明（不是本轮重新归因）：既有成本/采样来源（历史说明）：既有D6记录：main 含 D5 初连 ACK/room generation 包装；D6 协议未变，隔离此项未判 worse。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+            },
+            {
+                "key": "web.open/push.view.bytes",
+                "base": 76309,
+                "head": 76333,
+                "delta": 24,
+                "verdict": "worse",
+                "explanation": "沿用已核验 D8a 的历史说明（不是本轮重新归因）：既有成本/采样来源（历史说明）：既有D6记录：main 含 D5 初连 ACK/room generation 包装；D6 协议未变，隔离此项未判 worse。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+            },
+            {
+                "key": "web.open/http.requests",
+                "base": 81,
+                "head": 82,
+                "delta": 1,
+                "verdict": "worse",
+                "explanation": "沿用已核验 D8a 的历史说明（不是本轮重新归因）：main比较81→82，D6新增native.css的一次请求；相对旧D8a五轮最差值82没有变差。"
+            },
+            {
+                "key": "web.open/cdp.Nodes",
+                "base": 996,
+                "head": 1138,
+                "delta": 142,
+                "verdict": "worse",
+                "explanation": "沿用已核验 D8a 的历史说明（不是本轮重新归因）：既有成本/采样来源（历史说明）：既有D6记录：main 含 A4 preload 节点；D6 加 1 link 及相邻空白。同一最终代码两轮 1114→1114；另有节点分配/回收取样，不等于持久 DOM 或泄漏。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+            },
+            {
+                "key": "web.open/web.event.parse.calls",
+                "base": 9,
+                "head": 10,
+                "delta": 1,
+                "verdict": "worse",
+                "explanation": "沿用已核验 D8a 的历史说明（不是本轮重新归因）：既有成本/采样来源（历史说明）：既有D6记录：main 含 D5 初连 ACK/room generation 包装；D6 协议未变，隔离此项未判 worse。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+            },
+            {
+                "key": "web.open/web.event.parse.chars",
+                "base": 82941,
+                "head": 83141,
+                "delta": 200,
+                "verdict": "worse",
+                "explanation": "沿用已核验 D8a 的历史说明（不是本轮重新归因）：既有成本/采样来源（历史说明）：既有D6记录：main 含 D5 初连 ACK/room generation 包装；D6 协议未变，隔离此项未判 worse。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+            },
+            {
+                "key": "session.history.earlier/json.stringify.chars",
+                "base": 243098,
+                "head": 243132,
+                "delta": 34,
+                "verdict": "worse",
+                "explanation": "差值是既有 head timer 17 字符的整数倍；只是与历史观察相容，本轮无对应调用栈，不写成确定根因。"
+            },
+            {
+                "key": "web.open.long/push.view.bytes",
+                "base": 165859,
+                "head": 165883,
+                "delta": 24,
+                "verdict": "worse",
+                "explanation": "沿用已核验 D8a 的历史说明（不是本轮重新归因）：既有成本/采样来源（历史说明）：既有D6记录：main 含 D5 初连 ACK/room generation 包装；D6 协议未变，隔离此项未判 worse。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+            },
+            {
+                "key": "web.open.long/http.requests",
+                "base": 80,
+                "head": 81,
+                "delta": 1,
+                "verdict": "worse",
+                "explanation": "沿用已核验 D8a 的历史说明（不是本轮重新归因）：既有成本/采样来源（历史说明）：既有D6记录：D6 新增 native.css 一请求；步骤② web.open 在拆 CSS 前也曾 81→83，不能将 main 全部增量归到 CSS。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+            },
+            {
+                "key": "web.open.long/cdp.Nodes",
+                "base": 1561,
+                "head": 1703,
+                "delta": 142,
+                "verdict": "worse",
+                "explanation": "沿用已核验 D8a 的历史说明（不是本轮重新归因）：既有成本/采样来源（历史说明）：既有D6记录：main 含 A4 preload 节点；D6 加 1 link 及相邻空白。同一最终代码两轮 1703→1703；另有节点分配/回收取样，不等于持久 DOM 或泄漏。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+            },
+            {
+                "key": "web.open.long/web.event.parse.calls",
+                "base": 8,
+                "head": 9,
+                "delta": 1,
+                "verdict": "worse",
+                "explanation": "沿用已核验 D8a 的历史说明（不是本轮重新归因）：既有成本/采样来源（历史说明）：既有D6记录：main 含 D5 初连 ACK/room generation 包装；D6 协议未变，隔离此项未判 worse。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+            },
+            {
+                "key": "web.open.long/web.event.parse.chars",
+                "base": 173290,
+                "head": 173492,
+                "delta": 202,
+                "verdict": "worse",
+                "explanation": "沿用已核验 D8a 的历史说明（不是本轮重新归因）：既有成本/采样来源（历史说明）：既有D6记录：main 含 D5 初连 ACK/room generation 包装；D6 协议未变，隔离此项未判 worse。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+            },
+            {
+                "key": "native.warm/sql.rows",
+                "base": 10,
+                "head": 11,
+                "delta": 1,
+                "verdict": "worse",
+                "explanation": "沿用已核验 D8a 的历史说明（不是本轮重新归因）：既有成本/采样来源（历史说明）：既有D6记录：main 含 A1–A3 等既有查询/窗口差异；D6 隔离此项未判 worse。无新增 SQL，完整 owner/状态顺序等价。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+            },
+            {
+                "key": "turn.prewarmed/fs.read.calls",
+                "base": 25,
+                "head": 26,
+                "delta": 1,
+                "verdict": "worse",
+                "explanation": "沿用已核验 D8a 的历史说明（不是本轮重新归因）：本轮再现旧D8a已有的26 reads、20 parses/1424chars组合，并非本轮首次出现。旧诊断观测NativeTail分批读取及151字符native-mirror metadata；本轮未保存对应调用栈，不能把分批/重复metadata假设写成确定根因。采样差异，未归因。"
+            },
+            {
+                "key": "turn.prewarmed/json.parse.durableStorage.calls",
+                "base": 18,
+                "head": 20,
+                "delta": 2,
+                "verdict": "worse",
+                "explanation": "沿用已核验 D8a 的历史说明（不是本轮重新归因）：本轮再现旧D8a已有的26 reads、20 parses/1424chars组合，并非本轮首次出现。旧诊断观测NativeTail分批读取及151字符native-mirror metadata；本轮未保存对应调用栈，不能把分批/重复metadata假设写成确定根因。采样差异，未归因。"
+            },
+            {
+                "key": "turn.prewarmed/json.parse.durableStorage.chars",
+                "base": 1122,
+                "head": 1424,
+                "delta": 302,
+                "verdict": "worse",
+                "explanation": "沿用已核验 D8a 的历史说明（不是本轮重新归因）：本轮再现旧D8a已有的26 reads、20 parses/1424chars组合，并非本轮首次出现。旧诊断观测NativeTail分批读取及151字符native-mirror metadata；本轮未保存对应调用栈，不能把分批/重复metadata假设写成确定根因。采样差异，未归因。"
+            },
+            {
+                "key": "web.reopen/push.events",
+                "base": 9,
+                "head": 10,
+                "delta": 1,
+                "verdict": "worse",
+                "explanation": "沿用已核验 D8a 的历史说明（不是本轮重新归因）：既有成本/采样来源（历史说明）：既有D6记录：main 含 D5 初连 ACK/room generation 包装；D6 协议未变，隔离此项未判 worse。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+            },
+            {
+                "key": "web.reopen/push.bytes",
+                "base": 10313,
+                "head": 10541,
+                "delta": 228,
+                "verdict": "worse",
+                "explanation": "沿用已核验 D8a 的历史说明（不是本轮重新归因）：既有成本/采样来源（历史说明）：既有D6记录：main 含 D5 初连 ACK/room generation 包装；D6 协议未变，隔离此项未判 worse。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+            },
+            {
+                "key": "web.reopen/push.view.bytes",
+                "base": 2001,
+                "head": 2025,
+                "delta": 24,
+                "verdict": "worse",
+                "explanation": "沿用已核验 D8a 的历史说明（不是本轮重新归因）：既有成本/采样来源（历史说明）：既有D6记录：main 含 D5 初连 ACK/room generation 包装；D6 协议未变，隔离此项未判 worse。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+            },
+            {
+                "key": "web.reopen/cdp.Nodes",
+                "base": 1090,
+                "head": 1208,
+                "delta": 118,
+                "verdict": "worse",
+                "explanation": "沿用已核验 D8a 的历史说明（不是本轮重新归因）：既有成本/采样来源（历史说明）：既有D6记录：main 含 A4 preload 节点；D6 加 1 link 及相邻空白。同一最终代码两轮 1208→1232；另有节点分配/回收取样，不等于持久 DOM 或泄漏。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+            },
+            {
+                "key": "web.reopen/web.event.parse.calls",
+                "base": 8,
+                "head": 9,
+                "delta": 1,
+                "verdict": "worse",
+                "explanation": "沿用已核验 D8a 的历史说明（不是本轮重新归因）：既有成本/采样来源（历史说明）：既有D6记录：main 含 D5 初连 ACK/room generation 包装；D6 协议未变，隔离此项未判 worse。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+            },
+            {
+                "key": "web.reopen/web.event.parse.chars",
+                "base": 9527,
+                "head": 9727,
+                "delta": 200,
+                "verdict": "worse",
+                "explanation": "沿用已核验 D8a 的历史说明（不是本轮重新归因）：既有成本/采样来源（历史说明）：既有D6记录：main 含 D5 初连 ACK/room generation 包装；D6 协议未变，隔离此项未判 worse。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+            },
+            {
+                "key": "web.paced/cdp.Nodes",
+                "base": 1296,
+                "head": 1423,
+                "delta": 127,
+                "verdict": "worse",
+                "explanation": "沿用已核验 D8a 的历史说明（不是本轮重新归因）：既有成本/采样来源（历史说明）：既有D6记录：main 含 A4 preload 节点；D6 加 1 link 及相邻空白。同一最终代码两轮 1424→1421；另有节点分配/回收取样，不等于持久 DOM 或泄漏。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+            },
+            {
+                "key": "web.send.poll/cdp.Nodes",
+                "base": 1472,
+                "head": 1594,
+                "delta": 122,
+                "verdict": "worse",
+                "explanation": "沿用已核验 D8a 的历史说明（不是本轮重新归因）：既有成本/采样来源（历史说明）：既有D6记录：main 含 A4 preload 节点；D6 加 1 link 及相邻空白。同一最终代码两轮 1603→1620；另有节点分配/回收取样，不等于持久 DOM 或泄漏。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+            },
+            {
+                "key": "web.send.stream/push.bytes",
+                "base": 91492,
+                "head": 91804,
+                "delta": 312,
+                "verdict": "worse",
+                "explanation": "沿用已核验 D8a 的历史说明（不是本轮重新归因）：既有成本/采样来源（历史说明）：既有D6记录：main 含 D5 包装；D6 隔离本次数据长度增量未精确归因，未保存正文。同一最终代码两轮 91603→91603；保留差值，不把源码等价当作零成本。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+            },
+            {
+                "key": "web.send.stream/push.view.bytes",
+                "base": 77698,
+                "head": 77986,
+                "delta": 288,
+                "verdict": "worse",
+                "explanation": "沿用已核验 D8a 的历史说明（不是本轮重新归因）：既有成本/采样来源（历史说明）：既有D6记录：main 含 D5 包装；D6 隔离本次数据长度增量未精确归因，未保存正文。同一最终代码两轮 77785→77785；保留差值，不把源码等价当作零成本。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+            },
+            {
+                "key": "web.send.stream/cdp.RecalcStyleCount",
+                "base": 101,
+                "head": 108,
+                "delta": 7,
+                "verdict": "worse",
+                "explanation": "CDP 的布局/存活节点观测；D8b 没有 web 改动。未记录本轮分配/帧 trace，不能据一个样本归因固定 DOM 膨胀或声称已消除。"
+            },
+            {
+                "key": "web.send.stream/cdp.Nodes",
+                "base": 1510,
+                "head": 1628,
+                "delta": 118,
+                "verdict": "worse",
+                "explanation": "沿用已核验 D8a 的历史说明（不是本轮重新归因）：既有成本/采样来源（历史说明）：既有D6记录：main 含 A4 preload 节点；D6 加 1 link 及相邻空白。同一最终代码两轮 1579→1654；另有节点分配/回收取样，不等于持久 DOM 或泄漏。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+            },
+            {
+                "key": "web.send.stream/web.event.parse.chars",
+                "base": 30133,
+                "head": 30445,
+                "delta": 312,
+                "verdict": "worse",
+                "explanation": "沿用已核验 D8a 的历史说明（不是本轮重新归因）：既有成本/采样来源（历史说明）：既有D6记录：main 含 D5 包装；D6 隔离本次数据长度增量未精确归因，未保存正文。同一最终代码两轮 30445→30445；保留差值，不把源码等价当作零成本。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+            },
+            {
+                "key": "assets.first/http.requests",
+                "base": 53,
+                "head": 54,
+                "delta": 1,
+                "verdict": "worse",
+                "explanation": "沿用已核验 D8a 的历史说明（不是本轮重新归因）：既有成本/采样来源（历史说明）：既有D6记录：新增 native.css，首次与条件请求都各 +1；条件响应正文仍为 0。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+            },
+            {
+                "key": "assets.validated/http.requests",
+                "base": 53,
+                "head": 54,
+                "delta": 1,
+                "verdict": "worse",
+                "explanation": "沿用已核验 D8a 的历史说明（不是本轮重新归因）：既有成本/采样来源（历史说明）：既有D6记录：新增 native.css，首次与条件请求都各 +1；条件响应正文仍为 0。 本次D8五轮隔离比较未判worse。 本轮没有新增该路径的逐字段trace。"
+            }
+        ],
+        "slower": null,
+        "unavailable": [],
+        "timingEvidence": "unavailable: original main sample did not hold the timing lock; counters only"
+    },
+    "d8aToOff": {
+        "worse": [
+            {
+                "key": "startup.restart/json.parse.durableStorage.calls",
+                "base": 458,
+                "head": 459,
+                "delta": 1,
+                "verdict": "worse",
+                "explanation": "本轮多一次公开 Storage JSON 解码、19 字符；没有该值的原始调用栈。默认 off 仍用原 Storage，不能将额外解码擅自解释为固定算法回归或宣称其不存在。"
+            },
+            {
+                "key": "startup.restart/json.parse.durableStorage.chars",
+                "base": 51416,
+                "head": 51435,
+                "delta": 19,
+                "verdict": "worse",
+                "explanation": "本轮多一次公开 Storage JSON 解码、19 字符；没有该值的原始调用栈。默认 off 仍用原 Storage，不能将额外解码擅自解释为固定算法回归或宣称其不存在。"
+            },
+            {
+                "key": "session.open/sql.statements",
+                "base": 43,
+                "head": 44,
+                "delta": 1,
+                "verdict": "worse",
+                "explanation": "该窗口 events 9→10、rows 92→105；异步 view/warm 完成跨窗口会改变观察的状态。数据说明多观察了一批内容，但未保留其逐条 payload，不能把每个字节差都归于 RPC。静态同数据跨开关完整 room payload 等价测试通过。"
+            },
+            {
+                "key": "session.open/sql.rows",
+                "base": 92,
+                "head": 105,
+                "delta": 13,
+                "verdict": "worse",
+                "explanation": "该窗口 events 9→10、rows 92→105；异步 view/warm 完成跨窗口会改变观察的状态。数据说明多观察了一批内容，但未保留其逐条 payload，不能把每个字节差都归于 RPC。静态同数据跨开关完整 room payload 等价测试通过。"
+            },
+            {
+                "key": "session.open/json.stringify.chars",
+                "base": 84622,
+                "head": 88107,
+                "delta": 3485,
+                "verdict": "worse",
+                "explanation": "该窗口 events 9→10、rows 92→105；异步 view/warm 完成跨窗口会改变观察的状态。数据说明多观察了一批内容，但未保留其逐条 payload，不能把每个字节差都归于 RPC。静态同数据跨开关完整 room payload 等价测试通过。"
+            },
+            {
+                "key": "session.open/push.events",
+                "base": 9,
+                "head": 10,
+                "delta": 1,
+                "verdict": "worse",
+                "explanation": "该窗口 events 9→10、rows 92→105；异步 view/warm 完成跨窗口会改变观察的状态。数据说明多观察了一批内容，但未保留其逐条 payload，不能把每个字节差都归于 RPC。静态同数据跨开关完整 room payload 等价测试通过。"
+            },
+            {
+                "key": "session.open/push.bytes",
+                "base": 82236,
+                "head": 86312,
+                "delta": 4076,
+                "verdict": "worse",
+                "explanation": "该窗口 events 9→10、rows 92→105；异步 view/warm 完成跨窗口会改变观察的状态。数据说明多观察了一批内容，但未保留其逐条 payload，不能把每个字节差都归于 RPC。静态同数据跨开关完整 room payload 等价测试通过。"
+            },
+            {
+                "key": "turn.warm/json.parse.chars",
+                "base": 290753,
+                "head": 290760,
+                "delta": 7,
+                "verdict": "worse",
+                "explanation": "此项只有 JSON 字符数变化，调用次数没有同时变差。动态计时/状态字段可能改变长度，但本轮没保存原文，具体字段未归因。"
+            },
+            {
+                "key": "turn.warm/json.stringify.chars",
+                "base": 85248,
+                "head": 85250,
+                "delta": 2,
+                "verdict": "worse",
+                "explanation": "此项只有 JSON 字符数变化，调用次数没有同时变差。动态计时/状态字段可能改变长度，但本轮没保存原文，具体字段未归因。"
+            },
+            {
+                "key": "turn.paced/json.parse.chars",
+                "base": 382220,
+                "head": 382223,
+                "delta": 3,
+                "verdict": "worse",
+                "explanation": "此项只有 JSON 字符数变化，调用次数没有同时变差。动态计时/状态字段可能改变长度，但本轮没保存原文，具体字段未归因。"
+            },
+            {
+                "key": "session.history.earlier/json.stringify.chars",
+                "base": 243098,
+                "head": 243132,
+                "delta": 34,
+                "verdict": "worse",
+                "explanation": "差值是既有 head timer 17 字符的整数倍；只是与历史观察相容，本轮无对应调用栈，不写成确定根因。"
+            },
+            {
+                "key": "turn.prewarmed/fs.read.calls",
+                "base": 25,
+                "head": 26,
+                "delta": 1,
+                "verdict": "worse",
+                "explanation": "本轮 reads 25→26，另有公开 Storage parse 18→20、字符 +302。没有原始文件/JSON 调用栈，不能把历史分批观察当作当前确定根因，也不能证明这两种增量同源。"
+            },
+            {
+                "key": "turn.prewarmed/json.parse.durableStorage.calls",
+                "base": 18,
+                "head": 20,
+                "delta": 2,
+                "verdict": "worse",
+                "explanation": "本轮 reads 25→26，另有公开 Storage parse 18→20、字符 +302。没有原始文件/JSON 调用栈，不能把历史分批观察当作当前确定根因，也不能证明这两种增量同源。"
+            },
+            {
+                "key": "turn.prewarmed/json.parse.durableStorage.chars",
+                "base": 1122,
+                "head": 1424,
+                "delta": 302,
+                "verdict": "worse",
+                "explanation": "本轮 reads 25→26，另有公开 Storage parse 18→20、字符 +302。没有原始文件/JSON 调用栈，不能把历史分批观察当作当前确定根因，也不能证明这两种增量同源。"
+            }
+        ],
+        "slower": [
+            {
+                "key": "startup.restart/ms",
+                "base": 87.1,
+                "head": 118,
+                "change": 0.355,
+                "verdict": "slower"
+            },
+            {
+                "key": "startup.restart/appOpenMs",
+                "base": 29.1,
+                "head": 70.9,
+                "change": 1.436,
+                "verdict": "slower"
+            },
+            {
+                "key": "turn.cold/nativeStartHelperMs",
+                "base": 0.6,
+                "head": 2.1,
+                "change": 2.5,
+                "verdict": "slower"
+            },
+            {
+                "key": "session.reclaim/ms",
+                "base": 11.5,
+                "head": 15.9,
+                "change": 0.383,
+                "verdict": "slower"
+            },
+            {
+                "key": "session.reclaim/roomKernelProjectMs",
+                "base": 0.6,
+                "head": 0.8,
+                "change": 0.333,
+                "verdict": "slower"
+            },
+            {
+                "key": "session.open.long/roomKernelProjectMs",
+                "base": 0.1,
+                "head": 0.2,
+                "change": 1,
+                "verdict": "slower"
+            },
+            {
+                "key": "session.open.native-long/ms",
+                "base": 1,
+                "head": 1.8,
+                "change": 0.8,
+                "verdict": "slower"
+            },
+            {
+                "key": "session.history.earlier/ms",
+                "base": 15.8,
+                "head": 30.1,
+                "change": 0.905,
+                "verdict": "slower"
+            },
+            {
+                "key": "native.warm/nativeStartVerifyMs",
+                "base": 1,
+                "head": 1.4,
+                "change": 0.4,
+                "verdict": "slower"
+            },
+            {
+                "key": "native.warm/nativeStartRpcSpawnMs",
+                "base": 0.5,
+                "head": 0.7,
+                "change": 0.4,
+                "verdict": "slower"
+            },
+            {
+                "key": "web.reopen/viewApplyMs",
+                "base": 0.2,
+                "head": 0.6,
+                "change": 2,
+                "verdict": "slower"
+            },
+            {
+                "key": "web.paced/eventParseMs",
+                "base": 0.8,
+                "head": 1.2,
+                "change": 0.5,
+                "verdict": "slower"
+            },
+            {
+                "key": "web.send.stream/submitSentMs",
+                "base": 2.4,
+                "head": 3.5,
+                "change": 0.458,
+                "verdict": "slower"
+            },
+            {
+                "key": "web.send.stream/submitAnsweredMs",
+                "base": 16,
+                "head": 20.9,
+                "change": 0.306,
+                "verdict": "slower"
+            },
+            {
+                "key": "web.send.stream/runAdmittedMs",
+                "base": 7.7,
+                "head": 10.9,
+                "change": 0.416,
+                "verdict": "slower"
+            },
+            {
+                "key": "web.send.stream/promptDispatchedMs",
+                "base": 48.7,
+                "head": 59.3,
+                "change": 0.218,
+                "verdict": "slower"
+            },
+            {
+                "key": "web.send.stream/userEchoedMs",
+                "base": 8.7,
+                "head": 11.1,
+                "change": 0.276,
+                "verdict": "slower"
+            },
+            {
+                "key": "commands.discover.cold/nativeStartResourcesMs",
+                "base": 45.6,
+                "head": 63.1,
+                "change": 0.384,
+                "verdict": "slower"
+            },
+            {
+                "key": "commands.discover.cold/nativeStartHelperMs",
+                "base": 0.2,
+                "head": 0.3,
+                "change": 0.5,
+                "verdict": "slower"
+            },
+            {
+                "key": "commands.discover.cold/nativeStartRpcSpawnMs",
+                "base": 0.4,
+                "head": 0.5,
+                "change": 0.25,
+                "verdict": "slower"
+            },
+            {
+                "key": "image.concurrent/imageLookupMs",
+                "base": 23.1,
+                "head": 29.2,
+                "change": 0.264,
+                "verdict": "slower"
+            },
+            {
+                "key": "image.concurrent/imageSendFinishMs",
+                "base": 34.5,
+                "head": 58.7,
+                "change": 0.701,
+                "verdict": "slower"
+            },
+            {
+                "key": "journal.large/entriesSuffixMs",
+                "base": 0.8,
+                "head": 1.4,
+                "change": 0.75,
+                "verdict": "slower"
+            }
+        ],
+        "unavailable": []
+    },
+    "offToOn": {
+        "worse": [
+            {
+                "key": "startup.restart/fs.read.calls",
+                "base": 14,
+                "head": 29,
+                "delta": 15,
+                "verdict": "worse",
+                "explanation": "新 isolate 的公开 Storage/journal 模块及计数 preload 冷加载。已将仅用于 Storage 异常分类的公开 SDK 根导出延后；剩余 +15 reads / +257798 bytes 是此 instrumented 启动的实际成本。"
+            },
+            {
+                "key": "startup.restart/fs.read.bytes",
+                "base": 98872,
+                "head": 356670,
+                "delta": 257798,
+                "verdict": "worse",
+                "explanation": "新 isolate 的公开 Storage/journal 模块及计数 preload 冷加载。已将仅用于 Storage 异常分类的公开 SDK 根导出延后；剩余 +15 reads / +257798 bytes 是此 instrumented 启动的实际成本。"
+            },
+            {
+                "key": "turn.cold/push.events",
+                "base": 5,
+                "head": 6,
+                "delta": 1,
+                "verdict": "worse",
+                "explanation": "本轮多一个 74 字节小事件；业务推理次数断言未变。事件体未保存，不能仅按长度认定是哪一条事件。"
+            },
+            {
+                "key": "turn.cold/push.bytes",
+                "base": 18599,
+                "head": 18673,
+                "delta": 74,
+                "verdict": "worse",
+                "explanation": "本轮多一个 74 字节小事件；业务推理次数断言未变。事件体未保存，不能仅按长度认定是哪一条事件。"
+            },
+            {
+                "key": "git.changes/json.stringify.chars",
+                "base": 2539,
+                "head": 3104,
+                "delta": 565,
+                "verdict": "worse",
+                "explanation": "changes 返回值/序列化字节的样本差。D8b 未改 changes 查询或响应格式；未保存原始响应，不能确定具体可变字段。此项仍列作成本，不给出无证据的根因。"
+            },
+            {
+                "key": "web.reopen/cdp.Nodes",
+                "base": 1208,
+                "head": 1232,
+                "delta": 24,
+                "verdict": "worse",
+                "explanation": "CDP 的布局/存活节点观测；D8b 没有 web 改动。未记录本轮分配/帧 trace，不能据一个样本归因固定 DOM 膨胀或声称已消除。"
+            },
+            {
+                "key": "web.send.stream/push.bytes",
+                "base": 91804,
+                "head": 92005,
+                "delta": 201,
+                "verdict": "worse",
+                "explanation": "同样业务断言下，取样窗口里的中间推送体积不同；同一持久状态的 mirror、roomInfo、roomState 在切换开关后全量相等。没有保存当时每一帧，具体中间状态/批次未归因；保留实测额外字节，不宣称零开销。"
+            },
+            {
+                "key": "web.send.stream/push.view.bytes",
+                "base": 77986,
+                "head": 78187,
+                "delta": 201,
+                "verdict": "worse",
+                "explanation": "同样业务断言下，取样窗口里的中间推送体积不同；同一持久状态的 mirror、roomInfo、roomState 在切换开关后全量相等。没有保存当时每一帧，具体中间状态/批次未归因；保留实测额外字节，不宣称零开销。"
+            },
+            {
+                "key": "commands.discover.cold/json.stringify.chars",
+                "base": 33812,
+                "head": 33846,
+                "delta": 34,
+                "verdict": "worse",
+                "explanation": "差值是既有 head timer 17 字符的整数倍；只是与历史观察相容，本轮无对应调用栈，不写成确定根因。"
+            },
+            {
+                "key": "projection.large.paced/json.stringify.chars",
+                "base": 421137,
+                "head": 421699,
+                "delta": 562,
+                "verdict": "worse",
+                "explanation": "同样业务断言下，取样窗口里的中间推送体积不同；同一持久状态的 mirror、roomInfo、roomState 在切换开关后全量相等。没有保存当时每一帧，具体中间状态/批次未归因；保留实测额外字节，不宣称零开销。"
+            },
+            {
+                "key": "projection.large.paced/push.bytes",
+                "base": 247428,
+                "head": 248028,
+                "delta": 600,
+                "verdict": "worse",
+                "explanation": "同样业务断言下，取样窗口里的中间推送体积不同；同一持久状态的 mirror、roomInfo、roomState 在切换开关后全量相等。没有保存当时每一帧，具体中间状态/批次未归因；保留实测额外字节，不宣称零开销。"
+            },
+            {
+                "key": "projection.large.paced/push.view.bytes",
+                "base": 206056,
+                "head": 206656,
+                "delta": 600,
+                "verdict": "worse",
+                "explanation": "同样业务断言下，取样窗口里的中间推送体积不同；同一持久状态的 mirror、roomInfo、roomState 在切换开关后全量相等。没有保存当时每一帧，具体中间状态/批次未归因；保留实测额外字节，不宣称零开销。"
+            }
+        ],
+        "slower": [
+            {
+                "key": "startup.restart/ms",
+                "base": 118,
+                "head": 197.4,
+                "change": 0.673,
+                "verdict": "slower"
+            },
+            {
+                "key": "startup.restart/appOpenMs",
+                "base": 70.9,
+                "head": 142.1,
+                "change": 1.004,
+                "verdict": "slower"
+            },
+            {
+                "key": "sessions.list/ms",
+                "base": 10.9,
+                "head": 15.3,
+                "change": 0.404,
+                "verdict": "slower"
+            },
+            {
+                "key": "session.open/ms",
+                "base": 54,
+                "head": 66.5,
+                "change": 0.231,
+                "verdict": "slower"
+            },
+            {
+                "key": "session.open/roomKernelProjectMs",
+                "base": 1.4,
+                "head": 1.8,
+                "change": 0.286,
+                "verdict": "slower"
+            },
+            {
+                "key": "turn.cold/nativeStartRpcSpawnMs",
+                "base": 0.7,
+                "head": 1.2,
+                "change": 0.714,
+                "verdict": "slower"
+            },
+            {
+                "key": "turn.cold/roomKernelProjectMs",
+                "base": 0.3,
+                "head": 0.5,
+                "change": 0.667,
+                "verdict": "slower"
+            },
+            {
+                "key": "turn.warm/roomKernelProjectMs",
+                "base": 0.3,
+                "head": 0.9,
+                "change": 2,
+                "verdict": "slower"
+            },
+            {
+                "key": "turn.paced/roomKernelProjectMs",
+                "base": 3.5,
+                "head": 12.3,
+                "change": 2.514,
+                "verdict": "slower"
+            },
+            {
+                "key": "git.changes/ms",
+                "base": 169.8,
+                "head": 206,
+                "change": 0.213,
+                "verdict": "slower"
+            },
+            {
+                "key": "git.diff/ms",
+                "base": 110.6,
+                "head": 167.4,
+                "change": 0.514,
+                "verdict": "slower"
+            },
+            {
+                "key": "commands.list/ms",
+                "base": 32,
+                "head": 52.6,
+                "change": 0.644,
+                "verdict": "slower"
+            },
+            {
+                "key": "web.open/viewApplyMs",
+                "base": 0.2,
+                "head": 0.3,
+                "change": 0.5,
+                "verdict": "slower"
+            },
+            {
+                "key": "session.reclaim/ms",
+                "base": 15.9,
+                "head": 20.5,
+                "change": 0.289,
+                "verdict": "slower"
+            },
+            {
+                "key": "session.reclaim/roomKernelProjectMs",
+                "base": 0.8,
+                "head": 1.7,
+                "change": 1.125,
+                "verdict": "slower"
+            },
+            {
+                "key": "session.open.long/ms",
+                "base": 29.5,
+                "head": 45.9,
+                "change": 0.556,
+                "verdict": "slower"
+            },
+            {
+                "key": "session.open.long/roomKernelProjectMs",
+                "base": 0.2,
+                "head": 0.7,
+                "change": 2.5,
+                "verdict": "slower"
+            },
+            {
+                "key": "session.open.native-long/ms",
+                "base": 1.8,
+                "head": 9.8,
+                "change": 4.444,
+                "verdict": "slower"
+            },
+            {
+                "key": "native.warm/nativeStartResourcesMs",
+                "base": 35.9,
+                "head": 52.1,
+                "change": 0.451,
+                "verdict": "slower"
+            },
+            {
+                "key": "native.warm/nativeStartHelperMs",
+                "base": 0.3,
+                "head": 1.4,
+                "change": 3.667,
+                "verdict": "slower"
+            },
+            {
+                "key": "turn.prewarmed/roomKernelProjectMs",
+                "base": 0.2,
+                "head": 1.1,
+                "change": 4.5,
+                "verdict": "slower"
+            },
+            {
+                "key": "web.send.poll/submitAnsweredMs",
+                "base": 22.8,
+                "head": 27.8,
+                "change": 0.219,
+                "verdict": "slower"
+            },
+            {
+                "key": "web.send.poll/clockUncertaintyMs",
+                "base": 0.9,
+                "head": 1.1,
+                "change": 0.222,
+                "verdict": "slower"
+            },
+            {
+                "key": "web.send.stream/submitAnsweredMs",
+                "base": 20.9,
+                "head": 28.3,
+                "change": 0.354,
+                "verdict": "slower"
+            },
+            {
+                "key": "commands.discover.cold/nativeStartHelperMs",
+                "base": 0.3,
+                "head": 0.7,
+                "change": 1.333,
+                "verdict": "slower"
+            },
+            {
+                "key": "commands.discover.cold/nativeStartRpcSpawnMs",
+                "base": 0.5,
+                "head": 0.8,
+                "change": 0.6,
+                "verdict": "slower"
+            },
+            {
+                "key": "commands.discover.cold/roomKernelProjectMs",
+                "base": 0.1,
+                "head": 0.2,
+                "change": 1,
+                "verdict": "slower"
+            },
+            {
+                "key": "commands.discover.warm/roomKernelProjectMs",
+                "base": 0.2,
+                "head": 0.5,
+                "change": 1.5,
+                "verdict": "slower"
+            },
+            {
+                "key": "turn.prepared/roomKernelProjectMs",
+                "base": 0.3,
+                "head": 2.2,
+                "change": 6.333,
+                "verdict": "slower"
+            },
+            {
+                "key": "projection.large.open/ms",
+                "base": 64,
+                "head": 78.9,
+                "change": 0.233,
+                "verdict": "slower"
+            },
+            {
+                "key": "projection.large.open/roomKernelProjectMs",
+                "base": 1.9,
+                "head": 2.9,
+                "change": 0.526,
+                "verdict": "slower"
+            },
+            {
+                "key": "projection.large.paced/roomKernelProjectMs",
+                "base": 11.7,
+                "head": 41.2,
+                "change": 2.521,
+                "verdict": "slower"
+            },
+            {
+                "key": "projection.large.paced/roomLiveProjectMs",
+                "base": 0.4,
+                "head": 0.6,
+                "change": 0.5,
+                "verdict": "slower"
+            },
+            {
+                "key": "image.single/ms",
+                "base": 16,
+                "head": 22.3,
+                "change": 0.394,
+                "verdict": "slower"
+            },
+            {
+                "key": "image.single/imageLookupMs",
+                "base": 2.6,
+                "head": 3.4,
+                "change": 0.308,
+                "verdict": "slower"
+            },
+            {
+                "key": "image.single/imageSendFinishMs",
+                "base": 2.8,
+                "head": 4.3,
+                "change": 0.536,
+                "verdict": "slower"
+            },
+            {
+                "key": "image.single/imageServerMs",
+                "base": 11.3,
+                "head": 13.8,
+                "change": 0.221,
+                "verdict": "slower"
+            },
+            {
+                "key": "image.single/imageClientMs",
+                "base": 15.6,
+                "head": 21.7,
+                "change": 0.391,
+                "verdict": "slower"
+            },
+            {
+                "key": "image.concurrent/imageLookupMs",
+                "base": 29.2,
+                "head": 66.7,
+                "change": 1.284,
+                "verdict": "slower"
+            },
+            {
+                "key": "journal.large/entriesSuffixMs",
+                "base": 1.4,
+                "head": 1.7,
+                "change": 0.214,
+                "verdict": "slower"
+            },
+            {
+                "key": "journal.large/segmentEntriesMs",
+                "base": 11.2,
+                "head": 13.6,
+                "change": 0.214,
+                "verdict": "slower"
+            }
+        ],
+        "unavailable": []
+    },
+    "workerTimings": [
+        {
+            "scenario": "startup.restart",
+            "metric": "v8DeserializeMs",
+            "runs": [1.1],
+            "median": 1.1
+        },
+        {
+            "scenario": "startup.restart",
+            "metric": "storageWorkerMs",
+            "runs": [53.8],
+            "median": 53.8
+        },
+        {
+            "scenario": "startup.restart",
+            "metric": "storageEncodeMs",
+            "runs": [1.1],
+            "median": 1.1
+        },
+        {
+            "scenario": "startup.restart",
+            "metric": "storageQueueMs",
+            "runs": [0.2],
+            "median": 0.2
+        },
+        {
+            "scenario": "startup.restart",
+            "metric": "storageRoundTripMs",
+            "runs": [137.3],
+            "median": 137.3
+        },
+        {
+            "scenario": "startup.restart",
+            "metric": "storageWorkerV8SerializeMs",
+            "runs": [1],
+            "median": 1
+        },
+        {
+            "scenario": "startup.restart",
+            "metric": "v8SerializeMs",
+            "runs": [0.8],
+            "median": 0.8
+        },
+        {
+            "scenario": "startup.restart",
+            "metric": "storageWorkerV8DeserializeMs",
+            "runs": [1],
+            "median": 1
+        },
+        {
+            "scenario": "startup.restart",
+            "metric": "appCloseMs",
+            "runs": [55.1],
+            "median": 55.1
+        },
+        {
+            "scenario": "startup.restart",
+            "metric": "appOpenMs",
+            "runs": [142.1],
+            "median": 142.1
+        },
+        {
+            "scenario": "sessions.list",
+            "metric": "v8DeserializeMs",
+            "runs": [0],
+            "median": 0
+        },
+        {
+            "scenario": "sessions.list",
+            "metric": "storageWorkerMs",
+            "runs": [0.9],
+            "median": 0.9
+        },
+        {
+            "scenario": "sessions.list",
+            "metric": "storageEncodeMs",
+            "runs": [0.1],
+            "median": 0.1
+        },
+        {
+            "scenario": "sessions.list",
+            "metric": "storageQueueMs",
+            "runs": [0],
+            "median": 0
+        },
+        {
+            "scenario": "sessions.list",
+            "metric": "storageRoundTripMs",
+            "runs": [1.6],
+            "median": 1.6
+        },
+        {
+            "scenario": "sessions.list",
+            "metric": "storageWorkerV8SerializeMs",
+            "runs": [0],
+            "median": 0
+        },
+        {
+            "scenario": "sessions.list",
+            "metric": "v8SerializeMs",
+            "runs": [0.1],
+            "median": 0.1
+        },
+        {
+            "scenario": "sessions.list",
+            "metric": "storageWorkerV8DeserializeMs",
+            "runs": [0],
+            "median": 0
+        },
+        {
+            "scenario": "sessions.rename.tabs",
+            "metric": "v8DeserializeMs",
+            "runs": [0.2],
+            "median": 0.2
+        },
+        {
+            "scenario": "sessions.rename.tabs",
+            "metric": "storageWorkerMs",
+            "runs": [9.1],
+            "median": 9.1
+        },
+        {
+            "scenario": "sessions.rename.tabs",
+            "metric": "storageEncodeMs",
+            "runs": [0.5],
+            "median": 0.5
+        },
+        {
+            "scenario": "sessions.rename.tabs",
+            "metric": "storageQueueMs",
+            "runs": [0.1],
+            "median": 0.1
+        },
+        {
+            "scenario": "sessions.rename.tabs",
+            "metric": "storageRoundTripMs",
+            "runs": [14.1],
+            "median": 14.1
+        },
+        {
+            "scenario": "sessions.rename.tabs",
+            "metric": "storageWorkerV8SerializeMs",
+            "runs": [0.2],
+            "median": 0.2
+        },
+        {
+            "scenario": "sessions.rename.tabs",
+            "metric": "v8SerializeMs",
+            "runs": [0.4],
+            "median": 0.4
+        },
+        {
+            "scenario": "sessions.rename.tabs",
+            "metric": "storageWorkerV8DeserializeMs",
+            "runs": [0.3],
+            "median": 0.3
+        },
+        {
+            "scenario": "session.open",
+            "metric": "v8DeserializeMs",
+            "runs": [1.9],
+            "median": 1.9
+        },
+        {
+            "scenario": "session.open",
+            "metric": "storageWorkerMs",
+            "runs": [9.7],
+            "median": 9.7
+        },
+        {
+            "scenario": "session.open",
+            "metric": "storageEncodeMs",
+            "runs": [0.5],
+            "median": 0.5
+        },
+        {
+            "scenario": "session.open",
+            "metric": "storageQueueMs",
+            "runs": [0.1],
+            "median": 0.1
+        },
+        {
+            "scenario": "session.open",
+            "metric": "storageRoundTripMs",
+            "runs": [25.3],
+            "median": 25.3
+        },
+        {
+            "scenario": "session.open",
+            "metric": "storageWorkerV8SerializeMs",
+            "runs": [0.9],
+            "median": 0.9
+        },
+        {
+            "scenario": "session.open",
+            "metric": "v8SerializeMs",
+            "runs": [0.4],
+            "median": 0.4
+        },
+        {
+            "scenario": "session.open",
+            "metric": "storageWorkerV8DeserializeMs",
+            "runs": [0.4],
+            "median": 0.4
+        },
+        {
+            "scenario": "turn.cold",
+            "metric": "v8DeserializeMs",
+            "runs": [0.5],
+            "median": 0.5
+        },
+        {
+            "scenario": "turn.cold",
+            "metric": "storageWorkerMs",
+            "runs": [11.7],
+            "median": 11.7
+        },
+        {
+            "scenario": "turn.cold",
+            "metric": "storageEncodeMs",
+            "runs": [0.7],
+            "median": 0.7
+        },
+        {
+            "scenario": "turn.cold",
+            "metric": "storageQueueMs",
+            "runs": [1.7],
+            "median": 1.7
+        },
+        {
+            "scenario": "turn.cold",
+            "metric": "storageRoundTripMs",
+            "runs": [25.3],
+            "median": 25.3
+        },
+        {
+            "scenario": "turn.cold",
+            "metric": "storageWorkerV8SerializeMs",
+            "runs": [0.4],
+            "median": 0.4
+        },
+        {
+            "scenario": "turn.cold",
+            "metric": "v8SerializeMs",
+            "runs": [0.5],
+            "median": 0.5
+        },
+        {
+            "scenario": "turn.cold",
+            "metric": "storageWorkerV8DeserializeMs",
+            "runs": [0.8],
+            "median": 0.8
+        },
+        {
+            "scenario": "turn.warm",
+            "metric": "v8DeserializeMs",
+            "runs": [0.4],
+            "median": 0.4
+        },
+        {
+            "scenario": "turn.warm",
+            "metric": "storageWorkerMs",
+            "runs": [9],
+            "median": 9
+        },
+        {
+            "scenario": "turn.warm",
+            "metric": "storageEncodeMs",
+            "runs": [0.6],
+            "median": 0.6
+        },
+        {
+            "scenario": "turn.warm",
+            "metric": "storageQueueMs",
+            "runs": [3.1],
+            "median": 3.1
+        },
+        {
+            "scenario": "turn.warm",
+            "metric": "storageRoundTripMs",
+            "runs": [20.4],
+            "median": 20.4
+        },
+        {
+            "scenario": "turn.warm",
+            "metric": "storageWorkerV8SerializeMs",
+            "runs": [0.4],
+            "median": 0.4
+        },
+        {
+            "scenario": "turn.warm",
+            "metric": "v8SerializeMs",
+            "runs": [0.5],
+            "median": 0.5
+        },
+        {
+            "scenario": "turn.warm",
+            "metric": "storageWorkerV8DeserializeMs",
+            "runs": [0.7],
+            "median": 0.7
+        },
+        {
+            "scenario": "turn.paced",
+            "metric": "v8DeserializeMs",
+            "runs": [1.8],
+            "median": 1.8
+        },
+        {
+            "scenario": "turn.paced",
+            "metric": "storageWorkerMs",
+            "runs": [21.9],
+            "median": 21.9
+        },
+        {
+            "scenario": "turn.paced",
+            "metric": "storageEncodeMs",
+            "runs": [1.9],
+            "median": 1.9
+        },
+        {
+            "scenario": "turn.paced",
+            "metric": "storageQueueMs",
+            "runs": [4.9],
+            "median": 4.9
+        },
+        {
+            "scenario": "turn.paced",
+            "metric": "storageRoundTripMs",
+            "runs": [59.9],
+            "median": 59.9
+        },
+        {
+            "scenario": "turn.paced",
+            "metric": "storageWorkerV8SerializeMs",
+            "runs": [1.2],
+            "median": 1.2
+        },
+        {
+            "scenario": "turn.paced",
+            "metric": "v8SerializeMs",
+            "runs": [1.6],
+            "median": 1.6
+        },
+        {
+            "scenario": "turn.paced",
+            "metric": "storageWorkerV8DeserializeMs",
+            "runs": [1.6],
+            "median": 1.6
+        },
+        {
+            "scenario": "git.changes",
+            "metric": "v8DeserializeMs",
+            "runs": [0.8],
+            "median": 0.8
+        },
+        {
+            "scenario": "git.changes",
+            "metric": "storageWorkerMs",
+            "runs": [2.3],
+            "median": 2.3
+        },
+        {
+            "scenario": "git.changes",
+            "metric": "storageEncodeMs",
+            "runs": [0.1],
+            "median": 0.1
+        },
+        {
+            "scenario": "git.changes",
+            "metric": "storageQueueMs",
+            "runs": [0],
+            "median": 0
+        },
+        {
+            "scenario": "git.changes",
+            "metric": "storageRoundTripMs",
+            "runs": [4.2],
+            "median": 4.2
+        },
+        {
+            "scenario": "git.changes",
+            "metric": "storageWorkerV8SerializeMs",
+            "runs": [0.4],
+            "median": 0.4
+        },
+        {
+            "scenario": "git.changes",
+            "metric": "v8SerializeMs",
+            "runs": [0.1],
+            "median": 0.1
+        },
+        {
+            "scenario": "git.changes",
+            "metric": "storageWorkerV8DeserializeMs",
+            "runs": [0],
+            "median": 0
+        },
+        {
+            "scenario": "commands.list",
+            "metric": "v8DeserializeMs",
+            "runs": [0.1],
+            "median": 0.1
+        },
+        {
+            "scenario": "commands.list",
+            "metric": "storageWorkerMs",
+            "runs": [1.3],
+            "median": 1.3
+        },
+        {
+            "scenario": "commands.list",
+            "metric": "storageEncodeMs",
+            "runs": [0.1],
+            "median": 0.1
+        },
+        {
+            "scenario": "commands.list",
+            "metric": "storageQueueMs",
+            "runs": [0],
+            "median": 0
+        },
+        {
+            "scenario": "commands.list",
+            "metric": "storageRoundTripMs",
+            "runs": [3.2],
+            "median": 3.2
+        },
+        {
+            "scenario": "commands.list",
+            "metric": "storageWorkerV8SerializeMs",
+            "runs": [0.1],
+            "median": 0.1
+        },
+        {
+            "scenario": "commands.list",
+            "metric": "v8SerializeMs",
+            "runs": [0],
+            "median": 0
+        },
+        {
+            "scenario": "commands.list",
+            "metric": "storageWorkerV8DeserializeMs",
+            "runs": [0.1],
+            "median": 0.1
+        },
+        {
+            "scenario": "session.reclaim",
+            "metric": "v8DeserializeMs",
+            "runs": [0.3],
+            "median": 0.3
+        },
+        {
+            "scenario": "session.reclaim",
+            "metric": "storageWorkerMs",
+            "runs": [1.7],
+            "median": 1.7
+        },
+        {
+            "scenario": "session.reclaim",
+            "metric": "storageEncodeMs",
+            "runs": [0.2],
+            "median": 0.2
+        },
+        {
+            "scenario": "session.reclaim",
+            "metric": "storageQueueMs",
+            "runs": [0],
+            "median": 0
+        },
+        {
+            "scenario": "session.reclaim",
+            "metric": "storageRoundTripMs",
+            "runs": [8.6],
+            "median": 8.6
+        },
+        {
+            "scenario": "session.reclaim",
+            "metric": "storageWorkerV8SerializeMs",
+            "runs": [0.1],
+            "median": 0.1
+        },
+        {
+            "scenario": "session.reclaim",
+            "metric": "v8SerializeMs",
+            "runs": [0.2],
+            "median": 0.2
+        },
+        {
+            "scenario": "session.reclaim",
+            "metric": "storageWorkerV8DeserializeMs",
+            "runs": [0.1],
+            "median": 0.1
+        },
+        {
+            "scenario": "session.open.long",
+            "metric": "v8DeserializeMs",
+            "runs": [0.2],
+            "median": 0.2
+        },
+        {
+            "scenario": "session.open.long",
+            "metric": "storageWorkerMs",
+            "runs": [1.9],
+            "median": 1.9
+        },
+        {
+            "scenario": "session.open.long",
+            "metric": "storageEncodeMs",
+            "runs": [0.3],
+            "median": 0.3
+        },
+        {
+            "scenario": "session.open.long",
+            "metric": "storageQueueMs",
+            "runs": [0.1],
+            "median": 0.1
+        },
+        {
+            "scenario": "session.open.long",
+            "metric": "storageRoundTripMs",
+            "runs": [7.2],
+            "median": 7.2
+        },
+        {
+            "scenario": "session.open.long",
+            "metric": "storageWorkerV8SerializeMs",
+            "runs": [0.1],
+            "median": 0.1
+        },
+        {
+            "scenario": "session.open.long",
+            "metric": "v8SerializeMs",
+            "runs": [0.2],
+            "median": 0.2
+        },
+        {
+            "scenario": "session.open.long",
+            "metric": "storageWorkerV8DeserializeMs",
+            "runs": [0.2],
+            "median": 0.2
+        },
+        {
+            "scenario": "session.open.native-long",
+            "metric": "v8DeserializeMs",
+            "runs": [0.3],
+            "median": 0.3
+        },
+        {
+            "scenario": "session.open.native-long",
+            "metric": "storageWorkerMs",
+            "runs": [2.6],
+            "median": 2.6
+        },
+        {
+            "scenario": "session.open.native-long",
+            "metric": "storageEncodeMs",
+            "runs": [0.3],
+            "median": 0.3
+        },
+        {
+            "scenario": "session.open.native-long",
+            "metric": "storageQueueMs",
+            "runs": [0],
+            "median": 0
+        },
+        {
+            "scenario": "session.open.native-long",
+            "metric": "storageRoundTripMs",
+            "runs": [8.2],
+            "median": 8.2
+        },
+        {
+            "scenario": "session.open.native-long",
+            "metric": "storageWorkerV8SerializeMs",
+            "runs": [0.2],
+            "median": 0.2
+        },
+        {
+            "scenario": "session.open.native-long",
+            "metric": "v8SerializeMs",
+            "runs": [0.2],
+            "median": 0.2
+        },
+        {
+            "scenario": "session.open.native-long",
+            "metric": "storageWorkerV8DeserializeMs",
+            "runs": [0.2],
+            "median": 0.2
+        },
+        {
+            "scenario": "native.warm",
+            "metric": "v8DeserializeMs",
+            "runs": [0.1],
+            "median": 0.1
+        },
+        {
+            "scenario": "native.warm",
+            "metric": "storageWorkerMs",
+            "runs": [0.5],
+            "median": 0.5
+        },
+        {
+            "scenario": "native.warm",
+            "metric": "storageEncodeMs",
+            "runs": [0.1],
+            "median": 0.1
+        },
+        {
+            "scenario": "native.warm",
+            "metric": "storageQueueMs",
+            "runs": [0],
+            "median": 0
+        },
+        {
+            "scenario": "native.warm",
+            "metric": "storageRoundTripMs",
+            "runs": [2],
+            "median": 2
+        },
+        {
+            "scenario": "native.warm",
+            "metric": "storageWorkerV8SerializeMs",
+            "runs": [0],
+            "median": 0
+        },
+        {
+            "scenario": "native.warm",
+            "metric": "v8SerializeMs",
+            "runs": [0.1],
+            "median": 0.1
+        },
+        {
+            "scenario": "native.warm",
+            "metric": "storageWorkerV8DeserializeMs",
+            "runs": [0],
+            "median": 0
+        },
+        {
+            "scenario": "turn.prewarmed",
+            "metric": "v8DeserializeMs",
+            "runs": [0.8],
+            "median": 0.8
+        },
+        {
+            "scenario": "turn.prewarmed",
+            "metric": "storageWorkerMs",
+            "runs": [10.8],
+            "median": 10.8
+        },
+        {
+            "scenario": "turn.prewarmed",
+            "metric": "storageEncodeMs",
+            "runs": [0.8],
+            "median": 0.8
+        },
+        {
+            "scenario": "turn.prewarmed",
+            "metric": "storageQueueMs",
+            "runs": [3.1],
+            "median": 3.1
+        },
+        {
+            "scenario": "turn.prewarmed",
+            "metric": "storageRoundTripMs",
+            "runs": [24.4],
+            "median": 24.4
+        },
+        {
+            "scenario": "turn.prewarmed",
+            "metric": "storageWorkerV8SerializeMs",
+            "runs": [0.5],
+            "median": 0.5
+        },
+        {
+            "scenario": "turn.prewarmed",
+            "metric": "v8SerializeMs",
+            "runs": [0.6],
+            "median": 0.6
+        },
+        {
+            "scenario": "turn.prewarmed",
+            "metric": "storageWorkerV8DeserializeMs",
+            "runs": [0.9],
+            "median": 0.9
+        },
+        {
+            "scenario": "commands.discover.cold",
+            "metric": "v8DeserializeMs",
+            "runs": [0.1],
+            "median": 0.1
+        },
+        {
+            "scenario": "commands.discover.cold",
+            "metric": "storageWorkerMs",
+            "runs": [3],
+            "median": 3
+        },
+        {
+            "scenario": "commands.discover.cold",
+            "metric": "storageEncodeMs",
+            "runs": [0.2],
+            "median": 0.2
+        },
+        {
+            "scenario": "commands.discover.cold",
+            "metric": "storageQueueMs",
+            "runs": [0],
+            "median": 0
+        },
+        {
+            "scenario": "commands.discover.cold",
+            "metric": "storageRoundTripMs",
+            "runs": [6.2],
+            "median": 6.2
+        },
+        {
+            "scenario": "commands.discover.cold",
+            "metric": "storageWorkerV8SerializeMs",
+            "runs": [0.1],
+            "median": 0.1
+        },
+        {
+            "scenario": "commands.discover.cold",
+            "metric": "v8SerializeMs",
+            "runs": [0.2],
+            "median": 0.2
+        },
+        {
+            "scenario": "commands.discover.cold",
+            "metric": "storageWorkerV8DeserializeMs",
+            "runs": [0.1],
+            "median": 0.1
+        },
+        {
+            "scenario": "commands.discover.warm",
+            "metric": "v8DeserializeMs",
+            "runs": [0.4],
+            "median": 0.4
+        },
+        {
+            "scenario": "commands.discover.warm",
+            "metric": "storageWorkerMs",
+            "runs": [6.5],
+            "median": 6.5
+        },
+        {
+            "scenario": "commands.discover.warm",
+            "metric": "storageEncodeMs",
+            "runs": [0.5],
+            "median": 0.5
+        },
+        {
+            "scenario": "commands.discover.warm",
+            "metric": "storageQueueMs",
+            "runs": [0.1],
+            "median": 0.1
+        },
+        {
+            "scenario": "commands.discover.warm",
+            "metric": "storageRoundTripMs",
+            "runs": [20.1],
+            "median": 20.1
+        },
+        {
+            "scenario": "commands.discover.warm",
+            "metric": "storageWorkerV8SerializeMs",
+            "runs": [0.3],
+            "median": 0.3
+        },
+        {
+            "scenario": "commands.discover.warm",
+            "metric": "v8SerializeMs",
+            "runs": [0.4],
+            "median": 0.4
+        },
+        {
+            "scenario": "commands.discover.warm",
+            "metric": "storageWorkerV8DeserializeMs",
+            "runs": [0.4],
+            "median": 0.4
+        },
+        {
+            "scenario": "turn.prepared",
+            "metric": "v8DeserializeMs",
+            "runs": [0.7],
+            "median": 0.7
+        },
+        {
+            "scenario": "turn.prepared",
+            "metric": "storageWorkerMs",
+            "runs": [9.8],
+            "median": 9.8
+        },
+        {
+            "scenario": "turn.prepared",
+            "metric": "storageEncodeMs",
+            "runs": [0.7],
+            "median": 0.7
+        },
+        {
+            "scenario": "turn.prepared",
+            "metric": "storageQueueMs",
+            "runs": [3.1],
+            "median": 3.1
+        },
+        {
+            "scenario": "turn.prepared",
+            "metric": "storageRoundTripMs",
+            "runs": [23.7],
+            "median": 23.7
+        },
+        {
+            "scenario": "turn.prepared",
+            "metric": "storageWorkerV8SerializeMs",
+            "runs": [0.5],
+            "median": 0.5
+        },
+        {
+            "scenario": "turn.prepared",
+            "metric": "v8SerializeMs",
+            "runs": [0.6],
+            "median": 0.6
+        },
+        {
+            "scenario": "turn.prepared",
+            "metric": "storageWorkerV8DeserializeMs",
+            "runs": [0.8],
+            "median": 0.8
+        },
+        {
+            "scenario": "projection.large.open",
+            "metric": "v8DeserializeMs",
+            "runs": [2.3],
+            "median": 2.3
+        },
+        {
+            "scenario": "projection.large.open",
+            "metric": "storageWorkerMs",
+            "runs": [7.8],
+            "median": 7.8
+        },
+        {
+            "scenario": "projection.large.open",
+            "metric": "storageEncodeMs",
+            "runs": [0.3],
+            "median": 0.3
+        },
+        {
+            "scenario": "projection.large.open",
+            "metric": "storageQueueMs",
+            "runs": [0],
+            "median": 0
+        },
+        {
+            "scenario": "projection.large.open",
+            "metric": "storageRoundTripMs",
+            "runs": [24.9],
+            "median": 24.9
+        },
+        {
+            "scenario": "projection.large.open",
+            "metric": "storageWorkerV8SerializeMs",
+            "runs": [1.1],
+            "median": 1.1
+        },
+        {
+            "scenario": "projection.large.open",
+            "metric": "v8SerializeMs",
+            "runs": [0.3],
+            "median": 0.3
+        },
+        {
+            "scenario": "projection.large.open",
+            "metric": "storageWorkerV8DeserializeMs",
+            "runs": [0.3],
+            "median": 0.3
+        },
+        {
+            "scenario": "projection.large.paced",
+            "metric": "v8DeserializeMs",
+            "runs": [2.5],
+            "median": 2.5
+        },
+        {
+            "scenario": "projection.large.paced",
+            "metric": "storageWorkerMs",
+            "runs": [33.3],
+            "median": 33.3
+        },
+        {
+            "scenario": "projection.large.paced",
+            "metric": "storageEncodeMs",
+            "runs": [2.3],
+            "median": 2.3
+        },
+        {
+            "scenario": "projection.large.paced",
+            "metric": "storageQueueMs",
+            "runs": [6.1],
+            "median": 6.1
+        },
+        {
+            "scenario": "projection.large.paced",
+            "metric": "storageRoundTripMs",
+            "runs": [94.1],
+            "median": 94.1
+        },
+        {
+            "scenario": "projection.large.paced",
+            "metric": "storageWorkerV8SerializeMs",
+            "runs": [1.8],
+            "median": 1.8
+        },
+        {
+            "scenario": "projection.large.paced",
+            "metric": "v8SerializeMs",
+            "runs": [1.9],
+            "median": 1.9
+        },
+        {
+            "scenario": "projection.large.paced",
+            "metric": "storageWorkerV8DeserializeMs",
+            "runs": [2.3],
+            "median": 2.3
+        },
+        {
+            "scenario": "image.single",
+            "metric": "v8DeserializeMs",
+            "runs": [0.3],
+            "median": 0.3
+        },
+        {
+            "scenario": "image.single",
+            "metric": "storageWorkerMs",
+            "runs": [2.5],
+            "median": 2.5
+        },
+        {
+            "scenario": "image.single",
+            "metric": "storageEncodeMs",
+            "runs": [0],
+            "median": 0
+        },
+        {
+            "scenario": "image.single",
+            "metric": "storageQueueMs",
+            "runs": [0],
+            "median": 0
+        },
+        {
+            "scenario": "image.single",
+            "metric": "storageRoundTripMs",
+            "runs": [3.2],
+            "median": 3.2
+        },
+        {
+            "scenario": "image.single",
+            "metric": "storageWorkerV8SerializeMs",
+            "runs": [0.1],
+            "median": 0.1
+        },
+        {
+            "scenario": "image.single",
+            "metric": "v8SerializeMs",
+            "runs": [0],
+            "median": 0
+        },
+        {
+            "scenario": "image.single",
+            "metric": "storageWorkerV8DeserializeMs",
+            "runs": [0],
+            "median": 0
+        },
+        {
+            "scenario": "image.concurrent",
+            "metric": "v8DeserializeMs",
+            "runs": [3.1],
+            "median": 3.1
+        },
+        {
+            "scenario": "image.concurrent",
+            "metric": "storageWorkerMs",
+            "runs": [27.2],
+            "median": 27.2
+        },
+        {
+            "scenario": "image.concurrent",
+            "metric": "storageEncodeMs",
+            "runs": [0.1],
+            "median": 0.1
+        },
+        {
+            "scenario": "image.concurrent",
+            "metric": "storageQueueMs",
+            "runs": [0],
+            "median": 0
+        },
+        {
+            "scenario": "image.concurrent",
+            "metric": "storageRoundTripMs",
+            "runs": [52.2],
+            "median": 52.2
+        },
+        {
+            "scenario": "image.concurrent",
+            "metric": "storageWorkerV8SerializeMs",
+            "runs": [0.7],
+            "median": 0.7
+        },
+        {
+            "scenario": "image.concurrent",
+            "metric": "v8SerializeMs",
+            "runs": [0.1],
+            "median": 0.1
+        },
+        {
+            "scenario": "image.concurrent",
+            "metric": "storageWorkerV8DeserializeMs",
+            "runs": [0.1],
+            "median": 0.1
+        },
+        {
+            "scenario": "image.thumbs.first",
+            "metric": "v8DeserializeMs",
+            "runs": [1.9],
+            "median": 1.9
+        },
+        {
+            "scenario": "image.thumbs.first",
+            "metric": "storageWorkerMs",
+            "runs": [15.4],
+            "median": 15.4
+        },
+        {
+            "scenario": "image.thumbs.first",
+            "metric": "storageEncodeMs",
+            "runs": [0.1],
+            "median": 0.1
+        },
+        {
+            "scenario": "image.thumbs.first",
+            "metric": "storageQueueMs",
+            "runs": [0],
+            "median": 0
+        },
+        {
+            "scenario": "image.thumbs.first",
+            "metric": "storageRoundTripMs",
+            "runs": [35.3],
+            "median": 35.3
+        },
+        {
+            "scenario": "image.thumbs.first",
+            "metric": "storageWorkerV8SerializeMs",
+            "runs": [0.4],
+            "median": 0.4
+        },
+        {
+            "scenario": "image.thumbs.first",
+            "metric": "v8SerializeMs",
+            "runs": [0.1],
+            "median": 0.1
+        },
+        {
+            "scenario": "image.thumbs.first",
+            "metric": "storageWorkerV8DeserializeMs",
+            "runs": [0],
+            "median": 0
+        },
+        {
+            "scenario": "changes.poll.images",
+            "metric": "v8DeserializeMs",
+            "runs": [14.5],
+            "median": 14.5
+        },
+        {
+            "scenario": "changes.poll.images",
+            "metric": "storageWorkerMs",
+            "runs": [99.5],
+            "median": 99.5
+        },
+        {
+            "scenario": "changes.poll.images",
+            "metric": "storageEncodeMs",
+            "runs": [0.2],
+            "median": 0.2
+        },
+        {
+            "scenario": "changes.poll.images",
+            "metric": "storageQueueMs",
+            "runs": [0],
+            "median": 0
+        },
+        {
+            "scenario": "changes.poll.images",
+            "metric": "storageRoundTripMs",
+            "runs": [147.6],
+            "median": 147.6
+        },
+        {
+            "scenario": "changes.poll.images",
+            "metric": "storageWorkerV8SerializeMs",
+            "runs": [9],
+            "median": 9
+        },
+        {
+            "scenario": "changes.poll.images",
+            "metric": "v8SerializeMs",
+            "runs": [0.1],
+            "median": 0.1
+        },
+        {
+            "scenario": "changes.poll.images",
+            "metric": "storageWorkerV8DeserializeMs",
+            "runs": [0.1],
+            "median": 0.1
+        }
+    ],
+    "offStartupTimings": [
+        {
+            "scenario": "startup.restart",
+            "metric": "ms",
+            "runs": [118],
+            "median": 118
+        },
+        {
+            "scenario": "startup.restart",
+            "metric": "appCloseMs",
+            "runs": [46.9],
+            "median": 46.9
+        },
+        {
+            "scenario": "startup.restart",
+            "metric": "appOpenMs",
+            "runs": [70.9],
+            "median": 70.9
+        }
+    ],
+    "workerCounters": [
+        {
+            "scenario": "startup.restart",
+            "metric": "v8.deserialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; close the app and open it again",
+            "availability": "measured",
+            "runs": [737]
+        },
+        {
+            "scenario": "startup.restart",
+            "metric": "v8.deserialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; close the app and open it again",
+            "availability": "measured",
+            "runs": [104605]
+        },
+        {
+            "scenario": "startup.restart",
+            "metric": "v8.serialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; close the app and open it again",
+            "availability": "measured",
+            "runs": [737]
+        },
+        {
+            "scenario": "startup.restart",
+            "metric": "v8.serialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; close the app and open it again",
+            "availability": "measured",
+            "runs": [104605]
+        },
+        {
+            "scenario": "startup.restart",
+            "metric": "storage.worker.replyBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; close the app and open it again",
+            "availability": "measured",
+            "runs": [58644]
+        },
+        {
+            "scenario": "startup.restart",
+            "metric": "storage.worker.requestBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; close the app and open it again",
+            "availability": "measured",
+            "runs": [45961]
+        },
+        {
+            "scenario": "sessions.list",
+            "metric": "v8.deserialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; GET /api/sessions",
+            "availability": "measured",
+            "runs": [2]
+        },
+        {
+            "scenario": "sessions.list",
+            "metric": "v8.deserialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; GET /api/sessions",
+            "availability": "measured",
+            "runs": [216]
+        },
+        {
+            "scenario": "sessions.list",
+            "metric": "v8.serialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; GET /api/sessions",
+            "availability": "measured",
+            "runs": [2]
+        },
+        {
+            "scenario": "sessions.list",
+            "metric": "v8.serialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; GET /api/sessions",
+            "availability": "measured",
+            "runs": [216]
+        },
+        {
+            "scenario": "sessions.list",
+            "metric": "storage.worker.replyBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; GET /api/sessions",
+            "availability": "measured",
+            "runs": [156]
+        },
+        {
+            "scenario": "sessions.list",
+            "metric": "storage.worker.requestBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; GET /api/sessions",
+            "availability": "measured",
+            "runs": [60]
+        },
+        {
+            "scenario": "sessions.rename.tabs",
+            "metric": "v8.deserialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "after all established scenarios, 4 authenticated SSE tabs without a selected conversation opt into session deltas and load the full catalogue unmeasured; rename the History session twice through HTTP, waiting for each title in every tab; all reconstructed lists must equal the server list; count through quiet",
+            "availability": "measured",
+            "runs": [20]
+        },
+        {
+            "scenario": "sessions.rename.tabs",
+            "metric": "v8.deserialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "after all established scenarios, 4 authenticated SSE tabs without a selected conversation opt into session deltas and load the full catalogue unmeasured; rename the History session twice through HTTP, waiting for each title in every tab; all reconstructed lists must equal the server list; count through quiet",
+            "availability": "measured",
+            "runs": [2555]
+        },
+        {
+            "scenario": "sessions.rename.tabs",
+            "metric": "v8.serialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "after all established scenarios, 4 authenticated SSE tabs without a selected conversation opt into session deltas and load the full catalogue unmeasured; rename the History session twice through HTTP, waiting for each title in every tab; all reconstructed lists must equal the server list; count through quiet",
+            "availability": "measured",
+            "runs": [20]
+        },
+        {
+            "scenario": "sessions.rename.tabs",
+            "metric": "v8.serialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "after all established scenarios, 4 authenticated SSE tabs without a selected conversation opt into session deltas and load the full catalogue unmeasured; rename the History session twice through HTTP, waiting for each title in every tab; all reconstructed lists must equal the server list; count through quiet",
+            "availability": "measured",
+            "runs": [2555]
+        },
+        {
+            "scenario": "sessions.rename.tabs",
+            "metric": "storage.worker.replyBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "after all established scenarios, 4 authenticated SSE tabs without a selected conversation opt into session deltas and load the full catalogue unmeasured; rename the History session twice through HTTP, waiting for each title in every tab; all reconstructed lists must equal the server list; count through quiet",
+            "availability": "measured",
+            "runs": [744]
+        },
+        {
+            "scenario": "sessions.rename.tabs",
+            "metric": "storage.worker.requestBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "after all established scenarios, 4 authenticated SSE tabs without a selected conversation opt into session deltas and load the full catalogue unmeasured; rename the History session twice through HTTP, waiting for each title in every tab; all reconstructed lists must equal the server list; count through quiet",
+            "availability": "measured",
+            "runs": [1811]
+        },
+        {
+            "scenario": "session.open",
+            "metric": "v8.deserialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; a new event-stream tab on it, until its first full view",
+            "availability": "measured",
+            "runs": [56]
+        },
+        {
+            "scenario": "session.open",
+            "metric": "v8.deserialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; a new event-stream tab on it, until its first full view",
+            "availability": "measured",
+            "runs": [276197]
+        },
+        {
+            "scenario": "session.open",
+            "metric": "v8.serialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; a new event-stream tab on it, until its first full view",
+            "availability": "measured",
+            "runs": [56]
+        },
+        {
+            "scenario": "session.open",
+            "metric": "v8.serialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; a new event-stream tab on it, until its first full view",
+            "availability": "measured",
+            "runs": [276197]
+        },
+        {
+            "scenario": "session.open",
+            "metric": "storage.worker.replyBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; a new event-stream tab on it, until its first full view",
+            "availability": "measured",
+            "runs": [273379]
+        },
+        {
+            "scenario": "session.open",
+            "metric": "storage.worker.requestBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; a new event-stream tab on it, until its first full view",
+            "availability": "measured",
+            "runs": [2818]
+        },
+        {
+            "scenario": "turn.cold",
+            "metric": "v8.deserialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; first prompt of a new session with one tab watching, until settled and quiet",
+            "availability": "measured",
+            "runs": [142]
+        },
+        {
+            "scenario": "turn.cold",
+            "metric": "v8.deserialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; first prompt of a new session with one tab watching, until settled and quiet",
+            "availability": "measured",
+            "runs": [261138]
+        },
+        {
+            "scenario": "turn.cold",
+            "metric": "v8.serialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; first prompt of a new session with one tab watching, until settled and quiet",
+            "availability": "measured",
+            "runs": [142]
+        },
+        {
+            "scenario": "turn.cold",
+            "metric": "v8.serialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; first prompt of a new session with one tab watching, until settled and quiet",
+            "availability": "measured",
+            "runs": [261138]
+        },
+        {
+            "scenario": "turn.cold",
+            "metric": "storage.worker.replyBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; first prompt of a new session with one tab watching, until settled and quiet",
+            "availability": "measured",
+            "runs": [132998]
+        },
+        {
+            "scenario": "turn.cold",
+            "metric": "storage.worker.requestBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; first prompt of a new session with one tab watching, until settled and quiet",
+            "availability": "measured",
+            "runs": [128140]
+        },
+        {
+            "scenario": "turn.warm",
+            "metric": "v8.deserialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; second prompt of that session with one tab watching, until settled and quiet",
+            "availability": "measured",
+            "runs": [90]
+        },
+        {
+            "scenario": "turn.warm",
+            "metric": "v8.deserialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; second prompt of that session with one tab watching, until settled and quiet",
+            "availability": "measured",
+            "runs": [168639]
+        },
+        {
+            "scenario": "turn.warm",
+            "metric": "v8.serialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; second prompt of that session with one tab watching, until settled and quiet",
+            "availability": "measured",
+            "runs": [90]
+        },
+        {
+            "scenario": "turn.warm",
+            "metric": "v8.serialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; second prompt of that session with one tab watching, until settled and quiet",
+            "availability": "measured",
+            "runs": [168639]
+        },
+        {
+            "scenario": "turn.warm",
+            "metric": "storage.worker.replyBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; second prompt of that session with one tab watching, until settled and quiet",
+            "availability": "measured",
+            "runs": [86755]
+        },
+        {
+            "scenario": "turn.warm",
+            "metric": "storage.worker.requestBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; second prompt of that session with one tab watching, until settled and quiet",
+            "availability": "measured",
+            "runs": [81884]
+        },
+        {
+            "scenario": "turn.paced",
+            "metric": "v8.deserialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; third prompt of that session, its answer paced 25 ms per chunk, one tab watching, until settled and quiet",
+            "availability": "measured",
+            "runs": [184]
+        },
+        {
+            "scenario": "turn.paced",
+            "metric": "v8.deserialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; third prompt of that session, its answer paced 25 ms per chunk, one tab watching, until settled and quiet",
+            "availability": "measured",
+            "runs": [286899]
+        },
+        {
+            "scenario": "turn.paced",
+            "metric": "v8.serialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; third prompt of that session, its answer paced 25 ms per chunk, one tab watching, until settled and quiet",
+            "availability": "measured",
+            "runs": [184]
+        },
+        {
+            "scenario": "turn.paced",
+            "metric": "v8.serialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; third prompt of that session, its answer paced 25 ms per chunk, one tab watching, until settled and quiet",
+            "availability": "measured",
+            "runs": [286899]
+        },
+        {
+            "scenario": "turn.paced",
+            "metric": "storage.worker.replyBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; third prompt of that session, its answer paced 25 ms per chunk, one tab watching, until settled and quiet",
+            "availability": "measured",
+            "runs": [195078]
+        },
+        {
+            "scenario": "turn.paced",
+            "metric": "storage.worker.requestBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; third prompt of that session, its answer paced 25 ms per chunk, one tab watching, until settled and quiet",
+            "availability": "measured",
+            "runs": [91821]
+        },
+        {
+            "scenario": "git.changes",
+            "metric": "v8.deserialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 20 changed files; GET changes",
+            "availability": "measured",
+            "runs": [4]
+        },
+        {
+            "scenario": "git.changes",
+            "metric": "v8.deserialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 20 changed files; GET changes",
+            "availability": "measured",
+            "runs": [131893]
+        },
+        {
+            "scenario": "git.changes",
+            "metric": "v8.serialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 20 changed files; GET changes",
+            "availability": "measured",
+            "runs": [4]
+        },
+        {
+            "scenario": "git.changes",
+            "metric": "v8.serialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 20 changed files; GET changes",
+            "availability": "measured",
+            "runs": [131893]
+        },
+        {
+            "scenario": "git.changes",
+            "metric": "storage.worker.replyBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 20 changed files; GET changes",
+            "availability": "measured",
+            "runs": [131743]
+        },
+        {
+            "scenario": "git.changes",
+            "metric": "storage.worker.requestBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 20 changed files; GET changes",
+            "availability": "measured",
+            "runs": [150]
+        },
+        {
+            "scenario": "commands.list",
+            "metric": "v8.deserialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; GET the native slash-command list",
+            "availability": "measured",
+            "runs": [10]
+        },
+        {
+            "scenario": "commands.list",
+            "metric": "v8.deserialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; GET the native slash-command list",
+            "availability": "measured",
+            "runs": [8121]
+        },
+        {
+            "scenario": "commands.list",
+            "metric": "v8.serialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; GET the native slash-command list",
+            "availability": "measured",
+            "runs": [10]
+        },
+        {
+            "scenario": "commands.list",
+            "metric": "v8.serialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; GET the native slash-command list",
+            "availability": "measured",
+            "runs": [8121]
+        },
+        {
+            "scenario": "commands.list",
+            "metric": "storage.worker.replyBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; GET the native slash-command list",
+            "availability": "measured",
+            "runs": [7689]
+        },
+        {
+            "scenario": "commands.list",
+            "metric": "storage.worker.requestBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; GET the native slash-command list",
+            "availability": "measured",
+            "runs": [432]
+        },
+        {
+            "scenario": "web.open",
+            "metric": "v8.deserialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; headless Chromium signed in, opens /s/<session> until the last answer is in the page",
+            "availability": "measured",
+            "runs": [32]
+        },
+        {
+            "scenario": "web.open",
+            "metric": "v8.deserialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; headless Chromium signed in, opens /s/<session> until the last answer is in the page",
+            "availability": "measured",
+            "runs": [9504]
+        },
+        {
+            "scenario": "web.open",
+            "metric": "v8.serialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; headless Chromium signed in, opens /s/<session> until the last answer is in the page",
+            "availability": "measured",
+            "runs": [32]
+        },
+        {
+            "scenario": "web.open",
+            "metric": "v8.serialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; headless Chromium signed in, opens /s/<session> until the last answer is in the page",
+            "availability": "measured",
+            "runs": [9504]
+        },
+        {
+            "scenario": "web.open",
+            "metric": "storage.worker.replyBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; headless Chromium signed in, opens /s/<session> until the last answer is in the page",
+            "availability": "measured",
+            "runs": [8327]
+        },
+        {
+            "scenario": "web.open",
+            "metric": "storage.worker.requestBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; headless Chromium signed in, opens /s/<session> until the last answer is in the page",
+            "availability": "measured",
+            "runs": [1177]
+        },
+        {
+            "scenario": "session.reclaim",
+            "metric": "v8.deserialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, an unmeasured tab loads its full view; a new event-stream tab then claims every entry it held (server run, first id, count, digest) until its first full view; the rebuilt transcript must equal the held one",
+            "availability": "measured",
+            "runs": [16]
+        },
+        {
+            "scenario": "session.reclaim",
+            "metric": "v8.deserialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, an unmeasured tab loads its full view; a new event-stream tab then claims every entry it held (server run, first id, count, digest) until its first full view; the rebuilt transcript must equal the held one",
+            "availability": "measured",
+            "runs": [6759]
+        },
+        {
+            "scenario": "session.reclaim",
+            "metric": "v8.serialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, an unmeasured tab loads its full view; a new event-stream tab then claims every entry it held (server run, first id, count, digest) until its first full view; the rebuilt transcript must equal the held one",
+            "availability": "measured",
+            "runs": [16]
+        },
+        {
+            "scenario": "session.reclaim",
+            "metric": "v8.serialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, an unmeasured tab loads its full view; a new event-stream tab then claims every entry it held (server run, first id, count, digest) until its first full view; the rebuilt transcript must equal the held one",
+            "availability": "measured",
+            "runs": [6759]
+        },
+        {
+            "scenario": "session.reclaim",
+            "metric": "storage.worker.replyBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, an unmeasured tab loads its full view; a new event-stream tab then claims every entry it held (server run, first id, count, digest) until its first full view; the rebuilt transcript must equal the held one",
+            "availability": "measured",
+            "runs": [6229]
+        },
+        {
+            "scenario": "session.reclaim",
+            "metric": "storage.worker.requestBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, an unmeasured tab loads its full view; a new event-stream tab then claims every entry it held (server run, first id, count, digest) until its first full view; the rebuilt transcript must equal the held one",
+            "availability": "measured",
+            "runs": [530]
+        },
+        {
+            "scenario": "session.open.long",
+            "metric": "v8.deserialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "availability": "measured",
+            "runs": [16]
+        },
+        {
+            "scenario": "session.open.long",
+            "metric": "v8.deserialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "availability": "measured",
+            "runs": [3372]
+        },
+        {
+            "scenario": "session.open.long",
+            "metric": "v8.serialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "availability": "measured",
+            "runs": [16]
+        },
+        {
+            "scenario": "session.open.long",
+            "metric": "v8.serialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "availability": "measured",
+            "runs": [3372]
+        },
+        {
+            "scenario": "session.open.long",
+            "metric": "storage.worker.replyBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "availability": "measured",
+            "runs": [2833]
+        },
+        {
+            "scenario": "session.open.long",
+            "metric": "storage.worker.requestBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "availability": "measured",
+            "runs": [539]
+        },
+        {
+            "scenario": "session.open.native-long",
+            "metric": "v8.deserialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "after all other scenarios, a real app-created native session with 600 valid journal entries of about 1200 characters seeded outside the window without inference; call native roomInfo once before the window, then make 3 real roomInfo projections inside it and require identical goal and thinking values",
+            "availability": "measured",
+            "runs": [30]
+        },
+        {
+            "scenario": "session.open.native-long",
+            "metric": "v8.deserialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "after all other scenarios, a real app-created native session with 600 valid journal entries of about 1200 characters seeded outside the window without inference; call native roomInfo once before the window, then make 3 real roomInfo projections inside it and require identical goal and thinking values",
+            "availability": "measured",
+            "runs": [8352]
+        },
+        {
+            "scenario": "session.open.native-long",
+            "metric": "v8.serialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "after all other scenarios, a real app-created native session with 600 valid journal entries of about 1200 characters seeded outside the window without inference; call native roomInfo once before the window, then make 3 real roomInfo projections inside it and require identical goal and thinking values",
+            "availability": "measured",
+            "runs": [30]
+        },
+        {
+            "scenario": "session.open.native-long",
+            "metric": "v8.serialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "after all other scenarios, a real app-created native session with 600 valid journal entries of about 1200 characters seeded outside the window without inference; call native roomInfo once before the window, then make 3 real roomInfo projections inside it and require identical goal and thinking values",
+            "availability": "measured",
+            "runs": [8352]
+        },
+        {
+            "scenario": "session.open.native-long",
+            "metric": "storage.worker.replyBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "after all other scenarios, a real app-created native session with 600 valid journal entries of about 1200 characters seeded outside the window without inference; call native roomInfo once before the window, then make 3 real roomInfo projections inside it and require identical goal and thinking values",
+            "availability": "measured",
+            "runs": [7302]
+        },
+        {
+            "scenario": "session.open.native-long",
+            "metric": "storage.worker.requestBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "after all other scenarios, a real app-created native session with 600 valid journal entries of about 1200 characters seeded outside the window without inference; call native roomInfo once before the window, then make 3 real roomInfo projections inside it and require identical goal and thinking values",
+            "availability": "measured",
+            "runs": [1050]
+        },
+        {
+            "scenario": "web.open.long",
+            "metric": "v8.deserialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "availability": "measured",
+            "runs": [30]
+        },
+        {
+            "scenario": "web.open.long",
+            "metric": "v8.deserialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "availability": "measured",
+            "runs": [6316]
+        },
+        {
+            "scenario": "web.open.long",
+            "metric": "v8.serialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "availability": "measured",
+            "runs": [30]
+        },
+        {
+            "scenario": "web.open.long",
+            "metric": "v8.serialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "availability": "measured",
+            "runs": [6316]
+        },
+        {
+            "scenario": "web.open.long",
+            "metric": "storage.worker.replyBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "availability": "measured",
+            "runs": [5175]
+        },
+        {
+            "scenario": "web.open.long",
+            "metric": "storage.worker.requestBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "availability": "measured",
+            "runs": [1141]
+        },
+        {
+            "scenario": "native.warm",
+            "metric": "v8.deserialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "after all other scenarios, a new native session with one tab watching; its member asks to warm it (as focusing the message box does) until the answer; servers without warming refuse at once",
+            "availability": "measured",
+            "runs": [14]
+        },
+        {
+            "scenario": "native.warm",
+            "metric": "v8.deserialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "after all other scenarios, a new native session with one tab watching; its member asks to warm it (as focusing the message box does) until the answer; servers without warming refuse at once",
+            "availability": "measured",
+            "runs": [2953]
+        },
+        {
+            "scenario": "native.warm",
+            "metric": "v8.serialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "after all other scenarios, a new native session with one tab watching; its member asks to warm it (as focusing the message box does) until the answer; servers without warming refuse at once",
+            "availability": "measured",
+            "runs": [14]
+        },
+        {
+            "scenario": "native.warm",
+            "metric": "v8.serialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "after all other scenarios, a new native session with one tab watching; its member asks to warm it (as focusing the message box does) until the answer; servers without warming refuse at once",
+            "availability": "measured",
+            "runs": [2953]
+        },
+        {
+            "scenario": "native.warm",
+            "metric": "storage.worker.replyBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "after all other scenarios, a new native session with one tab watching; its member asks to warm it (as focusing the message box does) until the answer; servers without warming refuse at once",
+            "availability": "measured",
+            "runs": [2346]
+        },
+        {
+            "scenario": "native.warm",
+            "metric": "storage.worker.requestBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "after all other scenarios, a new native session with one tab watching; its member asks to warm it (as focusing the message box does) until the answer; servers without warming refuse at once",
+            "availability": "measured",
+            "runs": [607]
+        },
+        {
+            "scenario": "turn.prewarmed",
+            "metric": "v8.deserialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "after native.warm, the first prompt of that session, until settled and quiet",
+            "availability": "measured",
+            "runs": [134]
+        },
+        {
+            "scenario": "turn.prewarmed",
+            "metric": "v8.deserialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "after native.warm, the first prompt of that session, until settled and quiet",
+            "availability": "measured",
+            "runs": [311904]
+        },
+        {
+            "scenario": "turn.prewarmed",
+            "metric": "v8.serialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "after native.warm, the first prompt of that session, until settled and quiet",
+            "availability": "measured",
+            "runs": [134]
+        },
+        {
+            "scenario": "turn.prewarmed",
+            "metric": "v8.serialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "after native.warm, the first prompt of that session, until settled and quiet",
+            "availability": "measured",
+            "runs": [311904]
+        },
+        {
+            "scenario": "turn.prewarmed",
+            "metric": "storage.worker.replyBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "after native.warm, the first prompt of that session, until settled and quiet",
+            "availability": "measured",
+            "runs": [184020]
+        },
+        {
+            "scenario": "turn.prewarmed",
+            "metric": "storage.worker.requestBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "after native.warm, the first prompt of that session, until settled and quiet",
+            "availability": "measured",
+            "runs": [127884]
+        },
+        {
+            "scenario": "web.reopen",
+            "metric": "v8.deserialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after session.reclaim, headless Chromium opens /s/<session> in one tab until shown (and saved where the page keeps copies), closes it, then a fresh tab of the same profile opens it until the last answer shows without a saved-copy check marker",
+            "availability": "measured",
+            "runs": [20]
+        },
+        {
+            "scenario": "web.reopen",
+            "metric": "v8.deserialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after session.reclaim, headless Chromium opens /s/<session> in one tab until shown (and saved where the page keeps copies), closes it, then a fresh tab of the same profile opens it until the last answer shows without a saved-copy check marker",
+            "availability": "measured",
+            "runs": [7090]
+        },
+        {
+            "scenario": "web.reopen",
+            "metric": "v8.serialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after session.reclaim, headless Chromium opens /s/<session> in one tab until shown (and saved where the page keeps copies), closes it, then a fresh tab of the same profile opens it until the last answer shows without a saved-copy check marker",
+            "availability": "measured",
+            "runs": [20]
+        },
+        {
+            "scenario": "web.reopen",
+            "metric": "v8.serialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after session.reclaim, headless Chromium opens /s/<session> in one tab until shown (and saved where the page keeps copies), closes it, then a fresh tab of the same profile opens it until the last answer shows without a saved-copy check marker",
+            "availability": "measured",
+            "runs": [7090]
+        },
+        {
+            "scenario": "web.reopen",
+            "metric": "storage.worker.replyBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after session.reclaim, headless Chromium opens /s/<session> in one tab until shown (and saved where the page keeps copies), closes it, then a fresh tab of the same profile opens it until the last answer shows without a saved-copy check marker",
+            "availability": "measured",
+            "runs": [6370]
+        },
+        {
+            "scenario": "web.reopen",
+            "metric": "storage.worker.requestBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after session.reclaim, headless Chromium opens /s/<session> in one tab until shown (and saved where the page keeps copies), closes it, then a fresh tab of the same profile opens it until the last answer shows without a saved-copy check marker",
+            "availability": "measured",
+            "runs": [720]
+        },
+        {
+            "scenario": "web.paced",
+            "metric": "v8.deserialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, a new headless Chromium tab opens that history unmeasured, then submits one 6000-char answer paced 25 ms per chunk until it appears",
+            "availability": "measured",
+            "runs": [184]
+        },
+        {
+            "scenario": "web.paced",
+            "metric": "v8.deserialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, a new headless Chromium tab opens that history unmeasured, then submits one 6000-char answer paced 25 ms per chunk until it appears",
+            "availability": "measured",
+            "runs": [485827]
+        },
+        {
+            "scenario": "web.paced",
+            "metric": "v8.serialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, a new headless Chromium tab opens that history unmeasured, then submits one 6000-char answer paced 25 ms per chunk until it appears",
+            "availability": "measured",
+            "runs": [184]
+        },
+        {
+            "scenario": "web.paced",
+            "metric": "v8.serialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, a new headless Chromium tab opens that history unmeasured, then submits one 6000-char answer paced 25 ms per chunk until it appears",
+            "availability": "measured",
+            "runs": [485827]
+        },
+        {
+            "scenario": "web.paced",
+            "metric": "storage.worker.replyBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, a new headless Chromium tab opens that history unmeasured, then submits one 6000-char answer paced 25 ms per chunk until it appears",
+            "availability": "measured",
+            "runs": [327759]
+        },
+        {
+            "scenario": "web.paced",
+            "metric": "storage.worker.requestBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, a new headless Chromium tab opens that history unmeasured, then submits one 6000-char answer paced 25 ms per chunk until it appears",
+            "availability": "measured",
+            "runs": [158068]
+        },
+        {
+            "scenario": "web.send.poll",
+            "metric": "v8.deserialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all other scenarios, headless Chromium on a non-loopback name with long polling opens that history (now 13 turns) unmeasured, focuses the message box, warms the native process and types; from Enter until the first chunk of the 6000-char answer (sent 1000 ms after the request, then paced 25 ms per chunk) is painted, its milliseconds split into phases; one more Node event-stream tab watches; counted until settled and quiet",
+            "availability": "measured",
+            "runs": [222]
+        },
+        {
+            "scenario": "web.send.poll",
+            "metric": "v8.deserialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all other scenarios, headless Chromium on a non-loopback name with long polling opens that history (now 13 turns) unmeasured, focuses the message box, warms the native process and types; from Enter until the first chunk of the 6000-char answer (sent 1000 ms after the request, then paced 25 ms per chunk) is painted, its milliseconds split into phases; one more Node event-stream tab watches; counted until settled and quiet",
+            "availability": "measured",
+            "runs": [532902]
+        },
+        {
+            "scenario": "web.send.poll",
+            "metric": "v8.serialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all other scenarios, headless Chromium on a non-loopback name with long polling opens that history (now 13 turns) unmeasured, focuses the message box, warms the native process and types; from Enter until the first chunk of the 6000-char answer (sent 1000 ms after the request, then paced 25 ms per chunk) is painted, its milliseconds split into phases; one more Node event-stream tab watches; counted until settled and quiet",
+            "availability": "measured",
+            "runs": [222]
+        },
+        {
+            "scenario": "web.send.poll",
+            "metric": "v8.serialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all other scenarios, headless Chromium on a non-loopback name with long polling opens that history (now 13 turns) unmeasured, focuses the message box, warms the native process and types; from Enter until the first chunk of the 6000-char answer (sent 1000 ms after the request, then paced 25 ms per chunk) is painted, its milliseconds split into phases; one more Node event-stream tab watches; counted until settled and quiet",
+            "availability": "measured",
+            "runs": [532902]
+        },
+        {
+            "scenario": "web.send.poll",
+            "metric": "storage.worker.replyBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all other scenarios, headless Chromium on a non-loopback name with long polling opens that history (now 13 turns) unmeasured, focuses the message box, warms the native process and types; from Enter until the first chunk of the 6000-char answer (sent 1000 ms after the request, then paced 25 ms per chunk) is painted, its milliseconds split into phases; one more Node event-stream tab watches; counted until settled and quiet",
+            "availability": "measured",
+            "runs": [366196]
+        },
+        {
+            "scenario": "web.send.poll",
+            "metric": "storage.worker.requestBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all other scenarios, headless Chromium on a non-loopback name with long polling opens that history (now 13 turns) unmeasured, focuses the message box, warms the native process and types; from Enter until the first chunk of the 6000-char answer (sent 1000 ms after the request, then paced 25 ms per chunk) is painted, its milliseconds split into phases; one more Node event-stream tab watches; counted until settled and quiet",
+            "availability": "measured",
+            "runs": [166706]
+        },
+        {
+            "scenario": "web.send.stream",
+            "metric": "v8.deserialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll, the same send to that history (now 14 turns) from a new headless Chromium on the same name using the event stream; one more Node event-stream tab watches; counted until settled and quiet",
+            "availability": "measured",
+            "runs": [218]
+        },
+        {
+            "scenario": "web.send.stream",
+            "metric": "v8.deserialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll, the same send to that history (now 14 turns) from a new headless Chromium on the same name using the event stream; one more Node event-stream tab watches; counted until settled and quiet",
+            "availability": "measured",
+            "runs": [552121]
+        },
+        {
+            "scenario": "web.send.stream",
+            "metric": "v8.serialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll, the same send to that history (now 14 turns) from a new headless Chromium on the same name using the event stream; one more Node event-stream tab watches; counted until settled and quiet",
+            "availability": "measured",
+            "runs": [218]
+        },
+        {
+            "scenario": "web.send.stream",
+            "metric": "v8.serialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll, the same send to that history (now 14 turns) from a new headless Chromium on the same name using the event stream; one more Node event-stream tab watches; counted until settled and quiet",
+            "availability": "measured",
+            "runs": [552121]
+        },
+        {
+            "scenario": "web.send.stream",
+            "metric": "storage.worker.replyBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll, the same send to that history (now 14 turns) from a new headless Chromium on the same name using the event stream; one more Node event-stream tab watches; counted until settled and quiet",
+            "availability": "measured",
+            "runs": [379176]
+        },
+        {
+            "scenario": "web.send.stream",
+            "metric": "storage.worker.requestBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll, the same send to that history (now 14 turns) from a new headless Chromium on the same name using the event stream; one more Node event-stream tab watches; counted until settled and quiet",
+            "availability": "measured",
+            "runs": [172945]
+        },
+        {
+            "scenario": "commands.discover.cold",
+            "metric": "v8.deserialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all existing scenarios, an additional new native session with one tab; first explicit POST prompts, with no model request",
+            "availability": "measured",
+            "runs": [84]
+        },
+        {
+            "scenario": "commands.discover.cold",
+            "metric": "v8.deserialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all existing scenarios, an additional new native session with one tab; first explicit POST prompts, with no model request",
+            "availability": "measured",
+            "runs": [25065]
+        },
+        {
+            "scenario": "commands.discover.cold",
+            "metric": "v8.serialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all existing scenarios, an additional new native session with one tab; first explicit POST prompts, with no model request",
+            "availability": "measured",
+            "runs": [84]
+        },
+        {
+            "scenario": "commands.discover.cold",
+            "metric": "v8.serialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all existing scenarios, an additional new native session with one tab; first explicit POST prompts, with no model request",
+            "availability": "measured",
+            "runs": [25065]
+        },
+        {
+            "scenario": "commands.discover.cold",
+            "metric": "storage.worker.replyBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all existing scenarios, an additional new native session with one tab; first explicit POST prompts, with no model request",
+            "availability": "measured",
+            "runs": [13880]
+        },
+        {
+            "scenario": "commands.discover.cold",
+            "metric": "storage.worker.requestBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all existing scenarios, an additional new native session with one tab; first explicit POST prompts, with no model request",
+            "availability": "measured",
+            "runs": [11185]
+        },
+        {
+            "scenario": "commands.discover.warm",
+            "metric": "v8.deserialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; same additional session/tab after cold discovery; a second explicit POST prompts with a new request ID, with no model request",
+            "availability": "measured",
+            "runs": [72]
+        },
+        {
+            "scenario": "commands.discover.warm",
+            "metric": "v8.deserialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; same additional session/tab after cold discovery; a second explicit POST prompts with a new request ID, with no model request",
+            "availability": "measured",
+            "runs": [24182]
+        },
+        {
+            "scenario": "commands.discover.warm",
+            "metric": "v8.serialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; same additional session/tab after cold discovery; a second explicit POST prompts with a new request ID, with no model request",
+            "availability": "measured",
+            "runs": [72]
+        },
+        {
+            "scenario": "commands.discover.warm",
+            "metric": "v8.serialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; same additional session/tab after cold discovery; a second explicit POST prompts with a new request ID, with no model request",
+            "availability": "measured",
+            "runs": [24182]
+        },
+        {
+            "scenario": "commands.discover.warm",
+            "metric": "storage.worker.replyBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; same additional session/tab after cold discovery; a second explicit POST prompts with a new request ID, with no model request",
+            "availability": "measured",
+            "runs": [13596]
+        },
+        {
+            "scenario": "commands.discover.warm",
+            "metric": "storage.worker.requestBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; same additional session/tab after cold discovery; a second explicit POST prompts with a new request ID, with no model request",
+            "availability": "measured",
+            "runs": [10586]
+        },
+        {
+            "scenario": "turn.prepared",
+            "metric": "v8.deserialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; same additional session/tab after both discoveries; first ordinary prompt, until settled and quiet",
+            "availability": "measured",
+            "runs": [126]
+        },
+        {
+            "scenario": "turn.prepared",
+            "metric": "v8.deserialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; same additional session/tab after both discoveries; first ordinary prompt, until settled and quiet",
+            "availability": "measured",
+            "runs": [311230]
+        },
+        {
+            "scenario": "turn.prepared",
+            "metric": "v8.serialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; same additional session/tab after both discoveries; first ordinary prompt, until settled and quiet",
+            "availability": "measured",
+            "runs": [126]
+        },
+        {
+            "scenario": "turn.prepared",
+            "metric": "v8.serialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; same additional session/tab after both discoveries; first ordinary prompt, until settled and quiet",
+            "availability": "measured",
+            "runs": [311230]
+        },
+        {
+            "scenario": "turn.prepared",
+            "metric": "storage.worker.replyBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; same additional session/tab after both discoveries; first ordinary prompt, until settled and quiet",
+            "availability": "measured",
+            "runs": [183854]
+        },
+        {
+            "scenario": "turn.prepared",
+            "metric": "storage.worker.requestBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; same additional session/tab after both discoveries; first ordinary prompt, until settled and quiet",
+            "availability": "measured",
+            "runs": [127376]
+        },
+        {
+            "scenario": "projection.large.open",
+            "metric": "v8.deserialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "availability": "measured",
+            "runs": [92]
+        },
+        {
+            "scenario": "projection.large.open",
+            "metric": "v8.deserialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "availability": "measured",
+            "runs": [243151]
+        },
+        {
+            "scenario": "projection.large.open",
+            "metric": "v8.serialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "availability": "measured",
+            "runs": [92]
+        },
+        {
+            "scenario": "projection.large.open",
+            "metric": "v8.serialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "availability": "measured",
+            "runs": [243151]
+        },
+        {
+            "scenario": "projection.large.open",
+            "metric": "storage.worker.replyBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "availability": "measured",
+            "runs": [239257]
+        },
+        {
+            "scenario": "projection.large.open",
+            "metric": "storage.worker.requestBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "availability": "measured",
+            "runs": [3894]
+        },
+        {
+            "scenario": "projection.large.paced",
+            "metric": "v8.deserialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "the same 64-turn session and 4 attached tabs; one 6000-char answer paced 25 ms per chunk, until settled and quiet",
+            "availability": "measured",
+            "runs": [250]
+        },
+        {
+            "scenario": "projection.large.paced",
+            "metric": "v8.deserialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "the same 64-turn session and 4 attached tabs; one 6000-char answer paced 25 ms per chunk, until settled and quiet",
+            "availability": "measured",
+            "runs": [453443]
+        },
+        {
+            "scenario": "projection.large.paced",
+            "metric": "v8.serialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "the same 64-turn session and 4 attached tabs; one 6000-char answer paced 25 ms per chunk, until settled and quiet",
+            "availability": "measured",
+            "runs": [250]
+        },
+        {
+            "scenario": "projection.large.paced",
+            "metric": "v8.serialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "the same 64-turn session and 4 attached tabs; one 6000-char answer paced 25 ms per chunk, until settled and quiet",
+            "availability": "measured",
+            "runs": [453443]
+        },
+        {
+            "scenario": "projection.large.paced",
+            "metric": "storage.worker.replyBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "the same 64-turn session and 4 attached tabs; one 6000-char answer paced 25 ms per chunk, until settled and quiet",
+            "availability": "measured",
+            "runs": [322308]
+        },
+        {
+            "scenario": "projection.large.paced",
+            "metric": "storage.worker.requestBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "the same 64-turn session and 4 attached tabs; one 6000-char answer paced 25 ms per chunk, until settled and quiet",
+            "availability": "measured",
+            "runs": [131135]
+        },
+        {
+            "scenario": "image.single",
+            "metric": "v8.deserialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; retrieve image 0 once, until full client body and quiet; recently written SQLite data, not an OS cold-cache test",
+            "availability": "measured",
+            "runs": [2]
+        },
+        {
+            "scenario": "image.single",
+            "metric": "v8.deserialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; retrieve image 0 once, until full client body and quiet; recently written SQLite data, not an OS cold-cache test",
+            "availability": "measured",
+            "runs": [2629114]
+        },
+        {
+            "scenario": "image.single",
+            "metric": "v8.serialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; retrieve image 0 once, until full client body and quiet; recently written SQLite data, not an OS cold-cache test",
+            "availability": "measured",
+            "runs": [2]
+        },
+        {
+            "scenario": "image.single",
+            "metric": "v8.serialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; retrieve image 0 once, until full client body and quiet; recently written SQLite data, not an OS cold-cache test",
+            "availability": "measured",
+            "runs": [2629114]
+        },
+        {
+            "scenario": "image.single",
+            "metric": "storage.worker.replyBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; retrieve image 0 once, until full client body and quiet; recently written SQLite data, not an OS cold-cache test",
+            "availability": "measured",
+            "runs": [2629056]
+        },
+        {
+            "scenario": "image.single",
+            "metric": "storage.worker.requestBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; retrieve image 0 once, until full client body and quiet; recently written SQLite data, not an OS cold-cache test",
+            "availability": "measured",
+            "runs": [58]
+        },
+        {
+            "scenario": "image.concurrent",
+            "metric": "v8.deserialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after image.single, retrieve images 1 through 4 concurrently, until all client bodies and quiet; phase timings sum per-request intervals, not batch wall time",
+            "availability": "measured",
+            "runs": [8]
+        },
+        {
+            "scenario": "image.concurrent",
+            "metric": "v8.deserialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after image.single, retrieve images 1 through 4 concurrently, until all client bodies and quiet; phase timings sum per-request intervals, not batch wall time",
+            "availability": "measured",
+            "runs": [10516488]
+        },
+        {
+            "scenario": "image.concurrent",
+            "metric": "v8.serialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after image.single, retrieve images 1 through 4 concurrently, until all client bodies and quiet; phase timings sum per-request intervals, not batch wall time",
+            "availability": "measured",
+            "runs": [8]
+        },
+        {
+            "scenario": "image.concurrent",
+            "metric": "v8.serialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after image.single, retrieve images 1 through 4 concurrently, until all client bodies and quiet; phase timings sum per-request intervals, not batch wall time",
+            "availability": "measured",
+            "runs": [10516488]
+        },
+        {
+            "scenario": "image.concurrent",
+            "metric": "storage.worker.replyBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after image.single, retrieve images 1 through 4 concurrently, until all client bodies and quiet; phase timings sum per-request intervals, not batch wall time",
+            "availability": "measured",
+            "runs": [10516256]
+        },
+        {
+            "scenario": "image.concurrent",
+            "metric": "storage.worker.requestBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after image.single, retrieve images 1 through 4 concurrently, until all client bodies and quiet; phase timings sum per-request intervals, not batch wall time",
+            "availability": "measured",
+            "runs": [232]
+        },
+        {
+            "scenario": "image.thumbs.first",
+            "metric": "v8.deserialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after image.concurrent, request images 5 through 8 concurrently as transcript thumbnails (?size=thumb), the first time this server sees them, until all client bodies and quiet",
+            "availability": "measured",
+            "runs": [8]
+        },
+        {
+            "scenario": "image.thumbs.first",
+            "metric": "v8.deserialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after image.concurrent, request images 5 through 8 concurrently as transcript thumbnails (?size=thumb), the first time this server sees them, until all client bodies and quiet",
+            "availability": "measured",
+            "runs": [10516488]
+        },
+        {
+            "scenario": "image.thumbs.first",
+            "metric": "v8.serialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after image.concurrent, request images 5 through 8 concurrently as transcript thumbnails (?size=thumb), the first time this server sees them, until all client bodies and quiet",
+            "availability": "measured",
+            "runs": [8]
+        },
+        {
+            "scenario": "image.thumbs.first",
+            "metric": "v8.serialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after image.concurrent, request images 5 through 8 concurrently as transcript thumbnails (?size=thumb), the first time this server sees them, until all client bodies and quiet",
+            "availability": "measured",
+            "runs": [10516488]
+        },
+        {
+            "scenario": "image.thumbs.first",
+            "metric": "storage.worker.replyBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after image.concurrent, request images 5 through 8 concurrently as transcript thumbnails (?size=thumb), the first time this server sees them, until all client bodies and quiet",
+            "availability": "measured",
+            "runs": [10516256]
+        },
+        {
+            "scenario": "image.thumbs.first",
+            "metric": "storage.worker.requestBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after image.concurrent, request images 5 through 8 concurrently as transcript thumbnails (?size=thumb), the first time this server sees them, until all client bodies and quiet",
+            "availability": "measured",
+            "runs": [232]
+        },
+        {
+            "scenario": "image.thumbs.network",
+            "metric": "v8.deserialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after all loopback scenarios, Chromium downloads and decodes 4 previously unrequested images (indices 9 through 12) as thumbnails, cache disabled, CDP-emulated 4 Mbit/s throughput and 40 ms latency; includes first server resize cost; synthetic link, not production network",
+            "availability": "measured",
+            "runs": [8]
+        },
+        {
+            "scenario": "image.thumbs.network",
+            "metric": "v8.deserialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after all loopback scenarios, Chromium downloads and decodes 4 previously unrequested images (indices 9 through 12) as thumbnails, cache disabled, CDP-emulated 4 Mbit/s throughput and 40 ms latency; includes first server resize cost; synthetic link, not production network",
+            "availability": "measured",
+            "runs": [10516493]
+        },
+        {
+            "scenario": "image.thumbs.network",
+            "metric": "v8.serialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after all loopback scenarios, Chromium downloads and decodes 4 previously unrequested images (indices 9 through 12) as thumbnails, cache disabled, CDP-emulated 4 Mbit/s throughput and 40 ms latency; includes first server resize cost; synthetic link, not production network",
+            "availability": "measured",
+            "runs": [8]
+        },
+        {
+            "scenario": "image.thumbs.network",
+            "metric": "v8.serialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after all loopback scenarios, Chromium downloads and decodes 4 previously unrequested images (indices 9 through 12) as thumbnails, cache disabled, CDP-emulated 4 Mbit/s throughput and 40 ms latency; includes first server resize cost; synthetic link, not production network",
+            "availability": "measured",
+            "runs": [10516493]
+        },
+        {
+            "scenario": "image.thumbs.network",
+            "metric": "storage.worker.replyBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after all loopback scenarios, Chromium downloads and decodes 4 previously unrequested images (indices 9 through 12) as thumbnails, cache disabled, CDP-emulated 4 Mbit/s throughput and 40 ms latency; includes first server resize cost; synthetic link, not production network",
+            "availability": "measured",
+            "runs": [10516261]
+        },
+        {
+            "scenario": "image.thumbs.network",
+            "metric": "storage.worker.requestBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after all loopback scenarios, Chromium downloads and decodes 4 previously unrequested images (indices 9 through 12) as thumbnails, cache disabled, CDP-emulated 4 Mbit/s throughput and 40 ms latency; includes first server resize cost; synthetic link, not production network",
+            "availability": "measured",
+            "runs": [232]
+        },
+        {
+            "scenario": "changes.poll.images",
+            "metric": "v8.deserialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after all image scenarios, 4 concurrent GET changes for that image session (same Git workspace with 20 changed files), then the same 4 again with nothing changed; every answer identical, until quiet",
+            "availability": "measured",
+            "runs": [24]
+        },
+        {
+            "scenario": "changes.poll.images",
+            "metric": "v8.deserialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after all image scenarios, 4 concurrent GET changes for that image session (same Git workspace with 20 changed files), then the same 4 again with nothing changed; every answer identical, until quiet",
+            "availability": "measured",
+            "runs": [63097912]
+        },
+        {
+            "scenario": "changes.poll.images",
+            "metric": "v8.serialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after all image scenarios, 4 concurrent GET changes for that image session (same Git workspace with 20 changed files), then the same 4 again with nothing changed; every answer identical, until quiet",
+            "availability": "measured",
+            "runs": [24]
+        },
+        {
+            "scenario": "changes.poll.images",
+            "metric": "v8.serialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after all image scenarios, 4 concurrent GET changes for that image session (same Git workspace with 20 changed files), then the same 4 again with nothing changed; every answer identical, until quiet",
+            "availability": "measured",
+            "runs": [63097912]
+        },
+        {
+            "scenario": "changes.poll.images",
+            "metric": "storage.worker.replyBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after all image scenarios, 4 concurrent GET changes for that image session (same Git workspace with 20 changed files), then the same 4 again with nothing changed; every answer identical, until quiet",
+            "availability": "measured",
+            "runs": [63096925]
+        },
+        {
+            "scenario": "changes.poll.images",
+            "metric": "storage.worker.requestBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after all image scenarios, 4 concurrent GET changes for that image session (same Git workspace with 20 changed files), then the same 4 again with nothing changed; every answer identical, until quiet",
+            "availability": "measured",
+            "runs": [987]
+        },
+        {
+            "scenario": "image.paste.network",
+            "metric": "v8.deserialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "after all other scenarios, real Chromium prepares and uploads one deterministic xorshift-noise 3000x1500 opaque PNG from its clipboard path to the same synthetic session, on a CDP-emulated 4 Mbit/s uplink and 40 ms latency; includes browser resize, HTTP upload, metadata response and decode, excludes fixture construction/module loading; older revisions without the helper upload the original, matching their unchanged paste behavior; no inference, synthetic link",
+            "availability": "measured",
+            "runs": [2]
+        },
+        {
+            "scenario": "image.paste.network",
+            "metric": "v8.deserialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "after all other scenarios, real Chromium prepares and uploads one deterministic xorshift-noise 3000x1500 opaque PNG from its clipboard path to the same synthetic session, on a CDP-emulated 4 Mbit/s uplink and 40 ms latency; includes browser resize, HTTP upload, metadata response and decode, excludes fixture construction/module loading; older revisions without the helper upload the original, matching their unchanged paste behavior; no inference, synthetic link",
+            "availability": "measured",
+            "runs": [92]
+        },
+        {
+            "scenario": "image.paste.network",
+            "metric": "v8.serialize.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "after all other scenarios, real Chromium prepares and uploads one deterministic xorshift-noise 3000x1500 opaque PNG from its clipboard path to the same synthetic session, on a CDP-emulated 4 Mbit/s uplink and 40 ms latency; includes browser resize, HTTP upload, metadata response and decode, excludes fixture construction/module loading; older revisions without the helper upload the original, matching their unchanged paste behavior; no inference, synthetic link",
+            "availability": "measured",
+            "runs": [2]
+        },
+        {
+            "scenario": "image.paste.network",
+            "metric": "v8.serialize.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "after all other scenarios, real Chromium prepares and uploads one deterministic xorshift-noise 3000x1500 opaque PNG from its clipboard path to the same synthetic session, on a CDP-emulated 4 Mbit/s uplink and 40 ms latency; includes browser resize, HTTP upload, metadata response and decode, excludes fixture construction/module loading; older revisions without the helper upload the original, matching their unchanged paste behavior; no inference, synthetic link",
+            "availability": "measured",
+            "runs": [92]
+        },
+        {
+            "scenario": "image.paste.network",
+            "metric": "storage.worker.replyBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "after all other scenarios, real Chromium prepares and uploads one deterministic xorshift-noise 3000x1500 opaque PNG from its clipboard path to the same synthetic session, on a CDP-emulated 4 Mbit/s uplink and 40 ms latency; includes browser resize, HTTP upload, metadata response and decode, excludes fixture construction/module loading; older revisions without the helper upload the original, matching their unchanged paste behavior; no inference, synthetic link",
+            "availability": "measured",
+            "runs": [27]
+        },
+        {
+            "scenario": "image.paste.network",
+            "metric": "storage.worker.requestBytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "source": "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+            "workload": "after all other scenarios, real Chromium prepares and uploads one deterministic xorshift-noise 3000x1500 opaque PNG from its clipboard path to the same synthetic session, on a CDP-emulated 4 Mbit/s uplink and 40 ms latency; includes browser resize, HTTP upload, metadata response and decode, excludes fixture construction/module loading; older revisions without the helper upload the original, matching their unchanged paste behavior; no inference, synthetic link",
+            "availability": "measured",
+            "runs": [65]
+        }
+    ],
+    "limits": [
+        "one run per mode; no stable speedup claim",
+        "copy/scheduling contained in round-trip; not an isolated clone timer",
+        "no real accounts; no deployment"
+    ],
+    "timingLock": {
+        "label": "d8b-export-acceptance",
+        "command": [
+            "bash",
+            "-c",
+            "npm run perf:ci -- 230ec01 --runs 1 --out /tmp/rotom-review-D8b/acceptance-ci > /tmp/rotom-review-D8b/perf-acceptance-ci.log 2>&1 && ROTOM_PERF_STORAGE_WORKER=1 npm run perf:measure -- --runs 1 --out /tmp/rotom-review-D8b/worker-on-acceptance.json > /tmp/rotom-review-D8b/perf-worker-acceptance.log 2>&1"
+        ],
+        "exit": 0,
+        "signal": null,
+        "wallMs": 359856,
+        "cores": 8,
+        "loadBefore": 1.26,
+        "loadAfter": 4.55,
+        "highLoad": false
+    },
+    "workerTimingLock": {
+        "label": "d8b-export-acceptance",
+        "command": [
+            "bash",
+            "-c",
+            "npm run perf:ci -- 230ec01 --runs 1 --out /tmp/rotom-review-D8b/acceptance-ci > /tmp/rotom-review-D8b/perf-acceptance-ci.log 2>&1 && ROTOM_PERF_STORAGE_WORKER=1 npm run perf:measure -- --runs 1 --out /tmp/rotom-review-D8b/worker-on-acceptance.json > /tmp/rotom-review-D8b/perf-worker-acceptance.log 2>&1"
+        ],
+        "exit": 0,
+        "signal": null,
+        "wallMs": 359856,
+        "cores": 8,
+        "loadBefore": 1.26,
+        "loadAfter": 4.55,
+        "highLoad": false
+    },
+    "offMeasurementProductSha256": "c00a3abf5a1a40fe253b2ec698beddcbdd84129b02f9e0ed75317a1f6df7328f",
+    "offSourceScope": "Final formatted product source: both modes measured after the environment-cleanup ordering fix and report-export fix.",
+    "sourceReports": {
+        "main": "/tmp/rotom-review-D8b/ci/base.json",
+        "d8a": "/tmp/rotom-review-D8b/acceptance-ci/base.json",
+        "off": "/tmp/rotom-review-D8b/acceptance-ci/head.json",
+        "on": "/tmp/rotom-review-D8b/worker-on-acceptance.json"
+    }
+}

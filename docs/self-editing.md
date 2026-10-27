@@ -6,18 +6,17 @@ Before you start, read [map.md](map.md) for where the code you need is, and the 
 
 ## When a change takes effect
 
-| You save                             | What happens                                                                                                                                         |
-| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A file in `web/`                     | Every open browser reloads, at once. A syntax error blanks the app for everyone, you included.                                                       |
-| A module in `src/server/extensions/` | It is reinstalled into the running server about 300 ms later. If it fails to load, the previous version keeps running and the app reports the error. |
-| Any other file in `src/server/`      | Nothing, until the server restarts.                                                                                                                  |
-| `docs/`, `test/`                     | Nothing runs it, except `npm test`.                                                                                                                  |
+| You save                | What happens                                                                                   |
+| ----------------------- | ---------------------------------------------------------------------------------------------- |
+| A file in `web/`        | Every open browser reloads, at once. A syntax error blanks the app for everyone, you included. |
+| A file in `src/server/` | Nothing, until the server restarts.                                                            |
+| `docs/`, `test/`        | Nothing runs it, except `npm test`.                                                            |
 
 ## After every save
 
 - **`web/*.js`:** `node --check web/<file>.js` at once, before anything else. If the app went blank, this says why. Check the change in a browser (below): there are tests for some of the web app (`test/mobile-ui.test.ts`, `test/peeks-ui.test.ts`), not all of it.
-- **An extension module:** watch for the reload notice, or its error, in the app.
-- **Other server code:** `npm run check`.
+- **Server code:** `npm run check`.
+- **Native Agent Extensions:** use the configuration/reload procedure in [AGENT-CONFIGURATION.md](AGENT-CONFIGURATION.md). D9c removes the old repository service modules; user drop-in source and enabled/disabled records remain intact and unloaded. There is no service-extension hot reload.
 
 Then, before you call it done:
 
@@ -36,8 +35,8 @@ Keep [map.md](map.md), [architecture.md](architecture.md), and [features.md](fea
 
 Never try a change on the server people use, and never with their data. Two ways:
 
-- **A test.** `test/helpers.ts` opens the app on a temporary data folder with a scripted model (`openApp`, `newSession`, `say`, `until`). Most features have a test in `test/` to copy from. `test/mobile-ui.test.ts` drives the whole web app in Chromium at phone size.
-- **A copy you can open.** `test/serve.ts` runs this folder's code on a temporary data folder, with a scripted model that answers "echo: …" and costs nothing, and prints sign-in links for an owner and a guest. Web files and extension modules reload in it as you save; restart it after any other server change.
+- **A test.** `test/helpers.ts` provides temporary archive fixtures (`openApp`, `seedHistoricalSession`) and native metadata-only fixtures (`openNativeApp`). Actual native execution uses the loopback proofs in [VERIFICATION.md](VERIFICATION.md); archive fixtures do not run a model. `test/mobile-ui.test.ts` drives the web app in Chromium at phone size.
+- **A copy you can open.** `test/serve.ts` runs this folder's code on temporary data with a historical read-only session and prints sign-in links for an owner and a guest. It does not prove native execution. Web files reload as you save; restart this throwaway process after server changes.
 
 It runs until stopped, so start it in the background from a tool call, or the call waits for ever:
 
@@ -52,7 +51,7 @@ It listens on `127.0.0.2:8899`. Browsers keep cookies per host, not per port: si
 
 ## Restarting
 
-Server changes outside `extensions/` need a restart. Only the owner can, from Settings → **Restart server** (shown when Pi Pocket runs under its launcher, as `pi-pocket` does).
+Server code changes need a restart. Only the owner can, from Settings → **Restart server** (shown when Pi Pocket runs under its launcher, as `pi-pocket` does).
 
 - **Never restart while your own tool call runs**, and never on your own: finish the edit, run `npm run check` and `npm test`, then ask the person to restart.
 - Running work resumes after a restart. A tool call that was cut off and is not safe to repeat comes back to the model as interrupted.
@@ -61,7 +60,6 @@ Server changes outside `extensions/` need a restart. Only the owner can, from Se
 ## Getting a broken change back
 
 - **A blank app** (a syntax error in `web/`): the server is fine and your work goes on. Fix the file; every browser reloads.
-- **An extension that will not load:** the previous version still runs. Fix the file, or turn the module off in Settings → Extensions.
 - **A server that will not start:** someone at the machine fixes the file, or puts it back with `git checkout -- <file>` (see `git diff` first: it may hold other work). The launcher picks it up.
 
 Work in small steps, each one checked, so the step to undo is small.

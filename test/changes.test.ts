@@ -3,11 +3,11 @@ import {
     type App,
     cleanUp,
     lastText,
-    newSession,
+    seedHistoricalSession,
     openApp,
     owner,
     root,
-    say,
+    context,
     scriptedModel,
 } from "./helpers.ts";
 import assert from "node:assert/strict";
@@ -16,6 +16,8 @@ import { existsSync, mkdirSync, realpathSync, rmSync, symlinkSync, writeFileSync
 import { join } from "node:path";
 import { after, before, test } from "node:test";
 import type { FauxResponseStep } from "@earendil-works/pi-ai";
+import type { ConversationId } from "@earendil-works/pi-durable";
+import type { JsonValue } from "@earendil-works/chord";
 import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai/providers/faux";
 import { parseNumstat, parseStatus } from "../src/server/changes.ts";
 
@@ -136,6 +138,47 @@ let app: App;
 const repo = join(root, "repo");
 const gitIn = (...args: string[]) => execFileSync("git", args, { cwd: repo, encoding: "utf8" });
 
+async function appendToolCall(
+    id: ConversationId,
+    callId: string,
+    name: string,
+    args: Record<string, JsonValue>,
+): Promise<void> {
+    await app.harness.commit(async (tx) => {
+        await tx.appendEntry(id, {
+            kind: "pi.assistant",
+            model: [
+                {
+                    role: "assistant",
+                    content: [{ type: "toolCall", id: callId, name, arguments: args }],
+                } as never,
+            ],
+        });
+    }, context);
+}
+
+async function appendCodemodeResult(
+    id: ConversationId,
+    callId: string,
+    calls: JsonValue[],
+): Promise<void> {
+    await app.harness.commit(async (tx) => {
+        await tx.appendEntry(id, {
+            kind: "pi.tool-result",
+            model: [
+                {
+                    role: "toolResult",
+                    toolCallId: callId,
+                    toolName: "codemode",
+                    content: "done",
+                    isError: false,
+                    details: { calls },
+                },
+            ],
+        } as never);
+    }, context);
+}
+
 before(async () => {
     mkdirSync(repo, { recursive: true });
     gitIn("init", "-q");
@@ -154,11 +197,17 @@ after(async () => {
 });
 
 test("a session's changes list git's uncommitted files, mark Pi's, and give each file's diff", async () => {
-    const id = await newSession(app, repo);
+    const id = await seedHistoricalSession(app, repo);
 
-    await say(app, id, "edit it");
-    await say(app, id, "write notes");
-    await say(app, id, "write outside");
+    await appendToolCall(id, "edit-1", "edit", {
+        path: "keep.txt",
+        edits: [{ oldText: "b", newText: "c" }],
+    });
+    writeFileSync(join(repo, "keep.txt"), "a\nc\n");
+    await appendToolCall(id, "write-1", "write", { path: "notes/todo.md", content: "- one\n" });
+    mkdirSync(join(repo, "notes"), { recursive: true });
+    writeFileSync(join(repo, "notes/todo.md"), "- one\n");
+    await appendToolCall(id, "write-2", "write", { path: "../outside.txt", content: "x\n" });
     writeFileSync(join(repo, "other.txt"), "changed by a person\n");
 
     const changes = await app.workspace.changes(id, owner(app));
@@ -217,7 +266,7 @@ test("a session's changes list git's uncommitted files, mark Pi's, and give each
 });
 
 test("diffs read the same whatever a person's git config says", async () => {
-    const id = await newSession(app, repo);
+    const id = await seedHistoricalSession(app, repo);
 
     writeFileSync(join(repo, "fresh.txt"), "new\n");
     gitIn("config", "diff.mnemonicPrefix", "true");
@@ -238,9 +287,14 @@ test("diffs read the same whatever a person's git config says", async () => {
 });
 
 test("files a codemode script wrote are Pi's too, shown at the reply that ran it", async () => {
-    const id = await newSession(app, repo);
+    const id = await seedHistoricalSession(app, repo);
 
-    await say(app, id, "script it");
+    await appendToolCall(id, "script-1", "codemode", { code: "historical script" });
+    await appendCodemodeResult(id, "script-1", [
+        { name: "write", status: "ok", path: "scripted.txt" },
+        { name: "write", status: "ok", path: "../scripted-outside.txt" },
+    ]);
+    writeFileSync(join(repo, "scripted.txt"), "x\n");
     const changes = await app.workspace.changes(id, owner(app));
 
     assert.equal(changes.files.find((file) => file.path === "scripted.txt")?.byPi, true);
@@ -280,12 +334,13 @@ test("absolute direct-write paths through a symlinked cwd are attributed to Pi",
     const alias = join(root, "absolute-direct-alias");
 
     symlinkDirectory(folder, alias);
-    const id = await newSession(app, alias);
+    const id = await seedHistoricalSession(app, alias);
 
     const path = join(alias, "direct.txt");
 
-    await say(app, id, `write absolute: ${path}`);
-    assert.equal(existsSync(path), true, "the write created its target file");
+    await appendToolCall(id, "absolute-1", "write", { path, content: "absolute edit\n" });
+    writeFileSync(path, "absolute edit\n");
+    assert.equal(existsSync(path), true, "the historical fixture target file exists");
     const changes = await app.workspace.changes(id, owner(app));
 
     assert.equal(changes.files.find((file) => file.path === "direct.txt")?.byPi, true);
@@ -296,12 +351,14 @@ test("absolute codemode paths through a symlinked cwd are attributed to Pi", asy
     const alias = join(root, "absolute-codemode-alias");
 
     symlinkDirectory(folder, alias);
-    const id = await newSession(app, alias);
+    const id = await seedHistoricalSession(app, alias);
 
     const path = join(alias, "scripted.txt");
 
-    await say(app, id, `script absolute: ${path}`);
-    assert.equal(existsSync(path), true, "the codemode write created its target file");
+    await appendToolCall(id, "absolute-script-1", "codemode", { code: "historical script" });
+    await appendCodemodeResult(id, "absolute-script-1", [{ name: "write", status: "ok", path }]);
+    writeFileSync(path, "absolute script\n");
+    assert.equal(existsSync(path), true, "the historical fixture target file exists");
     const changes = await app.workspace.changes(id, owner(app));
 
     assert.equal(changes.files.find((file) => file.path === "scripted.txt")?.byPi, true);
@@ -316,9 +373,10 @@ test("a parent-relative write from a symlinked cwd stays outside its repository"
 
     writeFileSync(join(folder, "top.txt"), "changed by a person\n");
     symlinkDirectory(join(folder, "app"), alias);
-    const id = await newSession(app, alias);
+    const id = await seedHistoricalSession(app, alias);
 
-    await say(app, id, "write parent");
+    await appendToolCall(id, "parent-1", "write", { path: "../top.txt", content: "Pi's file\n" });
+    writeFileSync(join(root, "top.txt"), "Pi's file\n");
     assert.equal(existsSync(join(root, "top.txt")), true);
     const changes = await app.workspace.changes(id, owner(app));
 
@@ -339,9 +397,13 @@ test("a missing new leaf through a symlinked ancestor resolves to its repository
 
     symlinkDirectory(join(folder, "app"), cwdAlias);
     symlinkDirectory(join(folder, "app"), escapedAlias);
-    const id = await newSession(app, cwdAlias);
+    const id = await seedHistoricalSession(app, cwdAlias);
 
-    await say(app, id, "write through link");
+    await appendToolCall(id, "link-1", "write", {
+        path: "../symlinked-ancestor-target/new.txt",
+        content: "Pi's file\n",
+    });
+    writeFileSync(join(folder, "app", "new.txt"), "Pi's file\n");
     const path = join(folder, "app", "new.txt");
 
     assert.equal(existsSync(path), true);
@@ -362,7 +424,7 @@ test("someone invited to one session sees the changes in its folder, not the res
 
     writeFileSync(join(shared, "public", "page.txt"), "hello again\n");
     writeFileSync(join(shared, "private", "secret.txt"), "the secret\n");
-    const id = await newSession(app, join(shared, "public"));
+    const id = await seedHistoricalSession(app, join(shared, "public"));
     const guest = app.config.addUser("Scoped", "guest", [String(id)]).user;
 
     assert.deepEqual(
@@ -386,7 +448,7 @@ test("a file named like a pattern is that one file", async () => {
 
     writeFileSync(join(starred, "*"), "star changed\n");
     writeFileSync(join(starred, "plain.txt"), "plain changed\n");
-    const id = await newSession(app, starred);
+    const id = await seedHistoricalSession(app, starred);
     const diff = await app.workspace.changeDiff(id, owner(app), "*");
 
     assert.match(diff, /^\+star changed$/m);
@@ -398,7 +460,7 @@ test("a renamed file's diff is what changed in it, under both its names", async 
 
     execFileSync("git", ["mv", "café.txt", "thé.txt"], { cwd: moved });
     writeFileSync(join(moved, "thé.txt"), "one\ntwo\nthree\nfour\n");
-    const id = await newSession(app, moved);
+    const id = await seedHistoricalSession(app, moved);
     const [file] = (await app.workspace.changes(id, owner(app))).files;
     const diff = await app.workspace.changeDiff(id, owner(app), "thé.txt");
 
@@ -412,9 +474,9 @@ test("outside a repository, the changes are Pi's edits alone", async () => {
     const folder = join(root, "plain");
 
     mkdirSync(folder, { recursive: true });
-    const id = await newSession(app, folder);
+    const id = await seedHistoricalSession(app, folder);
 
-    await say(app, id, "write notes");
+    await appendToolCall(id, "plain-1", "write", { path: "notes/todo.md", content: "- one\n" });
     const changes = await app.workspace.changes(id, owner(app));
 
     assert.equal(changes.repo, undefined);

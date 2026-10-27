@@ -15,6 +15,7 @@ import { TeamAccounts, type Runtime } from "./team-accounts.ts";
 import { TeamExecution, TeamRunDoc } from "./team-execution.ts";
 import { ConfigurationDoc, TeamProfiles, type ConfigurationSnapshot } from "./team-profiles.ts";
 import { TeamKernel } from "./team-kernel.ts";
+import { StorageWorker } from "./storage-worker.ts";
 import { scopedParseObject } from "./perf-channels.ts";
 import { requireNoPendingKernel } from "./rotom-journal.ts";
 import { verifyRotomKernel } from "./rotom-kernel.ts";
@@ -40,7 +41,6 @@ import {
 } from "@earendil-works/pi-durable";
 import { NodeExecutionEnv } from "@earendil-works/pi-durable/env/node";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
-import { CodingTools } from "@earendil-works/pi-durable/tools";
 import { Alerts } from "./alerts.ts";
 import { Attribution, type Missing } from "./attribution.ts";
 import { Browsers } from "./browser.ts";
@@ -48,7 +48,7 @@ import { ChangeWatches } from "./change-watch.ts";
 import type { BrowserState } from "./browser/page.ts";
 import { Collab, REACTIONS } from "./collab.ts";
 import { Commands } from "./commands.ts";
-import { APP_ROOT, ConfigStore, type User } from "./config.ts";
+import { ConfigStore, type User } from "./config.ts";
 import {
     ArtifactBodyDoc,
     type ArtifactMeta,
@@ -66,10 +66,10 @@ import {
 } from "./docs.ts";
 import { describe, HttpError } from "./errors.ts";
 import { Goals } from "./goals.ts";
-import { type ApprovalRequest, Approvals, type PocketHost } from "./host.ts";
-import { type GuardStatus, LancetGuard } from "./lancet.ts";
+import { type ApprovalRequest, Approvals } from "./host.ts";
+import { type GuardStatus } from "./lancet.ts";
 import { takeLock } from "./lock.ts";
-import { modelList, resolveModel } from "./models.ts";
+import { modelList } from "./models.ts";
 import { configureHttp } from "./net.ts";
 import { snippet } from "./projection.ts";
 import {
@@ -80,9 +80,9 @@ import {
 } from "./prompts.ts";
 import { Providers } from "./providers.ts";
 import { PushStore } from "./push.ts";
-import { type ExtensionInfo, ExtensionLoader, prepareDropInFolder } from "./reload.ts";
 import { ResendTask } from "./resend.ts";
 import { type Client, Room, ROOM_DOCS } from "./room.ts";
+import { ARCHIVE_COPY, SUBSCRIPTION_COPY } from "./constants/copy.ts";
 import { Schedules } from "./schedules.ts";
 import { SessionLists } from "./session-lists.ts";
 import { Shell } from "./shell.ts";
@@ -90,6 +90,7 @@ import { Spend } from "./spend.ts";
 import { Transcripts } from "./transcripts.ts";
 import { MediaStore, type Resize } from "./media.ts";
 import { Workspace } from "./workspace.ts";
+import { quarantineLegacyTasks } from "./legacy-archive.ts";
 
 const context = BACKGROUND_CONTEXT;
 
@@ -101,12 +102,6 @@ export type AccessInfo = {
     url?: string;
 };
 
-/** The extension module that runs Lancet Guard on tool calls. */
-const GUARD_FILE = "guard.ts";
-/** The extension module with the browser tool. While it is off, the Browser panel is off too. */
-const BROWSER_FILE = "browser.ts";
-const BROWSER_EXTENSION = "pocket-browser";
-
 /** The most peek tiles a tab gets live at once: the ones on its screen, which a tall screen fits a handful of. */
 export const MAX_PEEKS = 12;
 
@@ -116,6 +111,8 @@ export interface OpenOptions {
     supervised: boolean;
     /** Explicit new-session-only native backend. Never changes existing sessions or copies grants. */
     kernel?: boolean;
+    /** Opt-in single owner of native journal + public Durable Storage. Default: false. */
+    storageWorker?: boolean;
     log?: (line: string) => void;
     /** Tests register scripted providers here. */
     configureModels?: (models: Runtime) => void;
@@ -133,7 +130,6 @@ export class PocketApp {
     /** Push subscriptions and their keys; undefined until the server opened. */
     pushStore: PushStore | undefined;
     readonly approvals = new Approvals((id) => this.attribution.requesterOf(id));
-    readonly guard = new LancetGuard();
     readonly dataDir: string;
     readonly defaultCwd: string;
     readonly supervised: boolean;
@@ -146,11 +142,15 @@ export class PocketApp {
     readonly profiles: TeamProfiles;
     kernel: TeamKernel | undefined;
     readonly #kernelEnabled: boolean;
+    readonly #storageWorkerEnabled: boolean;
+    #storageWorker?: StorageWorker;
+    /** Direct Storage is owned here only between opening SQLite and successful Harness ownership transfer. */
+    #preHarnessStorage?: Storage;
     readonly projects: TeamProjects;
     readonly execution = new TeamExecution(this);
     settings!: SettingsManager;
-    /** Only the non-Team legacy runtime loads server extension modules. */
-    loader: ExtensionLoader | undefined;
+    /** Retained for callers that inspect the retired legacy loader; Team never provides one. */
+    readonly loader = undefined;
     readonly commands = new Commands(this);
     readonly collab = new Collab(this);
     readonly alerts = new Alerts(this);
@@ -172,7 +172,15 @@ export class PocketApp {
     /** Each conversation's browser page, which Pi and the people in the conversation share. */
     readonly browsers: Browsers;
     readonly #clients = new Set<Client>();
+    readonly #clientRooms = new WeakMap<Client, Room>();
     readonly #sessionLists = new SessionLists();
+    readonly #sessionListPending = new Map<
+        Client,
+        { full: boolean; version: number } & ReturnType<typeof Promise.withResolvers<void>>
+    >();
+    #sessionListRunning = false;
+    #sessionListDrain = Promise.resolve();
+    #projectAccessEpoch = 0;
     readonly #rooms = new Map<ConversationId, Promise<Room>>();
     readonly #envs = new Map<string, NodeExecutionEnv>();
     readonly #busy = new Set<ConversationId>();
@@ -199,6 +207,12 @@ export class PocketApp {
     private constructor(options: OpenOptions) {
         this.#configureModels = options.configureModels;
         this.#kernelEnabled = options.kernel === true;
+        this.#storageWorkerEnabled = options.storageWorker === true;
+
+        if (this.#storageWorkerEnabled && !this.#kernelEnabled) {
+            throw new Error("Storage worker requires native kernel mode");
+        }
+
         this.now = options.now ?? Date.now;
         this.dataDir = options.dataDir;
         this.media = new MediaStore(
@@ -267,7 +281,34 @@ export class PocketApp {
     static async open(options: OpenOptions): Promise<PocketApp> {
         const app = new PocketApp(options);
 
-        await app.#open();
+        try {
+            await app.#open();
+        } catch (error) {
+            // The new pre-Harness quarantine stage owns direct SQLite until Harness.open succeeds.
+            if (app.#preHarnessStorage) {
+                try {
+                    await app.#preHarnessStorage.close(context);
+                    app.#preHarnessStorage = undefined;
+                    await app.close();
+                } catch (cleanupError) {
+                    throw new AggregateError(
+                        [error, cleanupError],
+                        "Startup failed and cleanup remains fenced",
+                    );
+                }
+            } else if (app.#storageWorker) {
+                try {
+                    await app.close();
+                } catch (cleanupError) {
+                    throw new AggregateError(
+                        [error, cleanupError],
+                        "Startup failed and cleanup remains fenced",
+                    );
+                }
+            }
+
+            throw error;
+        }
 
         return app;
     }
@@ -314,57 +355,32 @@ export class PocketApp {
 
         const registry = createRegistry();
 
-        registry.install(CodingTools);
-        // Durable work of the app itself, whatever extension modules are on.
+        // Historical task identities remain registered for archive decoding; none execute in Team mode.
         registry.install(
             defineExtension({ name: "pocket-core", tasks: [ResendTask, this.shell.task] }),
         );
 
-        if (!this.#kernelEnabled) {
-            const host: PocketHost = {
-                guard: this.guard,
-                approvals: this.approvals,
-                agentDir: getAgentDir(),
-                dataDir: this.dataDir,
-                skillPaths: () => {
-                    try {
-                        return this.settings.getSkillPaths();
-                    } catch {
-                        return [];
-                    }
-                },
-                resolveModel: (spec) => resolveModel(this.models, spec),
-                requesterOf: (conversationId) => this.attribution.requesterOf(conversationId),
-                notice: (level, message) => this.notice(level, message),
-                schedules: this.schedules,
-                goals: this.goals,
-                browsers: this.browsers,
-            };
-            const dropIn = join(this.dataDir, "extensions");
-
-            try {
-                prepareDropInFolder(dropIn, join(APP_ROOT, "node_modules"));
-            } catch (error) {
-                this.#log(
-                    `Drop-in extensions cannot import Pi Pocket's packages: ${describe(error)}`,
-                );
-            }
-
-            this.loader = new ExtensionLoader(
-                registry,
-                host,
-                { builtIn: join(APP_ROOT, "src", "server", "extensions"), dropIn },
-                (file) => this.config.extensionChoice(file),
-            );
-            await this.loader.loadAll();
-        }
-
+        // Legacy service extensions are deliberately not loaded in D9a. Their files and persisted choices remain
+        // available for later migration, but archive startup must not execute or watch old code.
         registry.install(this.execution.extension());
 
-        const storage = scopedParseObject(
-            "durable-storage",
-            await openNodeSqliteStorage(join(this.dataDir, "pocket.sqlite")),
-        );
+        if (this.#storageWorkerEnabled) {
+            this.#storageWorker = new StorageWorker(this.dataDir);
+            await this.#storageWorker.ready();
+        }
+
+        const storage =
+            this.#storageWorker?.storage ??
+            scopedParseObject(
+                "durable-storage",
+                await openNodeSqliteStorage(join(this.dataDir, "pocket.sqlite")),
+            );
+
+        if (!this.#storageWorker) {
+            this.#preHarnessStorage = storage;
+        }
+
+        await quarantineLegacyTasks(storage, (line) => this.#log(line));
 
         this.harness = await Harness.open(
             storage,
@@ -398,9 +414,10 @@ export class PocketApp {
             },
             context,
         );
+        this.#preHarnessStorage = undefined;
 
         if (this.#kernelEnabled) {
-            this.kernel = new TeamKernel(this);
+            this.kernel = new TeamKernel(this, this.#storageWorker?.journal);
         }
 
         try {
@@ -452,13 +469,15 @@ export class PocketApp {
             );
         });
 
-        if (this.guardOn()) {
-            void this.guard.warm().catch(() => {});
+        // Legacy Durable tasks are quarantined before Harness opens and are never resumed. Native journal recovery is
+        // separate and remains below; it is the only execution recovery path in Team mode.
+        if (this.#storageWorker) {
+            void this.kernel!.resumeInterrupted().catch((error) => {
+                this.#log(`Native continuation stopped: ${describe(error)}`);
+            });
+        } else {
+            void this.kernel?.resumeInterrupted();
         }
-
-        // Work a previous process left unfinished continues now.
-        this.harness.resume();
-        void this.kernel?.resumeInterrupted();
     }
 
     /**
@@ -468,6 +487,7 @@ export class PocketApp {
      */
     async #recover(storage: Storage): Promise<ConversationId[]> {
         this.#sessions = { ...((await this.harness.snapshot(SessionsDoc, context))?.items ?? {}) };
+        this.config.pruneFinishedSeen(Object.keys(this.#sessions));
         const conversations: ConversationId[] = [];
         const unrecorded = new Map<ConversationId, Missing[]>();
         let cursor: Cursor | undefined;
@@ -595,7 +615,6 @@ export class PocketApp {
                 this.alerts.runChanged(id, busy);
 
                 if (!busy) {
-                    this.spend.runEnded(id);
                     void this.recordRunFinished(id);
                 }
 
@@ -619,10 +638,16 @@ export class PocketApp {
 
             sessionsChanged = true;
         } else if (kind === SessionsDoc.definition.kind) {
+            const previous = this.#sessions;
+
             this.#sessions = {
                 ...((change.value as { items?: Record<string, SessionMeta> } | null)?.items ?? {}),
             };
             sessionsChanged = true;
+
+            if (Object.keys(previous).some((id) => this.#sessions[id] === undefined)) {
+                this.config.pruneFinishedSeen(Object.keys(this.#sessions));
+            }
 
             // Views show a session's title, limit, and worktree from here.
             for (const pending of this.#rooms.values()) {
@@ -777,17 +802,75 @@ export class PocketApp {
         }
 
         client.send("hello", this.#helloFor(client, hello));
-        this.#sendSessionLists([client], true);
+        await this.#sendSessionLists([client], true);
 
         if (arriving) {
             this.#peopleChanged(client.user.id);
         }
 
-        if (client.conversationId === undefined) {
+        await this.#joinRoom(client);
+    }
+
+    /** A read-only desired subscription; newer intents supersede pending room opens, without replaying any send. */
+    async subscribe(
+        clientUser: User,
+        connection: string,
+        generation: number,
+        id: ConversationId | undefined,
+        claim: Client["viewClaim"],
+    ) {
+        const client = [...this.#clients].find(
+            (each) =>
+                each.connection === connection &&
+                each.user.id === clientUser.id &&
+                each.subscriptionGeneration !== undefined,
+        );
+
+        if (!client) {
+            throw new HttpError(404, SUBSCRIPTION_COPY.unavailable);
+        }
+
+        if (generation <= client.subscriptionGeneration!) {
+            return { generation: client.subscriptionGeneration };
+        }
+
+        if (client.conversationId !== undefined) {
+            this.#leaveRoom(client, client.conversationId);
+        }
+
+        client.subscriptionGeneration = generation;
+        client.conversationId = id;
+        client.viewClaim = claim;
+        client.sentEntries.clear();
+        client.sentFields?.clear();
+        client.orderKey = "";
+        await this.#joinRoom(client);
+
+        return { generation: client.subscriptionGeneration };
+    }
+
+    async #joinRoom(client: Client): Promise<void> {
+        const id = client.conversationId;
+        const generation = client.subscriptionGeneration;
+        const current = () =>
+            this.#clients.has(client) &&
+            client.conversationId === id &&
+            client.subscriptionGeneration === generation;
+
+        const acknowledge = () => {
+            if (generation !== undefined) {
+                client.send("subscription", { generation, conversationId: id ?? null });
+            }
+        };
+
+        if (id === undefined) {
+            acknowledge();
+
             return;
         }
 
-        if (!this.canSee(client.user, client.conversationId)) {
+        if (!this.canSee(client.user, id)) {
+            acknowledge();
             client.send("missing", {
                 conversationId: client.conversationId,
                 message: "This session is not shared with you.",
@@ -799,18 +882,34 @@ export class PocketApp {
         }
 
         try {
-            const id = client.conversationId;
             const room = await this.room(id);
 
-            if (!this.#clients.has(client)) {
+            if (!current()) {
                 this.releaseRoom(room);
 
                 return;
             }
 
+            // Access can change while opening the room. Do not acknowledge or publish a stale grant.
+            if (!this.canSee(client.user, id)) {
+                this.releaseRoom(room);
+                this.requireSee(client.user, id);
+            }
+
             room.keepOpen();
+            this.#clientRooms.set(client, room);
             room.clients.add(client);
-            room.pushAll(client);
+            acknowledge();
+            await room.pushAll(client);
+
+            if (
+                !current() ||
+                this.#clientRooms.get(client) !== room ||
+                !this.canSee(client.user, room.id)
+            ) {
+                return;
+            }
+
             room.sendChanges(client, room.watchChanges(this.cwdOf(id)), false);
             client.send("chat", { conversationId: room.id, full: true, messages: room.chat });
             client.send("notes", { conversationId: room.id, ...room.notes });
@@ -823,10 +922,12 @@ export class PocketApp {
             room.pushPresence();
             this.#scheduleSessions();
         } catch (error) {
-            client.send("missing", {
-                conversationId: client.conversationId,
-                message: describe(error),
-            });
+            if (current()) {
+                acknowledge();
+                client.send("missing", { conversationId: id, message: describe(error) });
+                client.conversationId = undefined;
+                this.#leaveRoom(client, id);
+            }
         }
     }
 
@@ -856,23 +957,23 @@ export class PocketApp {
 
     /** Take a tab out of a conversation's room: the others see it go, and the room closes once no tab is left. */
     #leaveRoom(client: Client, id: ConversationId): void {
-        void this.#rooms.get(id)?.then(
-            (room) => {
-                if (!room.clients.delete(client)) {
-                    return;
-                }
+        const room = this.#clientRooms.get(client);
 
-                if (!room.has(client.user.id)) {
-                    room.setTyping(client.user.id, null);
-                }
+        if (room?.id !== id) {
+            return;
+        }
 
-                room.pushPresence();
-                room.schedule();
-                this.#scheduleSessions();
-                this.releaseRoom(room);
-            },
-            () => {},
-        );
+        this.#clientRooms.delete(client);
+        room.clients.delete(client);
+
+        if (!room.has(client.user.id)) {
+            room.setTyping(client.user.id, null);
+        }
+
+        room.pushPresence();
+        room.schedule();
+        this.#scheduleSessions();
+        this.releaseRoom(room);
     }
 
     /**
@@ -1085,6 +1186,24 @@ export class PocketApp {
         return current;
     }
 
+    /** Backend identity follows the session root, never whether the native kernel is loaded. */
+    sessionBackend(id: ConversationId): "durable" | "rotom" {
+        return this.sessionMeta(this.rootOf(id))?.backend ?? "durable";
+    }
+
+    /** Throw before any durable execution or workspace mutation can begin. */
+    requireArchiveWriteAllowed(id: ConversationId): void {
+        const meta = this.sessionMeta(this.rootOf(id));
+
+        if (meta === undefined) {
+            throw new HttpError(404, ARCHIVE_COPY.sessionMissing);
+        }
+
+        if (meta.backend !== "rotom") {
+            throw new HttpError(409, ARCHIVE_COPY.readOnly);
+        }
+    }
+
     /** People invited to one session see only that session and its subagents. */
     canSee(user: User, id: ConversationId): boolean {
         return (
@@ -1115,11 +1234,15 @@ export class PocketApp {
         user: User,
         backend: "durable" | "rotom" = "durable",
     ): Promise<void> {
-        if ((this.sessionMeta(this.rootOf(id))?.backend ?? "durable") !== backend) {
+        if (this.sessionBackend(id) !== backend) {
             throw new HttpError(
                 409,
                 "This operation is not supported by this conversation's execution backend.",
             );
+        }
+
+        if (backend === "durable") {
+            this.requireArchiveWriteAllowed(id);
         }
 
         this.requireSteer(user);
@@ -1141,6 +1264,7 @@ export class PocketApp {
     }
 
     async projectsChanged(): Promise<void> {
+        this.#projectAccessEpoch++;
         await this.kernel?.revoke();
 
         for (const client of [...this.#clients]) {
@@ -1159,24 +1283,7 @@ export class PocketApp {
             }
         }
 
-        this.#sendSessionLists(this.#clients, true);
-
-        for (const id of this.busyConversations()) {
-            const owner = this.execution.owner(id);
-            const user = owner ? this.config.userById(owner) : undefined;
-
-            if (
-                user &&
-                (!this.canSee(user, id) ||
-                    !this.projects.allowed(
-                        user,
-                        this.sessionMeta(this.rootOf(id))?.projectId,
-                        "continue",
-                    ))
-            ) {
-                await (await this.conversation(id)).abort(context);
-            }
-        }
+        await this.#sendSessionLists(this.#clients, true);
     }
 
     #noteChat(id: ConversationId, messages: readonly ChatMessage[] | undefined): boolean {
@@ -1264,7 +1371,7 @@ export class PocketApp {
                 startedAt: this.startedAt,
                 home: homedir(),
                 defaultCwd: this.defaultCwd,
-                extensions: this.loader?.extensionNames() ?? [],
+                extensions: [],
                 // Tells the web app this server has people chat and typing indicators.
                 chat: true,
                 kernel: this.kernel !== undefined,
@@ -1282,7 +1389,11 @@ export class PocketApp {
 
     /** A tab's hello: what everyone gets, and the id of its own connection, which its peek lists name. */
     #helloFor(client: Client, hello: Awaited<ReturnType<PocketApp["hello"]>>) {
-        return { ...hello, connection: client.connection };
+        return {
+            ...hello,
+            connection: client.connection,
+            ...(client.subscriptionGeneration === undefined ? {} : { subscriptions: true }),
+        };
     }
 
     /** A native conversation's live view or receipts changed: update the tabs watching it. */
@@ -1320,7 +1431,7 @@ export class PocketApp {
         }
     }
 
-    markRunSeen(id: ConversationId, user: User, finishedAt: number): void {
+    async markRunSeen(id: ConversationId, user: User, finishedAt: number): Promise<void> {
         this.requireSee(user, id);
         const current = this.#sessions[String(id)]?.finishedAt;
 
@@ -1335,11 +1446,13 @@ export class PocketApp {
 
         this.config.markFinishedSeen(user.id, String(id), finishedAt);
 
-        this.#sendSessionLists([...this.#clients].filter((client) => client.user.id === user.id));
+        await this.#sendSessionLists(
+            [...this.#clients].filter((client) => client.user.id === user.id),
+        );
     }
 
     /** Re-send a full list on the same ordered stream after a tab missed a delta. Never target another user's tab. */
-    resyncSessionList(user: User, connection: string): void {
+    async resyncSessionList(user: User, connection: string): Promise<void> {
         const client = [...this.#clients].find(
             (candidate) =>
                 candidate.connection === connection &&
@@ -1351,42 +1464,122 @@ export class PocketApp {
             throw new HttpError(404, "Session-list connection is no longer available.");
         }
 
-        this.#sendSessionLists([client], true);
+        await this.#sendSessionLists([client], true);
     }
 
-    /** Filter and prepare a list once per current user per refresh; compare/send separately for each connection. */
-    #sendSessionLists(clients: Iterable<Client>, full = false): void {
-        const rows = new Map<User, ReturnType<PocketApp["sessions"]>>();
-        const prepared = new Map<User, ReturnType<SessionLists["prepare"]>>();
+    /** One coalesced request per attached client; newer refreshes share its completion, never an unbounded queue. */
+    #sendSessionLists(clients: Iterable<Client>, full = false): Promise<void> {
+        const pending = new Set<Promise<void>>();
 
         for (const client of clients) {
+            if (this.#closing || !this.#clients.has(client)) {
+                continue;
+            }
+
+            let request = this.#sessionListPending.get(client);
+
+            if (request) {
+                request.full ||= full;
+                request.version++;
+            } else {
+                request = { full, version: 0, ...Promise.withResolvers<void>() };
+                this.#sessionListPending.set(client, request);
+            }
+
+            pending.add(request.promise);
+        }
+
+        if (!this.#sessionListRunning && this.#sessionListPending.size) {
+            this.#sessionListRunning = true;
+            this.#sessionListDrain = Promise.resolve().then(async () => {
+                try {
+                    while (this.#sessionListPending.size) {
+                        await this.#sendSessionListBatch();
+                    }
+                } finally {
+                    this.#sessionListRunning = false;
+                }
+            });
+        }
+
+        return Promise.all(pending).then(() => undefined);
+    }
+
+    /** Public rows and encoding are shared only within one refresh and one member's unchanged access. */
+    async #sendSessionListBatch(): Promise<void> {
+        const rows = new Map<User, Awaited<ReturnType<PocketApp["sessions"]>>>();
+        const prepared = new Map<User, ReturnType<SessionLists["prepare"]>>();
+        const access = new Map<
+            User,
+            { role: User["role"]; sessions: User["sessions"]; projects: number }
+        >();
+        const batch = [...this.#sessionListPending].map(([client, request]) => ({
+            client,
+            request,
+            version: request.version,
+        }));
+        // Config.updateUser replaces session scopes; project access has its own invalidation epoch.
+        const permissionKey = (user: User) => ({
+            role: user.role,
+            sessions: user.sessions,
+            projects: this.#projectAccessEpoch,
+        });
+
+        for (const { client, request, version } of batch) {
             const user = this.config.userById(client.user.id);
 
-            if (user === undefined || !this.#clients.has(client)) {
-                continue;
+            try {
+                if (user && this.#clients.has(client) && !this.#closing) {
+                    let items = rows.get(user);
+
+                    if (items === undefined) {
+                        access.set(user, permissionKey(user));
+                        items = await this.sessions(user);
+                        rows.set(user, items);
+                    }
+
+                    if (
+                        !this.#closing &&
+                        this.#clients.has(client) &&
+                        this.config.userById(user.id) === user
+                    ) {
+                        const scope = access.get(user)!;
+
+                        if (
+                            version !== request.version ||
+                            scope.role !== user.role ||
+                            scope.sessions !== user.sessions ||
+                            scope.projects !== this.#projectAccessEpoch
+                        ) {
+                            continue;
+                        }
+
+                        let list = prepared.get(user);
+
+                        if (!list) {
+                            list = client.sessionDeltas
+                                ? this.#sessionLists.prepare(items)
+                                : { items, encoded: undefined };
+
+                            if (client.sessionDeltas) {
+                                prepared.set(user, list);
+                            }
+                        }
+
+                        this.#sessionLists.send(
+                            client,
+                            client.sessionDeltas ? list : { items, encoded: undefined },
+                            request.full,
+                        );
+                    }
+                }
+
+                this.#sessionListPending.delete(client);
+                request.resolve();
+            } catch (error) {
+                this.#sessionListPending.delete(client);
+                request.reject(error);
             }
-
-            let items = rows.get(user);
-
-            if (items === undefined) {
-                items = this.sessions(user);
-                rows.set(user, items);
-            }
-
-            if (!client.sessionDeltas) {
-                this.#sessionLists.send(client, { items, encoded: undefined }, full);
-
-                continue;
-            }
-
-            let list = prepared.get(user);
-
-            if (list === undefined) {
-                list = this.#sessionLists.prepare(items);
-                prepared.set(user, list);
-            }
-
-            this.#sessionLists.send(client, list, full);
         }
     }
 
@@ -1398,13 +1591,15 @@ export class PocketApp {
         this.#sessionsTimer = setTimeout(() => {
             this.#sessionsTimer = undefined;
 
-            this.#sendSessionLists(this.#clients);
+            void this.#sendSessionLists(this.#clients).catch((error) => {
+                console.error("Session list projection failed", error);
+            });
         }, 400);
     }
 
     /** The session list, with who is in each session and its newest chat message. Scoped people see only theirs. */
-    sessions(user?: User) {
-        const nativeModels = this.kernel?.modelNames();
+    async sessions(user?: User) {
+        const nativeModels = this.kernel ? await this.kernel.modelNames() : undefined;
         const waiting = new Set(
             this.approvals.all().map((approval) => String(this.rootOf(approval.conversationId))),
         );
@@ -1422,45 +1617,51 @@ export class PocketApp {
             people.set(key, here);
         }
 
-        return Object.entries(this.#sessions)
-            .filter(
-                ([id]) =>
-                    user === undefined ||
-                    this.canSee(user, Number(id) as unknown as ConversationId),
-            )
-            .map(([id, meta]) => {
-                const conversationId = Number(id) as unknown as ConversationId;
-                const model =
-                    meta.backend === "rotom"
-                        ? nativeModels?.get(id)
-                        : this.#agents.get(conversationId)?.model?.modelId;
-                const busy = this.isBusy(conversationId);
-                const needsAnswer = this.kernel?.needsAnswer(conversationId, user) === true;
-                const here = [...(people.get(id) ?? new Map<string, string>())].map(
-                    ([userId, name]) => ({ id: userId, name }),
-                );
-                const chat = this.#lastChat.get(id);
-                const endedAt =
-                    meta.finishedAt ?? this.#endedAt.get(Number(id) as unknown as ConversationId);
-                const finishedUnread =
-                    user !== undefined &&
-                    meta.finishedAt !== undefined &&
-                    meta.finishedAt > (user.finishedSeen?.[id] ?? 0);
+        return (
+            await Promise.all(
+                Object.entries(this.#sessions)
+                    .filter(
+                        ([id]) =>
+                            user === undefined ||
+                            this.canSee(user, Number(id) as unknown as ConversationId),
+                    )
+                    .map(async ([id, meta]) => {
+                        const conversationId = Number(id) as unknown as ConversationId;
+                        const model =
+                            meta.backend === "rotom"
+                                ? nativeModels?.get(id)
+                                : this.#agents.get(conversationId)?.model?.modelId;
+                        const busy = this.isBusy(conversationId);
+                        const needsAnswer =
+                            this.kernel !== undefined &&
+                            (await this.kernel.needsAnswer(conversationId, user));
+                        const here = [...(people.get(id) ?? new Map<string, string>())].map(
+                            ([userId, name]) => ({ id: userId, name }),
+                        );
+                        const chat = this.#lastChat.get(id);
+                        const endedAt =
+                            meta.finishedAt ??
+                            this.#endedAt.get(Number(id) as unknown as ConversationId);
+                        const finishedUnread =
+                            user !== undefined &&
+                            meta.finishedAt !== undefined &&
+                            meta.finishedAt > (user.finishedSeen?.[id] ?? 0);
 
-                return {
-                    id: Number(id),
-                    ...meta,
-                    busy,
-                    waiting: waiting.has(id),
-                    ...(needsAnswer ? { needsAnswer: true } : {}),
-                    ...(endedAt === undefined ? {} : { endedAt }),
-                    ...(finishedUnread ? { finishedUnread: true } : {}),
-                    ...(model === undefined ? {} : { model }),
-                    ...(here.length === 0 ? {} : { people: here }),
-                    ...(chat === undefined ? {} : { chatAt: chat.at, chatBy: chat.userId }),
-                };
-            })
-            .sort((a, b) => b.updatedAt - a.updatedAt || a.id - b.id);
+                        return {
+                            id: Number(id),
+                            ...meta,
+                            busy,
+                            waiting: waiting.has(id),
+                            ...(needsAnswer ? { needsAnswer: true } : {}),
+                            ...(endedAt === undefined ? {} : { endedAt }),
+                            ...(finishedUnread ? { finishedUnread: true } : {}),
+                            ...(model === undefined ? {} : { model }),
+                            ...(here.length === 0 ? {} : { people: here }),
+                            ...(chat === undefined ? {} : { chatAt: chat.at, chatBy: chat.userId }),
+                        };
+                    }),
+            )
+        ).sort((a, b) => b.updatedAt - a.updatedAt || a.id - b.id);
     }
 
     isBusy(id: ConversationId): boolean {
@@ -1578,6 +1779,7 @@ export class PocketApp {
             return false;
         }
 
+        this.requireArchiveWriteAllowed(request.conversationId);
         const refused = allow ? this.cannotAllow(user, request) : undefined;
 
         if (refused !== undefined) {
@@ -1744,6 +1946,14 @@ export class PocketApp {
         }
 
         client.conversationId = undefined;
+
+        if (client.subscriptionGeneration !== undefined) {
+            client.send("subscription", {
+                generation: client.subscriptionGeneration,
+                conversationId: id,
+            });
+        }
+
         client.send("missing", { conversationId: id, message });
         this.#leaveRoom(client, id);
     }
@@ -1766,7 +1976,7 @@ export class PocketApp {
             }
 
             client.send("hello", this.#helloFor(client, await this.hello(user)));
-            this.#sendSessionLists([client], true);
+            await this.#sendSessionLists([client], true);
         }
     }
 
@@ -1806,10 +2016,11 @@ export class PocketApp {
         return this.#agents.get(id)?.cwd ?? this.#sessions[String(id)]?.cwd ?? this.defaultCwd;
     }
 
-    configuration(id: ConversationId): ConfigurationSnapshot | undefined {
+    async configuration(id: ConversationId): Promise<ConfigurationSnapshot | undefined> {
         if (
             this.sessionMeta(id)?.backend === "rotom" &&
-            this.kernel?.executions.journal.hasConversation(String(id))
+            this.kernel &&
+            (await this.kernel.executions.journal.hasConversation(String(id)))
         ) {
             return this.kernel.configuration(id);
         }
@@ -1818,8 +2029,8 @@ export class PocketApp {
     }
 
     /** Pi's skills in a conversation's folder, to run as `/skill:name`. */
-    skillCommands(id: ConversationId): SkillCommand[] {
-        const snapshot = this.configuration(id);
+    async skillCommands(id: ConversationId): Promise<SkillCommand[]> {
+        const snapshot = await this.configuration(id);
 
         if (snapshot) {
             return snapshot.skills;
@@ -1851,130 +2062,29 @@ export class PocketApp {
 
     // ─── Extensions ─────────────────────────────────────────────────────────
 
-    /** Server extension management is available only in the non-Team legacy runtime. */
-    #serviceExtensionLoader(): ExtensionLoader {
-        if (!this.loader) {
-            throw new HttpError(
-                404,
-                "Team supports Agent Extensions only. Configure team-agent or the project's .pi directory.",
-            );
-        }
-
-        return this.loader;
-    }
-
-    /** Whether Lancet Guard's module is on here; Pi's own setting may still turn the guard off. */
+    /** Legacy server extensions are unavailable; native Agent Extensions are the only supported path. */
     guardOn(): boolean {
-        return this.loader?.enabled(GUARD_FILE) ?? false;
+        return false;
     }
 
-    /** Lancet Guard as it applies here: Pi's own setting, unless the guard extension is off in Pi Pocket. */
     async guardStatus(): Promise<GuardStatus> {
-        const status = await this.guard.status();
-
-        if (this.guardOn()) {
-            return status;
-        }
-
         return {
-            available: status.available,
+            available: false,
             enabled: false,
-            detail: "Lancet Guard is off in Pi Pocket: bash, write, and edit calls run unchecked here.",
+            detail: ARCHIVE_COPY.guardUnavailable,
         };
     }
 
-    /** The extension modules, as this person may see them: where the server keeps files is for the owner only. */
-    async extensions(
-        user: User,
-    ): Promise<{ modules: ExtensionInfo[]; guard: GuardStatus; dropIns?: string }> {
-        const owner = user.role === "owner";
-        // A load error can name the server's folders too.
-        const modules = this.#serviceExtensionLoader()
-            .list()
-            .map(({ path, error, ...module }) =>
-                owner
-                    ? {
-                          ...module,
-                          ...(path === undefined ? {} : { path }),
-                          ...(error === undefined ? {} : { error }),
-                      }
-                    : {
-                          ...module,
-                          ...(error === undefined ? {} : { error: "It failed to load." }),
-                      },
-            );
-
-        // The guard row shows Pi's own setting, so the owner can tell "off here" from "off everywhere".
-        return {
-            modules,
-            guard: await this.guard.status(),
-            ...(owner ? { dropIns: join(this.dataDir, "extensions") } : {}),
-        };
+    async extensions(_user: User): Promise<never> {
+        throw new HttpError(404, ARCHIVE_COPY.extensionsUnavailable);
     }
 
-    /** Turn an extension module on or off for every session, now and after restarts. */
-    async setExtensionEnabled(user: User, file: string, enabled: boolean): Promise<void> {
-        const loader = this.#serviceExtensionLoader();
-        const module = loader.list().find((each) => each.file === file);
-
-        if (module === undefined) {
-            throw new HttpError(404, `There is no extension module ${file}`);
-        }
-
-        if (module.required && !enabled) {
-            throw new HttpError(400, `${module.title} is required and cannot be turned off`);
-        }
-
-        if (module.enabled === enabled) {
-            return;
-        }
-
-        this.config.setExtensionEnabled(file, enabled);
-
-        try {
-            await loader.apply(file);
-        } catch (error) {
-            throw new HttpError(
-                500,
-                `${module.title} is on but failed to load: ${describe(error)}`,
-            );
-        } finally {
-            await this.#refreshClients();
-        }
-
-        if (file === GUARD_FILE && enabled) {
-            void this.guard.warm().catch(() => {});
-        }
-
-        if (file === BROWSER_FILE && !enabled) {
-            await this.browsers.closeAll();
-        }
-
-        this.notice(
-            enabled ? "info" : "warning",
-            `${user.name} turned ${module.title} ${enabled ? "on" : "off"}.`,
-        );
+    async setExtensionEnabled(_user: User, _file: string, _enabled: boolean): Promise<never> {
+        throw new HttpError(404, ARCHIVE_COPY.extensionsUnavailable);
     }
 
-    async reloadExtension(file: string): Promise<void> {
-        const loader = this.#serviceExtensionLoader();
-        const module = loader.list().find((each) => each.file === file);
-
-        if (module === undefined) {
-            throw new HttpError(404, `There is no extension module ${file}`);
-        }
-
-        if (!module.enabled) {
-            throw new HttpError(409, `${module.title} is off`);
-        }
-
-        try {
-            await loader.reload(file);
-        } catch (error) {
-            throw new HttpError(500, `${module.title} failed to load: ${describe(error)}`);
-        } finally {
-            await this.#refreshClients();
-        }
+    async reloadExtension(_file: string): Promise<never> {
+        throw new HttpError(404, ARCHIVE_COPY.extensionsUnavailable);
     }
 
     /** The owner changes who may allow risky calls. */
@@ -2010,9 +2120,9 @@ export class PocketApp {
 
     // ─── Browser ────────────────────────────────────────────────────────────
 
-    /** The browser is on while its extension module is: the owner turns both off together in Extensions. */
+    /** Legacy browser extensions are not loaded in Team. */
     browserOn(): boolean {
-        return this.loader?.extensionNames().includes(BROWSER_EXTENSION) ?? false;
+        return false;
     }
 
     #browserEvent(conversationId: ConversationId, state: BrowserState) {
@@ -2030,33 +2140,76 @@ export class PocketApp {
             this.#unsubscribeCommits?.();
             this.#unsubscribeApprovals?.();
             this.#unsubscribeBrowsers?.();
-            this.loader?.close();
 
             for (const client of this.#clients) {
                 client.send("closing", {});
             }
 
-            for (const pending of this.#rooms.values()) {
-                void pending.then(
-                    (room) => room.close(),
-                    () => {},
-                );
-            }
-
+            await Promise.all(
+                [...this.#rooms.values()].map((pending) =>
+                    pending.then(
+                        (room) => room.close(),
+                        () => {},
+                    ),
+                ),
+            );
+            await this.#sessionListDrain;
             this.providers.close();
-            await this.kernel?.close();
+            const failures: unknown[] = [];
+
+            const failed = (error: unknown) => {
+                if (!this.#storageWorker) {
+                    throw error;
+                }
+
+                failures.push(error);
+            };
 
             try {
-                // Close writes no outcome: running work resumes when the next process opens the storage.
-                await this.harness?.close(context);
+                await this.kernel?.close();
+            } catch (error) {
+                failed(error);
+            }
+
+            try {
+                // A failed worker must not prevent parent-owned legacy tasks/resources from being stopped too.
+                try {
+                    await this.harness?.close(context);
+                } catch (error) {
+                    failed(error);
+                }
 
                 for (const env of this.#envs.values()) {
-                    await env.cleanup(context);
+                    try {
+                        await env.cleanup(context);
+                    } catch (error) {
+                        failed(error);
+                    }
+                }
+
+                // Environments can still own legacy child resources after Harness joins its invocations.
+                // Do not release either writer lease until that parent-owned cleanup is confirmed too.
+                if (this.#storageWorker && failures.length === 0) {
+                    await this.#storageWorker.close();
+                }
+
+                if (failures.length > 0) {
+                    throw new AggregateError(
+                        failures,
+                        "Shutdown incomplete; writer leases remain fenced",
+                    );
                 }
             } finally {
                 // After the harness: a browser call cut off by the stop resumes as interrupted, not as failed.
                 await this.browsers.closeAll({ final: true }).catch(() => {});
-                rmSync(this.#lockFile, { force: true });
+
+                try {
+                    this.config.flush();
+                } finally {
+                    if (!this.#storageWorker || this.#storageWorker.closed) {
+                        rmSync(this.#lockFile, { force: true });
+                    }
+                }
             }
         })();
 

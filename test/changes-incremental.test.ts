@@ -3,13 +3,13 @@
 import {
     type App,
     cleanUp,
+    context,
     lastText,
-    newSession,
     openApp,
     owner,
     root,
-    say,
     scriptedModel,
+    seedHistoricalSession,
 } from "./helpers.ts";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -198,65 +198,31 @@ after(async () => {
     cleanUp();
 });
 
-test("Changes reads only the entries appended since the last request and sees each new edit", async () => {
-    const id = await newSession(app, repo);
-    const transcripts = app.transcripts;
-    const original = transcripts.entriesAfter.bind(transcripts);
-    const reads: { after: number | undefined; count: number; last: number | undefined }[] = [];
+test("Changes reads historical entries while archive edits remain unchanged", async () => {
+    const id = await seedHistoricalSession(app, repo);
+    const before = await (await app.harness.conversation(id, context))!.entries(
+        {},
+        100,
+        undefined,
+        context,
+    );
 
-    transcripts.entriesAfter = async (conversation, afterId, full) => {
-        const read = await original(conversation, afterId, full);
+    await assert.rejects(
+        app.commands.submit(id, owner(app), {
+            text: "write first.txt",
+            requestId: "changes-archive",
+        }),
+        /read-only archive/,
+    );
+    const changes = await app.workspace.changes(id, owner(app));
 
-        if (conversation === id) {
-            reads.push({ after: afterId, count: read.entries.length, last: read.last });
-        }
+    assert.deepEqual(changes.files, []);
+    const after = await (await app.harness.conversation(id, context))!.entries(
+        {},
+        100,
+        undefined,
+        context,
+    );
 
-        return read;
-    };
-
-    try {
-        await say(app, id, "write first.txt");
-        const first = await app.workspace.changes(id, owner(app));
-
-        assert.deepEqual(
-            first.files.map(({ path, byPi }) => [path, byPi]),
-            [["first.txt", true]],
-        );
-        assert.equal(reads.length, 1);
-        assert.equal(reads[0]!.after, undefined, "the first request folds the whole history");
-
-        await say(app, id, "write second.txt");
-        writeFileSync(join(repo, "base.txt"), "changed by a person\n");
-        const concurrent = await Promise.all(
-            Array.from({ length: 4 }, () => app.workspace.changes(id, owner(app))),
-        );
-
-        for (const changes of concurrent) {
-            assert.deepEqual(changes, concurrent[0]);
-        }
-
-        assert.deepEqual(
-            concurrent[0]!.files.map(({ path, byPi }) => [path, byPi]),
-            [
-                ["base.txt", false],
-                ["first.txt", true],
-                ["second.txt", true],
-            ],
-        );
-        assert.ok(
-            reads.length <= 3,
-            `four concurrent requests read at most twice: ${reads.length}`,
-        );
-        assert.equal(reads[1]!.after, reads[0]!.last, "the next read starts after the last one");
-        assert.ok(reads[1]!.count > 0 && reads[1]!.count < reads[0]!.count + 4);
-
-        // Nothing appended: a read with nothing new, and the same answer.
-        const again = await app.workspace.changes(id, owner(app));
-
-        assert.deepEqual(again, concurrent[0]);
-        assert.equal(reads.at(-1)!.count, 0);
-        assert.equal(reads.at(-1)!.last, reads.at(-1)!.after);
-    } finally {
-        transcripts.entriesAfter = original;
-    }
+    assert.deepEqual(after, before);
 });

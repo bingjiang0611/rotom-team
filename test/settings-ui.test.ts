@@ -1,7 +1,15 @@
 // Settings, in a real browser where this machine has Chromium: everything app-wide has one way in, the settings window,
 // from the sidebar's foot or the folded rail; any of its sheets opened from elsewhere opens there; the session menu keeps
 // only the session's own actions.
-import { type App, cleanUp, newSession, openApp, root, scriptedModel, until } from "./helpers.ts";
+import {
+    type App,
+    cleanUp,
+    seedHistoricalSession,
+    openApp,
+    root,
+    scriptedModel,
+    until,
+} from "./helpers.ts";
 import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
@@ -127,7 +135,7 @@ before(async () => {
         load: async () => undefined,
         save: () => {},
     });
-    session = await newSession(app);
+    session = await seedHistoricalSession(app);
     page = await browsers.open(1);
     await page.setViewport(VIEWPORTS.desktop);
     await page.navigate(`${base}/login?token=${encodeURIComponent(app.config.ownerToken)}`);
@@ -368,13 +376,18 @@ test(
         await until(() => present('form button[type="submit"]'), "confirmation page");
         assert.ok((await bodyText()).includes("Continuing switches it"));
         assert.equal(app.config.devices(member.user.id).length, 0, "GET does not sign in");
-        await tap('form button[type="submit"]');
         const signedIn = () =>
             inPage<string | null>(`
+        // A form click starts navigation; the old confirmation page has no import map.
+        if (document.readyState === 'loading' || !document.querySelector('script[type="importmap"]')) {
+            return JSON.stringify(null);
+        }
         const { store } = await import('/store.js');
         return JSON.stringify(store.state.me?.id ?? null);
     `);
 
+        assert.equal(await signedIn(), null, "the confirmation page is not the signed-in app");
+        await tap('form button[type="submit"]');
         await until(
             async () => (await signedIn()) === member.user.id,
             "signed in as original member",

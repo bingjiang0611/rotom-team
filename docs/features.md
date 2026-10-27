@@ -2,7 +2,9 @@
 
 For the rotom team alpha's actual scope and limitations, see [README](../README.md) and [PRODUCT.md](PRODUCT.md). Personal accounts replace shared provider credentials; cross-account queueing/compaction, scheduling and automatic goals are not enabled. This inherited tour is not a claim that all upstream features are supported by this fork.
 
-The full tour. For setup, see the [README](../README.md).
+D9c removes Team's old repository service-extension modules. User drop-in source and enabled/disabled records remain intact and unloaded. The upstream extension installation/reload tour below is not Team setup guidance; use [native Agent Extensions](AGENT-CONFIGURATION.md). Legacy sessions are [read-only archives](LEGACY-ARCHIVE.md).
+
+The full upstream tour. For Team setup, see the [README](../README.md).
 
 - **Durable runs.** Every model request, tool call, queued message, and subagent is a durable task in one SQLite file. Kill the server mid-run and start it again: the run continues. A tool call that was cut off reruns if it is safe to; otherwise the model is told it was interrupted.
 - **Omarchy themes.** All of Omarchy's themes, from Tokyo Night and Gruvbox to Rosé Pine and the light ones, drawn from each theme's own `colors.toml`, with Omarchy's look: square tiles, 2px window borders, no shadows or blur, and JetBrains Mono throughout (bundled in `web/fonts/` under the SIL Open Font License). Settings → **Appearance** (or the launcher, or `/theme gruvbox`) picks one; the new look grows as a circle from where you tapped. **Desktop** follows the Omarchy theme of the machine Pi Pocket runs on: change your desktop's theme and the app follows within seconds, optionally with your wallpaper in the gaps.

@@ -16,10 +16,12 @@ account; the paying member changes model in place, in the same native session. S
 
 ## Shared installation and configuration
 
-Team supports native Agent Extensions only. In Team kernel mode, the inherited server extension loader is absent:
-`src/server/extensions/` and `<data>/extensions/` are not loaded or watched, no drop-in dependency link is created,
-and the old `/api/extensions` listing/toggle/reload endpoints return 404 for authorized requests. Existing files and
-switch records are retained. The non-Team legacy runtime still owns those modules; it is not an Agent configuration path.
+Team supports native Agent Extensions only. D9c removes the repository's old `src/server/extensions/` modules.
+In both kernel and read-only archive modes, the server extension loader is absent. User `<data>/extensions/`
+source files and enabled/disabled records are retained but never loaded or watched; no drop-in dependency link is created.
+The old `/api/extensions` listing/toggle/reload endpoints return 404 for authorized requests.
+D9c does not migrate data formats: D9b/D9a can reopen the same data without reviving quarantined tasks.
+For pre-D9a rollback restrictions, see [LEGACY-ARCHIVE.md](LEGACY-ARCHIVE.md).
 For paths, examples, package installation and reload steps, use [AGENT-CONFIGURATION.md](AGENT-CONFIGURATION.md).
 
 The owner manages `<data>/team-agent` using the pinned native resource layout:
@@ -87,6 +89,37 @@ Shared `extensions/pi-computer-use.json` is copied as declared native configurat
 owner declaration. Trusted project code runs with the service OS user's permissions; this is not filesystem or credential
 isolation from that code. Review project packages before enabling this release.
 
+## Optional storage worker
+
+`--storage-worker` opts the native-kernel server into one database worker. It is **off by default**;
+`--no-storage-worker` explicitly keeps the D8a in-process path. `PocketApp.open` also accepts
+`storageWorker: true`. Combining it with `--no-rotom-kernel` is rejected before acquiring a writer lease.
+This is a startup option, not a live toggle. Existing Durable sessions remain readable archives, not executable sessions. `--no-rotom-kernel` permits archive access only; it cannot bypass pending native ownership checks. See [LEGACY-ARCHIVE.md](LEGACY-ARCHIVE.md) for quarantine and rollback.
+
+Only `RotomJournal` and the public Pi Durable `Storage` run in that worker. Harness, transaction callbacks,
+mutation queue, mirror coordination, permissions, personal credentials, native processes and the payer gate stay
+on the parent. The worker receives explicit data paths and an empty environment, not caller Context values or
+credential objects. It is trusted code in the same OS process, **not a sandbox**.
+
+Operations execute FIFO with full transaction boundaries. V8 values are limited to 256 MiB after serialization;
+accepted ordinary requests are capped at 128 (including the active request) and 256 MiB combined encoded bytes.
+Transport uses 1 MiB pages with one page in flight per direction; it still materializes the whole value at each end.
+Three deduplicated, argument-free lifecycle closes have reserved capacity so a full ordinary queue can drain.
+These are transport bounds, not a global heap/RSS limit or a maximum queue-wait promise.
+
+An admitted operation must receive its durable ACK. Cancellation can remove a queued request, but cannot declare
+a dispatched write rolled back. Startup, active-operation ACK and final exit deadlines are 120 seconds.
+Lost ACK, transport failure, unexpected exit or failed close fence the owner; they do not trigger a retry,
+restart, parent-side writer, fallback reader or automatic lock removal. A reply exceeding the limit can follow
+a completed write and therefore fences as unknown. Acknowledged backend errors retain the public Storage error
+classification: only actual `StorageRejected` remains that class; other errors poison the owning Durable Session.
+
+Shutdown stops native admission, drains native/gate/child ownership and startup continuation work, then closes both
+stores. Parent execution environments must finish cleanup before final owner close; only its ACK **and** worker exit
+release leases. Failed storage must not skip native
+shutdown. An incomplete shutdown retains `kernel.lock` and `harness.lock`; a dead parent PID alone never authorizes
+breaking them. Recovery requires the existing offline ownership checks, not another live writer.
+
 ## Native process lifetime
 
 One native process is retained per immutable conversation segment after successful prompts and commands. MCP connections
@@ -94,6 +127,16 @@ and extension memory survive between turns. Each new receipt is authorized separ
 idle. Failures/unknown outcomes retire the process, and handoff retires the old binding. Stop does not reuse the stopped
 transport. Server shutdown awaits closure of retained processes before releasing its journal lock. No idle eviction or
 cross-restart in-memory restoration is claimed; reopening after restart uses the persisted native session.
+
+Public-history seeds (handoff, public fork and import) are sized by the UTF-8 bytes of the serialized
+`publicNativeHistory` result. Below 8 MiB, the parent runs the existing file helpers directly; at or above
+8 MiB, one operation-owned, short-lived Node worker runs them. Empty history still needs no file or worker.
+Both paths durably attach before appending, fsync the file/directory, verify the full readback, and recheck
+authorization and Stop before committing the head. The worker path also waits for worker exit; Stop joins it.
+Small synchronous file operations cannot be preempted by a queued HTTP Stop; an observed Stop prevents commit.
+An uncertain materialization is not retried or reused. An active execution still prevents journal closure.
+This is not a storage worker, agent process or shared pool. No new configuration setting or global memory cap is
+introduced; large parallel materializations require capacity validation.
 
 Opening an idle native session that runs on one's own account asks the server to start its process after the first
 authoritative full view, before composer focus or the first send. Hidden tabs defer until visible; cached/checking
@@ -257,8 +300,14 @@ branches. Navigation does not delete those records. A notice identifies this aft
 versus abandoned branch entries. Native JSONL export follows the selected branch. Compaction may further reduce the
 context sent to a model; branch membership is not a promise that every ancestor message is sent verbatim.
 
-Native status/widget events replace or clear keyed live slots; only real `notify` events create notices. A `handled`
-receipt means the handler completed, not that a requested navigation occurred: inspect its cancellation/result.
+Native status/widget events replace or clear keyed live slots. Ordinary `notify` text/JSON creates notices;
+Team's existing `team-kernel-*-v1` notify envelopes are private controls, not notices. The shared decoder validates
+children/policy/barrier/tree/context fields before dispatch to readers; command adapters still correlate their own
+nonce. Unknown reserved kinds, invalid fields or malformed reserved `{"kind":"team-kernel-` prefixes fence the RPC
+transport as unknown, without replay or payload logging. Other incomplete JSON remains ordinary notification text.
+The wire format and pinned native sender are unchanged.
+
+A `handled` receipt means the handler completed, not that a requested navigation occurred: inspect its cancellation/result.
 Side-effectful slash handlers use `command` receipts and are not automatically continued after unknown outcomes.
 Only native-discovered prompt templates/skills become ordinary recoverable `prompt` operations. Existing stored
 receipts stay readable and are not rewritten. Goal Stop may remain unknown; it does not certify external effects.
@@ -356,8 +405,35 @@ small/animated/unknown images, unsupported browsers and failed/unhelpful convers
 raise the 5 MiB per-model-image limit: a noisy PNG may still be too large to send.
 
 Live event streams and large long-poll responses negotiate gzip when accepted. Events flush immediately; an SSE
-client with more than 8 MiB of buffered data is disconnected so it can reconnect for a fresh view. Long-history
-pagination is not implemented yet.
+client with more than 8 MiB of buffered data is disconnected so it can reconnect for a fresh view. A long-poll
+connection likewise retains at most 8 MiB of serialized UTF-8 event data (including separators, plus a fixed response
+envelope). Each event is serialized once; unacknowledged responses reuse those bytes. Overflow closes and detaches
+the poller instead of returning a partial view; the next poll receives a new session and full view. An individual
+initial event larger than the limit cannot be delivered through that connection. Use the supported history tail/pages
+below; supporting an oversized single event requires a separately designed bounded event protocol.
+
+## Session subscriptions
+
+Each new web tab keeps one SSE connection or long-poll session while switching conversations, including Back/Forward
+and returning home. `subscriptions=1&generation=N` opts in on the initial GET; `hello.subscriptions` confirms support.
+`POST /api/subscribe` carries the authenticated connection id, a strictly newer safe-integer generation, a numeric
+`conversationId` (or `null` for home), and an optional saved-view `have` claim. It uses the normal authenticated,
+`X-Pocket: 1` write guard. It changes only the read subscription, not a user's send or native execution.
+
+The server checks connection ownership, removes the previous room synchronously, and checks access both before and
+after opening the new room. Older/equal generations cannot undo a newer selection. An ordered `subscription` event
+acknowledges the generation and target before its full view or missing result; home needs only the ACK. Room events
+(`view`, `missing`, `chat`, `notes`, `browser`, `presence`, `changes`) use `{ generation, data }` envelopes. The tab
+rejects events from another generation or room, including an old A snapshot after A→B→A. Global events remain unwrapped;
+normal switches do not repeat hello or reset the session-list version. Poll queues freeze the generation at enqueue,
+retain their transport sequence across switches, and reject invalid/future sequence ACKs without discarding data.
+
+Old tabs keep their original unwrapped format and reconnect behavior. A new tab also reconnects when an older server
+does not negotiate support. Saved-copy reads do not paint after the member/access key changes. A lost subscription
+response or six seconds without its completed view/ACK replaces only the read connection; the POST and user send are
+not replayed. SSE network errors reconnect with the latest route, not the original EventSource URL. After poll expiry
+or server restart, the client discards the replacement batch for the obsolete URL, closes that poller and opens a fresh
+connection for the current route. This exceptional recovery can require an extra handshake; normal switches do not.
 
 ## Session-list updates
 
@@ -386,6 +462,18 @@ Copies belong to one person and one level of access. Signing out (Settings or an
 So does a change of the signed-in person, role or session grants. A session the server says is missing loses its copy,
 and copies of sessions no longer in the person's list are dropped. Anyone using the same browser profile before
 sign-out could read the copies. Where IndexedDB is unavailable, nothing is saved.
+
+## Streaming Markdown
+
+Live text/thinking/tool updates refresh the transcript locally when busy and all non-live data are unchanged.
+Busy, permission/account, native status/dialog/widget, cost and persisted-entry changes still refresh the whole UI.
+This does not filter store notifications, change subscription order or alter transport/authorization behavior.
+
+Growing Markdown text updates are combined per browser animation frame. The first text and completed result render
+without waiting for a frame; completion still uses the full parser and sanitizer, including final code folding.
+A paused/background frame may delay intermediate text, never the completed result's render. Conversation or document
+base-path changes invalidate immediately, and unmounting cancels pending work. No stream versions are persisted.
+The transcript keeps following content height while the reader is at the bottom; scrolling up still stops following.
 
 ## Long sessions
 

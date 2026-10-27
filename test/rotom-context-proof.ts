@@ -68,7 +68,7 @@ writeFileSync(
 const executions = new RotomExecutions(data, async () => {});
 
 try {
-    executions.journal.bind("context", {
+    await executions.journal.bind("context", {
         memberId: "alice",
         kernelVersion: verifyRotomKernel().version,
         accountGeneration: "synthetic-only",
@@ -117,8 +117,8 @@ try {
     assert.equal(injections.captured, true);
     assert.ok(injections.groups.some((group: { native: boolean }) => group.native));
     assert.equal(requests, 1, "opening either view does not make additional inference");
-    assert.equal(executions.journal.usage("context").length, 1, "context is not billed");
-    const segment = executions.journal.session("context");
+    assert.equal((await executions.journal.usage("context")).length, 1, "context is not billed");
+    const segment = await executions.journal.session("context");
     const before = readFileSync(segment.sessionFile!, "utf8");
     const duplicate = await executions.run("context", "context-usage", "/context usage");
 

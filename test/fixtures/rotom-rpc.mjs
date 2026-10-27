@@ -107,6 +107,47 @@ for await (const line of input) {
         continue;
     }
 
+    if (mode.startsWith("control-bad-")) {
+        const messages = {
+            "control-bad-json": '{"kind":"team-kernel-children-v1",',
+            "control-bad-kind": '{"kind":"team-kernel-future-v1"}',
+            "control-bad-count": '{"kind":"team-kernel-children-v1","pending":-1}',
+        };
+
+        emit({ type: "extension_ui_request", method: "notify", message: messages[mode] });
+        response({ disposition: "handled" });
+        continue;
+    }
+
+    if (mode === "control-views" || mode === "control-wrong-nonce") {
+        const name = command.message.split(" ")[0];
+        const args = command.message.slice(name.length + 1);
+        const input = name === "/team-kernel-barrier" ? { nonce: args } : JSON.parse(args);
+        const nonce = mode === "control-wrong-nonce" ? "not-your-nonce" : input.nonce;
+        const controls = {
+            "/team-kernel-context": {
+                result: { text: "x".repeat(20_000) },
+                nonce,
+                kind: "team-kernel-context-v1",
+            },
+            "/team-kernel-tree": {
+                result: { cancelled: false, editorText: "draft" },
+                nonce,
+                kind: "team-kernel-tree-v1",
+            },
+            "/team-kernel-barrier": { ok: true, nonce, kind: "team-kernel-barrier-v1" },
+        };
+
+        emit({ type: "extension_ui_request", method: "notify", message: "ordinary notification" });
+        emit({
+            type: "extension_ui_request",
+            method: "notify",
+            message: JSON.stringify(controls[name], null, 2),
+        });
+        response({ disposition: "handled" });
+        continue;
+    }
+
     if (mode === "exit") {
         process.exit(0);
     }

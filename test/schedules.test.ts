@@ -1,24 +1,9 @@
 // Scheduled messages: reading times as people write them, and durable tasks that send them later, across restarts.
-import {
-    type App,
-    cleanUp,
-    context,
-    lastText,
-    newSession,
-    openApp,
-    owner,
-    recordCost,
-    root,
-    scriptedModel,
-    until,
-} from "./helpers.ts";
+import { context, seedHistoricalSession, openApp, owner, root, scriptedModel } from "./helpers.ts";
 import assert from "node:assert/strict";
 import { join } from "node:path";
-import { after, before, test } from "node:test";
-import type { FauxResponseStep } from "@earendil-works/pi-ai";
-import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai/providers/faux";
-import type { ConversationId } from "@earendil-works/pi-durable";
-import { AuthorsDoc, ChatDoc, ScheduleDoc } from "../src/server/docs.ts";
+import { test } from "node:test";
+import { ScheduleDoc } from "../src/server/docs.ts";
 import {
     describeMoment,
     describeRepeat,
@@ -119,327 +104,95 @@ test("clock times hold across daylight saving changes", () => {
     assert.equal(describeMoment(Date.UTC(2026, 9, 20, 12), chicago, sunday), "Oct 20 07:00");
 });
 
-/** Pi schedules its own follow-up, lists, and cancels, as the last message asks. */
-const route: FauxResponseStep = (request) => {
-    const { role, text } = lastText(request as never);
-    const call = (args: Parameters<typeof fauxToolCall>[1]) =>
-        fauxAssistantMessage([fauxToolCall("schedule", args)], { stopReason: "toolUse" });
-
-    if (role === "toolResult") {
-        return fauxAssistantMessage([fauxText(`tool said: ${text}`)]);
-    }
-
-    if (text.endsWith("remind yourself")) {
-        return call({ action: "add", when: "in 15m", message: "look at the deploy again" });
-    }
-
-    if (text.endsWith("list them")) {
-        return call({ action: "list" });
-    }
-
-    const cancel = /cancel (\w+)$/.exec(text)?.[1];
-
-    if (cancel !== undefined) {
-        return call({ action: "cancel", id: cancel });
-    }
-
-    return fauxAssistantMessage([fauxText(`echo: ${text}`)]);
-};
-
-const model = scriptedModel(route);
-const dataDir = join(root, "data");
-let app: App;
-/** How far ahead of the real time the server's clock is. */
-let ahead = 0;
-
-before(async () => {
-    app = await openApp(model, dataDir);
-});
-
-after(async () => {
-    await app?.close();
-    cleanUp();
-});
-
-/** Restart the server with its clock `minutes` further ahead. Returns the server's time as it starts. */
-async function restartLater(minutes: number): Promise<number> {
-    await app.close();
-    ahead += minutes * 60_000;
-    const offset = ahead;
-    const startsAt = Date.now() + offset;
-
-    app = await openApp(model, dataDir, () => Date.now() + offset);
-
-    return startsAt;
-}
-
-async function say(id: ConversationId, text: string, user = owner(app)): Promise<void> {
-    const { submissionId } = await app.commands.submit(id, user, {
-        text,
-        requestId: crypto.randomUUID(),
-    });
-
-    await (await app.harness.submission(submissionId, context))!.wait(context);
-}
-
-async function userTexts(id: ConversationId): Promise<string[]> {
-    const page = await (await app.harness.conversation(id, context))!.entries(
-        {},
-        100,
-        undefined,
-        context,
-    );
-
-    return page.items
-        .filter((entry) => entry.kind === "pi.user")
-        .map((entry) => JSON.stringify(entry.model));
-}
-
-const items = async (id: ConversationId) =>
-    Object.values((await app.harness.snapshot(ScheduleDoc, id, context))?.items ?? {});
-
-test("a scheduled message goes out at its time, also after a restart, once; a repeat goes back to sleep", async () => {
-    const id = await newSession(app);
-    const once = await app.commands.schedule(id, owner(app), {
-        when: "in 10m check the build",
-        zone: "UTC",
-    });
-
-    assert.equal(once.text, "check the build");
-    assert.equal(once.content, "[scheduled] check the build");
-    const repeat = await app.commands.schedule(id, owner(app), {
-        when: "every 20m ping",
-        zone: "UTC",
-    });
-    const chat = (await app.harness.snapshot(ChatDoc, id, context))!.messages.map(
-        (message) => message.text,
-    );
-
-    assert.match(chat[0]!, /^scheduled “check the build” for \w{3} \d\d:\d\d$/);
-    assert.equal(chat[1], "scheduled “ping” every 20 minutes");
-
-    // Eleven minutes on, after a restart: the first goes out, the repeat waits.
-    await restartLater(11);
-    await until(
-        async () =>
-            (await userTexts(id)).some((text) => text.includes("[scheduled] check the build")),
-        "the scheduled message to go out",
-    );
-    await until(async () => (await items(id)).length === 1, "the sent one to be done");
-    assert.equal((await items(id))[0]?.id, repeat.id);
-    // It went out as the owner's message: who set it up.
-    const page = await (await app.harness.conversation(id, context))!.entries(
-        {},
-        100,
-        undefined,
-        context,
-    );
-    const sent = page.items.find(
-        (entry) =>
-            entry.kind === "pi.user" && JSON.stringify(entry.model).includes("check the build"),
-    )!;
-
-    await until(
-        async () =>
-            (await app.harness.snapshot(AuthorsDoc, id, context))?.entries[String(sent.id)] ===
-            owner(app).id,
-        "the owner to be its author",
-    );
-    // A restart in the middle of sending runs that phase again, and it sends with the same request id: Pi Durable
-    // takes that message once.
-    const conversation = (await app.harness.conversation(id, context))!;
-
-    await conversation.submit(
-        {
-            type: "input",
-            content: once.content,
-            whenBusy: "followUp",
-            requestId: `u:${owner(app).id}:schedule-${String(once.taskId)}-0`,
-        },
-        context,
-    );
-    assert.equal(
-        (await userTexts(id)).filter((text) => text.includes("[scheduled] check the build")).length,
-        1,
-    );
-
-    // Ten minutes later: the repeat goes out once and sleeps until 20 minutes after it went out.
-    const sentAt = await restartLater(10);
-
-    await until(async () => (await items(id))[0]?.runs === 1, "the repeat to go out");
-    const [next] = await items(id);
-
-    assert.ok(
-        next!.next >= sentAt + 20 * 60_000,
-        "20 minutes after it went out, not after when it was due",
-    );
-    // Sent while Pi may still be answering, it waits in the queue a moment before it is in the transcript.
-    await until(
-        async () => (await userTexts(id)).some((text) => text.includes("[scheduled] ping")),
-        "the repeat's message",
-    );
-    assert.equal(
-        (await userTexts(id)).filter((text) => text.includes("[scheduled] ping")).length,
-        1,
-    );
-    assert.equal(
-        (await userTexts(id)).filter((text) => text.includes("[scheduled] check the build")).length,
-        1,
-        "never twice",
-    );
-    await app.commands.cancelSchedule(id, owner(app), repeat.id);
-    assert.deepEqual(await items(id), []);
-    await assert.rejects(app.commands.cancelSchedule(id, owner(app), repeat.id), { status: 404 });
-});
-
-test("Pi schedules, lists, and cancels its own messages with its tool", async () => {
-    const id = await newSession(app);
-
-    await say(id, "remind yourself");
-    const [mine] = await items(id);
-
-    assert.equal(mine?.text, "look at the deploy again");
-    assert.equal(mine?.by, undefined, "Pi set it");
-    await say(id, "list them");
-    await say(id, `cancel ${mine!.id}`);
-    assert.deepEqual(await items(id), []);
-    const said = (await userTexts(id)).join("\n");
-
-    assert.doesNotMatch(said, /\[scheduled\]/);
-    const answers = (await (await app.harness.conversation(id, context))!.context(context)).messages
-        .map((message) => JSON.stringify(message.content))
-        .join("\n");
-
-    assert.match(
-        answers,
-        new RegExp(`tool said: ${mine!.id}: \\w{3} \\d\\d:\\d\\d · look at the deploy again`),
-    );
-    assert.match(answers, new RegExp(`tool said: Cancelled ${mine!.id}\\.`));
-});
-
-test("a schedule Pi sets up is the work of whom it worked for, and is cancelled once they may not steer", async () => {
-    const id = await newSession(app);
-    const hal = app.config.addUser("Hal", "guest").user;
-    const ida = app.config.addUser("Ida", "guest").user;
-
-    await say(id, "remind yourself", hal);
-    await say(id, "remind yourself", ida);
-    await say(id, "something else");
-    // Items are keyed by random schedule ids, so their order is not meaningful.
-    const byRequester = (pairs: [string | undefined, string | undefined][]) =>
-        pairs.sort(([, a], [, b]) => String(a).localeCompare(String(b)));
-
-    assert.deepEqual(
-        byRequester((await items(id)).map((each) => [each.by, each.requestedBy])),
-        byRequester([
-            [undefined, hal.id],
-            [undefined, ida.id],
-        ]),
-        "Pi's, for Hal and for Ida",
-    );
-    app.config.updateUser(ida.id, { role: "viewer" });
-
-    await restartLater(16);
-    await until(
-        async () => (await items(id)).length === 0,
-        "Hal's to go out and Ida's to be cancelled",
-    );
-    await until(() => !app.isBusy(id), "Pi to answer");
-    assert.equal(
-        app.attribution.requesterOf(id),
-        hal.id,
-        "the owner wrote last, but Pi works for Hal now",
-    );
-    const authors = (await app.harness.snapshot(AuthorsDoc, id, context))!;
-    const sent = Object.keys(authors.requesters ?? {}).find(
-        (entry) => authors.requesters![entry] === hal.id,
-    );
-
-    assert.ok(
-        sent !== undefined && authors.entries[sent] === undefined,
-        "it shows as Pi's message",
-    );
-    const chat = (await app.harness.snapshot(ChatDoc, id, context))!.messages.map(
-        (message) => `${message.name} ${message.text}`,
-    );
-
-    assert.ok(
-        chat.includes(
-            "Pi scheduled “look at the deploy again”, which was cancelled: Ida can no longer steer here.",
-        ),
-        chat.join("\n"),
-    );
-});
-
-test("people need the right to steer and a session, and schedules need their extension", async () => {
-    const id = await newSession(app);
-    const viewer = app.config.addUser("Vee", "viewer").user;
-
-    await assert.rejects(app.commands.schedule(id, viewer, { when: "in 10m x" }), { status: 403 });
-    await assert.rejects(app.commands.schedule(id, owner(app), { when: "in 10m" }), {
-        status: 400,
-        message: /Say what Pi should get/,
-    });
-    await assert.rejects(
-        app.commands.schedule(id, owner(app), { when: "in 10m x", zone: "Mars/Olympus" }),
-        { status: 400 },
-    );
-    const other = await app.harness.createConversation(
-        { ownership: { kind: "ownerless" } },
-        context,
-    );
-
-    await assert.rejects(app.commands.schedule(other.id, owner(app), { when: "in 10m x" }), {
-        status: 400,
-    });
-    await app.setExtensionEnabled(owner(app), "schedules.ts", false);
+test("legacy schedules remain readable but cannot be created, listed, or cancelled", async () => {
+    const app = await openApp(scriptedModel(), join(root, "schedule-archive"));
 
     try {
-        await assert.rejects(app.commands.schedule(id, owner(app), { when: "in 10m x" }), {
-            status: 409,
-            message: /turned off in Extensions/,
-        });
+        const id = await seedHistoricalSession(app);
+
+        await assert.rejects(
+            app.commands.schedule(id, owner(app), { when: "in 15m", zone: "UTC" }),
+            /read-only archive/,
+        );
+        await assert.rejects(
+            app.commands.cancelSchedule(id, owner(app), "missing"),
+            /read-only archive/,
+        );
+        const viewer = app.config.addUser("Schedule viewer", "viewer").user;
+
+        await assert.rejects(
+            app.commands.schedule(id, viewer, { when: "in 15m", zone: "UTC" }),
+            /read-only archive/,
+        );
+        assert.equal((await app.harness.snapshot(ScheduleDoc, id, context))?.items, undefined);
     } finally {
-        await app.setExtensionEnabled(owner(app), "schedules.ts", true);
+        await app.close();
     }
 });
 
-test("a schedule is cancelled, with a line in the chat, once its person may not steer anymore or a limit is reached", async () => {
-    const id = await newSession(app);
-    const gus = app.config.addUser("Gus", "guest").user;
+test("a scheduled legacy message rejects mutation without claiming restart coverage", async () => {
+    const app = await openApp(scriptedModel(), join(root, "schedule-restart"));
 
-    await app.commands.schedule(id, gus, { when: "in 10m from Gus", zone: "UTC" });
-    await app.commands.schedule(id, owner(app), { when: "in 10m from the owner", zone: "UTC" });
-    app.config.updateUser(gus.id, { role: "viewer" });
-    await app.spend.setSessionBudget(owner(app), id, 1);
-    await recordCost(app, id, 2);
-    await until(() => app.spend.sessionSpent(id) === 2, "the spend to be known");
-    await assert.rejects(app.commands.schedule(id, owner(app), { when: "in 10m one more" }), {
-        status: 409,
-        message: /spend limit/,
-    });
+    try {
+        const id = await seedHistoricalSession(app);
 
-    await restartLater(11);
-    await until(async () => (await items(id)).length === 0, "both to be cancelled");
-    const chat = (await app.harness.snapshot(ChatDoc, id, context))!.messages.map(
-        (message) => `${message.name} ${message.text}`,
-    );
+        await assert.rejects(
+            app.commands.schedule(id, owner(app), { when: "in 10m", zone: "UTC" }),
+            /read-only archive/,
+        );
+        assert.equal((await app.harness.snapshot(ScheduleDoc, id, context))?.items, undefined);
+    } finally {
+        await app.close();
+    }
+});
 
-    assert.ok(
-        chat.includes(
-            "Gus scheduled “from Gus”, which was cancelled: they can no longer steer here.",
-        ),
-        chat.join("\n"),
-    );
-    assert.ok(
-        chat.includes(
-            `${owner(app).name} scheduled “from the owner”, which was cancelled: this session reached its $1.00 spend limit.`,
-        ),
-        chat.join("\n"),
-    );
-    assert.deepEqual(
-        (await userTexts(id)).filter((text) => text.includes("[scheduled]")),
-        [],
-        "neither went out",
-    );
+test("Pi cannot schedule, list, or cancel legacy messages through a tool", async () => {
+    const app = await openApp(scriptedModel(), join(root, "schedule-tool"));
+
+    try {
+        const id = await seedHistoricalSession(app);
+
+        await assert.rejects(
+            app.commands.schedule(id, owner(app), { when: "in 10m", zone: "UTC" }),
+            /read-only archive/,
+        );
+        await assert.rejects(
+            app.commands.cancelSchedule(id, owner(app), "missing"),
+            /read-only archive/,
+        );
+    } finally {
+        await app.close();
+    }
+});
+
+test("a legacy schedule cannot retain work ownership or cancellation state", async () => {
+    const app = await openApp(scriptedModel(), join(root, "schedule-owner"));
+
+    try {
+        const id = await seedHistoricalSession(app);
+        const guest = app.config.addUser("Schedule owner", "guest").user;
+
+        await assert.rejects(
+            app.commands.schedule(id, guest, { when: "in 10m", zone: "UTC" }),
+            /read-only archive/,
+        );
+    } finally {
+        await app.close();
+    }
+});
+
+test("people cannot change legacy schedules when the session is archived", async () => {
+    const app = await openApp(scriptedModel(), join(root, "schedule-permissions"));
+
+    try {
+        const id = await seedHistoricalSession(app);
+        const viewer = app.config.addUser("Schedule viewer", "viewer").user;
+
+        await assert.rejects(
+            app.commands.cancelSchedule(id, viewer, "missing"),
+            /read-only archive/,
+        );
+    } finally {
+        await app.close();
+    }
 });

@@ -3,11 +3,11 @@ import {
     type App,
     cleanUp,
     context,
-    newSession,
     openApp,
     owner,
     root,
     scriptedModel,
+    seedHistoricalSession,
     work,
 } from "./helpers.ts";
 import assert from "node:assert/strict";
@@ -140,50 +140,33 @@ after(async () => {
 });
 
 test("a session offers its folder's templates, and sending one sends it filled in", async () => {
-    const id = await newSession(app);
+    const id = await seedHistoricalSession(app);
 
     assert.deepEqual(
         app.promptTemplates(id).map((template) => template.name),
         ["fix", "tidy"],
     );
-    const { submissionId } = await app.commands.submit(id, owner(app), {
-        text: "/fix 42",
-        requestId: "t1",
-    });
-
-    await (await app.harness.submission(submissionId, context))!.wait(context);
-    const page = await (await app.harness.conversation(id, context))!.entries(
-        {},
-        10,
-        undefined,
-        context,
-    );
-    const sent = page.items.find((entry) => entry.kind === "pi.user");
-
-    assert.match(JSON.stringify(sent?.model), /Fix issue 42\. Keep the change small\./);
-    assert.equal(
-        app.sessions().find((each) => each.id === Number(id))?.title,
-        "/fix 42",
-        "the title is what was typed",
-    );
-    const plain = await app.commands.submit(id, owner(app), {
-        text: "/nothing here",
-        requestId: "t2",
-    });
-
-    await (await app.harness.submission(plain.submissionId, context))!.wait(context);
-    const again = await (await app.harness.conversation(id, context))!.entries(
+    const before = await (await app.harness.conversation(id, context))!.entries(
         {},
         10,
         undefined,
         context,
     );
 
-    assert.ok(
-        again.items.some(
-            (entry) =>
-                entry.kind === "pi.user" && JSON.stringify(entry.model).includes("/nothing here"),
-        ),
-        "anything else goes as written",
+    await assert.rejects(
+        app.commands.submit(id, owner(app), { text: "/fix 42", requestId: "t1" }),
+        /read-only archive/,
     );
+    await assert.rejects(
+        app.commands.submit(id, owner(app), { text: "/nothing here", requestId: "t2" }),
+        /read-only archive/,
+    );
+    const after = await (await app.harness.conversation(id, context))!.entries(
+        {},
+        10,
+        undefined,
+        context,
+    );
+
+    assert.deepEqual(after, before);
 });

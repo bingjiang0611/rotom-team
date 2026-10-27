@@ -12,8 +12,10 @@
  * uses `raw` for its own JSON so that its bookkeeping is not counted as the server's work.
  */
 import childProcess from "node:child_process";
-import { subscribe } from "node:diagnostics_channel";
+import { AsyncLocalStorage } from "node:async_hooks";
+import { channel, subscribe } from "node:diagnostics_channel";
 import fs from "node:fs";
+import v8 from "node:v8";
 import { syncBuiltinESMExports } from "node:module";
 import { basename } from "node:path";
 import { DatabaseSync, StatementSync } from "node:sqlite";
@@ -23,24 +25,100 @@ import {
     parseWorkChannel,
     pushChannel,
     roomPartChannel,
+    type StorageWorkerSignal,
     viewProjectionChannel,
     type NativeStartSignal,
     type PushSignal,
     type RoomPartSignal,
     type ViewProjectionSignal,
 } from "../../src/server/perf-channels.ts";
+import * as perfChannels from "../../src/server/perf-channels.ts";
+
+// The same instrument measures pre-worker revisions, which have no exported shared scope.
+const roomScope =
+    "roomPartScope" in perfChannels
+        ? perfChannels.roomPartScope
+        : new AsyncLocalStorage<RoomPartSignal["part"]>();
+const storageWorkerChannel = channel("rotom-team:storage-worker");
 
 export type Counts = Record<string, number>;
 
 const counts: Counts = {};
 const nativeTimings: Counts = {};
-let kernelRoomActive = false;
+let synchronousRoomPart: RoomPartSignal["part"] | undefined;
+const roomMetrics = new Set(["sql.statements", "sql.rows", "json.parse.calls", "json.parse.chars"]);
+
+roomPartChannel.bindStore(roomScope, (message) => (message as RoomPartSignal).part);
 
 const add = (name: string, amount = 1) => {
     counts[name] = (counts[name] ?? 0) + amount;
+    const part = roomScope.getStore() ?? synchronousRoomPart;
+
+    if (part && roomMetrics.has(name)) {
+        const key = `view.${part}.${name}`;
+
+        counts[key] = (counts[key] ?? 0) + amount;
+    }
 };
 
+// Worker counts already carry their original room scope. Adding via add() would attribute them twice.
+storageWorkerChannel.subscribe((message) => {
+    const sample = message as StorageWorkerSignal;
+
+    if (sample.counters === undefined) {
+        counts["storage.worker.unavailable"] = (counts["storage.worker.unavailable"] ?? 0) + 1;
+    } else {
+        for (const [name, value] of Object.entries(sample.counters)) {
+            counts[name] = (counts[name] ?? 0) + value;
+        }
+    }
+
+    for (const key of ["replyBytes", "requestBytes"] as const) {
+        const name = `storage.worker.${key}`;
+
+        counts[name] = (counts[name] ?? 0) + sample[key];
+    }
+
+    for (const key of ["workerMs", "encodeMs", "queueMs", "roundTripMs"] as const) {
+        const name = `storage${key[0]!.toUpperCase()}${key.slice(1)}`;
+
+        nativeTimings[name] = (nativeTimings[name] ?? 0) + sample[key];
+    }
+
+    for (const [key, ms] of Object.entries(sample.timings ?? {})) {
+        const name = `storageWorker${key[0]!.toUpperCase()}${key.slice(1)}`;
+
+        nativeTimings[name] = (nativeTimings[name] ?? 0) + ms;
+    }
+});
+
 export const raw = { parse: JSON.parse, stringify: JSON.stringify };
+
+const serialize = v8.serialize;
+const deserialize = v8.deserialize;
+
+v8.serialize = (value) => {
+    const started = performance.now();
+    const encoded = serialize(value);
+
+    add("v8.serialize.calls");
+    add("v8.serialize.bytes", encoded.byteLength);
+    nativeTimings.v8SerializeMs = (nativeTimings.v8SerializeMs ?? 0) + performance.now() - started;
+
+    return encoded;
+};
+
+v8.deserialize = (buffer) => {
+    const started = performance.now();
+    const decoded = deserialize(buffer);
+
+    add("v8.deserialize.calls");
+    add("v8.deserialize.bytes", buffer.byteLength);
+    nativeTimings.v8DeserializeMs =
+        (nativeTimings.v8DeserializeMs ?? 0) + performance.now() - started;
+
+    return decoded;
+};
 
 // Subscription enables AsyncLocalStorage scopes only in controlled benchmarks, never in the running product.
 parseWorkChannel.subscribe(() => undefined);
@@ -146,7 +224,14 @@ for (const method of ["run", "get", "all", "iterate"] as StatementMethod[]) {
     ) {
         add("sql.statements");
 
-        if (kernelRoomActive) {
+        if (
+            method === "all" &&
+            this.sourceSQL === "SELECT body FROM kernel_entries WHERE session_id=? ORDER BY rowid"
+        ) {
+            add("journal.segmentEntries.calls");
+        }
+
+        if ((roomScope.getStore() ?? synchronousRoomPart) === "kernel") {
             const table =
                 /\bFROM (kernel_heads|kernel_sessions|kernel_attempts|kernel_command_inputs|kernel_resume)\b/i
                     .exec(this.sourceSQL)?.[1]
@@ -302,33 +387,30 @@ viewProjectionChannel.subscribe((message) => {
     }
 });
 
-const roomPartStarts = new Map<RoomPartSignal["part"], Counts>();
-
 roomPartChannel.subscribe((message) => {
     const { part, ms } = message as RoomPartSignal;
 
     if (ms === undefined) {
         add(`view.${part}.project.calls`);
-        roomPartStarts.set(part, snapshot());
 
-        if (part === "kernel") {
-            kernelRoomActive = true;
+        // Older comparison revisions publish synchronous start/end pairs without runStores.
+        if (roomScope.getStore() === undefined) {
+            synchronousRoomPart = part;
         }
 
         return;
     }
 
-    if (part === "kernel") {
-        kernelRoomActive = false;
+    if (roomScope.getStore() === undefined) {
+        synchronousRoomPart = undefined;
     }
 
     const name = `room${part[0]!.toUpperCase()}${part.slice(1)}ProjectMs`;
 
     nativeTimings[name] = (nativeTimings[name] ?? 0) + ms;
-    const work = since(roomPartStarts.get(part) ?? {});
 
-    for (const metric of ["sql.statements", "sql.rows", "json.parse.calls", "json.parse.chars"]) {
-        add(`view.${part}.${metric}`, work[metric] ?? 0);
+    for (const metric of roomMetrics) {
+        counts[`view.${part}.${metric}`] ??= 0;
     }
 });
 

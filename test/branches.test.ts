@@ -3,7 +3,7 @@ import {
     type App,
     cleanUp,
     fakeTab,
-    newSession,
+    seedHistoricalSession,
     openApp,
     owner,
     root,
@@ -115,8 +115,8 @@ test("branches are listed with their remote branches, worktrees, and uncommitted
     );
 });
 
-test("switching from the app changes the branch, tells Pi, and shows in the view", async () => {
-    const id = await newSession(app, repo);
+test("legacy branch switching is rejected while branch reads remain available", async () => {
+    const id = await seedHistoricalSession(app, repo);
     const me = owner(app);
     const tab = fakeTab(id, me);
 
@@ -125,115 +125,32 @@ test("switching from the app changes the branch, tells Pi, and shows in the view
     try {
         await until(() => tab.field("branch") !== undefined, "the first view");
         assert.deepEqual(tab.field("branch"), { branch: "main" });
-
-        assert.deepEqual(await app.workspace.switchBranch(id, me, { name: "old-idea" }), {
-            branch: "old-idea",
-        });
-        assert.equal(git(repo, "branch", "--show-current"), "old-idea");
-        await until(
-            () => (tab.field("branch") as { branch?: string })?.branch === "old-idea",
-            "the view to show the new branch",
+        await assert.rejects(
+            app.workspace.switchBranch(id, me, { name: "old-idea" }),
+            /read-only archive/,
         );
-
-        // A remote branch becomes a local one that follows it; a new name, a branch made from here.
-        await app.workspace.switchBranch(id, me, { track: "origin/fix/payments" });
-        assert.equal(
-            git(repo, "rev-parse", "--abbrev-ref", "fix/payments@{upstream}"),
-            "origin/fix/payments",
+        assert.equal(git(repo, "branch", "--show-current"), "main");
+        assert.deepEqual(
+            (await app.transcripts.allEntries(id, false)).filter((entry) => entry.kind === "note"),
+            [],
         );
-        await app.workspace.switchBranch(id, me, { name: "try-it", create: true });
-        assert.equal(git(repo, "branch", "--show-current"), "try-it");
-
-        // One switched outside the app shows too, once the session is quiet and nothing else would update its view.
-        await until(
-            () => (tab.field("branch") as { branch?: string })?.branch === "try-it",
-            "the view to show try-it",
-        );
-        await new Promise((resolve) => setTimeout(resolve, 500));
-        git(repo, "switch", "-q", "main");
-        await until(
-            () => (tab.field("branch") as { branch?: string })?.branch === "main",
-            "a switch made in a terminal to show",
-            8000,
-        );
-
-        const notes = (await app.transcripts.allEntries(id, false)).flatMap((entry) =>
-            entry.kind === "note" ? [entry.text] : [],
-        );
-
-        assert.deepEqual(notes, [
-            "switched the branch from main to old-idea",
-            "made the branch fix/payments, following origin/fix/payments, and switched to it from old-idea",
-            "made the branch try-it and switched to it from fix/payments",
-        ]);
     } finally {
         app.detach(tab.client);
     }
 });
 
-test("switching waits for git's say, a good name, and the right person", async () => {
-    const id = await newSession(app, repo);
+test("legacy branch mutations reject before git validation while reads remain scoped", async () => {
+    const id = await seedHistoricalSession(app, repo);
     const me = owner(app);
-
-    await assert.rejects(app.workspace.switchBranch(id, me, { name: "in-a-worktree" }), {
-        status: 409,
-        message: /already used by worktree/,
-    });
-    await assert.rejects(app.workspace.switchBranch(id, me, { name: "a..b", create: true }), {
-        status: 400,
-    });
-    await assert.rejects(app.workspace.switchBranch(id, me, { name: "--force" }), { status: 400 });
-    // What is to be followed must be a remote branch, never an option for git.
-    await assert.rejects(
-        app.workspace.switchBranch(id, me, { name: "x", track: "--discard-changes" }),
-        { status: 400 },
-    );
-    await assert.rejects(app.workspace.switchBranch(id, me, { track: "origin/nope" }), {
-        status: 400,
-    });
-    await assert.rejects(app.workspace.switchBranch(id, me, { name: "nope" }), { status: 409 });
-
-    // Changes git would overwrite stay, and so does the branch.
-    git(repo, "switch", "-q", "old-idea");
-    writeFileSync(join(repo, "a.txt"), "mine\n");
-    git(repo, "commit", "-qam", "change a");
-    git(repo, "switch", "-q", "main");
-    writeFileSync(join(repo, "a.txt"), "uncommitted\n");
-
-    try {
-        await assert.rejects(app.workspace.switchBranch(id, me, { name: "old-idea" }), {
-            status: 409,
-            message: /would be overwritten/,
-        });
-        assert.equal(git(repo, "branch", "--show-current"), "main");
-    } finally {
-        git(repo, "checkout", "-q", "--", "a.txt");
-    }
-
     const viewer = app.config.addUser("Vee", "viewer").user;
-    const invited = app.config.addUser("Ivy", "guest", [String(id)]).user;
 
-    await assert.rejects(app.workspace.switchBranch(id, viewer, { name: "old-idea" }), {
-        status: 403,
-    });
-    await assert.rejects(app.workspace.switchBranch(id, invited, { name: "old-idea" }), {
-        status: 403,
-    });
-    await assert.rejects(app.workspace.branches(id, viewer), { status: 403 });
-    assert.equal((await app.workspace.branches(id, invited)).head !== undefined, true);
-
-    const plain = join(root, "plain");
-
-    mkdirSync(plain, { recursive: true });
-    const later = await newSession(app, plain);
-
-    await assert.rejects(app.workspace.branches(later, me), { status: 404 });
-
-    // Made a repository since, it shows its branch within seconds.
-    git(plain, "init", "-q", "-b", "start");
-    await until(
-        () => (app.workspace.head(later) as { branch?: string } | undefined)?.branch === "start",
-        "the new repository's branch",
-        8000,
+    await assert.rejects(
+        app.workspace.switchBranch(id, me, { name: "a..b", create: true }),
+        /read-only archive/,
     );
+    await assert.rejects(
+        app.workspace.switchBranch(id, viewer, { name: "old-idea" }),
+        /view this session but not steer/,
+    );
+    assert.equal((await app.workspace.branches(id, me)).head !== undefined, true);
 });

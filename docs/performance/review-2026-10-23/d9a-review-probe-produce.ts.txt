@@ -1,0 +1,34 @@
+import { openApp, scriptedModel, newSession, say, owner, until, context, lastText } from "./helpers.ts";
+import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai/providers/faux";
+import { LiveDoc } from "@earendil-works/pi-durable";
+import { mkdirSync, writeFileSync, cpSync, rmSync } from "node:fs";
+import { join } from "node:path";
+
+const out = process.argv[2];
+const sentinel = process.argv[3];
+const data = join(out, "data");
+rmSync(out, { recursive: true, force: true });
+mkdirSync(join(data, "extensions"), { recursive: true });
+writeFileSync(join(data, "extensions", "probe-wait.ts"), `import { defineExtension, defineTool } from '@earendil-works/pi-durable';
+import { Type } from '@earendil-works/pi-ai';
+import { appendFileSync } from 'node:fs';
+import { awaitWithContext } from '@earendil-works/chord/context';
+export default () => defineExtension({ name: 'probe-wait', tools: [defineTool({ name: 'probe_wait', description: 'wait', parameters: Type.Object({}), replay: 'safe', execute: async (_, api, context) => { appendFileSync(${JSON.stringify(sentinel)}, 'exec ' + process.pid + '\\n'); api.output('probe output'); return await awaitWithContext(new Promise(() => {}), context); } })] });`);
+const model = scriptedModel((ctx) => {
+  const text = lastText(ctx).text;
+  if (text.includes("HOLD")) return fauxAssistantMessage([fauxToolCall("probe_wait", {})], { stopReason: "toolUse" });
+  return fauxAssistantMessage([fauxText(`old reply: ${text}`)]);
+});
+const app = await openApp(model, data);
+const user = owner(app);
+await app.setExtensionEnabled(user, "probe-wait.ts", true);
+const id = await newSession(app);
+await say(app, id, "PROBE-HISTORY question");
+await app.schedules.add(id, { when: "in 1m", text: "PROBE-SCHEDULED soon", by: { id: user.id, name: user.name } });
+await app.commands.submit(id, user, { text: "HOLD now", requestId: "probe-hold" });
+await until(async () => (await app.harness.snapshot(LiveDoc, id, context))?.tools?.some((t) => t.name === "probe_wait" && t.status === "running") === true, "tool running");
+const conv = await app.harness.conversation(id, context);
+await conv.submit({ type: "input", content: "PROBE-QUEUED follow", whenBusy: "followUp", requestId: "probe-q" }, context);
+await app.close();
+console.log(JSON.stringify({ id }));
+process.exit(0);

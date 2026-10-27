@@ -252,7 +252,7 @@ export class Workspace {
     }
 
     /** Native tools run with the bound member's HOME, not the service user's HOME. */
-    #conversationHome(id: ConversationId): string | undefined {
+    async #conversationHome(id: ConversationId): Promise<string | undefined> {
         if (this.#app.sessionMeta(id)?.backend !== "rotom") {
             return undefined;
         }
@@ -263,20 +263,23 @@ export class Workspace {
             throw new HttpError(409, "The native session's file location is unavailable.");
         }
 
-        return kernel.executions.journal.session(String(id)).binding.home;
+        return (await kernel.executions.journal.session(String(id))).binding.home;
     }
 
     /** A path as a conversation means it: absolute, `~/…`, or relative to the conversation's working directory. */
-    conversationPath(id: ConversationId, path: string): string {
-        return resolve(this.#app.cwdOf(id), expandHome(path.trim(), this.#conversationHome(id)));
+    async conversationPath(id: ConversationId, path: string): Promise<string> {
+        return resolve(
+            this.#app.cwdOf(id),
+            expandHome(path.trim(), await this.#conversationHome(id)),
+        );
     }
 
     /**
      * A file a person may load through a conversation. People who can steer reach the whole machine through Pi anyway;
      * viewers and people invited to one session get only files under the conversation's folder or its uploads.
      */
-    conversationFile(user: User, id: ConversationId, path: string): string {
-        const file = this.conversationPath(id, path);
+    async conversationFile(user: User, id: ConversationId, path: string): Promise<string> {
+        const file = await this.conversationPath(id, path);
 
         if (
             user.role === "owner" ||
@@ -303,9 +306,16 @@ export class Workspace {
         const uploads = this.#lineage(id).map((each) =>
             join(this.#app.dataDir, "uploads", String(each)),
         );
-        const snapshotRoots = this.#lineage(id).flatMap(
-            (each) => this.#app.configuration(each)?.skills.map((skill) => skill.baseDir) ?? [],
-        );
+        const snapshotRoots = (
+            await Promise.all(
+                this.#lineage(id).map(
+                    async (each) =>
+                        (await this.#app.configuration(each))?.skills.map(
+                            (skill) => skill.baseDir,
+                        ) ?? [],
+                ),
+            )
+        ).flat();
         const roots = [cwd, ...uploads, ...snapshotRoots]
             .map(real)
             .filter((root): root is string => root !== undefined);
@@ -325,8 +335,8 @@ export class Workspace {
      * `conversationFile`, but Pi's own folder (sign-ins, settings) and this app's data (people, tokens, the database)
      * are the owner's alone. Uploads and worktrees, which sessions use, are not kept back.
      */
-    readableFile(user: User, id: ConversationId, path: string): string {
-        const file = this.conversationFile(user, id, path);
+    async readableFile(user: User, id: ConversationId, path: string): Promise<string> {
+        const file = await this.conversationFile(user, id, path);
 
         if (user.role === "owner") {
             return file;
@@ -344,16 +354,25 @@ export class Workspace {
         const inside = (root: string) => target === root || target.startsWith(root + sep);
         const data = real(this.#app.dataDir);
 
+        const inSnapshotRoot = async () => {
+            const roots = await Promise.all(
+                this.#lineage(id).map(
+                    async (each) =>
+                        (await this.#app.configuration(each))?.skills.map(
+                            (skill) => skill.baseDir,
+                        ) ?? [],
+                ),
+            );
+
+            return roots.flat().some((root) => inside(real(root)));
+        };
+
         if (
             inside(real(getAgentDir())) ||
             (inside(data) &&
                 !inside(join(data, "uploads")) &&
                 !inside(join(data, "worktrees")) &&
-                !this.#lineage(id).some((each) =>
-                    this.#app
-                        .configuration(each)
-                        ?.skills.some((skill) => inside(real(skill.baseDir))),
-                ))
+                !(await inSnapshotRoot()))
         ) {
             throw new HttpError(404, "Not found");
         }
@@ -400,7 +419,7 @@ export class Workspace {
         this.#app.requireSteer(user);
         await this.#app.conversation(id);
         const cwd = this.#app.cwdOf(id);
-        const requested = relative(cwd, this.conversationPath(id, path));
+        const requested = relative(cwd, await this.conversationPath(id, path));
 
         if (
             path.trim() === "" ||
@@ -417,7 +436,7 @@ export class Workspace {
 
         for (const candidate of found.files) {
             try {
-                const file = this.readableFile(user, id, candidate);
+                const file = await this.readableFile(user, id, candidate);
 
                 files.push({ path: file, display: displayPath(file, cwd) });
             } catch (error) {
@@ -445,11 +464,11 @@ export class Workspace {
         let file: string;
 
         try {
-            file = this.readableFile(user, id, path);
+            file = await this.readableFile(user, id, path);
 
             return {
                 path: file,
-                display: displayPath(file, this.#app.cwdOf(id), this.#conversationHome(id)),
+                display: displayPath(file, this.#app.cwdOf(id), await this.#conversationHome(id)),
                 ...(await viewFile(file)),
             };
         } catch (error) {

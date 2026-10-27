@@ -11,6 +11,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { RotomRpc } from "./rotom-rpc.ts";
+import { decodeNativeControl } from "./rotom-control.ts";
 import {
     nativeStartChannel,
     parseWithWork,
@@ -18,7 +19,7 @@ import {
     type NativeStartSignal,
 } from "./perf-channels.ts";
 import { prepareTeamResources, sharedContextPaths } from "./rotom-resources.ts";
-import { canonical, product, verifyRotomKernel } from "./rotom-product.ts";
+import { canonical, product, verifyRotomKernel, nativeSessionDataApi } from "./rotom-product.ts";
 
 export { verifyRotomKernel };
 
@@ -60,21 +61,7 @@ export async function nativeBuiltinCommands(): Promise<
 }
 
 export async function nativeSessionManager() {
-    verifyRotomKernel();
-    const { resolveInstalledPi } = await import(
-        pathToFileURL(join(product, "runtime/resolve-installed-pi.mjs")).href
-    );
-
-    await withParseWork("native-resolver", () => resolveInstalledPi(product));
-    const entry = canonical(
-        join(
-            product,
-            "runtime/pi/node_modules/@earendil-works/pi-coding-agent/dist/core/session-manager.js",
-        ),
-        "file",
-    );
-
-    const manager = await import(pathToFileURL(entry).href);
+    const manager = await nativeSessionDataApi();
     const ai = await import(
         pathToFileURL(
             canonical(
@@ -483,26 +470,12 @@ export async function startRotomKernel(options: {
             const nonce = randomUUID();
             let installed = false;
             const detach = client.onEvent((event) => {
-                if (
-                    event.type !== "extension_ui_request" ||
-                    event.method !== "notify" ||
-                    typeof event.message !== "string"
-                ) {
-                    return;
-                }
-
-                let value;
-
-                try {
-                    value = parseWithWork("native-rpc-notify", event.message);
-                } catch {
-                    return;
-                }
+                const control = decodeNativeControl(event);
 
                 if (
-                    value?.kind === "team-kernel-policy-v1" &&
-                    value.nonce === nonce &&
-                    value.ready === true
+                    control?.kind === "team-kernel-policy-v1" &&
+                    control.nonce === nonce &&
+                    control.ready
                 ) {
                     installed = true;
                 }

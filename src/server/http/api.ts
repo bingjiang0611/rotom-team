@@ -34,6 +34,8 @@ import { serveImage } from "./assets.ts";
 import { browserRoutes } from "./browser-routes.ts";
 import { conversationRoutes } from "./conversation-routes.ts";
 import { createEventStreams } from "./events.ts";
+import { parseClaim } from "../view-claim.ts";
+import { SUBSCRIPTION_COPY } from "../constants/copy.ts";
 import { type ApiRequest, conversationId, type HttpOptions, json, readJson } from "./io.ts";
 import { pushRoutes } from "./push-routes.ts";
 
@@ -70,10 +72,10 @@ export function createApi(options: HttpOptions, auth: Auth) {
      * What an invite may grant: viewers and people invited to one session cannot invite anyone, and only the owner can
      * sign a device in as the owner (never for one session).
      */
-    const inviteGrant = (
+    const inviteGrant = async (
         user: User,
         body: { role?: unknown; session?: unknown; memberId?: unknown },
-    ): InviteGrant => {
+    ): Promise<InviteGrant> => {
         if (body.memberId !== undefined) {
             requireOwner(user);
 
@@ -106,7 +108,7 @@ export function createApi(options: HttpOptions, auth: Auth) {
 
         const session = conversationId(String(body.session));
 
-        if (!app.sessions(user).some((each) => each.id === Number(session))) {
+        if (!(await app.sessions(user)).some((each) => each.id === Number(session))) {
             throw new HttpError(400, "No such session");
         }
 
@@ -149,7 +151,7 @@ export function createApi(options: HttpOptions, auth: Auth) {
      * Folders whose Agent resources this person may list. A session trusts and loads its own folder, registered or
      * not, so the owner gets every session's folder and the default one; a member, only the projects they may view.
      */
-    const agentResourceFolders = (user: User) => {
+    const agentResourceFolders = async (user: User) => {
         const folders = new Map<
             string,
             { path: string; project?: string; isDefault?: boolean; sessions: number }
@@ -171,7 +173,7 @@ export function createApi(options: HttpOptions, auth: Auth) {
             add(app.defaultCwd).isDefault = true;
         }
 
-        for (const session of app.sessions(user)) {
+        for (const session of await app.sessions(user)) {
             const folder = user.role === "owner" ? add(session.cwd) : folders.get(session.cwd);
 
             if (folder) {
@@ -214,6 +216,47 @@ export function createApi(options: HttpOptions, auth: Auth) {
             return poll(request, response, url, user);
         }
 
+        if (first === "subscribe" && method === "POST") {
+            const body = await readJson<{
+                connection?: unknown;
+                generation?: unknown;
+                conversationId?: unknown;
+                have?: unknown;
+            }>(request);
+
+            if (
+                !body ||
+                typeof body.connection !== "string" ||
+                body.connection.length > 64 ||
+                typeof body.generation !== "number" ||
+                !Number.isSafeInteger(body.generation) ||
+                body.generation < 1 ||
+                (body.conversationId !== null &&
+                    (typeof body.conversationId !== "number" ||
+                        !Number.isSafeInteger(body.conversationId) ||
+                        body.conversationId < 0)) ||
+                (body.have !== undefined &&
+                    body.have !== null &&
+                    (typeof body.have !== "string" || body.have.length > 160))
+            ) {
+                throw new HttpError(400, SUBSCRIPTION_COPY.invalidRequest);
+            }
+
+            return json(
+                response,
+                200,
+                await app.subscribe(
+                    user,
+                    body.connection,
+                    body.generation,
+                    body.conversationId === null
+                        ? undefined
+                        : conversationId(String(body.conversationId)),
+                    parseClaim(typeof body.have === "string" ? body.have : null),
+                ),
+            );
+        }
+
         if (first === "me" && method === "GET") {
             return json(response, 200, await app.hello(user));
         }
@@ -245,7 +288,7 @@ export function createApi(options: HttpOptions, auth: Auth) {
             // Only folders this person may view; any other path reads as unknown.
             if (
                 folder !== null &&
-                !agentResourceFolders(user).some((each) => each.path === folder)
+                !(await agentResourceFolders(user)).some((each) => each.path === folder)
             ) {
                 throw new HttpError(404, "No such folder.");
             }
@@ -262,7 +305,7 @@ export function createApi(options: HttpOptions, auth: Auth) {
                 throw new HttpError(404, "Agent resources are listed only on a Team server.");
             }
 
-            return json(response, 200, agentResourceFolders(user));
+            return json(response, 200, await agentResourceFolders(user));
         }
 
         if (first === "devices" && third === undefined) {
@@ -437,7 +480,7 @@ export function createApi(options: HttpOptions, auth: Auth) {
         }
 
         if (first === "spend" && method === "GET") {
-            return json(response, 200, app.spend.summary(user));
+            return json(response, 200, await app.spend.summary(user));
         }
 
         if (first === "spend" && method === "POST") {
@@ -457,11 +500,11 @@ export function createApi(options: HttpOptions, auth: Auth) {
                 throw new HttpError(400, "Say which session or person");
             }
 
-            return json(response, 200, app.spend.summary(user));
+            return json(response, 200, await app.spend.summary(user));
         }
 
         if (first === "sessions" && second === undefined && method === "GET") {
-            return json(response, 200, app.sessions(user));
+            return json(response, 200, await app.sessions(user));
         }
 
         if (first === "sessions" && second === undefined && method === "POST") {
@@ -479,7 +522,7 @@ export function createApi(options: HttpOptions, auth: Auth) {
                 throw new HttpError(400, "A session-list connection is required.");
             }
 
-            app.resyncSessionList(user, body.connection);
+            await app.resyncSessionList(user, body.connection);
 
             return json(response, 200, { ok: true });
         }
@@ -547,10 +590,9 @@ export function createApi(options: HttpOptions, auth: Auth) {
             }
 
             dirs.sort((a, b) => a.name.localeCompare(b.name));
-            const recent = [...new Set(app.sessions(user).map((session) => session.cwd))].slice(
-                0,
-                8,
-            );
+            const recent = [
+                ...new Set((await app.sessions(user)).map((session) => session.cwd)),
+            ].slice(0, 8);
 
             return json(response, 200, {
                 path,
@@ -689,7 +731,7 @@ export function createApi(options: HttpOptions, auth: Auth) {
                 minutes?: unknown;
                 memberId?: unknown;
             };
-            const grant = inviteGrant(user, body);
+            const grant = await inviteGrant(user, body);
             const invite = auth.createInvite(user, grant, inviteMinutes(body));
             const here = origin(request);
             const loopback = /^https?:\/\/(localhost|127\.\d+\.\d+\.\d+|\[::1\])(:\d+)?$/.test(

@@ -1,60 +1,38 @@
-// Worktrees: a session or a fork works in a git checkout of its own, made from the folder as it is, and removable.
+// Native creation and filesystem worktree primitives remain supported; legacy execution/removal does not.
 import {
     type App,
     cleanUp,
     context,
-    lastText,
+    appendHistoricalTurn,
     modelTexts,
-    newSession,
-    openApp,
+    seedHistoricalSession,
+    openNativeApp,
     owner,
     root,
-    say,
     scriptedModel,
-    until,
 } from "./helpers.ts";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+    existsSync,
+    mkdirSync,
+    readFileSync,
+    realpathSync,
+    symlinkSync,
+    writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
-import type { FauxResponseStep } from "@earendil-works/pi-ai";
-import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai/providers/faux";
-import { ChatDoc, SubagentsDoc } from "../src/server/docs.ts";
-
-/** Asked to, the model writes a file in its folder. */
-const route: FauxResponseStep = (request) => {
-    const { role, text } = lastText(request as never);
-
-    if (role === "toolResult") {
-        return fauxAssistantMessage([fauxText("written")]);
-    }
-
-    if (text.endsWith("write the plan")) {
-        return fauxAssistantMessage(
-            [fauxToolCall("write", { path: "plan.md", content: "approach B\n" })],
-            { stopReason: "toolUse" },
-        );
-    }
-
-    if (text.endsWith("work slowly")) {
-        return fauxAssistantMessage([fauxToolCall("bash", { command: "sleep 5" })], {
-            stopReason: "toolUse",
-        });
-    }
-
-    if (text.endsWith("start a helper")) {
-        return fauxAssistantMessage(
-            [fauxToolCall("subagent", { action: "spawn", name: "helper", message: "look around" })],
-            { stopReason: "toolUse" },
-        );
-    }
-
-    return fauxAssistantMessage([fauxText(`echo: ${text}`)]);
-};
+import {
+    createWorktree,
+    inWorktree,
+    removeWorktree,
+    sourceFolders,
+} from "../src/server/worktrees.ts";
 
 let app: App;
 const repo = join(root, "repo");
+const data = join(realpathSync(root), "worktree-data");
 const gitIn = (cwd: string, ...args: string[]) =>
     execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
 
@@ -67,12 +45,12 @@ before(async () => {
     writeFileSync(join(repo, ".gitignore"), "node_modules/\n");
     gitIn(repo, "add", "-A");
     gitIn(repo, "commit", "-qm", "init");
-    // Uncommitted work, a new file, and an ignored one: the first two come along into a worktree.
     writeFileSync(join(repo, "app", "main.ts"), "export const answer = 2;\n");
     writeFileSync(join(repo, "app", "notes.md"), "new notes\n");
     mkdirSync(join(repo, "node_modules"));
     writeFileSync(join(repo, "node_modules", "big.js"), "ignored\n");
-    app = await openApp(scriptedModel(route));
+    mkdirSync(data, { mode: 0o700 });
+    app = await openNativeApp(scriptedModel(), data);
 });
 
 after(async () => {
@@ -80,204 +58,139 @@ after(async () => {
     cleanUp();
 });
 
-test("a session in its own worktree starts with the folder as it is, on a branch of its own, and works apart", async () => {
+test("native worktree creation copies dirty and untracked files, not ignored files, into an isolated branch", async () => {
     const { id } = await app.commands.createSession(owner(app), {
+        backend: "rotom",
         cwd: join(repo, "app"),
         title: "Try B",
         worktree: true,
     });
-
-    await app.commands.configure(id, owner(app), {
-        model: { provider: "faux", modelId: "faux-1" },
-    });
     const worktree = app.sessionMeta(id)!.worktree!;
+    const cwd = app.cwdOf(id);
 
     assert.match(worktree.branch, /^pocket\/try-b-[0-9a-f]{6}$/);
     assert.equal(worktree.source, join(repo, "app"));
-    assert.ok(worktree.path.startsWith(join(root, "data", "worktrees")));
-    const cwd = app.cwdOf(id);
-
-    assert.equal(cwd, join(worktree.path, "app"), "the same folder within the repository");
-    assert.equal(
-        readFileSync(join(cwd, "main.ts"), "utf8"),
-        "export const answer = 2;\n",
-        "uncommitted changes came along",
-    );
-    assert.equal(
-        readFileSync(join(cwd, "notes.md"), "utf8"),
-        "new notes\n",
-        "new files came along",
-    );
-    assert.equal(existsSync(join(worktree.path, "node_modules")), false, "ignored files did not");
+    assert.ok(worktree.path.startsWith(join(data, "worktrees")));
+    assert.equal(cwd, join(worktree.path, "app"));
+    assert.equal(readFileSync(join(cwd, "main.ts"), "utf8"), "export const answer = 2;\n");
+    assert.equal(readFileSync(join(cwd, "notes.md"), "utf8"), "new notes\n");
+    assert.equal(existsSync(join(worktree.path, "node_modules")), false);
     assert.equal(gitIn(cwd, "rev-parse", "--abbrev-ref", "HEAD"), worktree.branch);
+    // Filesystem isolation, not a simulated tool invocation.
+    writeFileSync(join(cwd, "plan.md"), "a separate checkout\n");
+    assert.equal(existsSync(join(repo, "app", "plan.md")), false);
+    assert.equal(readFileSync(join(repo, "app", "main.ts"), "utf8"), "export const answer = 2;\n");
+});
 
-    await say(app, id, "write the plan");
-    assert.equal(existsSync(join(cwd, "plan.md")), true);
-    assert.equal(
-        existsSync(join(repo, "app", "plan.md")),
-        false,
-        "the original folder is untouched",
-    );
+test("standalone worktree removal requires force for dirty files and preserves its branch", async () => {
+    // This checkout is owned by this helper test, not a live native session.
+    const made = await createWorktree(join(repo, "app"), join(root, "helper-worktrees"), "Removal");
 
-    // With uncommitted changes, removing asks for force; the branch stays either way.
-    await assert.rejects(app.commands.removeWorktree(id, owner(app), false), { status: 409 });
-    await app.commands.removeWorktree(id, owner(app), true);
-    assert.equal(existsSync(worktree.path), false);
-    assert.equal(app.sessionMeta(id)?.worktree, undefined);
-    assert.equal(
-        app.cwdOf(id),
-        join(repo, "app"),
-        "the session works in the original folder again",
-    );
-    assert.match(gitIn(repo, "branch", "--list", worktree.branch), new RegExp(worktree.branch));
-    const chat = (await app.harness.snapshot(ChatDoc, id, context))!.messages.map(
-        (message) => message.text,
-    );
-
+    await assert.rejects(removeWorktree(made.worktree, false), {
+        status: 409,
+        message: /uncommitted changes/,
+    });
+    assert.equal(existsSync(made.worktree.path), true);
+    await removeWorktree(made.worktree, true);
+    assert.equal(existsSync(made.worktree.path), false);
     assert.match(
-        chat.at(-1)!,
-        /^removed the worktree; the branch pocket\/try-b-\w+ stays, and Pi works in .*\/repo\/app again$/,
+        gitIn(repo, "branch", "--list", made.worktree.branch),
+        new RegExp(made.worktree.branch),
     );
 });
 
-test("a fork can get a worktree of its own, and a folder outside any repository cannot", async () => {
-    const id = await newSession(app, join(repo, "app"));
+test("historical separate-worktree forks reject while nonrepository native creation makes no session", async () => {
+    const id = await seedHistoricalSession(app, join(repo, "app"));
 
-    await say(app, id, "hello");
-    const page = await (await app.harness.conversation(id, context))!.entries(
-        {},
-        10,
-        undefined,
-        context,
-    );
+    await appendHistoricalTurn(app, id, "historical question", "historical answer");
+    const conversation = await app.conversation(id);
+    const page = await conversation.entries({}, 10, undefined, context);
     const answer = page.items.find((entry) => entry.kind === "pi.assistant")!;
-    const { id: fork } = await app.commands.fork(id, owner(app), {
-        entryId: Number(answer.id),
-        worktree: true,
-    });
-    const worktree = app.sessionMeta(fork)!.worktree!;
+    const history = await modelTexts(app, id);
+    const before = (await app.sessions()).length;
 
-    assert.equal(app.cwdOf(fork), join(worktree.path, "app"));
-    assert.equal((await app.agentState(fork))?.cwd, join(worktree.path, "app"));
-    const chat = (await app.harness.snapshot(ChatDoc, fork, context))!.messages.map(
-        (message) => message.text,
+    await assert.rejects(
+        app.commands.fork(id, owner(app), { entryId: Number(answer.id), worktree: true }),
+        /read-only archive/,
     );
-
-    assert.match(chat[0]!, /^forked this from “.*” into a worktree on pocket\/[\w-]+$/);
-    await app.commands.removeWorktree(fork, owner(app), true);
-
+    assert.deepEqual(await modelTexts(app, id), history);
+    assert.equal((await app.sessions()).length, before);
     const plain = join(root, "plain");
 
-    mkdirSync(plain, { recursive: true });
-    const before = app.sessions().length;
-
-    await assert.rejects(app.commands.createSession(owner(app), { cwd: plain, worktree: true }), {
-        status: 400,
-        message: /not in a git repository/,
-    });
-    assert.equal(app.sessions().length, before, "no session was made");
+    mkdirSync(plain);
+    await assert.rejects(
+        app.commands.createSession(owner(app), { backend: "rotom", cwd: plain, worktree: true }),
+        { status: 400, message: /not in a git repository/ },
+    );
+    assert.equal((await app.sessions()).length, before);
 });
 
-test("a folder reached through a symbolic link gets the matching folder in its worktree", async () => {
+test("a symbolic source folder maps to the matching native checkout and retains its original spelling", async () => {
     const link = join(root, "linked");
 
     symlinkSync(repo, link);
+    const source = join(link, "app");
     const { id } = await app.commands.createSession(owner(app), {
-        cwd: join(link, "app"),
+        backend: "rotom",
+        cwd: source,
         worktree: true,
     });
     const worktree = app.sessionMeta(id)!.worktree!;
 
     assert.equal(app.cwdOf(id), join(worktree.path, "app"));
     assert.equal(existsSync(join(app.cwdOf(id), "main.ts")), true);
-    await app.commands.removeWorktree(id, owner(app), true);
-    assert.equal(app.cwdOf(id), join(link, "app"), "back to the folder as it was given");
+    assert.equal(worktree.source, source);
+    const original = await sourceFolders(worktree);
+
+    assert.equal(original(app.cwdOf(id)), source);
+    const onlyHere = join(worktree.path, "only-here");
+
+    mkdirSync(onlyHere);
+    assert.equal(original(onlyHere), source, "a worktree-only folder maps to the original source");
 });
 
-test("a worktree Pi is working in stays until Pi stops", async () => {
+test("native session worktree removal is unsupported and changes neither metadata nor checkout", async () => {
     const { id } = await app.commands.createSession(owner(app), {
+        backend: "rotom",
         cwd: join(repo, "app"),
         worktree: true,
     });
+    const before = structuredClone(app.sessionMeta(id));
+    const cwd = app.cwdOf(id);
 
-    await app.commands.configure(id, owner(app), {
-        model: { provider: "faux", modelId: "faux-1" },
-    });
-    const { submissionId } = await app.commands.submit(id, owner(app), {
-        text: "work slowly",
-        requestId: "slow",
-    });
-
-    await until(() => app.isBusy(id), "Pi to start");
-    await assert.rejects(app.commands.removeWorktree(id, owner(app), true), {
-        status: 409,
-        message: /Pi is working in the worktree/,
-    });
-    await app.commands.abort(id, owner(app));
-    await (await app.harness.submission(submissionId, context))!.wait(context);
-    await until(() => !app.isBusy(id), "Pi to stop");
-    await app.commands.removeWorktree(id, owner(app), true);
+    for (const force of [false, true]) {
+        await assert.rejects(app.commands.removeWorktree(id, owner(app), force), {
+            status: 409,
+            message: /not supported.*execution backend/,
+        });
+        assert.deepEqual(app.sessionMeta(id), before);
+        assert.equal(app.cwdOf(id), cwd);
+        assert.equal(existsSync(join(cwd, "main.ts")), true);
+    }
 });
 
-test("a worktree another session reaches through a symbolic link stays too", async () => {
-    const { id } = await app.commands.createSession(owner(app), {
-        cwd: join(repo, "app"),
-        worktree: true,
-    });
-    const link = join(root, "worktree-link");
+test("worktree membership recognizes symlink aliases, nested folders, and shared historical readers", async () => {
+    const made = await createWorktree(join(repo, "app"), join(root, "shared-worktrees"), "Shared");
+    const alias = join(root, "shared-alias");
 
-    symlinkSync(app.sessionMeta(id)!.worktree!.path, link, "dir");
-    await newSession(app, link);
-    await assert.rejects(app.commands.removeWorktree(id, owner(app), true), {
-        status: 409,
-        message: /works in this worktree too/,
-    });
-});
+    symlinkSync(made.worktree.path, alias);
+    assert.equal(inWorktree(made.worktree, alias), true);
+    assert.equal(inWorktree(made.worktree, join(alias, "app")), true);
+    assert.equal(inWorktree(made.worktree, made.cwd), true);
+    assert.equal(inWorktree(made.worktree, repo), false);
+    assert.equal(inWorktree(made.worktree, `${made.worktree.path}-sibling`), false);
+    const first = await seedHistoricalSession(app, made.cwd);
+    const second = await seedHistoricalSession(app, join(alias, "app"));
 
-test("a worktree another session works in stays, and a session's subagents leave it with the session", async () => {
-    const { id } = await app.commands.createSession(owner(app), {
-        cwd: join(repo, "app"),
-        worktree: true,
-    });
-
-    await app.commands.configure(id, owner(app), {
-        model: { provider: "faux", modelId: "faux-1" },
-    });
-    const worktree = app.sessionMeta(id)!.worktree!;
-
-    await say(app, id, "start a helper");
-    await until(
-        async () =>
-            (await modelTexts(app, id)).some((text) => text.includes("[subagent helper answered")),
-        "the helper to report",
+    await appendHistoricalTurn(app, first, "first historical checkout", "retained first reply");
+    await appendHistoricalTurn(app, second, "second historical checkout", "retained second reply");
+    await assert.rejects(
+        app.commands.configure(second, owner(app), { cwd: join(repo, "app") }),
+        /read-only archive/,
     );
-    const helper = (await app.harness.snapshot(SubagentsDoc, id, context))!.agents.helper!
-        .conversationId;
-
-    // Pi answers the report too: everything settles before the worktree may go.
-    await until(
-        () => !app.isBusy(id) && !app.isBusy(helper),
-        "the session and its helper to be done",
-    );
-    assert.equal(app.cwdOf(helper), join(worktree.path, "app"));
-
-    // A fork made without a worktree of its own works in this one.
-    const page = await (await app.harness.conversation(id, context))!.entries(
-        {},
-        50,
-        undefined,
-        context,
-    );
-    const reply = page.items.find((entry) => entry.kind === "pi.assistant")!;
-    const { id: fork } = await app.commands.fork(id, owner(app), { entryId: Number(reply.id) });
-
-    await assert.rejects(app.commands.removeWorktree(id, owner(app), true), {
-        status: 409,
-        message: /works in this worktree too/,
-    });
-    await app.commands.configure(fork, owner(app), { cwd: join(repo, "app") });
-
-    await app.commands.removeWorktree(id, owner(app), true);
-    assert.equal(app.cwdOf(id), join(repo, "app"));
-    assert.equal(app.cwdOf(helper), join(repo, "app"), "the helper went back with it");
+    assert.equal(app.cwdOf(first), made.cwd);
+    assert.equal(app.cwdOf(second), join(alias, "app"));
+    assert.equal(existsSync(join(app.cwdOf(second), "main.ts")), true);
+    assert.match((await modelTexts(app, first)).join("\n"), /retained first reply/);
+    assert.match((await modelTexts(app, second)).join("\n"), /retained second reply/);
 });

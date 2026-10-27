@@ -1,5 +1,5 @@
 // Opt-in TLS, HTTP/1.1 fallback, real app auth/streams/multiplexing and shutdown. No real accounts.
-import { cleanUp, newSession, openApp, root, scriptedModel } from "./helpers.ts";
+import { cleanUp, seedHistoricalSession, openApp, root, scriptedModel } from "./helpers.ts";
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import { readFileSync } from "node:fs";
@@ -46,7 +46,7 @@ test("TLS is explicit, paired, readable and valid before taking the listening po
 
 test("TLS serves HTTP/2 auth, gzip views and multiplexed app requests, with an HTTP/1.1 fallback and bounded shutdown", async () => {
     const app = await openApp(scriptedModel());
-    const id = await newSession(app);
+    const id = await seedHistoricalSession(app);
     const handle = createHandler({
         app,
         listen: { host: "127.0.0.1", port: 0 },

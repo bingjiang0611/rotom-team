@@ -236,14 +236,16 @@ const second = await call(bob.token, `c/${session.id}/submit`, "POST", {
 assert.equal(second.status, "settled");
 assert.equal(lastPayer(), bob.user.name);
 assert.equal(
-    (app.kernel!.roomState(session.id as never, bob.user) as { memberName: string }).memberName,
+    ((await app.kernel!.roomState(session.id as never, bob.user)) as { memberName: string })
+        .memberName,
     bob.user.name,
 );
 console.log(`  settled; paid by ${lastPayer()}; the session now runs as ${bob.user.name}`);
 
 step("Carol forks the session and continues the fork on her account");
-const head = (app.kernel!.roomState(session.id as never, carol.user) as { segmentId: string })
-    .segmentId;
+const head = (
+    (await app.kernel!.roomState(session.id as never, carol.user)) as { segmentId: string }
+).segmentId;
 const fork = (await call(carol.token, `c/${session.id}/fork`, "POST", {
     requestId: "carol-fork",
     expectedHead: head,
@@ -292,7 +294,7 @@ handler = createHandler({ app, listen: { host: "127.0.0.1", port: 0 }, restart: 
 const journal = app.kernel!.executions.journal;
 
 for (let tries = 0; ; tries++) {
-    const latest = journal.latest(String(session.id));
+    const latest = await journal.latest(String(session.id));
 
     if (latest?.requestId.includes("#resume") && latest.status === "settled") {
         break;

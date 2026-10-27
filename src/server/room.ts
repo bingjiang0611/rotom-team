@@ -20,6 +20,7 @@ import type { TeamKernel } from "./team-kernel.ts";
 import type { Head } from "./branches.ts";
 import type { User } from "./config.ts";
 import {
+    type ArchiveMarker,
     type ArtifactMeta,
     ArtifactsDoc,
     AuthorsDoc,
@@ -43,6 +44,7 @@ import {
     TurnsDoc,
 } from "./docs.ts";
 import { SHELL_ENTRY } from "./entry-format.ts";
+import { ARCHIVE_COPY } from "./constants/copy.ts";
 import { agentInfo } from "./models.ts";
 import { liveUpdate, type LiveSnapshot } from "./live-delta.ts";
 import {
@@ -69,13 +71,30 @@ function roomPart<T>(part: RoomPartSignal["part"], project: () => T): T {
         return project();
     }
 
-    roomPartChannel.publish({ part } satisfies RoomPartSignal);
-    const started = performance.now();
-    const result = project();
+    return roomPartChannel.runStores({ part } satisfies RoomPartSignal, () => {
+        const started = performance.now();
+        const finished = () =>
+            roomPartChannel.publish({
+                part,
+                ms: performance.now() - started,
+            } satisfies RoomPartSignal);
 
-    roomPartChannel.publish({ part, ms: performance.now() - started } satisfies RoomPartSignal);
+        try {
+            const result = project();
 
-    return result;
+            if (result instanceof Promise) {
+                return result.finally(finished) as T;
+            }
+
+            finished();
+
+            return result;
+        } catch (error) {
+            finished();
+
+            throw error;
+        }
+    });
 }
 
 const context = BACKGROUND_CONTEXT;
@@ -148,6 +167,8 @@ export interface Client {
     readonly sessionDeltas?: boolean;
     /** This connection understands versioned append-only live text. Older tabs still receive full snapshots. */
     readonly liveDeltas?: boolean;
+    /** Opt-in session subscription generation; absent for legacy tabs. */
+    subscriptionGeneration?: number;
     /** Entries the tab says it holds from an earlier connection; checked and used up by its first full view. */
     viewClaim?: ViewClaim;
     /**
@@ -198,6 +219,18 @@ export class Room {
     #pushedAt = -Infinity;
     #closeTimer: NodeJS.Timeout | undefined;
     #headTimer: NodeJS.Timeout | undefined;
+    #nativePushChain = Promise.resolve();
+    #nativeRunning = false;
+    #nativeClosed = false;
+    readonly #nativePending = new Map<
+        Client,
+        {
+            full: boolean;
+            version: number;
+            generation: Client["subscriptionGeneration"];
+            connection: Client["connection"];
+        } & ReturnType<typeof Promise.withResolvers<void>>
+    >();
     /** The branch this view last read, as JSON. */
     #head = "";
     readonly #projected = new Map<number, ClientEntry | null>();
@@ -217,7 +250,7 @@ export class Room {
     notes: Notes = { text: "", rev: 0 };
     turns: Turns = { on: false, asks: [] };
     decisions: Record<string, Decision> = {};
-    plan: { on: boolean; by?: string; at?: number } = { on: false };
+    plan: { on: boolean; by?: string; at?: number; archive?: ArchiveMarker } = { on: false };
     schedules: Record<string, Schedule> = {};
     goal: Goal | undefined;
     /** Who is typing where, by user id. Memory only: it means nothing after a restart. */
@@ -408,7 +441,13 @@ export class Room {
             () => {
                 this.#timer = undefined;
 
-                this.pushAll();
+                const pushed = this.pushAll();
+
+                if (pushed) {
+                    void pushed.catch((error) =>
+                        console.error("Native room projection failed", error),
+                    );
+                }
             },
             Math.max(0, this.#pushedAt + 90 - performance.now()),
         );
@@ -432,24 +471,6 @@ export class Room {
             return this.#entrySequence;
         }
 
-        const entries: ClientEntry[] = [];
-        const order: number[] = [];
-
-        for (const entry of source) {
-            const projected = this.#entry(entry);
-
-            if (projected !== null) {
-                entries.push(projected);
-                order.push(projected.id);
-            }
-        }
-
-        if (viewProjectionChannel.hasSubscribers) {
-            viewProjectionChannel.publish({
-                entryVisits: source.length,
-            } satisfies ViewProjectionSignal);
-        }
-
         const previous = this.#entrySequence;
         const previousSource = this.#entrySource;
         const appended =
@@ -460,6 +481,25 @@ export class Room {
                 (source[0] === previousSource[0] &&
                     source[previousSource.length - 1] ===
                         previousSource[previousSource.length - 1]));
+        // Reuse the same immutable prefix as the client cursors. A head change still rebuilds the full sequence.
+        const from = appended ? previousSource.length : 0;
+        const entries: ClientEntry[] = appended ? previous.entries.slice() : [];
+        const order: number[] = appended ? previous.order.slice() : [];
+
+        for (let index = from; index < source.length; index++) {
+            const projected = this.#entry(source[index]!);
+
+            if (projected !== null) {
+                entries.push(projected);
+                order.push(projected.id);
+            }
+        }
+
+        if (viewProjectionChannel.hasSubscribers) {
+            viewProjectionChannel.publish({
+                entryVisits: source.length - from,
+            } satisfies ViewProjectionSignal);
+        }
 
         this.#entrySource = source;
         this.#entrySequence = {
@@ -494,41 +534,250 @@ export class Room {
         return this.#stats;
     }
 
-    /** Send one client a fresh projection; do not retain the room-wide readback across calls. */
-    push(client: Client, full: boolean): void {
-        let info: ReturnType<TeamKernel["roomInfo"]> | undefined;
+    /** Public fields are identical for every viewer in one synchronous fanout. */
+    #fields(roomInfo: Awaited<ReturnType<TeamKernel["roomInfo"]>> | undefined) {
+        const fields: Record<string, unknown> = {
+            artifacts: Object.entries(this.artifacts).map(([id, meta]) => ({
+                id,
+                title: meta.title,
+                type: meta.type,
+                versions: meta.versions.map((version) => ({
+                    version: version.version,
+                    size: version.size,
+                    createdAt: version.createdAt,
+                })),
+            })),
+            subagents: Object.entries(this.subagents).map(([name, record]) => ({
+                name,
+                conversationId: record.conversationId,
+                busy: this.#app.isBusy(record.conversationId),
+            })),
+            authors: this.authors,
+            reactions: this.reactions,
+            pins: this.pins,
+            turns: this.turns,
+            decisions: this.decisions,
+            readOnly:
+                this.#app.sessionBackend(this.id) === "durable"
+                    ? { reason: ARCHIVE_COPY.readOnly }
+                    : null,
+            plan: this.plan,
+            schedules: Object.values(this.schedules)
+                .sort((a, b) => a.next - b.next)
+                .map(({ id, text, next, every, by, runs, archive }) => ({
+                    id,
+                    text,
+                    next,
+                    ...(every === undefined ? {} : { repeat: describeRepeat(every) }),
+                    ...(by === undefined ? {} : { by }),
+                    ...(archive === undefined ? {} : { archive }),
+                    runs,
+                })),
+            // The branch is read from the repository each time, so one Pi or a person switched to shows on the next update.
+            branch: this.#readHead(),
+            goal:
+                this.goal === undefined
+                    ? null
+                    : {
+                          command: this.goal.command,
+                          by: this.goal.by,
+                          status: this.goal.status,
+                          tries: this.goal.tries,
+                          max: this.goal.max,
+                          ...(this.goal.last === undefined ? {} : { last: this.goal.last }),
+                          ...(this.goal.archive === undefined
+                              ? {}
+                              : { archive: this.goal.archive }),
+                      },
+            ...(this.#native()
+                ? {
+                      nativeGoal: roomInfo!.goal ?? null,
+                  }
+                : {}),
+        };
 
-        this.#push(client, full, () => (info ??= this.#app.kernel!.roomInfo(this.id)));
+        const serialized = Object.entries(fields).map(([key, value]) => ({
+            key,
+            value,
+            json: JSON.stringify(value),
+        }));
+
+        if (viewProjectionChannel.hasSubscribers) {
+            viewProjectionChannel.publish({
+                fieldStringifyCalls: serialized.length,
+                fieldStringifyChars: serialized.reduce((sum, field) => sum + field.json.length, 0),
+            } satisfies ViewProjectionSignal);
+        }
+
+        return serialized;
     }
 
-    /** One synchronous fanout shares public room readback, never viewer-specific safety fields. */
-    pushAll(fullClient?: Client): void {
-        let info: ReturnType<TeamKernel["roomInfo"]> | undefined;
+    /** Send one client a fresh projection; do not retain room-wide readback across refreshes. */
+    push(client: Client, full: boolean): void | Promise<void> {
+        if (!this.#native()) {
+            this.#push(client, full, undefined, () => this.#fields(undefined));
 
-        // Every tab gets the current view now: a push already scheduled would find nothing new.
+            return;
+        }
+
+        return this.#queueNativePush(client, full);
+    }
+
+    /** A fanout shares public fields, never viewer-specific safety data. */
+    pushAll(fullClient?: Client): void | Promise<void> {
         clearTimeout(this.#timer);
         this.#timer = undefined;
         this.#pushedAt = performance.now();
 
-        const roomInfo = () => {
-            info ??= this.#app.kernel!.roomInfo(this.id);
+        const clients =
+            fullClient === undefined
+                ? [...this.clients]
+                : [fullClient, ...[...this.clients].filter((client) => client !== fullClient)];
 
-            return info;
-        };
+        if (!this.#native()) {
+            let fields: { key: string; value: unknown; json: string }[] | undefined;
+            const commonFields = () => (fields ??= this.#fields(undefined));
 
-        if (fullClient !== undefined) {
-            this.#push(fullClient, true, roomInfo);
+            for (const client of clients) {
+                this.#push(client, client === fullClient, undefined, commonFields);
+            }
+
+            return;
         }
 
-        for (const client of this.clients) {
-            if (client !== fullClient) {
-                this.#push(client, false, roomInfo);
+        return Promise.all(
+            clients.map((client) => this.#queueNativePush(client, client === fullClient)),
+        ).then(() => undefined);
+    }
+
+    #queueNativePush(client: Client, full: boolean): Promise<void> {
+        if (this.#nativeClosed || !this.clients.has(client)) {
+            return Promise.resolve();
+        }
+
+        let request = this.#nativePending.get(client);
+
+        if (request) {
+            request.full ||= full;
+            request.version++;
+            request.generation = client.subscriptionGeneration;
+            request.connection = client.connection;
+        } else {
+            request = {
+                full,
+                version: 0,
+                generation: client.subscriptionGeneration,
+                connection: client.connection,
+                ...Promise.withResolvers<void>(),
+            };
+            this.#nativePending.set(client, request);
+        }
+
+        if (!this.#nativeRunning) {
+            this.#nativeRunning = true;
+            this.#nativePushChain = Promise.resolve().then(async () => {
+                try {
+                    while (this.#nativePending.size) {
+                        await this.#pushNativeBatch();
+                    }
+                } finally {
+                    this.#nativeRunning = false;
+                }
+            });
+        }
+
+        return request.promise;
+    }
+
+    /** At most one pending completion per actual member, including requests arriving during preparation. */
+    async #pushNativeBatch(): Promise<void> {
+        const batch = [...this.#nativePending].map(([client, request]) => ({
+            client,
+            request,
+            version: request.version,
+            generation: request.generation,
+            connection: request.connection,
+        }));
+        const current = (item: (typeof batch)[number]) =>
+            !this.#nativeClosed &&
+            this.clients.has(item.client) &&
+            item.client.conversationId === this.id &&
+            item.client.subscriptionGeneration === item.generation &&
+            item.client.connection === item.connection &&
+            this.#app.config.userById(item.client.user.id) !== undefined &&
+            this.#app.canSee(item.client.user, this.id);
+        const active = batch.filter((item) => {
+            if (current(item)) {
+                return true;
+            }
+
+            this.#nativePending.delete(item.client);
+            item.request.resolve();
+
+            return false;
+        });
+
+        if (!active.length) {
+            return;
+        }
+
+        let info: Awaited<ReturnType<TeamKernel["roomInfo"]>>;
+
+        try {
+            info = await this.#app.kernel!.roomInfo(this.id);
+        } catch (error) {
+            for (const { client, request } of active) {
+                this.#nativePending.delete(client);
+                request.reject(error);
+                client.close?.();
+            }
+
+            return;
+        }
+
+        let fields: { key: string; value: unknown; json: string }[] | undefined;
+        const commonFields = () => (fields ??= this.#fields(info));
+
+        for (const item of active) {
+            const { client, request, version } = item;
+
+            try {
+                if (version !== request.version) {
+                    continue;
+                }
+
+                if (current(item)) {
+                    const state = await roomPart("kernel", () =>
+                        this.#app.kernel!.roomState(this.id, client.user),
+                    );
+
+                    if (version !== request.version) {
+                        continue;
+                    }
+
+                    if (current(item)) {
+                        this.#push(client, request.full, info, commonFields, state);
+                    }
+                }
+
+                this.#nativePending.delete(client);
+                request.resolve();
+            } catch (error) {
+                this.#nativePending.delete(client);
+                request.reject(error);
+                client.close?.();
             }
         }
     }
 
     /** Each client still validates its own sent entries, catalog, member and pending state. */
-    #push(client: Client, full: boolean, roomInfo: () => ReturnType<TeamKernel["roomInfo"]>): void {
+    #push(
+        client: Client,
+        full: boolean,
+        roomInfo: Awaited<ReturnType<TeamKernel["roomInfo"]>> | undefined,
+        commonFields: () => { key: string; value: unknown; json: string }[],
+        preparedState?: Awaited<ReturnType<TeamKernel["roomState"]>>,
+    ): void {
         const view = this.#view?.value;
 
         if (view === undefined) {
@@ -595,77 +844,13 @@ export class Room {
         const agentState = (view.docs["pi.agent"] ?? {}) as AgentState;
         const inbox = (view.docs["pi.inbox"] ?? { items: [] }) as unknown as InboxState;
         const live = view.docs["pi.live"] as LiveState | undefined;
-        // These grow with the session (authors has one item per message) but rarely change: streaming sends an update
-        // every 90 ms, which would repeat them all each time. Send each only when it differs from what this client has.
-        const fields: Record<string, unknown> = {
-            artifacts: Object.entries(this.artifacts).map(([id, meta]) => ({
-                id,
-                title: meta.title,
-                type: meta.type,
-                versions: meta.versions.map((version) => ({
-                    version: version.version,
-                    size: version.size,
-                    createdAt: version.createdAt,
-                })),
-            })),
-            subagents: Object.entries(this.subagents).map(([name, record]) => ({
-                name,
-                conversationId: record.conversationId,
-                busy: this.#app.isBusy(record.conversationId),
-            })),
-            authors: this.authors,
-            reactions: this.reactions,
-            pins: this.pins,
-            turns: this.turns,
-            decisions: this.decisions,
-            plan: this.plan,
-            schedules: Object.values(this.schedules)
-                .sort((a, b) => a.next - b.next)
-                .map(({ id, text, next, every, by, runs }) => ({
-                    id,
-                    text,
-                    next,
-                    ...(every === undefined ? {} : { repeat: describeRepeat(every) }),
-                    ...(by === undefined ? {} : { by }),
-                    runs,
-                })),
-            // The branch is read from the repository each time, so one Pi or a person switched to shows on the next update.
-            branch: this.#readHead(),
-            goal:
-                this.goal === undefined
-                    ? null
-                    : {
-                          command: this.goal.command,
-                          by: this.goal.by,
-                          status: this.goal.status,
-                          tries: this.goal.tries,
-                          max: this.goal.max,
-                          ...(this.goal.last === undefined ? {} : { last: this.goal.last }),
-                      },
-            ...(this.#native() ? { nativeGoal: roomInfo().goal ?? null } : {}),
-        };
+        const fields: Record<string, unknown> = {};
 
-        let fieldStringifyCalls = 0;
-        let fieldStringifyChars = 0;
-
-        for (const [key, value] of Object.entries(fields)) {
-            const json = JSON.stringify(value);
-
-            fieldStringifyCalls++;
-            fieldStringifyChars += json.length;
-
-            if (sentFields.get(key) === json) {
-                delete fields[key];
-            } else {
+        for (const { key, value, json } of commonFields()) {
+            if (sentFields.get(key) !== json) {
+                fields[key] = value;
                 sentFields.set(key, json);
             }
-        }
-
-        if (viewProjectionChannel.hasSubscribers) {
-            viewProjectionChannel.publish({
-                fieldStringifyCalls,
-                fieldStringifyChars,
-            } satisfies ViewProjectionSignal);
         }
 
         const liveState = roomPart("live", () =>
@@ -715,13 +900,11 @@ export class Room {
                 ),
             ),
             agent: this.#native()
-                ? roomInfo().agent
+                ? roomInfo!.agent
                 : agentInfo(this.#app.models, agentState, this.#app.defaultCwd),
             ...(this.#native()
                 ? {
-                      kernel: roomPart("kernel", () =>
-                          this.#app.kernel!.roomState(this.id, client.user),
-                      ),
+                      kernel: preparedState!,
                   }
                 : {}),
             stats: this.#projectStats(
@@ -958,7 +1141,8 @@ export class Room {
         this.#closeTimer.unref();
     }
 
-    close(): void {
+    close(): Promise<void> {
+        this.#nativeClosed = true;
         clearTimeout(this.#timer);
         clearTimeout(this.#closeTimer);
         clearInterval(this.#headTimer);
@@ -981,5 +1165,7 @@ export class Room {
         this.#statsEntrySource = undefined;
         this.#statsUsage = undefined;
         this.#stats = undefined;
+
+        return this.#nativePushChain;
     }
 }

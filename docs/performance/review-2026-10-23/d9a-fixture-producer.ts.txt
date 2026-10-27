@@ -1,0 +1,231 @@
+// Manual provenance tool, never a default-test dependency.
+// Copy to test/d9a-export.ts in an isolated git archive of 7478123, then run from that checkout:
+// node test/d9a-export.ts /absolute/path/to/new-fixture.json
+// Timestamps, IDs, and captured streaming position may differ; do not expect byte-identical output.
+import {
+  openApp,
+  scriptedModel,
+  newSession,
+  say,
+  owner,
+  until,
+  context,
+  root,
+  work,
+  cleanUp,
+  lastText,
+} from "./helpers.ts";
+import {
+  fauxAssistantMessage,
+  fauxText,
+  fauxToolCall,
+} from "@earendil-works/pi-ai/providers/faux";
+import { SqliteStorage } from "@earendil-works/pi-durable/storage/sqlite";
+import { LiveDoc } from "@earendil-works/pi-durable";
+import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { createHash } from "node:crypto";
+import assert from "node:assert/strict";
+
+const outputPath = process.argv[2];
+assert(
+  outputPath,
+  "Pass an explicit output path; this tool never overwrites the committed fixture by default",
+);
+const expectedHashes = {
+  "src/server/app.ts":
+    "a72ba479518863e909e8f4d938e002fa616b863cfd0f89697cfb2891cdaff9b5",
+  "src/server/docs.ts":
+    "b66678d9a123cabc144b0ad46ed5d427854f62066355f38ba88d6df9a42d07d7",
+  "src/server/shell.ts":
+    "1b6bc256550c70006aaeb53bd1d70879bf67184fbe13a1bb19d2bd2347b857d3",
+  "src/server/schedules.ts":
+    "befce18a51f9005f2535f99bf4064ff6d725aaf586bf439f5d130ff995eee5b8",
+  "src/server/resend.ts":
+    "c547649aa4fe695b5539d6ab7ac7b3ba3e4b4235c1b9e353ac8e76e9337188d3",
+};
+for (const [path, hash] of Object.entries(expectedHashes)) {
+  assert.equal(
+    createHash("sha256").update(readFileSync(path)).digest("hex"),
+    hash,
+    `Use the unmodified historical source: ${path}`,
+  );
+}
+
+const data = join(root, "data");
+mkdirSync(join(data, "extensions"), { recursive: true });
+const extensionSource = `import { defineExtension, defineTool } from '@earendil-works/pi-durable';
+import { Type } from '@earendil-works/pi-ai';
+import { awaitWithContext } from '@earendil-works/chord/context';
+export default () => defineExtension({ name: 'fixture-wait', tools: [defineTool({ name: 'fixture_wait', description: 'Synthetic cancellable wait', parameters: Type.Object({}), replay: 'safe', execute: async (_, api, context) => { api.output('synthetic unfinished tool output'); await api.details({ fixture: true }, context); return await awaitWithContext(new Promise(() => {}), context); } })] });`;
+writeFileSync(join(data, "extensions", "fixture-wait.ts"), extensionSource);
+let storage;
+const commit = SqliteStorage.prototype.commit;
+SqliteStorage.prototype.commit = async function (...args) {
+  storage = this;
+  return commit.apply(this, args);
+};
+const model = scriptedModel((ctx) => {
+  const text = lastText(ctx).text;
+  if (text.includes("HOLD-FIXTURE"))
+    return fauxAssistantMessage([fauxToolCall("fixture_wait", {})], {
+      stopReason: "toolUse",
+    });
+  if (text.includes("STREAM-FIXTURE"))
+    return fauxAssistantMessage([
+      fauxText("synthetic partial response ".repeat(1000)),
+    ]);
+  return fauxAssistantMessage([fauxText(`baseline reply: ${text}`)]);
+});
+const app = await openApp(model, data);
+async function all(method, query) {
+  const rows = [];
+  let cursor;
+  do {
+    const page = await storage[method](query, 128, cursor, context);
+    rows.push(...page.items);
+    cursor = page.next;
+  } while (cursor !== undefined);
+  return rows;
+}
+try {
+  const user = owner(app);
+  await app.setExtensionEnabled(user, "fixture-wait.ts", true);
+  const id = await newSession(app);
+  await say(app, id, "saved historical question");
+  await app.schedules.add(id, {
+    when: "in 1d",
+    text: "future historical work",
+    by: { id: user.id, name: user.name },
+  });
+  await app.goals.set(id, user.id, "false");
+  await app.commands.submit(id, user, {
+    text: "HOLD-FIXTURE",
+    requestId: "old-hold",
+  });
+  await until(
+    async () =>
+      (await app.harness.snapshot(LiveDoc, id, context))?.tools?.some(
+        (tool) => tool.name === "fixture_wait" && tool.status === "running",
+      ) === true,
+    "real baseline tool invocation",
+  );
+  const conversation = await app.harness.conversation(id, context);
+  await conversation.submit(
+    {
+      type: "input",
+      content: "queued historical input",
+      whenBusy: "followUp",
+      requestId: "old-queued",
+    },
+    context,
+  );
+  const partialId = await newSession(app);
+  await app.commands.submit(partialId, user, {
+    text: "STREAM-FIXTURE",
+    requestId: "old-stream",
+  });
+  await until(
+    async () =>
+      (
+        await app.harness.snapshot(LiveDoc, partialId, context)
+      )?.generation?.message?.content.some(
+        (part) => part.type === "text" && part.text.length > 0,
+      ) === true,
+    "committed baseline partial text",
+  );
+  const fixture = await app.harness.commit(async () => {
+    const conversations = await all("scanConversations", {});
+    const entries = [];
+    const tasks = [];
+    const submissions = [];
+    for (const conversation of conversations) {
+      entries.push(
+        ...(await all("scanEntries", { conversationId: conversation.id })),
+      );
+      tasks.push(
+        ...(await all("scanTasks", { conversationId: conversation.id })),
+      );
+      submissions.push(
+        ...(await all("scanSubmissions", { conversationId: conversation.id })),
+      );
+    }
+    const documents = [];
+    const scopes = [
+      { kind: "session" },
+      ...conversations.map((row) => ({
+        kind: "conversation",
+        conversationId: row.id,
+      })),
+      ...tasks.map((row) => ({ kind: "task", taskId: row.id })),
+    ];
+    for (const scope of scopes) {
+      for (const record of await all("scanDocuments", {
+        scope,
+        at: "current",
+      })) {
+        const stored = await storage.document(record.id, "current", context);
+        documents.push({
+          record,
+          content: {
+            kind: "base",
+            version: stored.version,
+            value: stored.value,
+          },
+        });
+      }
+    }
+    return { conversations, entries, tasks, submissions, documents };
+  }, context);
+  const sourceFiles = [
+    "src/server/app.ts",
+    "src/server/docs.ts",
+    "src/server/shell.ts",
+    "src/server/schedules.ts",
+    "src/server/resend.ts",
+  ];
+  const sourceHashes = Object.fromEntries(
+    sourceFiles.map((path) => [
+      path,
+      createHash("sha256").update(readFileSync(path)).digest("hex"),
+    ]),
+  );
+  const output = {
+    producer: {
+      revision: "7478123983cd9d9a2ff25782f87523043bdfe181",
+      durable: "1.0.2",
+      sourceHashes,
+      method:
+        "Real baseline app command execution with faux model; public Storage read on Harness mutation line before close.",
+      rootPlaceholder: "$FIXTURE_ROOT",
+    },
+    ids: { id, partialId },
+    extensionSource,
+    extensionChoices: {
+      enabledExtensions: [...app.config.enabledExtensions],
+      disabledExtensions: [...app.config.disabledExtensions],
+    },
+    fixture,
+  };
+  const serialized = JSON.stringify(output, null, 2)
+    .split(root)
+    .join("$FIXTURE_ROOT");
+  writeFileSync(outputPath, serialized + "\n", { flag: "wx" });
+  console.log(
+    JSON.stringify({
+      ids: output.ids,
+      entries: fixture.entries.length,
+      tasks: fixture.tasks.map((t) => ({
+        kind: t.kind,
+        status: t.state.status,
+      })),
+      submissions: fixture.submissions.map((s) => s.status),
+      documents: fixture.documents.length,
+      bytes: Buffer.byteLength(serialized),
+    }),
+  );
+} finally {
+  await app.close();
+  SqliteStorage.prototype.commit = commit;
+  cleanUp();
+}

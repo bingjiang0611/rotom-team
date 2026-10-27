@@ -1,4 +1,14 @@
-import { cleanUp, context, openApp, owner, root, scriptedModel, work, say } from "./helpers.ts";
+import {
+    appendHistoricalTurn,
+    cleanUp,
+    context,
+    openApp,
+    owner,
+    root,
+    scriptedModel,
+    seedHistoricalSession,
+    work,
+} from "./helpers.ts";
 import assert from "node:assert/strict";
 import { mkdirSync, readFileSync, writeFileSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
@@ -28,7 +38,12 @@ test("personal profile and complete skills freeze per conversation, survive rest
             instructions: "personal rules v1",
             skillDirectories: [skill],
         });
-        const { id } = await app.commands.createSession(alice, { title: "snapshot" });
+        const id = await seedHistoricalSession(app);
+        const snapshot = app.profiles.capture(alice, work, []);
+
+        await app.harness.commit(async (tx) => {
+            (await tx.doc(ConfigurationDoc, id)).snapshot = snapshot;
+        }, context);
         const config = (await app.harness.snapshot(ConfigurationDoc, id, context))!.snapshot!;
 
         assert.match(config.context, /project rules v1/);
@@ -49,14 +64,12 @@ test("personal profile and complete skills freeze per conversation, survive rest
             readFileSync(join(config.skills[0]!.baseDir, "references", "check.md"), "utf8"),
             "original reference",
         );
-        await say(app, id, "/skill:handoff summarize");
-        const transcript = await (await app.harness.conversation(id, context))!.context(context);
-
-        assert.match(JSON.stringify(transcript.messages), /Original instructions/);
-        assert.doesNotMatch(
-            JSON.stringify(transcript.messages),
-            /Changed instructions|personal rules v2|project rules v2/,
+        await appendHistoricalTurn(app, id, "/skill:handoff summarize", "historical handoff");
+        assert.match(
+            readFileSync(join(config.skills[0]!.baseDir, "SKILL.md"), "utf8"),
+            /Original instructions/,
         );
+        assert.doesNotMatch(config.context, /personal rules v2|project rules v2/);
         const page = await (await app.harness.conversation(id, context))!.entries(
             {},
             100,
@@ -64,19 +77,19 @@ test("personal profile and complete skills freeze per conversation, survive rest
             context,
         );
         const answer = page.items.findLast((entry) => entry.kind === "pi.assistant")!;
-        const fork = await app.commands.fork(id, alice, { entryId: Number(answer.id) });
 
-        assert.equal(
-            (await app.harness.snapshot(ConfigurationDoc, fork.id, context))!.snapshot!.digest,
-            config.digest,
+        await assert.rejects(
+            app.commands.fork(id, alice, { entryId: Number(answer.id) }),
+            /read-only archive/,
         );
         await app.close();
         app = await openApp(scriptedModel(), data);
         assert.equal(app.profiles.snapshot(id)!.digest, config.digest);
-        assert.equal(app.skillCommands(id)[0]!.path, config.skills[0]!.path);
-        const newer = await app.commands.createSession(owner(app), { title: "new version" });
+        assert.equal((await app.skillCommands(id))[0]!.path, config.skills[0]!.path);
+        await seedHistoricalSession(app);
+        const newerSnapshot = app.profiles.capture(owner(app), work, []);
 
-        assert.notEqual(app.profiles.snapshot(newer.id)!.digest, config.digest);
+        assert.notEqual(newerSnapshot.digest, config.digest);
     } finally {
         await app.close();
     }
@@ -129,7 +142,7 @@ test("profile edits are personal; viewer, service-data imports, and colliding sk
             instructions: "",
             skillDirectories: [first, second],
         });
-        await assert.rejects(app.commands.createSession(alice, { title: "no collision" }), {
+        assert.throws(() => app.profiles.capture(alice, work, []), {
             status: 400,
         });
         const linked = join(root, "linked-skill");

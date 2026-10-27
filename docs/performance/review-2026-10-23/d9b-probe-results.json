@@ -1,0 +1,553 @@
+{
+    "base": "9562e79",
+    "sourceCount": 394,
+    "sourceUnchangedSinceFinalChecks": true,
+    "taskShapeProof": {
+        "src/server/shell.ts": {
+            "tasks": [
+                {
+                    "types": [
+                        "{\n    command: string;\n    by: string;\n    name: string;\n    context: boolean;\n}",
+                        "{\n    phase: \"run\";\n}",
+                        "null"
+                    ],
+                    "fields": {
+                        "name": "TASK",
+                        "version": "1",
+                        "initial": "() => ({ phase: \"run\" })"
+                    }
+                }
+            ],
+            "types": {
+                "ShellInput": "{\n    command: string;\n    by: string;\n    name: string;\n    context: boolean;\n}",
+                "ShellState": "{\n    phase: \"run\";\n}"
+            }
+        },
+        "src/server/schedules.ts": {
+            "tasks": [
+                {
+                    "types": [
+                        "{\n    scheduleId: string;\n}",
+                        "{\n    phase: \"wait\";\n} | {\n    phase: \"send\";\n}",
+                        "null"
+                    ],
+                    "fields": {
+                        "name": "\"pocket.schedule\"",
+                        "version": "1",
+                        "initial": "() => ({ phase: \"wait\" })"
+                    }
+                }
+            ],
+            "types": {
+                "ScheduleInput": "{\n    scheduleId: string;\n}",
+                "ScheduleState": "{\n    phase: \"wait\";\n} | {\n    phase: \"send\";\n}",
+                "ScheduleRequest": "{\n    when: string;\n    text?: string;\n    zone?: string;\n    by?: {\n        id: string;\n        name: string;\n    };\n    requestedBy?: string;\n    key?: string;\n}"
+            }
+        },
+        "src/server/resend.ts": {
+            "tasks": [
+                {
+                    "types": [
+                        "{\n    text: string;\n    by: string;\n    images?: {\n        entry: EntryId;\n    };\n}",
+                        "{\n    phase: \"send\";\n}",
+                        "null"
+                    ],
+                    "fields": {
+                        "name": "\"pocket.resend\"",
+                        "version": "1",
+                        "initial": "() => ({ phase: \"send\" })"
+                    }
+                }
+            ],
+            "types": {
+                "Resend": "{\n    text: string;\n    by: string;\n    images?: {\n        entry: EntryId;\n    };\n}",
+                "ResendState": "{\n    phase: \"send\";\n}"
+            }
+        },
+        "src/server/goals.ts": {
+            "tasks": [],
+            "types": {}
+        }
+    },
+    "probes": {
+        "head-off": {
+            "mode": "off",
+            "r1.exportHasHistory": true,
+            "r1.submit": "409 This legacy Durable session is a read-only archive. Open, read, export, and access grants remain available; execution and mutation are disabled.",
+            "r1.archiveNotes": 1,
+            "r1.scheduledSent": 0,
+            "r1.newWork": false,
+            "r1.activeTasks": 0,
+            "r1.openSubmissions": 0,
+            "r1.locks": [],
+            "r2.exportHasHistory": true,
+            "r2.submit": "409 This legacy Durable session is a read-only archive. Open, read, export, and access grants remain available; execution and mutation are disabled.",
+            "r2.archiveNotes": 1,
+            "r2.scheduledSent": 0,
+            "r2.newWork": false,
+            "r2.activeTasks": 0,
+            "r2.openSubmissions": 0,
+            "r2.locks": [],
+            "sentinelUnchanged": true
+        },
+        "head-on": {
+            "mode": "on",
+            "r1.exportHasHistory": true,
+            "r1.submit": "409 This legacy Durable session is a read-only archive. Open, read, export, and access grants remain available; execution and mutation are disabled.",
+            "r1.archiveNotes": 1,
+            "r1.scheduledSent": 0,
+            "r1.newWork": false,
+            "r1.activeTasks": 0,
+            "r1.openSubmissions": 0,
+            "r1.locks": [],
+            "r2.exportHasHistory": true,
+            "r2.submit": "409 This legacy Durable session is a read-only archive. Open, read, export, and access grants remain available; execution and mutation are disabled.",
+            "r2.archiveNotes": 1,
+            "r2.scheduledSent": 0,
+            "r2.newWork": false,
+            "r2.activeTasks": 0,
+            "r2.openSubmissions": 0,
+            "r2.locks": [],
+            "sentinelUnchanged": true
+        },
+        "head-worker": {
+            "mode": "worker",
+            "r1.exportHasHistory": true,
+            "r1.submit": "409 This legacy Durable session is a read-only archive. Open, read, export, and access grants remain available; execution and mutation are disabled.",
+            "r1.archiveNotes": 1,
+            "r1.scheduledSent": 0,
+            "r1.newWork": false,
+            "r1.activeTasks": 0,
+            "r1.openSubmissions": 0,
+            "r1.locks": [],
+            "r2.exportHasHistory": true,
+            "r2.submit": "409 This legacy Durable session is a read-only archive. Open, read, export, and access grants remain available; execution and mutation are disabled.",
+            "r2.archiveNotes": 1,
+            "r2.scheduledSent": 0,
+            "r2.newWork": false,
+            "r2.activeTasks": 0,
+            "r2.openSubmissions": 0,
+            "r2.locks": [],
+            "sentinelUnchanged": true
+        },
+        "rollback-off": {
+            "mode": "off",
+            "r1.exportHasHistory": true,
+            "r1.submit": "409 This legacy Durable session is a read-only archive. Open, read, export, and access grants remain available; execution and mutation are disabled.",
+            "r1.archiveNotes": 1,
+            "r1.scheduledSent": 0,
+            "r1.newWork": false,
+            "r1.activeTasks": 0,
+            "r1.openSubmissions": 0,
+            "r1.locks": [],
+            "r2.exportHasHistory": true,
+            "r2.submit": "409 This legacy Durable session is a read-only archive. Open, read, export, and access grants remain available; execution and mutation are disabled.",
+            "r2.archiveNotes": 1,
+            "r2.scheduledSent": 0,
+            "r2.newWork": false,
+            "r2.activeTasks": 0,
+            "r2.openSubmissions": 0,
+            "r2.locks": [],
+            "sentinelUnchanged": true
+        },
+        "rollback-on": {
+            "mode": "on",
+            "r1.exportHasHistory": true,
+            "r1.submit": "409 This legacy Durable session is a read-only archive. Open, read, export, and access grants remain available; execution and mutation are disabled.",
+            "r1.archiveNotes": 1,
+            "r1.scheduledSent": 0,
+            "r1.newWork": false,
+            "r1.activeTasks": 0,
+            "r1.openSubmissions": 0,
+            "r1.locks": [],
+            "r2.exportHasHistory": true,
+            "r2.submit": "409 This legacy Durable session is a read-only archive. Open, read, export, and access grants remain available; execution and mutation are disabled.",
+            "r2.archiveNotes": 1,
+            "r2.scheduledSent": 0,
+            "r2.newWork": false,
+            "r2.activeTasks": 0,
+            "r2.openSubmissions": 0,
+            "r2.locks": [],
+            "sentinelUnchanged": true
+        },
+        "rollback-worker": {
+            "mode": "worker",
+            "r1.exportHasHistory": true,
+            "r1.submit": "409 This legacy Durable session is a read-only archive. Open, read, export, and access grants remain available; execution and mutation are disabled.",
+            "r1.archiveNotes": 1,
+            "r1.scheduledSent": 0,
+            "r1.newWork": false,
+            "r1.activeTasks": 0,
+            "r1.openSubmissions": 0,
+            "r1.locks": [],
+            "r2.exportHasHistory": true,
+            "r2.submit": "409 This legacy Durable session is a read-only archive. Open, read, export, and access grants remain available; execution and mutation are disabled.",
+            "r2.archiveNotes": 1,
+            "r2.scheduledSent": 0,
+            "r2.newWork": false,
+            "r2.activeTasks": 0,
+            "r2.openSubmissions": 0,
+            "r2.locks": [],
+            "sentinelUnchanged": true
+        }
+    },
+    "native": {
+        "app-off": {
+            "realProvider": false,
+            "status": "passed",
+            "webUiVerified": false,
+            "invalidBackendRejectedWithoutFallback": true,
+            "creationGapRecoveredWithoutDispatch": true,
+            "lostInitializedJournalFailsClosed": true,
+            "legacyNativeSetupBackfilledFromJournal": true,
+            "mcpSheetReportsProjectServers": true,
+            "nativeCompactBudgetAdmission": true,
+            "apiHandoffAndCompaction": true,
+            "handoffHistoricalUsagePreserved": true,
+            "apiForkIdempotencyConfigurationAndPayer": true,
+            "forkAndContinuePermissionsIndependent": true,
+            "concurrentConfigurationIdentityProtected": true,
+            "sameDigestStagingPreservesSnapshotIdentity": true,
+            "nativeConfigurationActivationAndFork": true,
+            "forkGapAndUnknownSourceNotReplayed": true,
+            "configurationGapNotReplayed": true,
+            "preparedOnlyReadbackExcludesLiveAndUnknown": true,
+            "readOnlyExactReceiptLookup": true,
+            "submitTakesOverWithSendersAccount": true,
+            "kernelUpgradeKeepsNativeSession": true,
+            "unifiedTranscriptLiveAndMirrored": true,
+            "extensionDialogsReachThePayer": true,
+            "messagesJoinTheRunningPrompt": true,
+            "projectMcpConnectedByChild": true,
+            "personalSkillsIgnoredByParentAndChild": true,
+            "subagentsThroughTheGate": true,
+            "stopEndsSubagents": true,
+            "cleanRestartContinues": true,
+            "projectSkillRunsByName": true,
+            "nativeForkSharesWorktree": true,
+            "nativeLiveForeignMutationDenied": true,
+            "oneMemberRunsSessionsInParallel": true,
+            "projectViewAndContinue": true,
+            "accountGenerationChecked": true,
+            "budgetNotBypassed": true,
+            "excludedSlashAndLongRequestRejectedBeforeIntent": true,
+            "disablingCannotBypassUnknownFence": true,
+            "apiCreateSubmitReadAbort": true,
+            "roleRevocation": true,
+            "projectConfiguration": true,
+            "fixedPayer": true,
+            "restartIdempotency": true,
+            "nativeHistoryResume": true,
+            "noDurableFallback": true,
+            "privateRequestAuthNotPersisted": true,
+            "loopbackRequests": 85,
+            "nativeDeliveredFileReadback": true,
+            "nativeAttachmentsImagesAndHistory": true,
+            "firstMessageNamesSession": true,
+            "nativeSubagentInjections": [
+                {
+                    "kind": "SKILL",
+                    "childInferences": 2,
+                    "descriptor": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-HZVwOz/native-app/kernel-homes/65dc3d3d-1836-436b-9087-be737987e4ca/.local/state/rotom/subagent-store/owned-process-groups-v2/async-subagent-runs/c9451a3e-5e8f-4070-b5f3-374ac386e86f/recovery-descriptor.json"
+                },
+                {
+                    "kind": "MEMORY",
+                    "childInferences": 1,
+                    "descriptor": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-HZVwOz/native-app/kernel-homes/65dc3d3d-1836-436b-9087-be737987e4ca/.local/state/rotom/subagent-store/owned-process-groups-v2/async-subagent-runs/74089337-a50e-4d4a-a943-27d71de0dca3/recovery-descriptor.json"
+                },
+                {
+                    "kind": "PROJECT_MEMORY",
+                    "childInferences": 1,
+                    "descriptor": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-HZVwOz/native-app/kernel-homes/65dc3d3d-1836-436b-9087-be737987e4ca/.local/state/rotom/subagent-store/owned-process-groups-v2/async-subagent-runs/d927fdae-b164-44d1-b3e0-1b7100f397de/recovery-descriptor.json"
+                },
+                {
+                    "kind": "REFINEMENT",
+                    "childInferences": 1,
+                    "descriptor": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-HZVwOz/native-app/kernel-homes/65dc3d3d-1836-436b-9087-be737987e4ca/.local/state/rotom/subagent-store/owned-process-groups-v2/async-subagent-runs/e183f707-fddd-4bc1-ad74-fd8efedb52bd/recovery-descriptor.json"
+                },
+                {
+                    "kind": "ASYNC_WORKFLOW",
+                    "childInferences": 0
+                },
+                {
+                    "kind": "WORKFLOW",
+                    "childInferences": 0
+                },
+                {
+                    "kind": "WORKER",
+                    "childInferences": 1,
+                    "descriptor": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-HZVwOz/native-app/kernel-homes/65dc3d3d-1836-436b-9087-be737987e4ca/.local/state/rotom/subagent-store/owned-process-groups-v2/async-subagent-runs/dfa8a11a-93e3-4541-81ac-9e0e799834ca/recovery-descriptor.json"
+                },
+                {
+                    "kind": "MEMORY",
+                    "childInferences": 1,
+                    "descriptor": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-HZVwOz/native-app/kernel-homes/8cb9e547-d362-4fc9-b2e3-da652b008935/.local/state/rotom/subagent-store/owned-process-groups-v2/async-subagent-runs/477b2dfb-3568-44da-8aa8-41d695ecbb83/recovery-descriptor.json"
+                },
+                {
+                    "kind": "PROJECT_MEMORY",
+                    "childInferences": 1,
+                    "descriptor": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-HZVwOz/native-app/kernel-homes/8cb9e547-d362-4fc9-b2e3-da652b008935/.local/state/rotom/subagent-store/owned-process-groups-v2/async-subagent-runs/65d67ca9-3ef7-4a76-8ff0-c568677a80ed/recovery-descriptor.json"
+                }
+            ],
+            "userProvidedWorkflowScripts": "unsupported: native scoped sync refusal and async lifetime/result-delivery gap",
+            "crashedKernelRemainsUnknownWithoutContinuation": true,
+            "evidence": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-HZVwOz/team-kernel-report.json"
+        },
+        "app-on": {
+            "realProvider": false,
+            "status": "passed",
+            "webUiVerified": false,
+            "invalidBackendRejectedWithoutFallback": true,
+            "creationGapRecoveredWithoutDispatch": true,
+            "lostInitializedJournalFailsClosed": true,
+            "legacyNativeSetupBackfilledFromJournal": true,
+            "mcpSheetReportsProjectServers": true,
+            "nativeCompactBudgetAdmission": true,
+            "apiHandoffAndCompaction": true,
+            "handoffHistoricalUsagePreserved": true,
+            "apiForkIdempotencyConfigurationAndPayer": true,
+            "forkAndContinuePermissionsIndependent": true,
+            "concurrentConfigurationIdentityProtected": true,
+            "sameDigestStagingPreservesSnapshotIdentity": true,
+            "nativeConfigurationActivationAndFork": true,
+            "forkGapAndUnknownSourceNotReplayed": true,
+            "configurationGapNotReplayed": true,
+            "preparedOnlyReadbackExcludesLiveAndUnknown": true,
+            "readOnlyExactReceiptLookup": true,
+            "submitTakesOverWithSendersAccount": true,
+            "kernelUpgradeKeepsNativeSession": true,
+            "unifiedTranscriptLiveAndMirrored": true,
+            "extensionDialogsReachThePayer": true,
+            "messagesJoinTheRunningPrompt": true,
+            "projectMcpConnectedByChild": true,
+            "personalSkillsIgnoredByParentAndChild": true,
+            "subagentsThroughTheGate": true,
+            "stopEndsSubagents": true,
+            "cleanRestartContinues": true,
+            "projectSkillRunsByName": true,
+            "nativeForkSharesWorktree": true,
+            "nativeLiveForeignMutationDenied": true,
+            "oneMemberRunsSessionsInParallel": true,
+            "projectViewAndContinue": true,
+            "accountGenerationChecked": true,
+            "budgetNotBypassed": true,
+            "excludedSlashAndLongRequestRejectedBeforeIntent": true,
+            "disablingCannotBypassUnknownFence": true,
+            "apiCreateSubmitReadAbort": true,
+            "roleRevocation": true,
+            "projectConfiguration": true,
+            "fixedPayer": true,
+            "restartIdempotency": true,
+            "nativeHistoryResume": true,
+            "noDurableFallback": true,
+            "privateRequestAuthNotPersisted": true,
+            "loopbackRequests": 86,
+            "nativeDeliveredFileReadback": true,
+            "nativeAttachmentsImagesAndHistory": true,
+            "firstMessageNamesSession": true,
+            "nativeSubagentInjections": [
+                {
+                    "kind": "SKILL",
+                    "childInferences": 2,
+                    "descriptor": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-Rwd1zc/native-app/kernel-homes/739d69bf-e3e0-490b-82b6-9ab13af7ec23/.local/state/rotom/subagent-store/owned-process-groups-v2/async-subagent-runs/b02f12d3-9da9-4288-b0eb-3b28994e4044/recovery-descriptor.json"
+                },
+                {
+                    "kind": "MEMORY",
+                    "childInferences": 1,
+                    "descriptor": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-Rwd1zc/native-app/kernel-homes/739d69bf-e3e0-490b-82b6-9ab13af7ec23/.local/state/rotom/subagent-store/owned-process-groups-v2/async-subagent-runs/006db886-ac11-4ada-9b76-6f2e6db0ab90/recovery-descriptor.json"
+                },
+                {
+                    "kind": "PROJECT_MEMORY",
+                    "childInferences": 1,
+                    "descriptor": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-Rwd1zc/native-app/kernel-homes/739d69bf-e3e0-490b-82b6-9ab13af7ec23/.local/state/rotom/subagent-store/owned-process-groups-v2/async-subagent-runs/3c46f6d3-1873-471e-bab4-5b87f36e0e00/recovery-descriptor.json"
+                },
+                {
+                    "kind": "REFINEMENT",
+                    "childInferences": 1,
+                    "descriptor": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-Rwd1zc/native-app/kernel-homes/739d69bf-e3e0-490b-82b6-9ab13af7ec23/.local/state/rotom/subagent-store/owned-process-groups-v2/async-subagent-runs/049ab73a-68ae-4d13-8cac-669887f343ab/recovery-descriptor.json"
+                },
+                {
+                    "kind": "ASYNC_WORKFLOW",
+                    "childInferences": 0
+                },
+                {
+                    "kind": "WORKFLOW",
+                    "childInferences": 0
+                },
+                {
+                    "kind": "WORKER",
+                    "childInferences": 1,
+                    "descriptor": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-Rwd1zc/native-app/kernel-homes/739d69bf-e3e0-490b-82b6-9ab13af7ec23/.local/state/rotom/subagent-store/owned-process-groups-v2/async-subagent-runs/6b6539ec-d24c-4645-a61d-1a42a46b621f/recovery-descriptor.json"
+                },
+                {
+                    "kind": "MEMORY",
+                    "childInferences": 1,
+                    "descriptor": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-Rwd1zc/native-app/kernel-homes/8bbde533-d808-4f08-a31e-b4c3eb092802/.local/state/rotom/subagent-store/owned-process-groups-v2/async-subagent-runs/e789d819-cd19-4928-993b-48e5b15fd2d0/recovery-descriptor.json"
+                },
+                {
+                    "kind": "PROJECT_MEMORY",
+                    "childInferences": 1,
+                    "descriptor": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-Rwd1zc/native-app/kernel-homes/8bbde533-d808-4f08-a31e-b4c3eb092802/.local/state/rotom/subagent-store/owned-process-groups-v2/async-subagent-runs/c060bca1-153f-4733-b28c-34885b466dd4/recovery-descriptor.json"
+                }
+            ],
+            "userProvidedWorkflowScripts": "unsupported: native scoped sync refusal and async lifetime/result-delivery gap",
+            "crashedKernelRemainsUnknownWithoutContinuation": true,
+            "storageWorkerFailureStopsNativeAndRetainsLeases": true,
+            "evidence": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-Rwd1zc/team-kernel-report.json"
+        },
+        "commands-off": {
+            "realAccounts": false,
+            "data": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-utfrll/native-commands",
+            "context": {
+                "usage": true,
+                "injections": true,
+                "noInference": true,
+                "idempotentReadback": true
+            },
+            "dynamicCommands": {
+                "shipped": 15,
+                "metadata": true,
+                "rejectedWithoutEffects": true,
+                "readOnlyHandlers": 8,
+                "noInference": true
+            },
+            "compaction": {
+                "calls": 2,
+                "usage": {
+                    "input": 22,
+                    "output": 14,
+                    "cacheRead": 0,
+                    "cacheWrite": 0,
+                    "reasoning": 0,
+                    "totalTokens": 36,
+                    "cost": {
+                        "input": 0,
+                        "output": 0,
+                        "cacheRead": 0,
+                        "cacheWrite": 0,
+                        "total": 0
+                    }
+                }
+            },
+            "queuedCommand": {
+                "operation": "prompt",
+                "status": "unknown",
+                "unresolvedCommandInput": true,
+                "effectCount": 1,
+                "recoveryEligible": false,
+                "restartedWithoutReplay": true
+            },
+            "largeReadback": {
+                "persistedHistoryOver64MiB": "settled",
+                "unflushedSuffix": "rpc-record-limit",
+                "finalizationFencedAfterRestart": true
+            },
+            "passed": true,
+            "inferences": 19,
+            "checks": [
+                "trusted executor fixture command effects remain unknown without restart/retry replay (below HTTP admission)",
+                "queued effect-then-error durably fences the existing prompt; no duplicate effect or automatic resume",
+                "actual unknown discovery cannot start a second native process with same or new request ID",
+                "catalog retained after 30 seconds/restart without native startup; owner-only shared settings",
+                "live native extensions exposed without a Team allowlist; protected account/upload/lifecycle commands rejected",
+                "native context usage/injections before first message and after inference; no paid probe or raw text result",
+                "first-session no-inference discovery and member-private snapshots",
+                "Qoder account API private results",
+                "native title readback before first message and after handoff",
+                "model A→B then inference B and Alice payer",
+                "thinking high persisted",
+                "skill admission clears before held inference completes",
+                "live thinking changes next provider request without replacing process, segment or receipt binding",
+                "native thinking clamping, payer-only admission and unknown/mixed-model fences",
+                "live thinking survives native process retirement and server restart",
+                "fixture native title and Team rename persist across handoff",
+                "native JSONL entries and HTML export/member privacy",
+                "selected earlier-user fork with Bob payer",
+                "native tree navigation and explicit branch summary usage",
+                "native slash compaction receipt, persisted summary/usage and idempotency",
+                "clone and selected-message fork create independent Team sessions; removed lifecycle commands rejected",
+                "settings persist to real native startup",
+                "unknown/private/excluded commands no inference",
+                "busy model mutation rejected without preference change",
+                "restart persistence"
+            ]
+        },
+        "commands-on": {
+            "realAccounts": false,
+            "data": "/private/var/folders/gq/gr5v20ss57550_3x_vbk9tpw0000gn/T/pi-pocket-test-oAKUHh/native-commands",
+            "context": {
+                "usage": true,
+                "injections": true,
+                "noInference": true,
+                "idempotentReadback": true
+            },
+            "dynamicCommands": {
+                "shipped": 15,
+                "metadata": true,
+                "rejectedWithoutEffects": true,
+                "readOnlyHandlers": 8,
+                "noInference": true
+            },
+            "compaction": {
+                "calls": 2,
+                "usage": {
+                    "input": 22,
+                    "output": 14,
+                    "cacheRead": 0,
+                    "cacheWrite": 0,
+                    "reasoning": 0,
+                    "totalTokens": 36,
+                    "cost": {
+                        "input": 0,
+                        "output": 0,
+                        "cacheRead": 0,
+                        "cacheWrite": 0,
+                        "total": 0
+                    }
+                }
+            },
+            "queuedCommand": {
+                "operation": "prompt",
+                "status": "unknown",
+                "unresolvedCommandInput": true,
+                "effectCount": 1,
+                "recoveryEligible": false,
+                "restartedWithoutReplay": true
+            },
+            "largeReadback": {
+                "persistedHistoryOver64MiB": "settled",
+                "unflushedSuffix": "rpc-record-limit",
+                "finalizationFencedAfterRestart": true
+            },
+            "passed": true,
+            "inferences": 19,
+            "checks": [
+                "trusted executor fixture command effects remain unknown without restart/retry replay (below HTTP admission)",
+                "queued effect-then-error durably fences the existing prompt; no duplicate effect or automatic resume",
+                "actual unknown discovery cannot start a second native process with same or new request ID",
+                "catalog retained after 30 seconds/restart without native startup; owner-only shared settings",
+                "live native extensions exposed without a Team allowlist; protected account/upload/lifecycle commands rejected",
+                "native context usage/injections before first message and after inference; no paid probe or raw text result",
+                "first-session no-inference discovery and member-private snapshots",
+                "Qoder account API private results",
+                "native title readback before first message and after handoff",
+                "model A→B then inference B and Alice payer",
+                "thinking high persisted",
+                "skill admission clears before held inference completes",
+                "live thinking changes next provider request without replacing process, segment or receipt binding",
+                "native thinking clamping, payer-only admission and unknown/mixed-model fences",
+                "live thinking survives native process retirement and server restart",
+                "fixture native title and Team rename persist across handoff",
+                "native JSONL entries and HTML export/member privacy",
+                "selected earlier-user fork with Bob payer",
+                "native tree navigation and explicit branch summary usage",
+                "native slash compaction receipt, persisted summary/usage and idempotency",
+                "clone and selected-message fork create independent Team sessions; removed lifecycle commands rejected",
+                "settings persist to real native startup",
+                "unknown/private/excluded commands no inference",
+                "busy model mutation rejected without preference change",
+                "restart persistence"
+            ]
+        }
+    }
+}

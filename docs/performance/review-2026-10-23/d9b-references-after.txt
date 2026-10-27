@@ -1,0 +1,49 @@
+Removed loader/executor symbols (production source)
+$ rg -n ExtensionLoader|prepareDropInFolder|ExtensionModule|CodingTools|new LancetGuard|messageText|#stopOverLimit|runEnded src/server
+exit=1; matches=0
+
+
+No Durable execution calls in retired command/task wrappers
+$ rg -n \.(submit|compact|abort|abortTask|createTask)\( src/server/commands.ts src/server/shell.ts src/server/schedules.ts src/server/resend.ts src/server/goals.ts src/server/team-execution.ts
+exit=1; matches=0
+
+
+No old HTTP command dispatch calls
+$ rg -n commands\.(submit|abort|withdraw|configure|applyProfile|reset|setInstructions|setPlan|approvePlan|schedule|cancelSchedule|setGoal|clearGoal|fork|resend|compact)\( src/server/http
+exit=1; matches=0
+
+
+Retained dependency evidence (not zero-reference claims)
+$ rg -n watchTree|PocketHost|new LancetGuard|commands.note|envFor|app.loader src/server/main.ts test/serve.ts src/server/host.ts src/server/extensions test/lancet.test.ts test/codemode.test.ts src/server/workspace.ts test/storage-worker-app.test.ts test/native-service-extensions.test.ts
+exit=0; matches=31
+test/storage-worker-app.test.ts:165:        const env = app.envFor(ROOT_CONVERSATION_ID);
+src/server/main.ts:215:const [{ PocketApp: App }, { createHandler: makeHandler }, { watchTree }] = await Promise.all([
+src/server/main.ts:254:    const stops = [watchTree(join(APP_ROOT, "web"), (file) => opened.reloadClients(file))];
+src/server/workspace.ts:167:        await this.#app.commands.note(id, user, what);
+src/server/workspace.ts:522:        await this.#app.commands.note(id, user, what);
+test/serve.ts:18:import { watchTree } from "../src/server/reload.ts";
+test/serve.ts:24:const stopWatching = watchTree(join(APP_ROOT, "web"), (file) => app.reloadClients(file));
+test/lancet.test.ts:27:    const lancet = new LancetGuard();
+test/codemode.test.ts:16:import { Approvals, type PocketHost } from "../src/server/host.ts";
+test/codemode.test.ts:84:const host = { approvals: new Approvals(() => undefined) } as unknown as PocketHost;
+test/codemode.test.ts:231:    } as unknown as PocketHost;
+test/native-service-extensions.test.ts:30:        assert.equal(app.loader, undefined);
+src/server/host.ts:107:export interface PocketHost {
+src/server/extensions/codemode.ts:37:import type { PocketHost } from "../host.ts";
+src/server/extensions/codemode.ts:184:export default function createCodemode(_host: PocketHost) {
+src/server/extensions/plan.ts:10:import type { PocketHost } from "../host.ts";
+src/server/extensions/plan.ts:286:export default function createPlan(_host: PocketHost) {
+src/server/extensions/subagents.ts:23:import type { PocketHost } from "../host.ts";
+src/server/extensions/subagents.ts:138:export default function createSubagents(host: PocketHost) {
+src/server/extensions/goals.ts:9:import type { PocketHost } from "../host.ts";
+src/server/extensions/goals.ts:25:export default function createGoals(host: PocketHost) {
+src/server/extensions/browser.ts:14:import type { PocketHost } from "../host.ts";
+src/server/extensions/browser.ts:80:export default function createBrowser(host: PocketHost) {
+src/server/extensions/guard.ts:7:import type { ApprovalAnswer, PocketHost } from "../host.ts";
+src/server/extensions/guard.ts:15:export default function createGuard(host: PocketHost) {
+src/server/extensions/artifacts.ts:9:import type { PocketHost } from "../host.ts";
+src/server/extensions/artifacts.ts:57:export default function createArtifacts(_host: PocketHost) {
+src/server/extensions/prompt.ts:18:import type { PocketHost } from "../host.ts";
+src/server/extensions/prompt.ts:51:export default function createPrompt(host: PocketHost) {
+src/server/extensions/schedules.ts:9:import type { PocketHost } from "../host.ts";
+src/server/extensions/schedules.ts:15:export default function createSchedules(host: PocketHost) {

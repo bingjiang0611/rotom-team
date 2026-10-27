@@ -23,8 +23,19 @@ export const WORKLOAD = {
     /** A long native history (seeded directly, no model), for opening it and reading all of it. */
     longTurns: 300,
     longAnswerChars: 1200,
+    /** A native journal history for repeated roomInfo projections, seeded directly with no model. */
+    nativeLongEntries: 600,
+    nativeLongEntryChars: 1200,
+    /** A separate synthetic RotomJournal fixture for the A1 query measurement. */
+    journalConversations: 60,
+    journalAttempts: 50,
+    journalEntriesPerAttempt: 12,
+    journalEntryChars: 2000,
     /** The newest entries a tab asks for first, as the web app does (`TRANSCRIPT_TAIL` in web/store.js). */
     longTail: 240,
+    /** The explicit static bundle is a transport workload, not a full browser navigation. */
+    staticAssetBundle:
+        "root web/*.js and *.css, known VENDOR modules, and all synthetic public assets",
 } as const;
 
 /**
@@ -52,6 +63,7 @@ export const SCENARIOS: Record<string, string> = {
     "web.open": `${seeded}; headless Chromium signed in, opens /s/<session> until the last answer is in the page`,
     "session.reclaim": `${seeded}; after all established scenarios, an unmeasured tab loads its full view; a new event-stream tab then claims every entry it held (server run, first id, count, digest) until its first full view; the rebuilt transcript must equal the held one`,
     "session.open.long": `after all other scenarios, a separate native history of ${WORKLOAD.longTurns} user/assistant turns (${WORKLOAD.longAnswerChars}-char answers) seeded directly; a new event-stream tab asking for the newest ${WORKLOAD.longTail} entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view`,
+    "session.open.native-long": `after all other scenarios, a real app-created native session with ${WORKLOAD.nativeLongEntries} valid journal entries of about ${WORKLOAD.nativeLongEntryChars} characters seeded outside the window without inference; call native roomInfo once before the window, then make 3 real roomInfo projections inside it and require identical goal and thinking values`,
     "session.history.earlier": `after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request`,
     "web.open.long": `after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page`,
     "native.warm": `after all other scenarios, a new native session with one tab watching; its member asks to warm it (as focusing the message box does) until the answer; servers without warming refuse at once`,
@@ -76,6 +88,9 @@ export const SCENARIOS: Record<string, string> = {
     "changes.poll.images": `${imageHistory}; after all image scenarios, ${WORKLOAD.projectionTabs} concurrent GET changes for that image session (same Git workspace with ${WORKLOAD.changedFiles} changed files), then the same ${WORKLOAD.projectionTabs} again with nothing changed; every answer identical, until quiet`,
     "image.paste.network":
         "after all other scenarios, real Chromium prepares and uploads one deterministic xorshift-noise 3000x1500 opaque PNG from its clipboard path to the same synthetic session, on a CDP-emulated 4 Mbit/s uplink and 40 ms latency; includes browser resize, HTTP upload, metadata response and decode, excludes fixture construction/module loading; older revisions without the helper upload the original, matching their unchanged paste behavior; no inference, synthetic link",
+    "journal.large": `after all other scenarios, a separate RotomJournal with ${WORKLOAD.journalConversations} conversations × ${WORKLOAD.journalAttempts} attempts × ${WORKLOAD.journalEntriesPerAttempt} entries of about ${WORKLOAD.journalEntryChars} characters; measure an entries suffix, segmentEntries and credits`,
+    "assets.first": `${WORKLOAD.staticAssetBundle}; request each asset with Accept-Encoding: gzip and retain its decoded body digest and ETag; raw node:http body bytes and completed request count are transport observations`,
+    "assets.validated": `${WORKLOAD.staticAssetBundle}; request each asset again with If-None-Match when the first response supplied an ETag; accept matching empty 304 or decoded-equal full 200; raw node:http body bytes and completed request count are transport observations`,
 };
 
 export type Layer = "storage" | "process" | "cpu" | "push" | "http" | "web";
@@ -197,12 +212,12 @@ const COUNTERS: Record<string, MetricSpec> = {
     "fs.read.calls": {
         layer: "storage",
         unit: "count",
-        source: "synchronous readSync calls in the parent process (test/perf/counters.ts)",
+        source: "synchronous readSync calls in instrumented parent/storage-worker processes (test/perf/counters.ts)",
     },
     "fs.read.bytes": {
         layer: "storage",
         unit: "bytes",
-        source: "bytes returned by synchronous readSync in the parent process (test/perf/counters.ts)",
+        source: "bytes returned by synchronous readSync in instrumented parent/storage-worker processes (test/perf/counters.ts)",
     },
     "fs.write.calls": {
         layer: "storage",
@@ -309,6 +324,11 @@ const COUNTERS: Record<string, MetricSpec> = {
         unit: "chars",
         source: "characters decoded inside synchronous native kernel roomState projection (test/perf/counters.ts)",
     },
+    "roomInfo.segmentEntries.calls": {
+        layer: "storage",
+        unit: "count",
+        source: "benchmark-local StatementSync.all wrapper counts the segmentEntries history query during synchronous roomInfo projections (test/perf/scenarios.ts)",
+    },
     "push.events": {
         layer: "push",
         unit: "count",
@@ -332,12 +352,12 @@ const COUNTERS: Record<string, MetricSpec> = {
     "http.requests": {
         layer: "http",
         unit: "count",
-        source: "http.server.request.start diagnostics channel (test/perf/counters.ts)",
+        source: "http.server.request.start diagnostics channel; static bundle completed node:http responses (test/perf/counters.ts and test/perf/static-assets.ts)",
     },
     "http.body.bytes": {
         layer: "http",
         unit: "bytes",
-        source: "answer body bytes the benchmark received (test/perf/scenarios.ts)",
+        source: "raw response body bytes received by transport probes (test/perf/scenarios.ts and test/perf/static-assets.ts)",
     },
     "cdp.LayoutCount": {
         layer: "web",
@@ -596,6 +616,14 @@ export const REPORTED: Record<string, string[]> = {
         "web.view.prune.checks",
         "web.view.order.ids",
     ],
+    "journal.large": ["sql.statements", "sql.rows"],
+    "session.open.native-long": [
+        "roomInfo.segmentEntries.calls",
+        "json.parse.journalSegments.calls",
+        "json.parse.journalSegments.chars",
+    ],
+    "assets.first": ["http.requests", "http.body.bytes"],
+    "assets.validated": ["http.requests", "http.body.bytes"],
 };
 
 export function metricSpec(metric: string): MetricSpec {

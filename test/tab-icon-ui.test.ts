@@ -3,11 +3,11 @@ import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { createServer, type Server } from "node:http";
 import { join } from "node:path";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, mkdirSync, realpathSync } from "node:fs";
 import { Browsers } from "../src/server/browser.ts";
 import { findBrowser } from "../src/server/browser/discovery.ts";
 import { createHandler } from "../src/server/http.ts";
-import { cleanUp, newSession, openApp, root, scriptedModel, until } from "./helpers.ts";
+import { cleanUp, openNativeApp, owner, root, scriptedModel, until } from "./helpers.ts";
 
 const chromium = findBrowser();
 const real = { skip: chromium === undefined ? "Chromium not installed" : false };
@@ -15,7 +15,7 @@ const PLAIN = "/icon.svg";
 const RUNNING = "/icon-running.svg";
 /** Longer than one blink: a still icon stays put across it. */
 const STILL_MS = 1_200;
-let app: Awaited<ReturnType<typeof openApp>>;
+let app: Awaited<ReturnType<typeof openNativeApp>>;
 let browsers: Browsers;
 let server: Server;
 let page: Awaited<ReturnType<Browsers["open"]>>;
@@ -25,8 +25,11 @@ before(async () => {
         return;
     }
 
-    app = await openApp(scriptedModel(), join(root, "tab-icon-data"));
-    const id = Number(await newSession(app));
+    const data = join(realpathSync(root), "tab-icon-data");
+
+    mkdirSync(data, { mode: 0o700 });
+    app = await openNativeApp(scriptedModel(), data);
+    const id = Number((await app.commands.createSession(owner(app), { backend: "rotom" })).id);
 
     server = createServer(
         createHandler({ app, listen: { host: "127.0.0.1", port: 0 }, restart: () => {} }),

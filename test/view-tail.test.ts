@@ -4,7 +4,7 @@ import {
     cleanUp,
     context,
     fakeTab,
-    newSession,
+    seedHistoricalSession,
     openApp,
     owner,
     root,
@@ -40,7 +40,7 @@ test("a tail view sends the newest entries and the whole order; updates stay del
     const app = await openApp(scriptedModel(), join(root, "tail-room"));
 
     try {
-        const id = await newSession(app);
+        const id = await seedHistoricalSession(app);
 
         for (let index = 1; index <= 12; index++) {
             await append(app, id, `message ${index}`);
@@ -48,17 +48,17 @@ test("a tail view sends the newest entries and the whole order; updates stay del
 
         const room = await app.room(id);
 
-        const tab = (tail?: number) => {
+        const tab = async (tail?: number) => {
             const each = fakeTab(id, owner(app));
 
             Object.assign(each.client, tail === undefined ? {} : { viewTail: tail });
-            room.push(each.client as Client, true);
+            await room.push(each.client as Client, true);
 
             return each;
         };
 
-        const whole = tab().last("view") as unknown as View;
-        const tailed = tab(5);
+        const whole = (await tab()).last("view") as unknown as View;
+        const tailed = await tab(5);
         const view = tailed.last("view") as unknown as View;
 
         assert.deepEqual(view.order, whole.order, "the whole order");
@@ -79,7 +79,7 @@ test("a tail view sends the newest entries and the whole order; updates stay del
         assert.deepEqual(room.earlier(999_999, 200), [], "an id not in the order");
 
         await append(app, id, "thirteen");
-        room.push(tailed.client as Client, false);
+        await room.push(tailed.client as Client, false);
         const added = tailed.last("view") as unknown as View;
 
         assert.equal(
@@ -105,8 +105,8 @@ test("pages of earlier entries over HTTP: checked parameters, and only for peopl
     const get = (token: string, path: string) =>
         fetch(`${base}/api/${path}`, { headers: { authorization: `Bearer ${token}` } });
     const ownerToken = app.config.ownerToken;
-    const id = await newSession(app);
-    const other = await newSession(app);
+    const id = await seedHistoricalSession(app);
+    const other = await seedHistoricalSession(app);
     const elsewhere = app.config.addUser("Elsewhere", "guest", [String(other)]);
 
     try {
@@ -117,7 +117,7 @@ test("pages of earlier entries over HTTP: checked parameters, and only for peopl
         const room = await app.room(id);
         const reference = fakeTab(id, owner(app));
 
-        room.push(reference.client, true);
+        await room.push(reference.client, true);
         const whole = reference.last("view") as unknown as View;
         const last = whole.order!.at(-1)!;
 

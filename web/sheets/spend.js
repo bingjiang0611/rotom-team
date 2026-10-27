@@ -89,7 +89,7 @@ export function SpendSheet() {
                         <span class="mono">${money(session.spent)}</span>
                         <${SpendLimit}
                             budget=${session.budget}
-                            editable=${owner}
+                            editable=${owner && !session.readOnly}
                             save=${save({ session: session.id })}
                         />
                     </div>`,

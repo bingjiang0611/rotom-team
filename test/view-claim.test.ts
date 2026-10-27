@@ -3,7 +3,7 @@ import {
     cleanUp,
     context,
     fakeTab,
-    newSession,
+    seedHistoricalSession,
     openApp,
     owner,
     root,
@@ -111,7 +111,7 @@ test("a room sends only what a valid claim lacks, once, and everything for any o
     const app = await openApp(scriptedModel(), join(root, "claims"));
 
     try {
-        const id = await newSession(app);
+        const id = await seedHistoricalSession(app);
 
         for (const text of ["one", "two", "three"]) {
             await append(app, id, text);
@@ -122,16 +122,16 @@ test("a room sends only what a valid claim lacks, once, and everything for any o
         const order = all.map((entry) => entry.id);
         const held = order.slice(0, 2);
 
-        const fullWith = (have: string | undefined) => {
+        const fullWith = async (have: string | undefined) => {
             const tab = fakeTab(id, owner(app));
 
             tab.client.viewClaim = parseClaim(have ?? null);
-            room.push(tab.client, true);
+            await room.push(tab.client, true);
 
             return tab;
         };
 
-        const claimed = fullWith(bench.claimFor(app.startedAt, held));
+        const claimed = await fullWith(bench.claimFor(app.startedAt, held));
         const view = claimed.last("view")!;
 
         assert.deepEqual(view.kept, { first: held[0], count: 2 });
@@ -140,12 +140,12 @@ test("a room sends only what a valid claim lacks, once, and everything for any o
         assert.equal(claimed.client.viewClaim, undefined, "a claim is used up");
 
         await append(app, id, "four");
-        room.push(claimed.client, false);
+        await room.push(claimed.client, false);
         const added = claimed.last("view")!;
 
         assert.equal((added.entries as unknown[]).length, 1, "later updates are deltas as before");
         assert.ok(!("kept" in added));
-        room.push(claimed.client, true);
+        await room.push(claimed.client, true);
         assert.equal(
             (claimed.last("view")!.entries as unknown[]).length,
             order.length + 1,
@@ -161,7 +161,7 @@ test("a room sends only what a valid claim lacks, once, and everything for any o
             "nonsense",
             undefined,
         ]) {
-            const view = fullWith(have).last("view")!;
+            const view = (await fullWith(have)).last("view")!;
 
             assert.ok(!("kept" in view), String(have));
             assert.deepEqual(view.entries, fresh, `${have}: everything`);

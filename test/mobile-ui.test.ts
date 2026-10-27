@@ -3,20 +3,24 @@
 // to the list, or to the session before.
 import {
     type App,
+    appendHistoricalTurn,
+    context,
     cleanUp,
-    newSession,
-    openApp,
+    noInferenceModels,
+    owner,
+    seedHistoricalSession,
     root,
-    say,
-    scriptedModel,
     until,
     work,
 } from "./helpers.ts";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { join } from "node:path";
+import { PocketApp } from "../src/server/app.ts";
+import { NATIVE_ENTRY } from "../src/server/entry-format.ts";
+import type { JsonValue } from "@earendil-works/chord";
 import { after, before, test } from "node:test";
 import type { ConversationId } from "@earendil-works/pi-durable";
 import { Browsers } from "../src/server/browser.ts";
@@ -41,6 +45,7 @@ let second: ConversationId;
 let rich: ConversationId;
 /** A conversation taller than the screen, to scroll up in and come back down from. */
 let long: ConversationId;
+let nativeControls: ConversationId;
 
 /** Run a script in the page and read back the JSON it returns. */
 async function inPage<T>(script: string): Promise<T> {
@@ -153,7 +158,15 @@ before(async () => {
     git("add", "-A");
     git("commit", "-qm", "Start");
     writeFileSync(join(work, "README.md"), "# Hello\n\nA file to read, changed.\n");
-    app = await openApp(scriptedModel());
+    app = await PocketApp.open({
+        dataDir: mkdtempSync(join(realpathSync(root), "mobile-ui-data-")),
+        defaultCwd: realpathSync(work),
+        supervised: false,
+        kernel: true,
+        browser: null,
+        log: () => {},
+        configureUserModels: noInferenceModels,
+    });
     server = createServer(
         createHandler({ app, listen: { host: "127.0.0.1", port: 0 }, restart: () => {} }),
     );
@@ -164,12 +177,13 @@ before(async () => {
         load: async () => undefined,
         save: () => {},
     });
-    first = await newSession(app);
-    second = await newSession(app);
-    rich = await newSession(app);
-    await say(
+    first = await seedHistoricalSession(app);
+    second = await seedHistoricalSession(app);
+    rich = await seedHistoricalSession(app);
+    await appendHistoricalTurn(
         app,
         rich,
+        "rich historical prompt",
         [
             "A table, and some code:",
             "",
@@ -182,12 +196,42 @@ before(async () => {
             "```",
         ].join("\n"),
     );
-    long = await newSession(app);
+    nativeControls = (
+        await app.commands.createSession(owner(app), {
+            backend: "rotom",
+            cwd: realpathSync(work),
+        })
+    ).id;
+    await app.harness.commit(async (tx) => {
+        await tx.appendEntry(nativeControls, {
+            kind: NATIVE_ENTRY,
+            data: {
+                entry: {
+                    type: "message",
+                    id: "mobile-native-controls",
+                    parentId: null,
+                    message: {
+                        role: "assistant",
+                        timestamp: 0,
+                        content: [
+                            { type: "text", text: "Native controls" },
+                            {
+                                type: "text",
+                                text: "```ts\nexport const toggle = (theme: string) => theme;\n```",
+                            },
+                        ],
+                    },
+                },
+            } as JsonValue,
+        });
+    }, context);
+    long = await seedHistoricalSession(app);
 
     for (let turn = 1; turn <= 6; turn++) {
-        await say(
+        await appendHistoricalTurn(
             app,
             long,
+            `historical turn ${turn}`,
             Array.from({ length: 20 }, (_, line) => `- Turn ${turn}, line ${line + 1}`).join("\n"),
         );
     }
@@ -556,7 +600,7 @@ const sideways = (from: number, by: number, y = 200): [number, number][] =>
 
 test("the places, a thumb away: the button beside the message box, then a tile", real, async () => {
     await fresh();
-    await tap(row(first));
+    await tap(row(nativeControls));
     await tap(".composer-row .places-button");
     await reach({ sheet: "places", layers: 1 }, "the places");
     assert.ok(
@@ -568,12 +612,15 @@ test("the places, a thumb away: the button beside the message box, then a tile",
     await tap('.place[data-place="files"]');
     await reach({ sheet: null, files: true, layers: 1 }, "the Files tile in the sheet's place");
     await back();
-    await reach({ files: false, layers: 0, path: `/s/${first}` }, "back to the conversation");
+    await reach(
+        { files: false, layers: 0, path: `/s/${nativeControls}` },
+        "back to the conversation",
+    );
 });
 
 test("swipe up from the message box for the places", real, async () => {
     await fresh();
-    await tap(row(first));
+    await tap(row(nativeControls));
     await swipe(".model-chip", [
         [20, 10],
         [21, 0],
@@ -641,8 +688,8 @@ const hitArea = (selector: string) =>
 
 test("a quick second tap does not land on what just slid in", real, async () => {
     await fresh();
-    await tap(row(first));
-    await reach({ path: `/s/${first}`, layers: 0 }, "the session");
+    await tap(row(nativeControls));
+    await reach({ path: `/s/${nativeControls}`, layers: 0 }, "the session");
     await new Promise((resolve) => setTimeout(resolve, 400));
     // A double tap on the places button: the second lands where a tile (or the scrim) has just come.
     await page.click({ selector: ".composer-row .places-button" }, { count: 2 });
@@ -732,8 +779,8 @@ test("on a phone, nothing that slides in makes the page wider than the screen", 
 
 test("a swipe follows its own finger, not another on the glass", real, async () => {
     await fresh();
-    await tap(row(first));
-    await reach({ path: `/s/${first}` }, "the session");
+    await tap(row(nativeControls));
+    await reach({ path: `/s/${nativeControls}` }, "the session");
     // Swipes wait for the conversation's view, at rest: mid-slide, its middle is still off to the right.
     await until(
         async () =>
@@ -796,7 +843,7 @@ test(
 
 test("on a phone, the controls are thumb-sized", real, async () => {
     await fresh();
-    await goTo(rich);
+    await goTo(nativeControls);
     await until(
         async () =>
             (await inPage<boolean>(
@@ -853,7 +900,7 @@ test("on a phone, the controls are thumb-sized", real, async () => {
 
     await page.evaluate(`document.activeElement?.blur()`);
 
-    // A reaction keeps its chip's look; the tap it takes reaches past it, unseen.
+    // Native synthetic history supports the reaction control without requiring inference.
     await tap(".answer-actions .reaction.add");
     await tap(".reaction-picker button");
     await until(
@@ -861,7 +908,7 @@ test("on a phone, the controls are thumb-sized", real, async () => {
             (await inPage<boolean>(
                 `return JSON.stringify(document.querySelector(".answer-actions > .reaction:not(.add)") !== null)`,
             )) === true,
-        "the reaction",
+        "the native reaction",
     );
     const chip = await inPage<number>(
         `return JSON.stringify(document.querySelector(".answer-actions > .reaction:not(.add)").getBoundingClientRect().height)`,

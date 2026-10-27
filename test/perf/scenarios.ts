@@ -34,6 +34,7 @@ import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { ConversationId } from "@earendil-works/pi-durable";
 import type { JsonValue } from "@earendil-works/chord";
 import { NATIVE_ENTRY } from "../../src/server/entry-format.ts";
+import type { KernelEntry } from "../../src/server/rotom-journal.ts";
 import { sniffImage } from "../../src/server/http/assets.ts";
 import { measureImageNetwork } from "./image-network.ts";
 import { measurePasteNetwork } from "./paste-network.ts";
@@ -41,6 +42,8 @@ import { measureSend } from "./send-phases.ts";
 import { sessionListTab } from "./session-list.ts";
 import { claimFor } from "./view-claim.ts";
 import { type Transcript, viewTab } from "./view-tab.ts";
+import { createJournalLargeFixture, measureJournalLarge } from "./journal-large.ts";
+import { createStaticAssetsProbe } from "./static-assets.ts";
 
 export type ScenarioResult =
     | { scenario: string; ms: number; counts: Counts; extra?: Record<string, number> }
@@ -184,6 +187,7 @@ const open = () =>
         defaultCwd: workspace,
         supervised: false,
         kernel: true,
+        ...(process.env.ROTOM_PERF_STORAGE_WORKER === "1" ? { storageWorker: true } : {}),
         browser: null,
         log: () => {},
         configureUserModels,
@@ -329,11 +333,23 @@ for (let index = 0; index < WORKLOAD.extraSessions; index++) {
 
 // ─── Scenarios.
 
-await scenario("startup.restart", async () => {
-    await app.close();
-    app = await open();
-    handler = createHandler({ app, listen: { host: "127.0.0.1", port: 0 }, restart: () => {} });
-});
+let appCloseMs = 0;
+let appOpenMs = 0;
+
+await scenario(
+    "startup.restart",
+    async () => {
+        let started = performance.now();
+
+        await app.close();
+        appCloseMs = performance.now() - started;
+        started = performance.now();
+        app = await open();
+        appOpenMs = performance.now() - started;
+        handler = createHandler({ app, listen: { host: "127.0.0.1", port: 0 }, restart: () => {} });
+    },
+    () => ({ appCloseMs, appOpenMs }),
+);
 await app.hello(owner(app));
 
 await scenario("sessions.list", async () => ({
@@ -581,6 +597,8 @@ try {
                         return bytes.length;
                     }),
                 );
+
+                await imageProbe.settled();
                 const measured = imageProbe.report(indices.length);
 
                 assert.equal(
@@ -768,7 +786,7 @@ try {
             );
         }
 
-        const expected = raw.stringify(app.sessions(owner(app)));
+        const expected = raw.stringify(await app.sessions(owner(app)));
 
         for (const tab of listTabs) {
             assert.equal(raw.stringify(tab.rows), expected, "each tab reconstructs the full list");
@@ -995,7 +1013,7 @@ await readyTab.close();
 
 // A subagent's start runs the team's validator (`rotom-child.ts`, through `rotom-child.sh`) as its own Node process
 // before Pi: in that member's HOME and workspace, with the shared profile, as the native process's environment has them.
-const { binding: readyBinding } = app.kernel!.executions.journal.session(String(ready));
+const { binding: readyBinding } = await app.kernel!.executions.journal.session(String(ready));
 
 await scenario("native.validate", async () => {
     const child = spawn(
@@ -1042,10 +1060,140 @@ for (const [index, transport] of (["poll", "stream"] as const).entries()) {
     );
 }
 
+// The synthetic journal is deliberately isolated from the app journal and seeded before this measured window.
+const journalLarge = createJournalLargeFixture(root, {
+    conversations: WORKLOAD.journalConversations,
+    attempts: WORKLOAD.journalAttempts,
+    entriesPerAttempt: WORKLOAD.journalEntriesPerAttempt,
+    entryChars: WORKLOAD.journalEntryChars,
+});
+let journalLargeTimings: ReturnType<typeof measureJournalLarge> | undefined;
+
+try {
+    await scenario(
+        "journal.large",
+        async () => {
+            journalLargeTimings = measureJournalLarge(journalLarge);
+        },
+        () => journalLargeTimings ?? {},
+    );
+} finally {
+    journalLarge.close();
+}
+
+// A real app-created native session with a long journal, seeded directly without inference. Its roomInfo projections
+// are measured separately from the seed and the one reference read below.
+const nativeLong = (await call("sessions", "POST", { title: "Native long", backend: "rotom" }))
+    .value.id as unknown as ConversationId;
+const nativeLongJournal = app.kernel!.executions.journal;
+const nativeLongBinding = (await nativeLongJournal.session(String(nativeLong))).binding;
+const nativeLongEntries: KernelEntry[] = [];
+let nativeLongParent: string | null = null;
+
+for (let index = 0; index < WORKLOAD.nativeLongEntries; index++) {
+    const id = `native-long-${index}`;
+    const entry: KernelEntry =
+        index === 0
+            ? {
+                  id,
+                  parentId: null,
+                  type: "custom",
+                  customType: "goal-state",
+                  data: { goal: { id: "native-long", status: "active" } },
+              }
+            : index === 1
+              ? {
+                    id,
+                    parentId: nativeLongParent,
+                    type: "thinking_level_change",
+                    thinkingLevel: "high",
+                }
+              : index === WORKLOAD.nativeLongEntries - 1
+                ? {
+                      id,
+                      parentId: nativeLongParent,
+                      type: "message",
+                      message: {
+                          role: "assistant",
+                          provider: nativeLongBinding.provider,
+                          model: nativeLongBinding.model,
+                          stopReason: "stop",
+                          content: [
+                              {
+                                  type: "text",
+                                  text: "x".repeat(WORKLOAD.nativeLongEntryChars),
+                              },
+                          ],
+                      },
+                  }
+                : {
+                      id,
+                      parentId: nativeLongParent,
+                      type: "custom",
+                      customType: "native-long-entry",
+                      data: { text: "x".repeat(WORKLOAD.nativeLongEntryChars) },
+                  };
+
+    nativeLongEntries.push(entry);
+    nativeLongParent = id;
+}
+
+const nativeLongAttempt = await nativeLongJournal.reserve(
+    String(nativeLong),
+    "native-long-seed",
+    "native-long-seed",
+);
+
+await nativeLongJournal.attach(
+    nativeLongAttempt.id,
+    join(nativeLongBinding.home, "native-long.jsonl"),
+    "native-long",
+);
+await nativeLongJournal.finish(nativeLongAttempt.id, "settled", nativeLongEntries);
+
+// Establish the expected values outside the measured window; this is an actual native roomInfo read, not a fixture.
+const nativeLongReference = await app.kernel!.roomInfo(nativeLong);
+
+assert.deepEqual(nativeLongReference.goal, {
+    goal: { id: "native-long", status: "active" },
+});
+assert.equal(nativeLongReference.agent.thinkingLevel, "high");
+
+await scenario("session.open.native-long", async () => {
+    const before = snapshot();
+
+    for (let projection = 0; projection < 3; projection++) {
+        const info = await app.kernel!.roomInfo(nativeLong);
+
+        assert.deepEqual(info.goal, nativeLongReference.goal);
+        assert.equal(info.agent.thinkingLevel, nativeLongReference.agent.thinkingLevel);
+    }
+
+    // This observer lives with each database, including the worker; a parent-only monkeypatch would report false zero.
+    return { "roomInfo.segmentEntries.calls": since(before)["journal.segmentEntries.calls"] ?? 0 };
+});
+
+// Append the named static bundle workload after every existing scenario. It is an explicit asset transport probe,
+// not a claim about full browser navigation or browser-side module execution.
+const staticAssets = createStaticAssetsProbe(base);
+
+await scenario("assets.first", () => staticAssets.first());
+await scenario("assets.validated", () => staticAssets.validated());
+
 writeFileSync(out, raw.stringify({ workload: WORKLOAD, results }, null, 2));
 server.closeAllConnections();
 server.close();
 model.close();
 await app.close();
 cleanUp();
+
+if (process.env.ROTOM_PERF_STORAGE_WORKER === "1") {
+    assert.ok((snapshot()["storage.worker.replyBytes"] ?? 0) > 0, "worker measurement is required");
+    assert.equal(
+        snapshot()["storage.worker.unavailable"] ?? 0,
+        0,
+        "unmeasured worker work is unavailable, not zero",
+    );
+}
+
 process.exit(0);

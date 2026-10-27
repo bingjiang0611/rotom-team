@@ -131,7 +131,7 @@ try {
             beforeChecks = inferenceChecks,
             beforeReducer = reducerRequests;
 
-        executions.journal.bind(id, {
+        await executions.journal.bind(id, {
             memberId: "alice",
             kernelVersion: verifyRotomKernel().version,
             accountGeneration: "synthetic-only",
@@ -146,23 +146,23 @@ try {
         const sameModel = reducerModel === model;
 
         assert.equal(result.status, sameModel ? "settled" : "unknown", JSON.stringify(result));
-        const auxiliary = executions.journal
-            .entries(id)
-            .filter((row) => row.entry.type === "usage");
+        const auxiliary = (await executions.journal.entries(id)).filter(
+            (row) => row.entry.type === "usage",
+        );
 
         assert.equal(requests - beforeRequests, sameModel ? 3 : 2);
         assert.equal(inferenceChecks - beforeChecks, sameModel ? 3 : 2);
         assert.equal(reducerRequests - beforeReducer, sameModel ? 1 : 0);
         assert.equal(auxiliary.length, sameModel ? 1 : 0);
-        assert.equal(executions.journal.usage(id).length, sameModel ? 3 : 1);
-        assert.ok(executions.journal.usage(id).every((row) => row.memberId === "alice"));
+        assert.equal((await executions.journal.usage(id)).length, sameModel ? 3 : 1);
+        assert.ok((await executions.journal.usage(id)).every((row) => row.memberId === "alice"));
 
         if (sameModel) {
             assert.equal(auxiliary[0]!.entry.kind, "sol_pi_reducer");
             assert.deepEqual(
-                executions.journal
-                    .usage(id)
-                    .map((row) => (row.raw as { totalTokens: number }).totalTokens),
+                (await executions.journal.usage(id)).map(
+                    (row) => (row.raw as { totalTokens: number }).totalTokens,
+                ),
                 [14, 14, 14],
             );
         }

@@ -1,6 +1,14 @@
 // A real browser keeps a saved copy of a session it opened, shows it marked as checking when coming back, claims it so
 // the server sends only what is missing, and forgets every copy on sign-out or a change of person or access.
-import { cleanUp, context, newSession, openApp, root, scriptedModel, until } from "./helpers.ts";
+import {
+    cleanUp,
+    context,
+    seedHistoricalSession,
+    openApp,
+    root,
+    scriptedModel,
+    until,
+} from "./helpers.ts";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { join } from "node:path";
@@ -34,7 +42,7 @@ test(
         });
 
         try {
-            const id = await newSession(app);
+            const id = await seedHistoricalSession(app);
             const append = (text: string) =>
                 app.harness.commit(
                     (tx) =>
@@ -74,23 +82,40 @@ test(
             await page.navigate(base);
             await until(async () => (await state("me"))?.id !== undefined, "signed in");
             await evaluate(`
-                window.held = []; window.views = []; window.urls = [];
+                window.held = []; window.views = []; window.urls = []; window.claims = [];
+                const originalFetch = window.fetch;
+                window.fetch = (...args) => {
+                    if (args[0] === '/api/subscribe') window.claims.push(JSON.parse(args[1].body).have);
+                    return originalFetch(...args);
+                };
                 const Original = window.EventSource;
                 window.EventSource = class extends Original {
                     constructor(url, options) { super(url, options); window.urls.push(String(url)); }
                     addEventListener(name, callback, options) {
                         if (name !== 'view') return super.addEventListener(name, callback, options);
                         super.addEventListener(name, (event) => {
-                            const data = JSON.parse(event.data);
-                            window.views.push({ full: data.full, kept: data.kept ?? null, entries: data.entries.length });
+                            const data = JSON.parse(event.data).data;
+                            if (data.full) window.views.push({ full: data.full, kept: data.kept ?? null, entries: data.entries.length });
                             if (window.held) window.held.push(() => callback(event)); else callback(event);
                         }, options);
                     }
                 };
                 window.releaseViews = () => { const held = window.held; window.held = null; held.forEach(run => run()); };
-                (await import('/store.js')).navigate(${id});
+                const { store, connect } = await import('/store.js');
+                window.previousStream = store.state.streamId;
+                connect();
                 return JSON.stringify(true);
             `);
+            // Install the view probe on the home connection before reusing it with a subscription POST.
+            await until(
+                async () =>
+                    evaluate(`return JSON.stringify(
+                (await import('/store.js')).store.state.streamId !== window.previousStream)`),
+                "instrumented home connection",
+            );
+            await evaluate(
+                `(await import('/store.js')).navigate(${id}); return JSON.stringify(true);`,
+            );
             await until(async () => (await state("view.checking")) === true, "the saved copy");
             assert.equal(await state("view.order.length"), 3);
             await until(
@@ -102,8 +127,8 @@ test(
                 "the copy on screen, marked, with no message box",
             );
             assert.match(
-                (await evaluate(`return JSON.stringify(window.urls.at(-1))`)) as string,
-                /&have=/,
+                (await evaluate(`return JSON.stringify(window.claims.at(-1))`)) as string,
+                /^\d+\.\d+\.\d+\.[0-9a-f]{16}$/,
             );
             await until(
                 async () => evaluate(`return JSON.stringify(window.views.length > 0)`),
@@ -115,8 +140,9 @@ test(
             await until(
                 async () =>
                     evaluate(`return JSON.stringify(
-                        !document.querySelector('[data-view-checking]') && !!document.querySelector('.composer'))`),
-                "the message box once confirmed",
+                        !document.querySelector('[data-view-checking]') && !document.querySelector('.composer') &&
+                        document.body.textContent.includes('read-only archive'))`),
+                "the confirmed archive stays read-only",
             );
 
             const first = (await evaluate(`return JSON.stringify(window.views[0])`)) as {

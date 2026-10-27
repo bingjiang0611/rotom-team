@@ -1,29 +1,18 @@
 /** `/api/c/:id`: one conversation's routes, for people the API has checked may see it. */
-import { randomUUID } from "node:crypto";
-import { createWriteStream, rmSync } from "node:fs";
-import { basename, extname, join, resolve, sep } from "node:path";
-import { pipeline } from "node:stream/promises";
 import type { ConversationId } from "@earendil-works/pi-durable";
-import type { Attachment, SubmitRequest } from "../commands.ts";
+import type { SubmitRequest } from "../commands.ts";
 import { HttpError } from "../errors.ts";
+import { ARCHIVE_COPY } from "../constants/copy.ts";
 import { uploadedAttachments } from "../attachments.ts";
 import { teamCommandUsesAdapter } from "../team-command-policy.ts";
-import { serveDownload, serveImage, TYPES } from "./assets.ts";
+import { serveDownload, serveImage } from "./assets.ts";
 import { type ApiRequest, json, readJson, send } from "./io.ts";
 import { ENTRY_IMAGE_TYPES } from "../media.ts";
 import { sendStoredImage } from "./stored-image.ts";
+import { conversationUpload } from "./conversation-routes/upload.ts";
 
-const MAX_UPLOAD = 50 * 1024 * 1024;
 /** The most entries one page of a view's earlier entries holds (`GET /api/c/:id/entries`). */
 const EARLIER_PAGE = 200;
-
-function safeName(name: string): string {
-    const base = basename(name)
-        .replace(/[^\w.\- ()]+/g, "_")
-        .trim();
-
-    return base === "" || base.startsWith(".") ? `upload${base}` : base.slice(0, 120);
-}
 
 export async function conversationRoutes(
     api: ApiRequest,
@@ -34,6 +23,12 @@ export async function conversationRoutes(
     const method = request.method ?? "GET";
     const [, , third, fourth] = parts;
 
+    const rejectRetired = (): never => {
+        app.requireArchiveWriteAllowed(id);
+
+        throw new HttpError(409, ARCHIVE_COPY.executionRetired);
+    };
+
     if (third === "seen" && method === "POST" && fourth === undefined) {
         const body = await readJson<{ finishedAt: number }>(request);
 
@@ -41,7 +36,7 @@ export async function conversationRoutes(
             throw new HttpError(400, "A finishedAt value is required.");
         }
 
-        app.markRunSeen(id, user, body.finishedAt);
+        await app.markRunSeen(id, user, body.finishedAt);
 
         return json(response, 200, { seen: true });
     }
@@ -90,7 +85,7 @@ export async function conversationRoutes(
         }
 
         if (third === "kernel" && method === "GET" && fourth === undefined) {
-            return json(response, 200, app.kernel.snapshot(id, user));
+            return json(response, 200, await app.kernel.snapshot(id, user));
         }
 
         if (third === "configuration" && method === "POST" && fourth === undefined) {
@@ -232,7 +227,11 @@ export async function conversationRoutes(
         }
 
         if (third === "dialog" && method === "POST" && fourth === undefined) {
-            return json(response, 200, app.kernel.answerDialog(id, user, await readJson(request)));
+            return json(
+                response,
+                200,
+                await app.kernel.answerDialog(id, user, await readJson(request)),
+            );
         }
 
         if (third === "configure" && method === "POST" && fourth === undefined) {
@@ -323,7 +322,7 @@ export async function conversationRoutes(
     }
 
     if (third === "configuration" && method === "GET") {
-        return json(response, 200, app.configuration(id) ?? null);
+        return json(response, 200, (await app.configuration(id)) ?? null);
     }
 
     if (third === "configuration" && method === "POST") {
@@ -336,9 +335,7 @@ export async function conversationRoutes(
             );
         }
 
-        await app.commands.applyProfile(id, user);
-
-        return json(response, 200, app.profiles.snapshot(id));
+        return rejectRetired();
     }
 
     if (third === "submit" && method === "POST") {
@@ -352,15 +349,7 @@ export async function conversationRoutes(
             throw new HttpError(400, "attachments must be a list");
         }
 
-        const attachments = (body.attachments ?? []).filter((file): file is Attachment => {
-            // Only files this server stored for this conversation.
-            return (
-                typeof file?.path === "string" &&
-                resolve(file.path).startsWith(app.workspace.uploadDirectory(id) + sep)
-            );
-        });
-
-        return json(response, 200, await app.commands.submit(id, user, { ...body, attachments }));
+        return rejectRetired();
     }
 
     if (third === "chat" && method === "POST") {
@@ -427,55 +416,43 @@ export async function conversationRoutes(
     }
 
     if (third === "abort" && method === "POST") {
-        await app.commands.abort(id, user);
-
-        return json(response, 200, { ok: true });
+        return rejectRetired();
     }
 
     if (third === "withdraw" && method === "POST") {
-        const body = await readJson<{ submissionId?: number }>(request);
+        await readJson<{ submissionId?: number }>(request);
 
-        return json(response, 200, {
-            result: await app.commands.withdraw(id, user, Number(body.submissionId)),
-        });
+        return rejectRetired();
     }
 
     if (third === "configure" && method === "POST") {
-        await app.commands.configure(id, user, await readJson(request));
+        await readJson(request);
 
-        return json(response, 200, { ok: true });
+        return rejectRetired();
     }
 
     if (third === "reset" && method === "POST") {
-        const body = await readJson<{ note?: unknown }>(request);
+        await readJson<{ note?: unknown }>(request);
 
-        await app.commands.reset(id, user, body.note);
-
-        return json(response, 200, { ok: true });
+        return rejectRetired();
     }
 
     if (third === "instructions" && method === "POST") {
-        const body = await readJson<{ text?: unknown }>(request);
+        await readJson<{ text?: unknown }>(request);
 
-        await app.commands.setInstructions(id, user, body.text);
-
-        return json(response, 200, { ok: true });
+        return rejectRetired();
     }
 
     if (third === "plan" && method === "POST") {
-        const body = await readJson<{ on?: unknown; approve?: unknown }>(request);
+        await readJson<{ on?: unknown; approve?: unknown }>(request);
 
-        if (body.approve === true) {
-            return json(response, 200, await app.commands.approvePlan(id, user));
-        }
-
-        await app.commands.setPlan(id, user, body.on);
-
-        return json(response, 200, { ok: true });
+        return rejectRetired();
     }
 
     if (third === "schedules" && fourth === undefined && method === "POST") {
-        return json(response, 200, await app.commands.schedule(id, user, await readJson(request)));
+        await readJson(request);
+
+        return rejectRetired();
     }
 
     if (
@@ -484,21 +461,13 @@ export async function conversationRoutes(
         parts[4] === "cancel" &&
         method === "POST"
     ) {
-        await app.commands.cancelSchedule(id, user, fourth);
-
-        return json(response, 200, { ok: true });
+        return rejectRetired();
     }
 
     if (third === "goal" && method === "POST") {
-        const body = await readJson<{ command?: unknown; clear?: unknown }>(request);
+        await readJson<{ command?: unknown; clear?: unknown }>(request);
 
-        if (body.clear === true) {
-            await app.commands.clearGoal(id, user);
-        } else {
-            await app.commands.setGoal(id, user, body.command);
-        }
-
-        return json(response, 200, { ok: true });
+        return rejectRetired();
     }
 
     if (third === "worktree" && method === "POST") {
@@ -508,17 +477,19 @@ export async function conversationRoutes(
             throw new HttpError(400, "Only removing a worktree is asked for here");
         }
 
-        await app.commands.removeWorktree(id, user, body.force);
-
-        return json(response, 200, { ok: true });
+        return rejectRetired();
     }
 
     if (third === "fork" && method === "POST") {
-        return json(response, 200, await app.commands.fork(id, user, await readJson(request)));
+        await readJson(request);
+
+        return rejectRetired();
     }
 
     if (third === "resend" && method === "POST") {
-        return json(response, 200, await app.commands.resend(id, user, await readJson(request)));
+        await readJson(request);
+
+        return rejectRetired();
     }
 
     if (third === "compact" && method === "POST") {
@@ -532,13 +503,7 @@ export async function conversationRoutes(
             throw new HttpError(400, "instructions must be text");
         }
 
-        await app.commands.compact(
-            id,
-            user,
-            (body.instructions as string | null | undefined)?.trim() || undefined,
-        );
-
-        return json(response, 200, { ok: true });
+        return rejectRetired();
     }
 
     if (third === "image" && fourth !== undefined && (method === "GET" || method === "HEAD")) {
@@ -582,7 +547,11 @@ export async function conversationRoutes(
             throw new HttpError(400, "path is required");
         }
 
-        return serveImage(request, response, app.workspace.conversationFile(user, id, requested));
+        return serveImage(
+            request,
+            response,
+            await app.workspace.conversationFile(user, id, requested),
+        );
     }
 
     if (third === "download" && method === "GET") {
@@ -592,7 +561,7 @@ export async function conversationRoutes(
             throw new HttpError(400, "path is required");
         }
 
-        return serveDownload(response, app.workspace.readableFile(user, id, requested));
+        return serveDownload(response, await app.workspace.readableFile(user, id, requested));
     }
 
     if (third === "entry" && fourth !== undefined && method === "GET") {
@@ -697,13 +666,13 @@ export async function conversationRoutes(
     }
 
     if (third === "shell" && fourth === undefined && method === "POST") {
-        return json(response, 200, await app.shell.start(id, user, await readJson(request)));
+        await readJson(request);
+
+        return rejectRetired();
     }
 
     if (third === "shell" && fourth !== undefined && parts[4] === "stop" && method === "POST") {
-        await app.shell.stop(id, user, Number(fourth));
-
-        return json(response, 200, { ok: true });
+        return rejectRetired();
     }
 
     if (third === "entries" && method === "GET" && fourth === undefined) {
@@ -739,59 +708,8 @@ export async function conversationRoutes(
     }
 
     if (third === "upload" && method === "POST") {
-        app.requireSteer(user);
-
-        if (Number(request.headers["content-length"] ?? 0) > MAX_UPLOAD) {
-            throw new HttpError(413, "Files can be up to 50 MB");
-        }
-
-        await app.conversation(id);
-        const name = safeName(url.searchParams.get("name") ?? "upload");
-        const directory = app.workspace.uploadDirectory(id);
-        // Unique, and never written over: pasted images all arrive as image.png, often at once.
-        const file = join(
-            directory,
-            `${Date.now().toString(36)}-${randomUUID().slice(0, 8)}-${name}`,
-        );
-        let size = 0;
-
-        request.on("data", (chunk: Buffer) => {
-            size += chunk.length;
-
-            if (size > MAX_UPLOAD) {
-                request.destroy(new HttpError(413, "Files can be up to 50 MB"));
-            }
-        });
-
-        try {
-            await pipeline(request, createWriteStream(file, { mode: 0o600, flags: "wx" }));
-        } catch (error) {
-            // A cut-off or oversized upload leaves nothing behind (and a name already taken was never this upload's).
-            // Cut off is the client's doing, not a server error.
-            if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
-                rmSync(file, { force: true });
-            }
-
-            if (error instanceof HttpError || request.complete) {
-                throw error;
-            }
-
-            throw new HttpError(400, "The upload stopped before it finished");
-        }
-
-        const mime =
-            String(request.headers["content-type"] ?? "") ||
-            TYPES[extname(name).toLowerCase()] ||
-            "application/octet-stream";
-        const attachment: Attachment = {
-            path: file,
-            name,
-            mime: mime.split(";")[0]!.trim(),
-            size,
-        };
-
-        return json(response, 200, attachment);
+        app.requireArchiveWriteAllowed(id);
     }
 
-    throw new HttpError(404, "Unknown API route");
+    return conversationUpload(api, id, third, method);
 }

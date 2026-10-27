@@ -1,5 +1,12 @@
 // helpers.ts first: it points Pi's folder at a temporary one before anything from src/ loads.
-import { cleanUp, owner, root as testRoot, scriptedModel, work } from "./helpers.ts";
+import {
+    cleanUp,
+    owner,
+    root as testRoot,
+    scriptedModel,
+    seedHistoricalSession,
+    work,
+} from "./helpers.ts";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import {
@@ -235,7 +242,7 @@ test("the API lists any session's folder for the owner, and for a member only th
         (each) => app.config.userById(each) !== undefined,
     );
     // Not a registered project, yet a session there trusts and loads the folder.
-    const session = await app.commands.createSession(owner(app), { cwd: loose });
+    const session = await seedHistoricalSession(app, loose);
 
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
     const port = (server.address() as { port: number }).port;
@@ -271,7 +278,7 @@ test("the API lists any session's folder for the owner, and for a member only th
     assert.equal((await get(member.token, "agent-resources")).status, 200);
 
     // The kernel never started this session: no native commands yet, not an error.
-    const prompts = await get(ownerToken, `c/${session.id}/prompts`);
+    const prompts = await get(ownerToken, `c/${session}/prompts`);
 
     assert.equal(prompts.status, 200);
     assert.deepEqual(

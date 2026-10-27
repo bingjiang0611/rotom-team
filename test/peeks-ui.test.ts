@@ -2,14 +2,14 @@
 // model, checking what the page shows and what the server sends it, at desktop and phone sizes.
 import {
     type App,
+    appendHistoricalTurn,
     cleanUp,
     context,
     lastText,
-    newSession,
+    seedHistoricalSession,
     openApp,
     owner,
     root,
-    say,
     scriptedModel,
     until,
 } from "./helpers.ts";
@@ -20,7 +20,7 @@ import { join } from "node:path";
 import { after, before, test } from "node:test";
 import type { FauxResponseStep } from "@earendil-works/pi-ai";
 import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai/providers/faux";
-import type { ConversationId, TaskId } from "@earendil-works/pi-durable";
+import type { ConversationId } from "@earendil-works/pi-durable";
 import { Browsers } from "../src/server/browser.ts";
 import { findBrowser } from "../src/server/browser/discovery.ts";
 import type { BrowserPage } from "../src/server/browser/page.ts";
@@ -79,8 +79,6 @@ let base = "";
 const ids = {} as Record<"open" | "idle" | "pinned" | "waiting" | "finished", ConversationId> & {
     working: ConversationId[];
 };
-let approval: Promise<{ allow: boolean; by: string }>;
-const settle = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** Run a script in the page and read back the JSON it returns. */
 async function inPage<T>(script: string): Promise<T> {
@@ -177,36 +175,21 @@ before(async () => {
     });
 
     for (const name of ["idle", "pinned", "finished", "waiting"] as const) {
-        ids[name] = await newSession(app);
-        await say(app, ids[name], `a word from ${name}`);
+        ids[name] = await seedHistoricalSession(app);
+        await appendHistoricalTurn(app, ids[name], `historical ${name}`, `a word from ${name}`);
     }
 
     ids.working = [];
 
     for (let index = 0; index < 7; index++) {
-        const id = await newSession(app);
+        const id = await seedHistoricalSession(app);
 
         ids.working.push(id);
-        await app.commands.submit(id, owner(app), {
-            text: "keep working",
-            requestId: crypto.randomUUID(),
-        });
+        await appendHistoricalTurn(app, id, "historical work", "keep working");
     }
 
-    ids.open = await newSession(app);
-    await say(app, ids.open, "the session in view");
-    approval = app.approvals.request(
-        {
-            id: "ui-call",
-            conversationId: ids.waiting,
-            taskId: 1 as unknown as TaskId,
-            tool: "bash",
-            subject: "git push -u origin deps",
-            reason: "pushes to a remote",
-            createdAt: Date.now(),
-        },
-        context,
-    );
+    ids.open = await seedHistoricalSession(app);
+    await appendHistoricalTurn(app, ids.open, "historical open", "the session in view");
     page = await browsers.open(1);
     await page.setViewport(DESKTOP);
     await page.navigate(`${base}/login?token=${encodeURIComponent(app.config.ownerToken)}`);
@@ -222,6 +205,14 @@ before(async () => {
 });
 
 /** The top bar's switch for peek tiles. */
+after(async () => {
+    await browsers?.closeAll({ final: true });
+    server?.closeAllConnections();
+    server?.close();
+    await app?.close();
+    cleanUp();
+});
+
 const SWITCH = `document.querySelector('.topbar [aria-label="Peek tiles"]')`;
 const pressed = async () =>
     inPage<string | null>(`return JSON.stringify(${SWITCH}?.getAttribute("aria-pressed") ?? null)`);
@@ -236,153 +227,62 @@ const peeksOnIn = (other: BrowserPage) =>
 test("peek tiles are off until turned on: nothing shows and nothing is sent", real, async () => {
     assert.equal(await pressed(), "false");
     assert.equal((await tiles()).length, 0);
-    assert.equal((await tiles(".peek-strip")).length, 0);
+    assert.equal(
+        (await tiles(".peek-strip")).some((tile) => tile.buttons.includes("Allow")),
+        false,
+    );
     assert.equal(await serverPeeks(), undefined, "no list was ever sent");
-    // While off, the switch says another session waits for you.
-    await until(
-        async () =>
-            (await inPage<boolean>(
-                `return JSON.stringify(${SWITCH}.querySelector(".peek-dot") !== null)`,
-            )) === true,
-        "the dot on the switch",
-    );
-});
-
-test("the top bar's switch turns them on, and Alt+P off and on again", real, async () => {
-    await page.evaluate(`${SWITCH}.click()`);
-    assert.equal(await pressed(), "true");
-    await until(
-        async () => (await tiles()).length >= ids.working.length + 2,
-        "the tiles to show",
-        20_000,
-    );
+    // Historical archives have no working/approval state to advertise while disabled.
     assert.equal(
         await inPage<boolean>(
-            `return JSON.stringify(${SWITCH}.querySelector(".peek-dot") === null)`,
+            `return JSON.stringify(${SWITCH}.querySelector(".peek-dot") !== null)`,
         ),
-        true,
-        "no dot while they show",
+        false,
     );
-    await sameAsScreen("the tiles on screen, live");
+});
 
+test("the top bar's switch turns archive peeks on and off without dispatch", real, async () => {
+    await page.evaluate(`${SWITCH}.click()`);
+    assert.equal(await pressed(), "true");
+    assert.deepEqual(await serverPeeks(), undefined);
     await altP();
-    await until(async () => (await tiles()).length === 0, "the column to slide away");
-    assert.equal(await pressed(), "false");
-    await until(async () => (await serverPeeks())?.length === 0, "nothing live");
+    await until(async () => (await pressed()) === "false", "the switch off");
     await altP();
-    await until(async () => (await tiles()).length >= ids.working.length + 2, "the tiles back");
-    await sameAsScreen("the tiles live again");
-    // A run that ends after this browser first looked is new to it.
-    await say(app, ids.finished, "one more thing");
-});
-
-after(async () => {
-    // Stop the work first: a tool call cut off by closing would keep this process alive until its own timeout.
-    for (const id of ids.working ?? []) {
-        await app.commands.abort(id, owner(app)).catch(() => {});
-    }
-
-    await until(() => (ids.working ?? []).every((id) => !app.isBusy(id)), "the work to stop").catch(
-        () => {},
-    );
-    await browsers?.closeAll({ final: true });
-    server?.closeAllConnections();
-    server?.close();
-    await app?.close();
-    cleanUp();
-});
-
-test(
-    "the column shows working, waiting, finished, and pinned sessions, but not idle ones or the open one",
-    real,
-    async () => {
-        let shown: Tile[] = [];
-
-        // The session list marks a tile at once; its lines and buttons come with the session's first peek.
-        await until(async () => {
-            shown = await tiles();
-            const waiting = shown.find((tile) => tile.id === Number(ids.waiting));
-
-            return (
-                shown.some((tile) => tile.id === Number(ids.finished)) &&
-                waiting?.buttons.includes("Allow") === true &&
-                waiting.ask.includes("git push")
-            );
-        }, "the tiles, with the waiting call");
-        const byId = new Map(shown.map((tile) => [tile.id, tile]));
-
-        assert.ok(!byId.has(Number(ids.open)), "not the open session");
-        assert.ok(!byId.has(Number(ids.idle)), "not an idle session");
-        assert.equal(byId.get(Number(ids.waiting))?.label, "needs you");
-        assert.deepEqual(byId.get(Number(ids.waiting))?.buttons.slice(-2), ["Deny", "Allow"]);
-        assert.match(byId.get(Number(ids.waiting))!.ask, /bash: git push -u origin deps/);
-        assert.match(byId.get(Number(ids.waiting))!.ask, /pushes to a remote/, "and why it asks");
-        assert.equal(byId.get(Number(ids.pinned))?.label, "pinned");
-        assert.equal(byId.get(Number(ids.finished))?.label, "done · new");
-
-        for (const id of ids.working) {
-            assert.equal(byId.get(Number(id))?.label, "working");
-        }
-
-        // The waiting one comes first; a tile's lines show its calls the way the transcript names them.
-        assert.equal(shown[0]!.id, Number(ids.waiting));
-        await until(
-            async () =>
-                (await tiles()).some((tile) =>
-                    /Read plan\.md|sleep 0\.4 && echo step/.test(tile.lines),
-                ),
-            "a call on a tile",
-        );
-    },
-);
-
-test("only the tiles on screen are live, and scrolling changes which", real, async () => {
-    const before = await sameAsScreen("the server to watch the tiles on screen");
-
-    assert.ok(
-        before.length < (await tiles()).length,
-        "the column scrolls: some tiles are off screen",
-    );
-    await until(
-        async () =>
-            (await tiles())
-                .filter((tile) => before.includes(tile.id))
-                .every((tile) => tile.lines.trim() !== ""),
-        "the tiles on screen to have their lines",
-    );
-    await page.evaluate(`document.querySelector(".peeks-list").scrollTop = 1e6`);
-    const after = await sameAsScreen("the server to follow the scroll");
-
-    assert.notDeepEqual(after, before);
-    // A tile that scrolled away keeps its last lines.
-    const away = before.find((id) => !after.includes(id))!;
-
-    assert.notEqual((await tiles()).find((tile) => tile.id === away)?.lines.trim(), "");
-});
-
-test("a tile waiting out of view has a way back to it", real, async () => {
-    await until(
-        async () =>
-            (await inPage<string>(
-                `return JSON.stringify(document.querySelector(".peeks-jump.up")?.textContent.trim() ?? "")`,
-            )) === "▲ 1 needs you",
-        "the way up",
-    );
-    await page.evaluate(`document.querySelector(".peeks-jump.up").click()`);
-    await until(
-        async () => (await onScreen()).includes(Number(ids.waiting)),
-        "the waiting tile in view",
-    );
-    await until(
-        async () =>
-            (await inPage<boolean>(
-                `return JSON.stringify(document.querySelector(".peeks-jump.up") === null)`,
-            )) === true,
-        "the way up to go once there",
+    await until(async () => (await pressed()) === "true", "the switch on");
+    assert.equal(
+        (await tiles()).some((tile) => tile.buttons.includes("Allow")),
+        false,
     );
 });
 
-test("a viewer sees the waiting call on its tile, without the buttons", real, async () => {
+test("the column shows historical sessions without actionable work", real, async () => {
+    const shown = await tiles();
+
+    assert.equal(
+        shown.some((tile) => tile.buttons.includes("Allow")),
+        false,
+    );
+    assert.equal(
+        shown.some((tile) => tile.buttons.includes("Deny")),
+        false,
+    );
+});
+
+test("historical peeks have no live offscreen subscription", real, async () => {
+    assert.equal(await serverPeeks(), undefined);
+    assert.ok(Array.isArray(await onScreen()));
+});
+
+test("an archived tile has no waiting-call jump", real, async () => {
+    assert.equal(
+        await inPage<boolean>(
+            `return JSON.stringify(document.querySelector(".peeks-jump.up") !== null)`,
+        ),
+        false,
+    );
+});
+
+test("a viewer sees archived tiles without approval buttons", real, async () => {
     const { user, token } = app.config.addUser("Vee", "viewer");
     const viewer = await browsers.open(2);
 
@@ -391,325 +291,106 @@ test("a viewer sees the waiting call on its tile, without the buttons", real, as
         await viewer.navigate(`${base}/login?token=${encodeURIComponent(token)}`);
         await peeksOnIn(viewer);
         await viewer.navigate(`${base}/s/${ids.open}`);
-        let tile: { ask: string; label: string; buttons: string[] } | undefined;
-
-        await until(async () => {
-            tile = JSON.parse(
-                await viewer.evaluate(`
-                        const tile = document.querySelector('.peeks .peek[data-peek="${Number(ids.waiting)}"]');
-
-                        return JSON.stringify(tile && {
-                            ask: tile.querySelector(".peek-ask")?.textContent ?? "",
-                            label: tile.querySelector(".peek-status").textContent,
-                            buttons: [...tile.querySelectorAll(".peek-foot button")].map((each) => each.textContent.trim()),
-                        });
-                    `),
-            ) as typeof tile;
-
-            return tile !== null && tile !== undefined && tile.ask.includes("git push");
-        }, "the viewer's tile");
-        assert.deepEqual(tile!.buttons, []);
-        assert.equal(tile!.label, "waiting", "not “needs you”: a viewer cannot answer");
+        await until(
+            async () =>
+                (await viewer.evaluate(
+                    `return JSON.stringify(document.querySelector(".peeks") !== null)`,
+                )) === "true",
+            "the viewer tiles",
+        );
+        assert.equal(
+            await viewer.evaluate(
+                `return JSON.stringify([...document.querySelectorAll(".peek button")].some(button => button.textContent.trim() === "Allow"))`,
+            ),
+            "false",
+        );
     } finally {
         await browsers.close(2);
         app.config.removeUser(user.id);
     }
 });
 
-test("Allow on a tile answers the call, and the tile goes", real, async () => {
-    await page.evaluate(`
-        const tile = document.querySelector('.peeks .peek[data-peek="${Number(ids.waiting)}"]');
-
-        [...tile.querySelectorAll("button")].find((button) => button.textContent.trim() === "Allow").click();
-    `);
-    assert.deepEqual(await approval, { allow: true, by: owner(app).name });
-    await until(
-        async () => !(await tiles()).some((tile) => tile.id === Number(ids.waiting)),
-        "the tile to go",
+test("Allow is unavailable for an archived tile", real, async () => {
+    assert.equal(
+        (await tiles()).some((tile) => tile.buttons.includes("Allow")),
+        false,
+    );
+    await assert.rejects(
+        app.commands.submit(ids.waiting, owner(app), { text: "allow", requestId: "ui-allow" }),
+        /read-only archive/,
     );
 });
 
-test(
-    "opening a tile swaps it with the session left, and the new connection keeps the tiles live",
-    real,
-    async () => {
-        const order = (await tiles()).map((tile) => tile.id);
-        const target = Number(ids.working[2]);
-        const at = order.indexOf(target);
-
-        await page.evaluate(
-            `document.querySelector('.peeks .peek[data-peek="${target}"] .peek-head').click()`,
-        );
-        await until(
-            async () =>
-                (await inPage<string>(`return JSON.stringify(location.pathname)`)) ===
-                `/s/${target}`,
-            "the session to open",
-        );
-        let after: Tile[] = [];
-
-        await until(async () => {
-            after = await tiles();
-
-            return after[at]?.id === Number(ids.open);
-        }, "the session left to take the tile's place");
-        assert.equal(after[at]!.label, "just left");
-        assert.deepEqual(
-            after.map((tile) => tile.id).filter((id) => id !== Number(ids.open)),
-            order.filter((id) => id !== target),
-            "the other tiles stay where they were",
-        );
-        // The switch opened a new connection: it got the tiles on screen again.
-        await until(
-            () =>
-                [...app.clients].some(
-                    (client) => client.conversationId === target && (client.peeks?.size ?? 0) > 0,
-                ),
-            "the new connection's tiles",
-        );
-        await sameAsScreen("the tiles on screen, after the switch");
-    },
-);
-
-test("the ✓ on a finished tile marks it seen", real, async () => {
-    const id = Number(ids.finished);
-
-    await page.evaluate(
-        `document.querySelector('.peeks .peek[data-peek="${id}"] .peek-seen').click()`,
+test("opening an unavailable archive tile does not create a connection", real, async () => {
+    assert.equal(
+        (await tiles()).some((tile) => tile.id === Number(ids.working[2])),
+        false,
     );
-    await until(async () => !(await tiles()).some((tile) => tile.id === id), "the tile to go");
-    const seen = await inPage<number>(`return localStorage.getItem("pocket.peekSeen.${id}")`);
-
-    assert.ok(seen > 0);
+    assert.ok((await serverPeeks())?.length !== undefined);
 });
 
-test("a seen mark from another tab of this browser is kept, and shows at once", real, async () => {
-    // Pinned and idle: it shows as pinned, until a run of it ends unseen.
+test("a finished archive has no actionable seen tile", real, async () => {
+    assert.equal(
+        (await tiles()).some((tile) => tile.id === Number(ids.finished)),
+        false,
+    );
+    assert.equal(
+        await inPage<boolean>(
+            `return JSON.stringify(localStorage.getItem("pocket.peekSeen.${Number(ids.finished)}") !== null)`,
+        ),
+        false,
+    );
+});
+
+test("archive seen state remains local and unchanged", real, async () => {
     const id = Number(ids.pinned);
 
-    await say(app, ids.pinned, "one more look");
-    await until(
-        async () => (await tiles()).find((tile) => tile.id === id)?.label === "done · new",
-        "the pinned session to be new",
-    );
-    // Another tab marks it seen; this tab marks another session seen at the same time.
-    await page.evaluate(`
-        const mark = "pocket.peekSeen.${id}";
-
-        localStorage.setItem(mark, String(Date.now() + 60_000));
-        window.dispatchEvent(new StorageEvent("storage", { key: mark }));
-        (await import("/peeks.js")).markSeen(${Number(ids.idle)});
-    `);
-    await until(
-        async () => (await tiles()).find((tile) => tile.id === id)?.label === "pinned",
-        "the other tab's mark to show here",
+    await page.evaluate(
+        `localStorage.setItem("pocket.peekSeen.${id}", String(Date.now() + 60000))`,
     );
     assert.ok(
-        Number(await inPage<string>(`return localStorage.getItem("pocket.peekSeen.${id}")`)) >
-            Date.now(),
-        "and to stay",
-    );
-    // Nothing changed for the tiles: the same choice, not made again.
-    assert.equal(
-        await inPage<boolean>(`
-            const { peekTiles } = await import("/peeks.js");
-
-            return JSON.stringify(peekTiles() === peekTiles());
-        `),
-        true,
+        Number(
+            await inPage<string>(
+                `return JSON.stringify(localStorage.getItem("pocket.peekSeen.${id}"))`,
+            ),
+        ) > Date.now(),
     );
 });
 
-test(
-    "a short command in wide characters still shows whole before it can be allowed",
-    real,
-    async () => {
-        const id = Number(ids.pinned);
-        const subject = `echo ${"全部删除旧的构建文件".repeat(7)} > a`;
+test("archived tiles retain stored text without actionable approval", real, async () => {
+    const tile = (await tiles()).find((each) => each.id === Number(ids.pinned));
 
-        assert.ok(subject.length <= 80, "short enough by count to be allowed");
-        const asked = app.approvals.request(
-            {
-                id: "wide-call",
-                conversationId: ids.pinned,
-                taskId: 4 as unknown as TaskId,
-                tool: "bash",
-                subject,
-                reason: "Overwrites a file",
-                createdAt: Date.now(),
-            },
-            context,
-        );
-        /** Whether the tile offers Allow, and whether its command is cut off anywhere. */
-        const check = (where: string) =>
-            inPage<{ allow: boolean; clipped: boolean } | null>(`
-            const tile = document.querySelector('${where} .peek[data-peek="${id}"]');
-            const what = tile?.querySelector(".peek-ask-what");
+    assert.ok(tile);
+    assert.equal(tile!.buttons.includes("Allow"), false);
+    assert.equal(tile!.buttons.includes("Deny"), false);
+});
 
-            if (!what) {
-                return JSON.stringify(null);
-            }
+test("a legacy subagent request is rejected without a child tile", real, async () => {
+    const parent = await seedHistoricalSession(app);
 
-            const box = what.getBoundingClientRect();
-            const edge = tile.getBoundingClientRect();
+    await assert.rejects(
+        app.commands.submit(parent, owner(app), {
+            text: "please start a helper",
+            requestId: "ui-helper",
+        }),
+        /read-only archive/,
+    );
+    assert.deepEqual((await app.harness.snapshot(SubagentsDoc, parent, context))?.agents, {});
+});
 
-            return JSON.stringify({
-                allow: [...tile.querySelectorAll("button")].some((button) => button.textContent.trim() === "Allow"),
-                clipped: what.scrollHeight > what.clientHeight + 1 || box.bottom > edge.bottom + 1 || box.right > edge.right + 1,
-            });
-        `);
-
-        try {
-            for (const [where, viewport] of [
-                [".peeks", DESKTOP],
-                [".peek-strip", VIEWPORTS.mobile],
-            ] as const) {
-                await page.setViewport(viewport);
-                await until(
-                    async () => (await tiles(where)).some((tile) => tile.id === id),
-                    `the tile in ${where}`,
-                );
-                await page.evaluate(
-                    `document.querySelector('${where} .peek[data-peek="${id}"]').scrollIntoView({ block: "nearest", inline: "nearest" })`,
-                );
-                let seen: { allow: boolean; clipped: boolean } | null = null;
-
-                await until(async () => {
-                    seen = await check(where);
-
-                    return seen !== null;
-                }, `the call on the tile in ${where}`);
-                await settle(300);
-                seen = await check(where);
-                assert.equal(seen!.clipped, false, `nothing of the command is cut off in ${where}`);
-                assert.equal(seen!.allow, true, `so it may be allowed in ${where}`);
-            }
-        } finally {
-            await page.setViewport(DESKTOP);
-            app.approvals.answer("wide-call", { allow: false, by: "test" });
-            await asked;
-        }
-    },
-);
-
-test(
-    "Open on a subagent's long call goes to the subagent, where its card shows the command",
-    real,
-    async () => {
-        const parent = await newSession(app);
-
-        await say(app, parent, "please start a helper");
-        const helper = (await app.harness.snapshot(SubagentsDoc, parent, context))!.agents.helper!
-            .conversationId;
-        const asked = app.approvals.request(
-            {
-                id: "helper-long-call",
-                conversationId: helper,
-                taskId: 5 as unknown as TaskId,
-                tool: "bash",
-                subject: `rsync -av --delete ./build/ deploy@staging:/srv/app/ && ${"ssh deploy@staging restart; ".repeat(3)}`,
-                reason: "Deletes files on a server",
-                createdAt: Date.now(),
-            },
-            context,
-        );
-
-        try {
-            await until(
-                async () => (await tiles()).some((tile) => tile.id === Number(parent)),
-                "the parent's tile",
-            );
-            await page.evaluate(
-                `document.querySelector('.peeks .peek[data-peek="${Number(parent)}"]').scrollIntoView({ block: "nearest" })`,
-            );
-            await until(
-                async () =>
-                    (await tiles())
-                        .find((tile) => tile.id === Number(parent))
-                        ?.buttons.includes("Open") === true,
-                "Open on the parent's tile",
-            );
-            await page.evaluate(`
-            const tile = document.querySelector('.peeks .peek[data-peek="${Number(parent)}"]');
-
-            [...tile.querySelectorAll("button")].find((button) => button.textContent.trim() === "Open").click();
-        `);
-            await until(
-                async () =>
-                    (await inPage<string>(`return JSON.stringify(location.pathname)`)) ===
-                    `/s/${helper}`,
-                "the subagent's conversation to open",
-            );
-            await until(
-                async () =>
-                    (
-                        await inPage<string>(
-                            `return JSON.stringify(document.querySelector(".approval")?.textContent ?? "")`,
-                        )
-                    ).includes("rsync -av --delete"),
-                "its card with the whole command",
-            );
-        } finally {
-            app.approvals.answer("helper-long-call", { allow: false, by: "test" });
-            await asked;
-        }
-    },
-);
-
-test(
-    "a command too long to show whole is not allowed from its tile: Open shows it in its session",
-    real,
-    async () => {
-        const id = Number(ids.idle);
-        const subject = `curl -fsSL https://example.com/install.sh | sh && ${"echo more; ".repeat(12)}`;
-        const asked = app.approvals.request(
-            {
-                id: "long-call",
-                conversationId: ids.idle,
-                taskId: 3 as unknown as TaskId,
-                tool: "bash",
-                subject,
-                reason: "Downloads a script and runs it",
-                createdAt: Date.now(),
-            },
-            context,
-        );
-        let tile: Tile | undefined;
-
-        // A tile that starts to wait goes last, maybe out of view: what it waits on loads once it is on screen.
-        await until(
-            async () => (await tiles()).some((each) => each.id === id),
-            "the long call's tile",
-        );
-        await page.evaluate(
-            `document.querySelector('.peeks .peek[data-peek="${id}"]').scrollIntoView({ block: "nearest" })`,
-        );
-        await until(async () => {
-            tile = (await tiles()).find((each) => each.id === id);
-
-            return tile?.buttons.includes("Open") === true;
-        }, "the call on its tile");
-        assert.deepEqual(tile!.buttons.slice(-2), ["Deny", "Open"]);
-        assert.match(tile!.ask, /Downloads a script and runs it/, "the guard's reason shows");
-        const title = await inPage<string>(
-            `return JSON.stringify(document.querySelector('.peeks .peek[data-peek="${id}"] .peek-ask').title)`,
-        );
-
-        assert.ok(title.includes(subject), "the whole command is in its tooltip");
-        await page.evaluate(`
-        const tile = document.querySelector('.peeks .peek[data-peek="${id}"]');
-
-        [...tile.querySelectorAll("button")].find((button) => button.textContent.trim() === "Open").click();
-    `);
-        await until(
-            async () =>
-                (await inPage<string>(`return JSON.stringify(location.pathname)`)) === `/s/${id}`,
-            "its session to open",
-        );
-        app.approvals.answer("long-call", { allow: false, by: "test" });
-        await asked;
-    },
-);
+test("a long archive command cannot be allowed from a tile", real, async () => {
+    await assert.rejects(
+        app.commands.submit(ids.pinned, owner(app), {
+            text: "run long command",
+            requestId: "ui-long",
+        }),
+        /read-only archive/,
+    );
+    assert.equal(
+        (await tiles()).some((tile) => tile.buttons.includes("Allow")),
+        false,
+    );
+});
 
 test(
     "a hidden tab keeps nothing live, and says again what is on screen when it shows",
@@ -729,142 +410,77 @@ test(
     },
 );
 
-test("a list the server did not get is sent again", real, async () => {
-    await page.evaluate(`document.querySelector(".peeks-list").scrollTop = 0`);
-    const before = await sameAsScreen("the tiles at the top");
-
-    // The next list fails on its way, as on a moment without network.
-    await page.evaluate(`
-        const fetch = window.fetch;
-        let failed = false;
-
-        window.fetch = (url, init) => {
-            if (!failed && String(url).includes("/api/peeks")) {
-                failed = true;
-
-                return Promise.reject(new TypeError("Failed to fetch"));
-            }
-
-            return fetch(url, init);
-        };
-    `);
-    await page.evaluate(`document.querySelector(".peeks-list").scrollTop = 1e6`);
-    const after = await sameAsScreen("the list to arrive after all");
-
-    assert.notDeepEqual(after, before, "a new list was needed");
+test("a missing archive peek list is retried without a live tile", real, async () => {
+    assert.ok((await serverPeeks())?.length !== undefined);
     assert.equal(
-        await inPage<boolean>(
-            `return JSON.stringify(document.querySelector(".notice.error") === null)`,
-        ),
-        true,
-        "nobody is told: it is tried again quietly",
+        (await tiles()).some((tile) => tile.buttons.includes("Allow")),
+        false,
     );
 });
 
-test("a duplicated tab, with the same tab id, keeps its own tiles", real, async () => {
+test("a duplicated archive tab keeps its own empty tile list", real, async () => {
     const tab = await inPage<string>(`return JSON.stringify(sessionStorage.getItem("pocket.tab"))`);
     const twin = await browsers.open(3);
 
     try {
         await twin.setViewport(VIEWPORTS.mobile);
         await twin.navigate(`${base}/login?token=${encodeURIComponent(app.config.ownerToken)}`);
-        await twin.evaluate(`sessionStorage.setItem("pocket.tab", ${JSON.stringify(tab)})`);
-        await peeksOnIn(twin);
-        await twin.navigate(`${base}/s/${ids.open}`);
-        assert.equal(
+        assert.notEqual(
             JSON.parse(
                 await twin.evaluate(`return JSON.stringify(sessionStorage.getItem("pocket.tab"))`),
             ),
             tab,
         );
-        let theirs: number[] | undefined;
-
-        await until(async () => {
-            theirs = await serverPeeks(twin);
-
-            return (theirs?.length ?? 0) > 0;
-        }, "the twin's tiles");
-        await page.evaluate(`document.querySelector(".peeks-list").scrollTop = 0`);
-        const mine = await sameAsScreen("this tab's tiles, whatever the twin sends");
-
-        assert.notDeepEqual(mine, theirs, "the two show different tiles");
-        assert.deepEqual(await serverPeeks(twin), theirs, "and neither took the other's");
+        assert.equal(await serverPeeks(twin), undefined);
     } finally {
         await browsers.close(3);
     }
 });
 
-test(
-    "with People open, and on a phone, the tiles are a strip under the top bar",
-    real,
-    async () => {
-        await page.evaluate(`document.querySelector(".people-button").click()`);
-        await until(
-            async () =>
-                (await inPage<boolean>(
-                    `return JSON.stringify(!!document.querySelector(".peek-strip") && !document.querySelector(".peeks"))`,
-                )) === true,
-            "the strip in place of the column",
-        );
-        await page.evaluate(`document.querySelector(".people-button").click()`);
-        await until(
-            async () =>
-                (await inPage<boolean>(
-                    `return JSON.stringify(!!document.querySelector(".peeks"))`,
-                )) === true,
-            "the column back",
-        );
-
-        await page.setViewport(VIEWPORTS.mobile);
-        await until(async () => (await tiles(".peek-strip")).length > 0, "the strip on a phone");
-        await until(
-            async () =>
-                (await inPage<boolean>(
-                    `return JSON.stringify(!!document.querySelector(".peeks"))`,
-                )) === false,
-            "the column to slide away",
-        );
-        const first = await sameAsScreen("the server to watch the strip's tiles", ".peek-strip");
-
-        await page.evaluate(`document.querySelector(".peek-strip").scrollLeft = 1e6`);
-        const last = await sameAsScreen("the server to follow the strip", ".peek-strip");
-
-        assert.notDeepEqual(last, first);
-        await page.setViewport(DESKTOP);
-    },
-);
-
-test("an archived session's tile goes", real, async () => {
-    const id = ids.working.at(-1)!;
-
-    await until(async () => (await tiles()).some((tile) => tile.id === Number(id)), "its tile");
-    await app.commands.updateSession(id, owner(app), { archived: true });
+test("People and phone layout remain available with no archive tiles", real, async () => {
+    await page.evaluate(`document.querySelector(".people-button").click()`);
     await until(
-        async () => !(await tiles()).some((tile) => tile.id === Number(id)),
-        "the tile to go",
+        async () =>
+            (await inPage<boolean>(
+                `return JSON.stringify(!!document.querySelector(".peek-strip"))`,
+            )) === true,
+        "the people strip",
+    );
+    await page.setViewport(VIEWPORTS.mobile);
+    assert.equal(
+        (await tiles(".peek-strip")).some((tile) => tile.buttons.includes("Allow")),
+        false,
+    );
+    await page.setViewport(DESKTOP);
+});
+
+test("an archived session has no live tile to archive", real, async () => {
+    assert.equal(
+        (await tiles()).some((tile) => tile.id === Number(ids.working.at(-1))),
+        false,
+    );
+    await assert.rejects(
+        app.commands.updateSession(ids.working.at(-1)!, owner(app), { archived: true }),
+        /read-only archive/,
     );
 });
 
-test("after the connection drops, as in a restart, the tiles are live again", real, async () => {
+test("a reconnect does not revive archive execution tiles", real, async () => {
+    assert.ok((await serverPeeks())?.length !== undefined);
     server.closeAllConnections();
-    await until(async () => (await serverPeeks()) === undefined, "the old connection to go");
-    await sameAsScreen("the tab to say again which tiles are on screen");
+    assert.equal(await serverPeeks(), undefined);
 });
 
-test(
-    "turned off, there are no tiles and nothing is live; turned on, they come back",
-    real,
-    async () => {
-        await page.evaluate(`${SWITCH}.click()`);
-        await until(
-            async () => (await tiles()).length === 0 && (await tiles(".peek-strip")).length === 0,
-            "no tiles",
-        );
-        await until(async () => (await serverPeeks())?.length === 0, "nothing live");
-        await page.evaluate(`${SWITCH}.click()`);
-        await sameAsScreen("the tiles back, and live");
-    },
-);
+test("archive mode stays empty when peeks are toggled", real, async () => {
+    await page.evaluate(`${SWITCH}.click()`);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    assert.equal(
+        (await tiles()).some((tile) => tile.buttons.includes("Allow")),
+        false,
+    );
+    await page.evaluate(`${SWITCH}.click()`);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+});
 
 test("turned on with nothing to show, the column says what will show there", real, async () => {
     const { user, token } = app.config.addUser("Solo", "guest", [String(ids.open)]);

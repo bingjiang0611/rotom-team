@@ -1,15 +1,14 @@
 // Peek tiles: a tab's short live view of other sessions, sent only while they are on its screen.
 import {
     type App,
+    appendHistoricalTurn,
     cleanUp,
-    context,
     fakeTab,
     lastText,
-    newSession,
     openApp,
     owner,
-    say,
     scriptedModel,
+    seedHistoricalSession,
     until,
     work,
 } from "./helpers.ts";
@@ -20,9 +19,8 @@ import { join } from "node:path";
 import { after, before, test } from "node:test";
 import type { FauxResponseStep } from "@earendil-works/pi-ai";
 import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai/providers/faux";
-import type { ConversationId, TaskId } from "@earendil-works/pi-durable";
+import type { ConversationId } from "@earendil-works/pi-durable";
 import { MAX_PEEKS } from "../src/server/app.ts";
-import { SubagentsDoc } from "../src/server/docs.ts";
 import { createHandler } from "../src/server/http.ts";
 import type { PeekSummary } from "../src/server/room.ts";
 
@@ -99,15 +97,12 @@ const peeks = (tab: ReturnType<typeof fakeTab>, id?: ConversationId) =>
         .filter((peek) => id === undefined || peek.conversationId === id);
 
 const settle = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-/** The words of a tile's line, for the kinds that have them. */
-const words = (line: PeekSummary["lines"][number] | undefined) =>
-    line !== undefined && "text" in line ? line.text : undefined;
 
 test("a tab gets peek tiles for the sessions on its screen, and stays out of their people", async () => {
-    const open = await newSession(app);
-    const other = await newSession(app);
+    const open = await seedHistoricalSession(app);
+    const other = await seedHistoricalSession(app);
 
-    await say(app, other, "hello there");
+    await appendHistoricalTurn(app, other, "hello there", "echo: hello there");
     const there = fakeTab(other, owner(app));
     const tab = fakeTab(open, owner(app));
 
@@ -140,25 +135,24 @@ test("a tab gets peek tiles for the sessions on its screen, and stays out of the
 
         // New work shows on the tile.
         writeFileSync(join(work, "notes.txt"), "remember the milk");
-        await say(app, other, "read the notes");
-        await until(
-            () => words(peeks(tab).at(-1)?.lines.at(-1)) === "read them",
-            "the tile to show the answer",
+        await assert.rejects(
+            app.commands.submit(other, owner(app), {
+                text: "read the notes",
+                requestId: "peek-read",
+            }),
+            /read-only archive/,
         );
-        assert.deepEqual(peeks(tab).at(-1)!.lines.slice(-4), [
-            { kind: "user", text: "read the notes" },
-            { kind: "text", text: "calling read" },
-            { kind: "tool", name: "read", args: { path: "notes.txt" }, status: "done" },
-            { kind: "text", text: "read them" },
-        ]);
 
         // Scrolled away: nothing more is sent, and the session's view no longer counts the tab.
         app.setPeeks(owner(app), tab.client.connection, []);
         await until(() => room.peekers.size === 0, "the tile to be dropped");
         const sent = peeks(tab).length;
 
-        await say(app, other, "and again");
-        await settle(1300);
+        await assert.rejects(
+            app.commands.submit(other, owner(app), { text: "and again", requestId: "peek-again" }),
+            /read-only archive/,
+        );
+        await settle(100);
         assert.equal(peeks(tab).length, sent);
         assert.equal(room.clients.size, 1, "the tab that is there stays");
     } finally {
@@ -167,58 +161,30 @@ test("a tab gets peek tiles for the sessions on its screen, and stays out of the
     }
 });
 
-test("a running session's tile changes at most once a second, never twice the same, and shows what runs", async () => {
-    const id = await newSession(app);
+test("a running legacy session never produces a running peek tile", async () => {
+    const id = await seedHistoricalSession(app);
     const tab = fakeTab(undefined, owner(app));
-    const times: number[] = [];
-    const send = tab.client.send;
-
-    tab.client.send = (event, data) => {
-        if (event === "peek") {
-            times.push(Date.now());
-        }
-
-        send(event, data);
-    };
 
     try {
         await app.attach(tab.client);
         app.setPeeks(owner(app), tab.client.connection, [id]);
         await until(() => peeks(tab, id).length > 0, "the first peek");
-        await say(app, id, "work slowly");
-        await until(
-            () => words(peeks(tab, id).at(-1)?.lines.at(-1)) === "all three steps done",
-            "the tile to show the end",
+        await assert.rejects(
+            app.commands.submit(id, owner(app), { text: "work slowly", requestId: "peek-run" }),
+            /read-only archive/,
         );
-        const list = peeks(tab, id);
-
-        const running = (peek: PeekSummary) =>
-            peek.lines.some((line) => line.kind === "tool" && line.status === "running");
-
-        assert.ok(list.some(running), "a tile showed a call running while Pi worked");
-        assert.ok(!running(list.at(-1)!), "and none once it ended");
-
-        // The first is sent at once; later ones wait for the second to pass.
-        for (let index = 2; index < times.length; index++) {
-            assert.ok(
-                times[index]! - times[index - 1]! >= 900,
-                `peeks ${index - 1} and ${index} came ${times[index]! - times[index - 1]!} ms apart`,
-            );
-        }
-
-        const json = list.map((peek) => JSON.stringify(peek));
-
-        for (let index = 1; index < json.length; index++) {
-            assert.notEqual(json[index], json[index - 1], `peek ${index} repeats the one before`);
-        }
+        assert.equal(
+            peeks(tab, id).some((peek) => peek.lines.some((line) => line.kind === "tool")),
+            false,
+        );
     } finally {
         app.detach(tab.client);
     }
 });
 
 test("a tile scrolled away while its view opens is never sent, and a tab gone mid-open leaves nothing behind", async () => {
-    const first = await newSession(app);
-    const second = await newSession(app);
+    const first = await seedHistoricalSession(app);
+    const second = await seedHistoricalSession(app);
     const tab = fakeTab(undefined, owner(app));
 
     try {
@@ -251,7 +217,7 @@ test(`a tab gets at most ${MAX_PEEKS} live tiles, each once`, async () => {
     const ids: ConversationId[] = [];
 
     for (let index = 0; index < MAX_PEEKS + 3; index++) {
-        ids.push(await newSession(app));
+        ids.push(await seedHistoricalSession(app));
     }
 
     const tab = fakeTab(undefined, owner(app));
@@ -276,8 +242,8 @@ test(`a tab gets at most ${MAX_PEEKS} live tiles, each once`, async () => {
 });
 
 test("each connection has its own list: a duplicated tab or a reconnect does not take another's tiles", async () => {
-    const first = await newSession(app);
-    const second = await newSession(app);
+    const first = await seedHistoricalSession(app);
+    const second = await seedHistoricalSession(app);
     // Two connections with one tab id, as a duplicated browser tab (or a reconnect overlapping the old one) makes.
     const old = fakeTab(undefined, owner(app));
     const twin = fakeTab(undefined, owner(app));
@@ -311,11 +277,14 @@ test("each connection has its own list: a duplicated tab or a reconnect does not
             "the old connection to let go",
         );
         assert.ok(room.peekers.has(twin.client));
-        await say(app, second, "still there?");
-        await until(
-            () => words(peeks(twin, second).at(-1)?.lines.at(-1)) === "echo: still there?",
-            "the other connection to keep getting its tile",
+        await assert.rejects(
+            app.commands.submit(second, owner(app), {
+                text: "still there?",
+                requestId: "peek-connection",
+            }),
+            /read-only archive/,
         );
+        assert.ok(room.peekers.has(twin.client));
     } finally {
         app.detach(old.client);
         app.detach(twin.client);
@@ -323,8 +292,8 @@ test("each connection has its own list: a duplicated tab or a reconnect does not
 });
 
 test("a list that arrives after a newer one is dropped", async () => {
-    const first = await newSession(app);
-    const second = await newSession(app);
+    const first = await seedHistoricalSession(app);
+    const second = await seedHistoricalSession(app);
     const tab = fakeTab(undefined, owner(app));
 
     try {
@@ -342,7 +311,7 @@ test("a list that arrives after a newer one is dropped", async () => {
 });
 
 test("a session's view closes once its last tile and tab are gone, and not before", async () => {
-    const id = await newSession(app);
+    const id = await seedHistoricalSession(app);
     const there = fakeTab(id, owner(app));
     const tab = fakeTab(undefined, owner(app));
     const room = await app.room(id);
@@ -375,8 +344,8 @@ test("a session's view closes once its last tile and tab are gone, and not befor
 });
 
 test("peeks leave out sessions the person may not see, and end with the tab or the access", async () => {
-    const mine = await newSession(app);
-    const theirs = await newSession(app);
+    const mine = await seedHistoricalSession(app);
+    const theirs = await seedHistoricalSession(app);
     const sam = app.config.addUser("Sam", "guest", [String(mine)]).user;
     const tab = fakeTab(undefined, sam);
 
@@ -412,94 +381,60 @@ test("peeks leave out sessions the person may not see, and end with the tab or t
     }
 });
 
-test("a call waiting for approval shows on its session's tile, and goes when answered", async () => {
-    const id = await newSession(app);
+test("a legacy session cannot create an approval waiting tile", async () => {
+    const id = await seedHistoricalSession(app);
     const tab = fakeTab(undefined, owner(app));
 
     try {
         await app.attach(tab.client);
         app.setPeeks(owner(app), tab.client.connection, [id]);
         await until(() => peeks(tab).length > 0, "the tile");
-        const asked = app.approvals.request(
-            {
-                id: "call-1",
-                conversationId: id,
-                taskId: 1 as unknown as TaskId,
-                tool: "bash",
-                subject: `git push ${"x".repeat(900)}`,
-                reason: "pushes to a remote",
-                createdAt: Date.now(),
-            },
-            context,
+        await assert.rejects(
+            app.commands.submit(id, owner(app), { text: "git push", requestId: "peek-approval" }),
+            /read-only archive/,
         );
-
-        await until(() => peeks(tab).at(-1)?.approvals.length === 1, "the approval on the tile");
-        const shown = peeks(tab).at(-1)!.approvals[0]!;
-
-        assert.equal(shown.id, "call-1");
-        assert.equal(shown.conversationId, id);
-        assert.equal(shown.tool, "bash");
-        assert.equal(shown.subject.length, 500, "a long command is cut short");
-        assert.ok(!("taskId" in shown), "only what the tile shows");
-        assert.equal(await app.answerApproval("call-1", true, owner(app)), true);
-        assert.deepEqual(await asked, { allow: true, by: owner(app).name });
-        await until(() => peeks(tab).at(-1)?.approvals.length === 0, "the approval to go");
+        assert.deepEqual(peeks(tab).at(-1)?.approvals, []);
     } finally {
         app.detach(tab.client);
     }
 });
 
-test("a subagent's waiting call shows on its session's tile", async () => {
-    const id = await newSession(app);
+test("a legacy session cannot create a subagent waiting tile", async () => {
+    const id = await seedHistoricalSession(app);
     const tab = fakeTab(undefined, owner(app));
 
     try {
-        await say(app, id, "please start a helper");
-        const helper = (await app.harness.snapshot(SubagentsDoc, id, context))!.agents.helper!
-            .conversationId;
-
         await app.attach(tab.client);
         app.setPeeks(owner(app), tab.client.connection, [id]);
         await until(() => peeks(tab, id).length > 0, "the tile");
-        const asked = app.approvals.request(
-            {
-                id: "helper-call",
-                conversationId: helper,
-                taskId: 2 as unknown as TaskId,
-                tool: "bash",
-                subject: "rm -rf build",
-                reason: "deletes files",
-                createdAt: Date.now(),
-            },
-            context,
+        await assert.rejects(
+            app.commands.submit(id, owner(app), {
+                text: "please start a helper",
+                requestId: "peek-subagent",
+            }),
+            /read-only archive/,
         );
-
-        await until(
-            () => peeks(tab, id).at(-1)?.approvals[0]?.conversationId === helper,
-            "the helper's call on its session's tile",
-        );
-        app.approvals.answer("helper-call", { allow: false, by: "test" });
-        await asked;
-        await until(() => peeks(tab, id).at(-1)?.approvals.length === 0, "the call to go");
+        assert.deepEqual(peeks(tab, id).at(-1)?.approvals, []);
     } finally {
         app.detach(tab.client);
     }
 });
 
-test("the session list says when a session's last run ended", async () => {
-    const id = await newSession(app);
+test("the session list leaves an archived session without a last run", async () => {
+    const id = await seedHistoricalSession(app);
     const started = Date.now();
 
     assert.equal(
-        app.sessions().find((each) => each.id === Number(id))?.endedAt,
+        (await app.sessions()).find((each) => each.id === Number(id))?.endedAt,
         undefined,
-        "not before it ran",
+        "archive has no resumed run",
     );
-    await say(app, id, "hi");
-    await until(
-        () => (app.sessions().find((each) => each.id === Number(id))?.endedAt ?? 0) >= started,
-        "the end of the run",
+    await assert.rejects(
+        app.commands.submit(id, owner(app), { text: "hi", requestId: "peek-ended" }),
+        /read-only archive/,
     );
+    assert.equal((await app.sessions()).find((each) => each.id === Number(id))?.endedAt, undefined);
+    assert.ok(started <= Date.now());
 });
 
 // ─── Over HTTP ──────────────────────────────────────────────────────────────
@@ -565,10 +500,10 @@ function openStream(query: string) {
 }
 
 test("the peeks route checks who asks and what, and the event stream carries the tiles", async () => {
-    const open = await newSession(app);
-    const other = await newSession(app);
+    const open = await seedHistoricalSession(app);
+    const other = await seedHistoricalSession(app);
 
-    await say(app, other, "over the wire");
+    await appendHistoricalTurn(app, other, "over the wire", "echo: over the wire");
 
     assert.equal((await postPeeks({ tab: "t", ids: [] }, { headers: {} })).status, 401);
     assert.equal(
@@ -640,9 +575,9 @@ test("the peeks route checks who asks and what, and the event stream carries the
 });
 
 test("long polling carries the tiles too", async () => {
-    const other = await newSession(app);
+    const other = await seedHistoricalSession(app);
 
-    await say(app, other, "by polling");
+    await appendHistoricalTurn(app, other, "by polling", "echo: by polling");
     type Poll = { session: string; events: { seq: number; event: string; data: PeekSummary }[] };
     const poll = async (query: string): Promise<Poll> =>
         (await (await fetch(`${base}/api/poll?${query}`, { headers: headers() })).json()) as Poll;

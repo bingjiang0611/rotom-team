@@ -1,6 +1,6 @@
 // The daily performance journal: what it keeps out (anything a user typed), how it rotates and caps its files, and that
 // the server's own event streams, native runs, and browser tabs' timing reports reach it.
-import { cleanUp, newSession, openApp, owner, root, scriptedModel } from "./helpers.ts";
+import { cleanUp, seedHistoricalSession, openApp, owner, root, scriptedModel } from "./helpers.ts";
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import { mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
@@ -102,7 +102,7 @@ test("a crash-truncated last line is kept for the report, and new records start 
 
 test("the server's requests, pushed events, and native runs reach the journal, without what anyone typed", async () => {
     const app = await openApp(scriptedModel());
-    const id = await newSession(app);
+    const id = await seedHistoricalSession(app);
     const server = createServer(
         createHandler({ app, listen: { host: "127.0.0.1", port: 0 }, restart: () => {} }),
     );

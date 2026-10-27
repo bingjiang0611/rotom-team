@@ -1,0 +1,82 @@
+Base 2676e7f; tracked code/script/test queries. Test references below belong to the exact planned deletion closure, not a false pre-deletion zero-reference claim. Documentation is handled separately.
+
+$ git grep -n -E server/extensions|extensions/(artifacts|browser|codemode|goals|guard|plan|prompt|schedules|subagents) -- src test scripts bin package.json tsconfig.json
+exit=0
+src/server/changes.ts:67:/** The codemode tool's name (`extensions/codemode.ts`): its results list the calls a script made. */
+src/server/config.ts:78:    /** Extension modules (file names in `src/server/extensions/`) the owner turned off. */
+test/agent-resource-list.test.ts:187:    assert.equal(extensions["browser"]!.path, join(product, "extensions/browser/index.ts"));
+test/browser.test.ts:24:import { blockedInPlanMode } from "../src/server/extensions/plan.ts";
+test/codemode.test.ts:14:import createCodemode from "../src/server/extensions/codemode.ts";
+test/codemode.test.ts:15:import createGuard from "../src/server/extensions/guard.ts";
+test/docs-examples.test.ts:159:    const directory = join(APP_ROOT, "src/server/extensions");
+test/docs-examples.test.ts:191:    const parsed = source(join(APP_ROOT, "src/server/extensions/prompt.ts"));
+test/plan.test.ts:17:import { blockedInPlanMode, commandWords, readOnlyCommand } from "../src/server/extensions/plan.ts";
+test/projection.test.ts:5:import { slugify } from "../src/server/extensions/artifacts.ts";
+
+$ git grep -n -E commandWords|readOnlyCommand|blockedInPlanMode|slugify -- src test scripts
+exit=0
+src/server/extensions/artifacts.ts:13:export function slugify(value: string): string {
+src/server/extensions/artifacts.ts:87:            const id = slugify(args.id);
+src/server/extensions/plan.ts:150:export function commandWords(command: string): string[][] | undefined {
+src/server/extensions/plan.ts:239:export function readOnlyCommand(command: string): boolean {
+src/server/extensions/plan.ts:240:    const commands = commandWords(command);
+src/server/extensions/plan.ts:252:export function blockedInPlanMode(tool: string, args: Record<string, unknown>): string | undefined {
+src/server/extensions/plan.ts:272:    if (tool === "bash" && typeof args.command === "string" && readOnlyCommand(args.command)) {
+src/server/extensions/plan.ts:303:                    const reason = blockedInPlanMode(
+test/browser.test.ts:24:import { blockedInPlanMode } from "../src/server/extensions/plan.ts";
+test/browser.test.ts:232:        assert.equal(blockedInPlanMode("browser", { action }), undefined, action);
+test/browser.test.ts:237:            blockedInPlanMode("browser", { action }) ?? "",
+test/browser.test.ts:245:        blockedInPlanMode("browser", {
+test/plan.test.ts:17:import { blockedInPlanMode, commandWords, readOnlyCommand } from "../src/server/extensions/plan.ts";
+test/plan.test.ts:20:    assert.deepEqual(commandWords(`grep -rn "a|b" src | head -5 && echo 'it''s'`), [
+test/plan.test.ts:25:    assert.deepEqual(commandWords(`echo "a \\" b \\x" one\\ word; ls`), [
+test/plan.test.ts:43:        const words = commandWords(refused);
+test/plan.test.ts:45:        assert.ok(words === undefined || !readOnlyCommand(refused), refused);
+test/plan.test.ts:69:        assert.equal(readOnlyCommand(command), true, command);
+test/plan.test.ts:109:        assert.equal(readOnlyCommand(command), false, command);
+test/plan.test.ts:114:    assert.equal(blockedInPlanMode("read", { path: "a" }), undefined);
+test/plan.test.ts:115:    assert.equal(blockedInPlanMode("artifact", {}), undefined);
+test/plan.test.ts:116:    assert.equal(blockedInPlanMode("codemode", { code: "" }), undefined);
+test/plan.test.ts:117:    assert.equal(blockedInPlanMode("subagent", { action: "status" }), undefined);
+test/plan.test.ts:118:    assert.equal(blockedInPlanMode("subagent", { action: "stop" }), undefined);
+test/plan.test.ts:119:    assert.equal(blockedInPlanMode("bash", { command: "git log" }), undefined);
+test/plan.test.ts:121:        blockedInPlanMode("write", { path: "a", content: "" }) ?? "",
+test/plan.test.ts:125:        blockedInPlanMode("bash", { command: "npm install" }) ?? "",
+test/plan.test.ts:128:    assert.match(blockedInPlanMode("subagent", { action: "spawn" }) ?? "", /blocked/);
+test/plan.test.ts:130:        blockedInPlanMode("schedule", {}) ?? "",
+test/projection.test.ts:5:import { slugify } from "../src/server/extensions/artifacts.ts";
+test/projection.test.ts:165:    assert.equal(slugify("Neon Orbital Garden!"), "neon-orbital-garden");
+test/projection.test.ts:166:    assert.equal(slugify("  __x__ "), "x");
+
+$ git grep -n -E extensions|readdirSync|definitions|getDocsPath|APP_ROOT -- test/docs-examples.test.ts
+exit=0
+test/docs-examples.test.ts:4:import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
+test/docs-examples.test.ts:9:import { getDocsPath } from "@earendil-works/pi-coding-agent";
+test/docs-examples.test.ts:10:import { APP_ROOT, ConfigStore } from "../src/server/config.ts";
+test/docs-examples.test.ts:17:const dropIns = join(data, "extensions");
+test/docs-examples.test.ts:23:    for (const file of readdirSync(EXAMPLES).filter((each) => each.endsWith(".ts"))) {
+test/docs-examples.test.ts:55:function definitions(file: ts.SourceFile, factory: string): string[] {
+test/docs-examples.test.ts:121:        await assert.rejects(app.extensions(owner(app)), { status: 404 });
+test/docs-examples.test.ts:157:test("extensions.md names the reserved historical built-in tools and extension namespaces", () => {
+test/docs-examples.test.ts:158:    const doc = readFileSync(join(DOCS, "extensions.md"), "utf8");
+test/docs-examples.test.ts:159:    const directory = join(APP_ROOT, "src/server/extensions");
+test/docs-examples.test.ts:160:    const files = readdirSync(directory)
+test/docs-examples.test.ts:168:        ...files.flatMap((file) => definitions(file, "defineTool")),
+test/docs-examples.test.ts:170:    const names = files.flatMap((file) => definitions(file, "defineExtension"));
+test/docs-examples.test.ts:191:    const parsed = source(join(APP_ROOT, "src/server/extensions/prompt.ts"));
+test/docs-examples.test.ts:202:        "resolve(APP_ROOT)",
+test/docs-examples.test.ts:205:        "getDocsPath()",
+test/docs-examples.test.ts:217:        APP_ROOT,
+test/docs-examples.test.ts:220:        getDocsPath(),
+test/docs-examples.test.ts:231:        ...readdirSync(DOCS)
+
+$ git grep -n -E ExtensionLoader|prepareDropInFolder -- src test scripts
+exit=1
+
+$ git grep -n -E watchTree|execution.extension|install\(Shell|schedules.task|ResendTask -- src/server/app.ts src/server/main.ts
+exit=0
+src/server/app.ts:83:import { ResendTask } from "./resend.ts";
+src/server/app.ts:360:            defineExtension({ name: "pocket-core", tasks: [ResendTask, this.shell.task] }),
+src/server/app.ts:365:        registry.install(this.execution.extension());
+src/server/main.ts:215:const [{ PocketApp: App }, { createHandler: makeHandler }, { watchTree }] = await Promise.all([
+src/server/main.ts:254:    const stops = [watchTree(join(APP_ROOT, "web"), (file) => opened.reloadClients(file))];

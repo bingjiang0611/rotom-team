@@ -45,14 +45,18 @@ import {
 } from "./rotom-executions.ts";
 import { attachmentImages, attachmentText } from "./attachments.ts";
 import type { Attachment } from "./commands.ts";
-import { childrenReport, RpcFailure, type RpcRecord } from "./rotom-rpc.ts";
+import { RpcFailure, type RpcRecord } from "./rotom-rpc.ts";
+import { decodeNativeControl } from "./rotom-control.ts";
 import { AuthorsDoc, SessionsDoc } from "./docs.ts";
 import { THINKING_LEVELS } from "./commands.ts";
 import { NATIVE_ENTRY, RESUME_PREFIX } from "./entry-format.ts";
 import { projectLive, type ClientLive } from "./projection.ts";
+import { publicEntry, applyUpdate } from "./team-kernel/projection.ts";
 import {
     KernelRequestConflict,
+    type RotomJournal,
     type KernelBinding,
+    type AsyncRotomJournal,
     type KernelEntry,
     type KernelReceipt,
 } from "./rotom-journal.ts";
@@ -231,15 +235,23 @@ export class TeamKernel {
     readonly #live = new Map<ConversationId, NativeLive>();
     readonly #commands = new Map<ConversationId, NativeCommandCatalog>();
     readonly #nativeGoal = new Map<ConversationId, unknown>();
+    // Bounded derived snapshots, including a known absent Goal; live command readback still takes precedence.
+    readonly #historicalGoals = new Map<
+        string,
+        { rowid: number; version: string; value: unknown }
+    >();
     readonly #branchedHistory = new Set<ConversationId>();
     readonly #mirrorHistoryLoaded = new Set<ConversationId>();
+    readonly #mirrorCursors = new Map<ConversationId, { count: number; rowid: number }>();
     readonly #mcp: McpSignIns;
     readonly #mirrors = new Map<ConversationId, Promise<void>>();
     readonly #operations = new Map<
         string,
         { operation: string; identity: string; promise: Promise<unknown> }
     >();
-    constructor(app: PocketApp) {
+    readonly #remoteStorage: boolean;
+    constructor(app: PocketApp, journal?: AsyncRotomJournal) {
+        this.#remoteStorage = journal !== undefined;
         this.#app = app;
         this.#mcp = new McpSignIns(join(app.dataDir, "team-agent"));
         verifyRotomKernel();
@@ -317,6 +329,7 @@ export class TeamKernel {
                     }),
                 };
             },
+            journal,
         );
     }
 
@@ -334,12 +347,14 @@ export class TeamKernel {
         return { provider: binding.accountGeneration, modelId: binding.model };
     }
     /** Current head models for list views in one read, including in-place changes; no native startup/cache. */
-    modelNames(): ReadonlyMap<string, string> {
+    async modelNames(): Promise<ReadonlyMap<string, string>> {
         return this.executions.journal.modelNames();
     }
 
-    configuration(id: ConversationId): ConfigurationSnapshot | undefined {
-        return this.#snapshot(this.executions.journal.session(String(id)).binding, id);
+    async configuration(id: ConversationId): Promise<ConfigurationSnapshot | undefined> {
+        const { binding } = await this.executions.journal.session(String(id));
+
+        return this.#snapshot(binding, id);
     }
 
     #snapshot(binding: KernelBinding, id: ConversationId): ConfigurationSnapshot | undefined {
@@ -468,11 +483,11 @@ export class TeamKernel {
         }
 
         const journal = this.executions.journal;
-        const exists = journal.hasConversation(String(id));
+        const exists = await journal.hasConversation(String(id));
         const setup = await app.harness.snapshot(NativeSetupDoc, id, BACKGROUND_CONTEXT);
         // Pre-setup-document deployments are recoverable only from their original immutable journal binding.
         const binding =
-            setup?.binding ?? (exists ? journal.segment(String(id)).binding : undefined);
+            setup?.binding ?? (exists ? (await journal.segment(String(id))).binding : undefined);
 
         if (!binding || (!exists && setup?.bound)) {
             throw new Error(
@@ -488,7 +503,7 @@ export class TeamKernel {
         }
 
         this.#home(binding.memberId);
-        journal.bind(String(id), binding);
+        await journal.bind(String(id), binding);
 
         if (!setup?.bound) {
             await app.harness.commit(async (tx) => {
@@ -498,7 +513,7 @@ export class TeamKernel {
 
         if (
             !setup?.seed ||
-            journal.request(String(id), setup.seed.requestId)?.status === "settled"
+            (await journal.request(String(id), setup.seed.requestId))?.status === "settled"
         ) {
             this.#ready.add(id);
         }
@@ -507,7 +522,7 @@ export class TeamKernel {
     async reconcile(ids: readonly ConversationId[]): Promise<void> {
         const native = ids.filter((id) => this.#app.sessionMeta(id)?.backend === "rotom");
 
-        this.executions.journal.reconcileOrphans(new Set(native.map(String)));
+        await this.executions.journal.reconcileOrphans(new Set(native.map(String)));
         // A missing native PID proves neither tool closure nor the outcome of an external request.
         // Historical unknown attempts retain their fences; startup must not classify them as interrupted.
 
@@ -529,8 +544,8 @@ export class TeamKernel {
     }
 
     /** Account changes wait for every run of the member; starting runs in other sessions does not. */
-    requireAccountIdle(user: User): void {
-        const pending = this.executions.journal.pending(user.id);
+    async requireAccountIdle(user: User): Promise<void> {
+        const pending = await this.executions.journal.pending(user.id);
 
         if (pending) {
             throw new HttpError(
@@ -544,20 +559,20 @@ export class TeamKernel {
         return [...this.#active].some((run) => run.id === id);
     }
 
-    needsAnswer(id: ConversationId, viewer?: User): boolean {
+    async needsAnswer(id: ConversationId, viewer?: User): Promise<boolean> {
         const waiting = (this.#live.get(id)?.dialogs?.length ?? 0) > 0;
 
         if (!waiting || viewer === undefined) {
             return waiting;
         }
 
-        return this.executions.journal.session(String(id)).binding.memberId === viewer.id;
+        return (await this.executions.journal.session(String(id))).binding.memberId === viewer.id;
     }
 
-    snapshot(id: ConversationId, user: User) {
+    async snapshot(id: ConversationId, user: User) {
         this.#app.requireSee(user, id);
 
-        if (!this.executions.journal.hasConversation(String(id))) {
+        if (!(await this.executions.journal.hasConversation(String(id)))) {
             throw new HttpError(
                 409,
                 "Native initialization is incomplete; reconcile setup before execution.",
@@ -569,13 +584,11 @@ export class TeamKernel {
         }
 
         const journal = this.executions.journal;
-        const messages = journal
-            .entries(String(id))
-            .flatMap(({ entry }) =>
-                entry.type === "message" && entry.message ? [entry.message] : [],
-            );
+        const messages = (await journal.entries(String(id))).flatMap(({ entry }) =>
+            entry.type === "message" && entry.message ? [entry.message] : [],
+        );
         const publicMessages = accountContext({ messages } as TranscriptContext, "", "").messages;
-        const { binding, segmentId } = journal.session(String(id));
+        const { binding, segmentId } = await journal.session(String(id));
 
         return {
             backend: "rotom",
@@ -586,15 +599,17 @@ export class TeamKernel {
             provider: binding.provider,
             model: binding.model,
             configurationDigest: binding.configurationDigest,
-            thinkingLevel: this.executions.thinkingLevel(String(id)),
+            thinkingLevel: await this.executions.thinkingLevel(String(id)),
             messages: publicMessages,
-            receipts: journal.receipts(String(id)).map((receipt) => ({
-                ...this.#receipt(receipt),
-                memberId: receipt.binding.memberId,
-            })),
+            receipts: await Promise.all(
+                (await journal.receipts(String(id))).map(async (receipt) => ({
+                    ...(await this.#receipt(receipt)),
+                    memberId: receipt.binding.memberId,
+                })),
+            ),
             receiptsLimit: 100,
-            usage: journal.usage(String(id)),
-            credits: journal.credits(String(id)),
+            usage: await journal.usage(String(id)),
+            credits: await journal.credits(String(id)),
             costStatus: "unknown",
             // Do not fold provisional output into the durable transcript or the old Durable spend counter.
             streaming: this.isRunning(id),
@@ -699,7 +714,7 @@ export class TeamKernel {
             return mcp;
         }
 
-        const { binding } = this.executions.journal.session(String(id));
+        const { binding } = await this.executions.journal.session(String(id));
 
         if (binding.memberId !== user.id) {
             const name = this.#app.config.userById(binding.memberId)?.name ?? "Another member";
@@ -712,7 +727,8 @@ export class TeamKernel {
 
         const model = this.#app.accounts.kernelModel(user, this.#ref(binding));
         const images = await attachmentImages(attachments, model.input.includes("image"));
-        const goal = (this.nativeGoal(id) as { goal?: { waiting?: unknown } } | undefined)?.goal;
+        const goal = ((await this.nativeGoal(id)) as { goal?: { waiting?: unknown } } | undefined)
+            ?.goal;
 
         try {
             if (
@@ -825,7 +841,7 @@ export class TeamKernel {
 
         if (command === "qoder-credits" || command === "qoder-models") {
             await this.#requireDynamicAdapter(id, user, command, requestId);
-            this.requireAccountIdle(user);
+            await this.requireAccountIdle(user);
             const result = await this.#app.accounts.nativeQoder(
                 user,
                 command === "qoder-models" ? "models" : "credits",
@@ -860,7 +876,7 @@ export class TeamKernel {
                 }
 
                 await this.#app.accounts.forUser(user);
-                const current = this.#currentChoice(id, user);
+                const current = await this.#currentChoice(id, user);
                 const ref = current ?? this.#app.commands.defaultModel(user).model;
 
                 if (!ref) {
@@ -906,7 +922,7 @@ export class TeamKernel {
         }
 
         if ((command === "fork" || command === "tree") && !args) {
-            const source = this.executions.journal.session(String(id));
+            const source = await this.executions.journal.session(String(id));
 
             if (command === "tree" && source.binding.memberId !== user.id) {
                 const receipt = await this.#handoff(
@@ -921,8 +937,8 @@ export class TeamKernel {
                 }
             }
 
-            const { segmentId } = this.executions.journal.session(String(id));
-            const entries = this.executions.journal.segmentEntries(segmentId);
+            const { segmentId } = await this.executions.journal.session(String(id));
+            const entries = await this.executions.journal.segmentEntries(segmentId);
 
             if (command === "tree") {
                 return {
@@ -971,7 +987,7 @@ export class TeamKernel {
         }
 
         if (command === "clone" || command === "fork") {
-            const { segmentId } = this.executions.journal.session(String(id));
+            const { segmentId } = await this.executions.journal.session(String(id));
             const target = await this.#fork(
                 id,
                 user,
@@ -984,9 +1000,9 @@ export class TeamKernel {
             let editorText: string | undefined;
 
             if (command === "fork" && target.receipt?.status === "settled") {
-                const selected = this.executions.journal
-                    .segmentEntries(segmentId)
-                    .find((entry) => entry.id === args);
+                const selected = (await this.executions.journal.segmentEntries(segmentId)).find(
+                    (entry) => entry.id === args,
+                );
                 const native = await nativeSessionManager();
 
                 editorText = native.contentText(
@@ -1008,7 +1024,7 @@ export class TeamKernel {
         // Identity readback must not need a still-connected account or today's model capabilities.
         const images = await attachmentImages(attachments, true);
         const identity = nativePromptIdentity(prompt, images);
-        const previous = this.executions.journal.existing(
+        const previous = await this.executions.journal.existing(
             String(id),
             key,
             identity,
@@ -1021,7 +1037,7 @@ export class TeamKernel {
             )?.items[key];
 
             return {
-                ...this.#receipt(previous),
+                ...(await this.#receipt(previous)),
                 ...(saved === undefined ? {} : { nativeResult: saved }),
             };
         }
@@ -1031,7 +1047,7 @@ export class TeamKernel {
         }
 
         const journal = this.executions.journal;
-        const source = journal.session(String(id));
+        const source = await journal.session(String(id));
 
         if (images.length > 0) {
             await this.#app.accounts.forUser(user);
@@ -1072,7 +1088,7 @@ export class TeamKernel {
             }
         }
 
-        const binding = journal.session(String(id)).binding;
+        const binding = (await journal.session(String(id))).binding;
 
         if (binding.memberId !== user.id) {
             throw new HttpError(409, "Another member took over first; refresh and send again.");
@@ -1126,7 +1142,7 @@ export class TeamKernel {
 
                         if (command.source === "skill" || command.source === "prompt") {
                             await nameAcceptedPrompt();
-                            expanded(journal.request(String(id), key)!);
+                            expanded((await journal.request(String(id), key))!);
                         }
                     },
                     onNativeResult: async (result) => {
@@ -1152,7 +1168,7 @@ export class TeamKernel {
             // Skills/templates are model input, not dialogs: release the draft on authoritative admission.
             const receipt = await Promise.race([
                 run,
-                promptExpansion.then((receipt) => this.#receipt(receipt)),
+                promptExpansion.then(async (receipt) => await this.#receipt(receipt)),
             ]);
 
             return { ...receipt, ...(nativeResult === undefined ? {} : { nativeResult }) };
@@ -1166,7 +1182,7 @@ export class TeamKernel {
             }
         });
 
-        return Promise.race([run, admitted.then((receipt) => this.#receipt(receipt))]);
+        return Promise.race([run, admitted.then(async (receipt) => await this.#receipt(receipt))]);
     }
 
     /**
@@ -1201,13 +1217,13 @@ export class TeamKernel {
         this.#app.requireSee(user, id);
 
         const prior = requestId
-            ? this.executions.journal.request(String(id), this.#request(id, user, requestId))
+            ? await this.executions.journal.request(String(id), this.#request(id, user, requestId))
             : undefined;
 
         if (prior?.operation === "command" && request.model === undefined) {
             // An idle thinking change ran as the native /thinking command in the same session.
             try {
-                this.executions.journal.existing(
+                await this.executions.journal.existing(
                     String(id),
                     prior.requestId,
                     `/thinking ${String(request.thinkingLevel)}`,
@@ -1221,7 +1237,7 @@ export class TeamKernel {
                 throw error;
             }
 
-            return { receipt: this.#receipt(prior) };
+            return { receipt: await this.#receipt(prior) };
         }
 
         if (prior) {
@@ -1240,12 +1256,12 @@ export class TeamKernel {
                 throw new HttpError(409, "Model command request identity changed.");
             }
 
-            return { receipt: this.#receipt(prior) };
+            return { receipt: await this.#receipt(prior) };
         }
 
         if (this.isRunning(id) && request.model === undefined) {
             await this.#app.requireDriver(id, user, "rotom");
-            const { binding } = this.executions.journal.session(String(id));
+            const { binding } = await this.executions.journal.session(String(id));
 
             if (binding.memberId !== user.id) {
                 throw new HttpError(
@@ -1276,7 +1292,7 @@ export class TeamKernel {
             }
         }
 
-        if (this.isRunning(id) || this.executions.journal.pendingConversation(String(id))) {
+        if (this.isRunning(id) || (await this.executions.journal.pendingConversation(String(id)))) {
             throw new HttpError(
                 409,
                 "Pi is working or has an unknown operation. Reconcile it before switching the model.",
@@ -1284,7 +1300,7 @@ export class TeamKernel {
         }
 
         await this.#app.accounts.forUser(user);
-        const previous = this.#currentChoice(id, user);
+        const previous = await this.#currentChoice(id, user);
         let ref = request.model
             ? { provider: String(request.model.provider), modelId: String(request.model.modelId) }
             : (previous ?? this.#app.commands.defaultModel(user).model);
@@ -1324,14 +1340,14 @@ export class TeamKernel {
                 ) as ModelThinkingLevel,
             ),
         };
-        const observed = this.executions.journal.session(String(id));
+        const observed = await this.executions.journal.session(String(id));
 
         if (
             requestId === undefined &&
             observed.binding.memberId === user.id &&
             observed.binding.accountGeneration === chosen.model?.provider &&
             observed.binding.model === chosen.model.modelId &&
-            this.executions.thinkingLevel(String(id)) === (chosen.thinkingLevel ?? "off")
+            (await this.executions.thinkingLevel(String(id))) === (chosen.thinkingLevel ?? "off")
         ) {
             this.#app.accounts.choose(user, { ...ref, thinkingLevel: chosen.thinkingLevel });
 
@@ -1365,7 +1381,7 @@ export class TeamKernel {
             if (thinking.status === "handled") {
                 this.#app.accounts.choose(user, {
                     ...ref,
-                    thinkingLevel: this.executions.thinkingLevel(String(id)),
+                    thinkingLevel: await this.executions.thinkingLevel(String(id)),
                 });
                 this.#app.roomChanged(id);
             }
@@ -1397,7 +1413,7 @@ export class TeamKernel {
             if (switched.status === "handled") {
                 this.#app.accounts.choose(user, {
                     ...ref,
-                    thinkingLevel: this.executions.thinkingLevel(String(id)),
+                    thinkingLevel: await this.executions.thinkingLevel(String(id)),
                 });
                 this.#app.roomChanged(id);
             }
@@ -1441,7 +1457,7 @@ export class TeamKernel {
             },
             onEvent: (event) => this.#observe(id, event),
             onCommands: async (commands) => {
-                const session = this.executions.journal.session(String(id));
+                const session = await this.executions.journal.session(String(id));
 
                 this.#commands.set(id, {
                     memberId: session.binding.memberId,
@@ -1586,10 +1602,14 @@ export class TeamKernel {
                 break;
 
             case "extension_ui_request": {
-                const subagents = childrenReport(event);
+                const control = decodeNativeControl(event);
 
-                if (subagents !== undefined) {
-                    live.subagents = subagents;
+                if (control) {
+                    if (control.kind !== "team-kernel-children-v1") {
+                        return;
+                    }
+
+                    live.subagents = control.pending;
                     break;
                 }
 
@@ -1600,32 +1620,9 @@ export class TeamKernel {
                 // Native notifications are notices; statuses/widgets are keyed live replace/clear slots.
                 // Dialogs remain interactive live state for the paying member.
                 if (method === "notify") {
-                    if (
-                        typeof event.message === "string" &&
-                        event.message.startsWith('{"kind":"team-kernel-context-v1"')
-                    ) {
-                        return;
-                    }
-
                     const message = text(event.message);
 
                     if (message) {
-                        let control: { kind?: unknown } | undefined;
-
-                        try {
-                            control = JSON.parse(message) as { kind?: unknown };
-                        } catch {}
-
-                        if (
-                            [
-                                "team-kernel-barrier-v1",
-                                "team-kernel-tree-v1",
-                                "team-kernel-context-v1",
-                            ].includes(String(control?.kind))
-                        ) {
-                            return;
-                        }
-
                         const level = ["warning", "error"].includes(String(event.notifyType))
                             ? (String(event.notifyType) as "warning" | "error")
                             : "info";
@@ -1709,7 +1706,7 @@ export class TeamKernel {
      * Answer a dialog of the running prompt. Only the member it runs for may: the run spends their account and
      * acts with their authority. A dialog that is gone (answered, or its run ended) is a 409, never a resend.
      */
-    answerDialog(id: ConversationId, user: User, body: unknown): { answered: true } {
+    async answerDialog(id: ConversationId, user: User, body: unknown): Promise<{ answered: true }> {
         const request = body as {
             id?: unknown;
             value?: unknown;
@@ -1726,7 +1723,7 @@ export class TeamKernel {
 
         this.#app.requireSteer(user);
 
-        if (this.executions.journal.session(String(id)).binding.memberId !== user.id) {
+        if ((await this.executions.journal.session(String(id))).binding.memberId !== user.id) {
             throw new HttpError(403, "Only the member this run is for can answer its questions.");
         }
 
@@ -1767,30 +1764,37 @@ export class TeamKernel {
     }
 
     /** The same personal model choice drives the thinking picker and its eventual configuration write. */
-    #currentChoice(id: ConversationId, user: User) {
-        const { binding } = this.executions.journal.session(String(id));
+    async #currentChoice(id: ConversationId, user: User) {
+        const { binding } = await this.executions.journal.session(String(id));
 
         return binding.memberId === user.id
-            ? { ...this.#ref(binding), thinkingLevel: this.executions.thinkingLevel(String(id)) }
+            ? {
+                  ...this.#ref(binding),
+                  thinkingLevel: await this.executions.thinkingLevel(String(id)),
+              }
             : this.#app.accounts.choice(user);
     }
 
     /** The room's agent line for a native conversation: what the current segment runs on, and for whom. */
-    agentInfo(id: ConversationId, readEntries?: (segmentId: string) => KernelEntry[]) {
+    async agentInfo(
+        id: ConversationId,
+        readEntries?: (segmentId: string) => Promise<KernelEntry[]>,
+    ) {
         const cwd = this.#app.sessionMeta(id)?.cwd ?? this.#app.defaultCwd;
+        const session = await this.executions.journal.sessionIfPresent(String(id));
 
-        if (!this.executions.journal.hasConversation(String(id))) {
+        if (!session) {
             return { model: null, thinkingLevel: "off", cwd, available: false };
         }
 
-        const { binding } = this.executions.journal.session(String(id));
+        const { binding } = session;
 
         return {
             model: { provider: binding.accountGeneration, modelId: binding.model },
             modelName: binding.model,
             accountName: this.#app.config.userById(binding.memberId)?.name ?? "A former member",
             personalAccount: true,
-            thinkingLevel: this.executions.thinkingLevel(String(id), readEntries),
+            thinkingLevel: await this.executions.thinkingLevel(String(id), readEntries),
             cwd: binding.workspace,
             available: true,
         };
@@ -1851,11 +1855,11 @@ export class TeamKernel {
             "continue",
         );
 
-        if (!this.executions.journal.hasConversation(String(id))) {
+        if (!(await this.executions.journal.hasConversation(String(id)))) {
             throw new HttpError(409, "This session is still starting.");
         }
 
-        const { workspace } = this.executions.journal.session(String(id)).binding;
+        const { workspace } = (await this.executions.journal.session(String(id))).binding;
         const home = this.#home(current.id);
         const key = JSON.stringify([current.id, workspace]);
         const request = (body ?? {}) as { server?: unknown; url?: unknown };
@@ -1900,7 +1904,7 @@ export class TeamKernel {
                 );
             }
 
-            this.requireAccountIdle(user);
+            await this.requireAccountIdle(user);
             const allowed = [
                 "steeringMode",
                 "followUpMode",
@@ -2031,7 +2035,7 @@ export class TeamKernel {
             throw new HttpError(400, "Choose html or jsonl.");
         }
 
-        const segment = this.executions.journal.session(String(id));
+        const segment = await this.executions.journal.session(String(id));
 
         if (segment.binding.memberId !== user.id) {
             throw new HttpError(
@@ -2040,7 +2044,7 @@ export class TeamKernel {
             );
         }
 
-        if (this.executions.journal.pendingConversation(String(id))) {
+        if (await this.executions.journal.pendingConversation(String(id))) {
             throw new HttpError(409, "Wait for the native operation to settle before exporting.");
         }
 
@@ -2075,7 +2079,7 @@ export class TeamKernel {
     }
 
     /** Explicit discovery is a non-inference native operation under the requesting member's lease. */
-    discoverCommands(id: ConversationId, user: User, requestId: string) {
+    async discoverCommands(id: ConversationId, user: User, requestId: string) {
         return this.#operation(id, user, requestId, "discover", {}, async () => {
             this.#app.requireSteer(user);
             await this.#app.requireDriver(id, user, "rotom");
@@ -2084,7 +2088,7 @@ export class TeamKernel {
                 throw new HttpError(409, "Wait for this run before refreshing native commands.");
             }
 
-            const prior = this.executions.journal.request(
+            const prior = await this.executions.journal.request(
                 String(id),
                 this.#request(id, user, requestId),
             );
@@ -2094,10 +2098,16 @@ export class TeamKernel {
                     throw new HttpError(409, "Request belongs to another operation.");
                 }
 
-                return { receipt: this.#receipt(prior), ...(await this.nativeCommands(id, user)) };
+                return {
+                    receipt: await this.#receipt(prior),
+                    ...(await this.nativeCommands(id, user)),
+                };
             }
 
-            if (this.executions.journal.pendingConversation(String(id))?.status === "unknown") {
+            if (
+                (await this.executions.journal.pendingConversation(String(id)))?.status ===
+                "unknown"
+            ) {
                 throw new HttpError(
                     409,
                     "Reconcile the unknown operation before refreshing native commands.",
@@ -2122,7 +2132,7 @@ export class TeamKernel {
                 }
             }
 
-            const binding = this.executions.journal.session(String(id)).binding;
+            const binding = (await this.executions.journal.session(String(id))).binding;
             const receipt = await this.#track(
                 id,
                 binding,
@@ -2167,7 +2177,7 @@ export class TeamKernel {
         }
     }
 
-    #commandSnapshot(
+    async #commandSnapshot(
         id: ConversationId,
         memberId: string,
         knownSession?: { segmentId: string; binding: KernelBinding },
@@ -2178,13 +2188,16 @@ export class TeamKernel {
             return undefined;
         }
 
-        // A standalone catalog read must prove the session still exists. roomState already read this exact snapshot
-        // synchronously, so reuse it there instead of querying and decoding the same binding again.
-        if (knownSession === undefined && !this.executions.journal.hasConversation(String(id))) {
+        // A standalone catalog read must prove the session still exists. A caller that already read the
+        // session passes it here to avoid a duplicate journal read.
+        if (
+            knownSession === undefined &&
+            !(await this.executions.journal.hasConversation(String(id)))
+        ) {
             return undefined;
         }
 
-        const session = knownSession ?? this.executions.journal.session(String(id));
+        const session = knownSession ?? (await this.executions.journal.session(String(id)));
 
         if (
             cached?.memberId === memberId &&
@@ -2263,7 +2276,7 @@ export class TeamKernel {
             }
         }
 
-        const cached = this.#commandSnapshot(id, user.id);
+        const cached = await this.#commandSnapshot(id, user.id);
         const dynamic = cached?.commands ?? [];
 
         return {
@@ -2273,7 +2286,8 @@ export class TeamKernel {
             })),
             dynamicReady: Boolean(cached),
             discoveryBlocked:
-                this.executions.journal.pendingConversation(String(id))?.status === "unknown",
+                (await this.executions.journal.pendingConversation(String(id)))?.status ===
+                "unknown",
             revision: commandCatalogRevision(cached),
             freshness: !cached
                 ? "undiscovered"
@@ -2292,28 +2306,45 @@ export class TeamKernel {
     }
 
     /** Canonical Goal snapshot captured after the native command barrier, if one has been observed. */
-    nativeGoal(
+    async nativeGoal(
         id: ConversationId,
         readEntries = (segmentId: string) => this.executions.journal.segmentEntries(segmentId),
-    ): unknown {
+    ): Promise<unknown> {
         if (this.#nativeGoal.has(id)) {
             return this.#nativeGoal.get(id);
         }
 
-        if (!this.executions.journal.hasConversation(String(id))) {
+        const journal = this.executions.journal;
+        const session = await journal.sessionIfPresent(String(id));
+
+        if (!session) {
             return undefined;
         }
 
-        const { segmentId } = this.executions.journal.session(String(id));
+        const { segmentId, binding } = session;
+        const rowid = await journal.segmentRevision(segmentId);
+        const cached = this.#historicalGoals.get(segmentId);
 
-        const entries = readEntries(segmentId);
+        if (cached?.rowid === rowid && cached.version === binding.kernelVersion) {
+            return cached.value;
+        }
 
-        return currentBranchGoalState({ entries, leafId: entries.at(-1)?.id });
+        const entries = await readEntries(segmentId);
+        const value = currentBranchGoalState({ entries, leafId: entries.at(-1)?.id });
+
+        this.#historicalGoals.delete(segmentId);
+        this.#historicalGoals.set(segmentId, { rowid, version: binding.kernelVersion, value });
+
+        if (this.#historicalGoals.size > 128) {
+            this.#historicalGoals.delete(this.#historicalGoals.keys().next().value!);
+        }
+
+        return value;
     }
 
-    /** Room-wide public readback; share complete history only within this synchronous projection. */
-    roomInfo(id: ConversationId) {
-        const bySegment = new Map<string, KernelEntry[]>();
+    /** Room-wide public readback; share complete history only within this async projection. */
+    async roomInfo(id: ConversationId) {
+        const bySegment = new Map<string, Promise<KernelEntry[]>>();
 
         const readEntries = (segmentId: string) => {
             let entries = bySegment.get(segmentId);
@@ -2327,24 +2358,23 @@ export class TeamKernel {
         };
 
         // Goal used to be read before agentInfo; keep that error/live-state ordering.
-        const goal = this.nativeGoal(id, readEntries);
-        const agent = this.agentInfo(id, readEntries);
+        const goal = await this.nativeGoal(id, readEntries);
+        const agent = await this.agentInfo(id, readEntries);
 
         return { goal, agent };
     }
 
     /** What the web app needs to drive a native conversation: the head it acts on, and who pays for it. */
-    roomState(id: ConversationId, viewer: User) {
+    async roomState(id: ConversationId, viewer: User) {
         const journal = this.executions.journal;
 
-        const session = journal.sessionIfPresent(String(id));
+        const snapshot = await journal.roomSnapshot(String(id));
 
-        if (!session) {
+        if (!snapshot) {
             return { initializing: true };
         }
 
-        const { binding, segmentId } = session;
-        const pending = journal.pendingConversation(String(id));
+        const { binding, segmentId, pending, latest } = snapshot;
 
         return {
             initializing: !this.#ready.has(id),
@@ -2357,14 +2387,14 @@ export class TeamKernel {
             kernelVersion: binding.kernelVersion,
             yours: binding.memberId === viewer.id,
             commandsRevision: commandCatalogRevision(
-                this.#commandSnapshot(id, viewer.id, { binding, segmentId }),
+                await this.#commandSnapshot(id, viewer.id, { binding, segmentId }),
             ),
             hasBranchedHistory: this.#branchedHistory.has(id),
             dialogs: this.#live.get(id)?.dialogs ?? [],
             statuses: this.#live.get(id)?.statuses ?? {},
             widgets: this.#live.get(id)?.widgets ?? {},
             subagents: this.#live.get(id)?.subagents ?? 0,
-            ...(this.#cutOff(id) ? { cutOff: true } : {}),
+            ...((await this.#cutOff(id, latest)) ? { cutOff: true } : {}),
             ...(pending
                 ? {
                       pending: {
@@ -2381,9 +2411,8 @@ export class TeamKernel {
     }
 
     /** The last run was cut off by a server stop and did not continue by itself: a person may say Continue. */
-    #cutOff(id: ConversationId): boolean {
+    async #cutOff(id: ConversationId, latest: KernelReceipt | undefined): Promise<boolean> {
         const journal = this.executions.journal;
-        const latest = journal.latest(String(id));
 
         if (
             !latest ||
@@ -2394,7 +2423,7 @@ export class TeamKernel {
             return false;
         }
 
-        const plan = journal.resume(latest.id);
+        const plan = await journal.resume(latest.id);
 
         return latest.status === "interrupted"
             ? plan?.state !== "pending" && plan?.state !== "started"
@@ -2453,13 +2482,22 @@ export class TeamKernel {
         const app = this.#app;
         const mirrored =
             (await app.harness.snapshot(NativeMirrorDoc, id, BACKGROUND_CONTEXT))?.count ?? 0;
-        // Once per process, inspect the prefix too so historical branch notices survive restart.
-        // Thereafter SQL returns only the unmirrored suffix, avoiding old body/binding JSON decoding.
-        const skip = this.#mirrorHistoryLoaded.has(id) ? mirrored : 0;
-        const rows = this.executions.journal.entries(String(id), skip);
+        const journal = this.executions.journal;
+        const cached = this.#mirrorCursors.get(id);
+        const cursor =
+            cached?.count === mirrored
+                ? cached.rowid
+                : await journal.entryCursor(String(id), mirrored);
+        const skip = mirrored;
+        const rows = await journal.entriesAfter(String(id), cursor);
         const count = skip + rows.length;
 
-        if (rows.some((row) => row.entry.customType === "team-kernel-branch")) {
+        if (
+            (mirrored > 0 &&
+                !this.#mirrorHistoryLoaded.has(id) &&
+                (await journal.hasBranchedHistory(String(id)))) ||
+            rows.some((row) => row.entry.customType === "team-kernel-branch")
+        ) {
             this.#branchedHistory.add(id);
         }
 
@@ -2520,6 +2558,8 @@ export class TeamKernel {
             }, BACKGROUND_CONTEXT);
         }
 
+        // Only a successful Durable commit consumes rows. A failed mirror must retry the same suffix.
+        this.#mirrorCursors.set(id, { count, rowid: rows.at(-1)?.rowid ?? cursor });
         const live = this.#live.get(id);
 
         if (live?.generation?.ended) {
@@ -2572,7 +2612,7 @@ export class TeamKernel {
             throw new HttpError(409, "Request belongs to a fork allocation.");
         }
 
-        if (operation === "fork" && this.executions.journal.request(String(id), key)) {
+        if (operation === "fork" && (await this.executions.journal.request(String(id), key))) {
             throw new HttpError(409, "Request belongs to another operation.");
         }
     }
@@ -2607,7 +2647,9 @@ export class TeamKernel {
         }
 
         const receipt =
-            targetId === null ? undefined : this.executions.journal.request(String(targetId), key);
+            targetId === null
+                ? undefined
+                : await this.executions.journal.request(String(targetId), key);
 
         if (
             receipt &&
@@ -2637,7 +2679,7 @@ export class TeamKernel {
 
         return {
             targetId,
-            receipt: receipt ? this.#receipt(receipt) : null,
+            receipt: receipt ? await this.#receipt(receipt) : null,
             ...(nativeResult === undefined ? {} : { nativeResult }),
             ...(preparedOnly ? { preparedOnly: true } : {}),
         };
@@ -2660,15 +2702,15 @@ export class TeamKernel {
                     throw new HttpError(409, "Configuration request identity changed.");
                 }
 
-                const receipt = this.executions.journal.request(String(id), key);
+                const receipt = await this.executions.journal.request(String(id), key);
 
-                return { receipt: receipt ? this.#receipt(receipt) : null };
+                return { receipt: receipt ? await this.#receipt(receipt) : null };
             }
 
             const journal = this.executions.journal;
-            const source = journal.session(String(id));
+            const source = await journal.session(String(id));
 
-            if (journal.request(String(id), key)) {
+            if (await journal.request(String(id), key)) {
                 throw new HttpError(409, "Request belongs to another operation.");
             }
 
@@ -2679,7 +2721,10 @@ export class TeamKernel {
                 );
             }
 
-            if (source.segmentId !== expectedHead || journal.pendingConversation(String(id))) {
+            if (
+                source.segmentId !== expectedHead ||
+                (await journal.pendingConversation(String(id)))
+            ) {
                 throw new HttpError(
                     409,
                     "Source changed or is active/unknown; reconcile before activation.",
@@ -2739,10 +2784,15 @@ export class TeamKernel {
             throw new HttpError(400, "Compaction instructions must be text.");
         }
 
-        const previous = this.executions.journal.existing(String(id), key, instructions, "compact");
+        const previous = await this.executions.journal.existing(
+            String(id),
+            key,
+            instructions,
+            "compact",
+        );
 
         if (previous) {
-            return this.#receipt(previous);
+            return await this.#receipt(previous);
         }
 
         const binding = (await this.#upgradeKernel(id, user)).binding;
@@ -2791,16 +2841,18 @@ export class TeamKernel {
                 }
 
                 app.requireSee(current, prior.id);
-                const receipt = this.executions.journal.request(String(prior.id), key);
+                const receipt = await this.executions.journal.request(String(prior.id), key);
 
-                return { id: prior.id, receipt: receipt ? this.#receipt(receipt) : null };
+                return { id: prior.id, receipt: receipt ? await this.#receipt(receipt) : null };
             }
 
             const journal = this.executions.journal;
 
+            const source = await journal.session(String(id));
+
             if (
-                journal.session(String(id)).segmentId !== expectedHead ||
-                journal.pendingConversation(String(id))
+                source.segmentId !== expectedHead ||
+                (await journal.pendingConversation(String(id)))
             ) {
                 throw new HttpError(
                     409,
@@ -2809,9 +2861,9 @@ export class TeamKernel {
             }
 
             if (entryId) {
-                const selected = journal
-                    .segmentEntries(expectedHead)
-                    .find((entry) => entry.id === entryId);
+                const selected = (await journal.segmentEntries(expectedHead)).find(
+                    (entry) => entry.id === entryId,
+                );
 
                 if (
                     selected?.type !== "message" ||
@@ -2837,7 +2889,7 @@ export class TeamKernel {
                     ...(clone ? { clone: true } : {}),
                 },
             );
-            const binding = journal.session(String(target.id)).binding;
+            const binding = (await journal.session(String(target.id))).binding;
             const receipt = await this.#track(
                 target.id,
                 binding,
@@ -2869,9 +2921,11 @@ export class TeamKernel {
     async #upgradeKernel(
         id: ConversationId,
         user: User,
-        source = this.executions.journal.session(String(id)),
+        source?: Awaited<ReturnType<RotomJournal["session"]>>,
     ) {
         const journal = this.executions.journal;
+
+        source ??= await journal.session(String(id));
         const version = verifyRotomKernel().version;
 
         if (source.binding.memberId !== user.id || source.binding.kernelVersion === version) {
@@ -2888,7 +2942,7 @@ export class TeamKernel {
         await this.#check(binding, id);
 
         try {
-            journal.upgradeKernel(String(id), source.segmentId, version);
+            await journal.upgradeKernel(String(id), source.segmentId, version);
         } catch (error) {
             if (error instanceof KernelRequestConflict) {
                 throw new HttpError(409, `${error.message}.`);
@@ -2914,27 +2968,27 @@ export class TeamKernel {
         }
 
         const journal = this.executions.journal;
-        const previous = journal.request(String(id), key);
+        const previous = await journal.request(String(id), key);
 
         if (previous) {
-            journal.existing(
+            await journal.existing(
                 String(id),
                 key,
                 JSON.stringify({ expectedHead, binding: previous.binding }),
                 "handoff",
             );
 
-            return this.#receipt(previous);
+            return await this.#receipt(previous);
         }
 
         this.#app.requireSteer(user);
-        const source = journal.session(String(id));
+        const source = await journal.session(String(id));
 
         if (source.segmentId !== expectedHead) {
             throw new HttpError(409, "Conversation head changed; refresh before handoff.");
         }
 
-        if (journal.pendingConversation(String(id))) {
+        if (await journal.pendingConversation(String(id))) {
             throw new HttpError(
                 409,
                 "A native operation is active or unknown; reconcile it before handoff.",
@@ -2971,7 +3025,7 @@ export class TeamKernel {
         );
     }
 
-    #receipt(receipt: KernelReceipt) {
+    async #receipt(receipt: KernelReceipt) {
         const configuration = this.#configurations.get(this.#id(receipt.sessionId))?.requests[
             receipt.requestId
         ];
@@ -2985,7 +3039,7 @@ export class TeamKernel {
                 throw new HttpError(409, "Configuration receipt binding changed.");
             }
 
-            this.executions.journal.existing(
+            await this.executions.journal.existing(
                 receipt.sessionId,
                 receipt.requestId,
                 JSON.stringify({
@@ -3031,7 +3085,7 @@ export class TeamKernel {
                 receipt.operation === "prompt" &&
                 ["settled", "interrupted"].includes(receipt.status);
 
-            return this.#receipt(receipt);
+            return await this.#receipt(receipt);
         } finally {
             this.#active.delete(run);
 
@@ -3100,7 +3154,7 @@ export class TeamKernel {
             return { warmed: false };
         }
 
-        const { binding } = this.executions.journal.session(String(id));
+        const { binding } = await this.executions.journal.session(String(id));
 
         if (
             binding.memberId !== current.id ||
@@ -3117,36 +3171,57 @@ export class TeamKernel {
      * Unknown outcomes and legacy interrupted classifications stay untouched, even with a persisted resume plan.
      * The derived request id prevents a second startup from sending the same continuation again.
      */
-    async resumeInterrupted(): Promise<void> {
+    #resumeDrain?: Promise<void>;
+    resumeInterrupted(): Promise<void> {
+        if (!this.#remoteStorage) {
+            return this.#resumeInterrupted();
+        }
+
+        this.#resumeDrain ??= this.#resumeInterrupted().finally(() => {
+            this.#resumeDrain = undefined;
+        });
+
+        return this.#resumeDrain;
+    }
+
+    async #resumeInterrupted(): Promise<void> {
         const journal = this.executions.journal;
 
-        for (const plan of journal.resumes("pending")) {
+        for (const plan of await journal.resumes("pending")) {
+            if (this.#remoteStorage && this.#closing) {
+                return;
+            }
+
             const id = this.#id(plan.sessionId);
-            const attempt = journal.receipt(plan.attemptId);
+            const attempt = await journal.receipt(plan.attemptId);
 
             if (attempt.status !== "settled") {
                 continue;
             }
 
-            const { binding } = journal.session(plan.sessionId);
+            const { binding } = await journal.session(plan.sessionId);
             const user = this.#app.config.userById(binding.memberId);
 
             // Someone acted since (a new message, a handoff, a fork seed): their choice stands.
             if (
-                journal.latest(plan.sessionId)?.id !== attempt.id ||
+                (await journal.latest(plan.sessionId))?.id !== attempt.id ||
                 !user ||
-                !journal.canResume(attempt.id)
+                !(await journal.canResume(attempt.id))
             ) {
-                journal.markResume(plan.attemptId, "skipped");
+                await journal.markResume(plan.attemptId, "skipped");
                 continue;
             }
 
             try {
                 await this.#app.accounts.forUser(user);
                 await this.submit(id, user, `#resume-${attempt.id}`, RESUME_TEXT, false);
-                journal.markResume(plan.attemptId, "started");
+                await journal.markResume(plan.attemptId, "started");
             } catch (error) {
-                journal.markResume(plan.attemptId, "skipped");
+                if (this.#remoteStorage && this.#closing) {
+                    return;
+                }
+
+                await journal.markResume(plan.attemptId, "skipped");
                 this.#app.notice(
                     "warning",
                     `A rotom run cut off by a server restart did not continue by itself: ${error}`,
@@ -3161,126 +3236,57 @@ export class TeamKernel {
         this.#closing = true;
         this.#mcp.close();
 
-        // A stop cuts prompts off mid-work: plan their continuation before stopping them.
-        for (const id of new Set([...this.#active].map((run) => run.id))) {
-            const pending = this.executions.journal.pendingConversation(String(id));
+        const failures: unknown[] = [];
 
-            if (pending?.operation === "prompt" && this.executions.journal.canResume(pending.id)) {
-                this.executions.journal.planResume(pending.id);
+        const failed = (error: unknown) => {
+            if (!this.#remoteStorage) {
+                throw error; // Preserve the D8a path when the worker is disabled.
+            }
+
+            failures.push(error);
+        };
+
+        // A failed storage owner cannot save a continuation. Still abort/drain every native owner.
+        try {
+            for (const id of new Set([...this.#active].map((run) => run.id))) {
+                await this.executions.journal.planPendingResume(String(id));
+            }
+        } catch (error) {
+            failed(error);
+        }
+
+        for (const id of new Set([...this.#active].map((run) => run.id))) {
+            try {
+                await this.executions.abort(String(id));
+            } catch (error) {
+                failed(error);
             }
         }
 
-        for (const id of new Set([...this.#active].map((run) => run.id))) {
-            await this.executions.abort(String(id));
+        await Promise.allSettled([...this.#active].map((run) => run.promise));
+
+        try {
+            if (this.#resumeDrain) {
+                await this.#resumeDrain;
+            }
+        } catch (error) {
+            failed(error);
         }
 
-        await Promise.allSettled([...this.#active].map((run) => run.promise));
-        await this.executions.close();
+        try {
+            await this.executions.close();
+        } catch (error) {
+            failed(error);
+        }
+
+        if (failures.length > 0) {
+            throw new AggregateError(
+                failures,
+                "Native shutdown attempted; storage or closure failures retain writer leases",
+            );
+        }
     }
 }
 
 /** What a continuation after a server stop tells Pi. It shows in the transcript as the server's note. */
 const RESUME_TEXT = `${RESUME_PREFIX} The server restarted while you were working, and your last step may have been cut off. Check what was already done, then continue the task from where it stopped. Do not repeat finished steps.`;
-
-/**
- * What everyone in the room may see of a native entry: an answer's text and tool calls, without reasoning or provider
- * signatures, as handoff does. The complete entry stays in the kernel journal.
- */
-function publicEntry(entry: KernelEntry): KernelEntry {
-    const message = entry.message as
-        { role?: unknown; content?: { type?: unknown; [key: string]: unknown }[] } | undefined;
-
-    if (
-        entry.type !== "message" ||
-        message?.role !== "assistant" ||
-        !Array.isArray(message.content)
-    ) {
-        return entry;
-    }
-
-    return {
-        ...entry,
-        message: {
-            ...message,
-            content: message.content.flatMap((part): Record<string, unknown>[] =>
-                part.type === "text"
-                    ? [{ type: "text", text: part.text }]
-                    : part.type === "toolCall"
-                      ? [
-                            {
-                                type: "toolCall",
-                                id: part.id,
-                                name: part.name,
-                                arguments: part.arguments,
-                            },
-                        ]
-                      : [],
-            ),
-        },
-    };
-}
-
-/**
- * Apply one streamed delta to the in-flight answer. Rotom's RPC sends deltas, not the whole partial message. Reasoning
- * is not shown live, as it is not shown once persisted. Returns whether anything visible changed.
- */
-function applyUpdate(message: { content: Record<string, unknown>[] }, event: RpcRecord): boolean {
-    const update = event.assistantMessageEvent as
-        | {
-              type?: string;
-              contentIndex?: number;
-              delta?: string;
-              content?: string;
-              id?: string;
-              toolName?: string;
-              toolCall?: Record<string, unknown>;
-          }
-        | undefined;
-    const index = update?.contentIndex;
-
-    if (!update || typeof index !== "number" || !Number.isInteger(index) || index < 0) {
-        return false;
-    }
-
-    const content = message.content;
-    const text = typeof content[index]?.text === "string" ? (content[index].text as string) : "";
-
-    switch (update.type) {
-        case "text_start":
-            content[index] = { type: "text", text: "" };
-
-            return true;
-
-        case "text_delta":
-            content[index] = { type: "text", text: text + String(update.delta ?? "") };
-
-            return true;
-
-        case "text_end":
-            content[index] = { type: "text", text: String(update.content ?? text) };
-
-            return true;
-
-        case "toolcall_start":
-            content[index] = {
-                type: "toolCall",
-                id: String(update.id ?? ""),
-                name: String(update.toolName ?? ""),
-                arguments: {},
-            };
-
-            return true;
-
-        case "toolcall_end":
-            if (!update.toolCall) {
-                return false;
-            }
-
-            content[index] = update.toolCall;
-
-            return true;
-
-        default:
-            return false;
-    }
-}

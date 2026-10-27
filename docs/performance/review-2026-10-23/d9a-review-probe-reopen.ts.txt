@@ -1,0 +1,15 @@
+import { openApp, scriptedModel, lastText } from "./helpers.ts";
+import { fauxAssistantMessage, fauxText } from "@earendil-works/pi-ai/providers/faux";
+import { cpSync, mkdtempSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+const [hist, sentinel] = process.argv.slice(2);
+const before = readFileSync(sentinel, "utf8");
+const data = join(mkdtempSync(join(tmpdir(), "d9a-pos-")), "data");
+cpSync(join(hist, "data"), data, { recursive: true });
+const model = scriptedModel((ctx) => fauxAssistantMessage([fauxText(`old reply: ${lastText(ctx).text}`)]));
+const app = await openApp(model, data, () => Date.now() + 2 * 3600_000);
+await new Promise((r) => setTimeout(r, 4000));
+await app.close();
+console.log(JSON.stringify({ sentinelChanged: readFileSync(sentinel, "utf8") !== before }));
+process.exit(0);

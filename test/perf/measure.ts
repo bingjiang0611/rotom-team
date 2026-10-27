@@ -103,6 +103,37 @@ export function buildReport(
             continue;
         }
 
+        // Preserve transport/serialization work without changing the workload or its ratcheted keys.
+        const storageMetrics = new Set(
+            measured
+                .flatMap((result) => Object.keys(result.counts))
+                .filter(
+                    (metric) => metric.startsWith("storage.worker.") || metric.startsWith("v8."),
+                ),
+        );
+
+        for (const metric of storageMetrics) {
+            const values = measured.map((result) => result.counts[metric]);
+            const base = {
+                scenario,
+                metric,
+                layer: "cpu",
+                unit: metric.toLowerCase().endsWith("bytes") ? "bytes" : "count",
+                source: "parent/worker V8 calls and encoded transport bytes (test/perf/counters.ts)",
+                workload,
+            };
+
+            observations.push(
+                values.every((value) => value !== undefined)
+                    ? { ...base, availability: "measured", runs: values }
+                    : {
+                          ...base,
+                          availability: "unavailable",
+                          reason: "counter missing from a run",
+                      },
+            );
+        }
+
         const ms = measured.map((result) => round(result.ms));
 
         timings.push({ scenario, metric: "ms", runs: ms, median: median(ms) });
@@ -121,10 +152,18 @@ export function buildReport(
 
 /** One run, in a fresh process, of the prepared checkout at `repo` (`checkout.ts`). */
 export async function runOnce(file: string, repo: string): Promise<ScenarioResult[]> {
-    const child = spawn(process.execPath, [join(repo, "test", "perf", "scenarios.ts"), file], {
-        cwd: repo,
-        stdio: ["ignore", "inherit", "inherit"],
-    });
+    const preload =
+        process.env.ROTOM_PERF_STORAGE_WORKER === "1"
+            ? ["--import", join(repo, "test", "perf", "storage-worker-preload.ts")]
+            : [];
+    const child = spawn(
+        process.execPath,
+        [...preload, join(repo, "test", "perf", "scenarios.ts"), file],
+        {
+            cwd: repo,
+            stdio: ["ignore", "inherit", "inherit"],
+        },
+    );
     const code = await new Promise<number | null>((resolve) => child.once("exit", resolve));
 
     if (code !== 0) {

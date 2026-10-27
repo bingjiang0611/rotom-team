@@ -948,20 +948,18 @@ export async function nativeCommandUiProof(options: {
             "third branch message settles",
             20_000,
         );
-        const segment = kernel.executions.journal.session(String(options.id));
+        const segment = await kernel.executions.journal.session(String(options.id));
         const native = await nativeSessionManager();
         const activeMessages = () =>
             native.SessionManager.open(segment.sessionFile!)
                 .getBranch()
                 .filter((entry: { type?: string }) => entry.type === "message");
-        const selected = kernel.executions.journal
-            .segmentEntries(segment.segmentId)
-            .find(
-                (entry) =>
-                    entry.type === "message" &&
-                    (entry.message as { role?: string })?.role === "user" &&
-                    JSON.stringify(entry.message).includes("SECOND_BROWSER_MARKER"),
-            )!;
+        const selected = (await kernel.executions.journal.segmentEntries(segment.segmentId)).find(
+            (entry) =>
+                entry.type === "message" &&
+                (entry.message as { role?: string })?.role === "user" &&
+                JSON.stringify(entry.message).includes("SECOND_BROWSER_MARKER"),
+        )!;
         const selectedButton = `.sheet button[data-entry-id="${selected.id}"]`;
         const beforeFork = options.modelCalls();
 
@@ -1003,7 +1001,7 @@ export async function nativeCommandUiProof(options: {
         const forkId = Number(
             await page.evaluate(`(await import('/store.js')).store.state.conversationId`),
         ) as ConversationId;
-        const forkHistory = JSON.stringify(kernel.snapshot(forkId, options.user).messages);
+        const forkHistory = JSON.stringify((await kernel.snapshot(forkId, options.user)).messages);
 
         assert.notEqual(forkId, options.id);
         assert.ok(forkHistory.includes("FIRST_BROWSER_MARKER"));
@@ -1093,7 +1091,7 @@ export async function nativeCommandUiProof(options: {
         );
         assert.ok(JSON.stringify(activeMessages()).includes("THIRD_BROWSER_MARKER"));
         assert.equal(options.modelCalls(), beforeFork);
-        const cancelledReceipt = kernel.executions.journal.latest(String(options.id))!;
+        const cancelledReceipt = (await kernel.executions.journal.latest(String(options.id)))!;
         const cancelledReadback = await kernel.lookup(
             options.id,
             options.user,
@@ -1174,12 +1172,12 @@ export async function nativeCommandUiProof(options: {
 
         assert.ok(branch.includes("FIRST_BROWSER_MARKER"));
         assert.ok(!branch.includes("THIRD_BROWSER_MARKER"));
-        const summary = kernel.executions.journal
-            .segmentEntries(segment.segmentId)
-            .findLast((entry) => entry.type === "branch_summary");
+        const summary = (
+            await kernel.executions.journal.segmentEntries(segment.segmentId)
+        ).findLast((entry) => entry.type === "branch_summary");
 
         assert.ok(summary?.summary);
-        const usage = kernel.executions.journal.usage(String(options.id)).at(-1)!;
+        const usage = (await kernel.executions.journal.usage(String(options.id))).at(-1)!;
 
         assert.equal(usage.memberId, options.user.id);
         assert.ok(usage.raw, "native branch summary usage is recorded, not dropped");
@@ -1194,11 +1192,9 @@ export async function nativeCommandUiProof(options: {
         );
         await screenshot("native-command-tree-summary-draft");
         await execute("FIXTURE_CUSTOM_MESSAGE");
-        const custom = kernel.executions.journal
-            .segmentEntries(segment.segmentId)
-            .findLast(
-                (entry) => entry.type === "custom_message" && entry.customType === "fixture-text",
-            )!;
+        const custom = (await kernel.executions.journal.segmentEntries(segment.segmentId)).findLast(
+            (entry) => entry.type === "custom_message" && entry.customType === "fixture-text",
+        )!;
         const customResult = JSON.parse(
             await page.evaluate(
                 `JSON.stringify(await (await import('/store.js')).actions.submit(${JSON.stringify(`/tree ${custom.id}`)}, [], 'steer', false, true))`,

@@ -12,6 +12,10 @@ import type { Client } from "../room.ts";
 import { pushChannel, type PushSignal } from "../perf-channels.ts";
 import { conversationId, json, send } from "./io.ts";
 import { parseClaim } from "../view-claim.ts";
+import { HttpError } from "../errors.ts";
+import { SUBSCRIPTION_COPY } from "../constants/copy.ts";
+
+const ROOM_EVENTS = new Set(["view", "missing", "chat", "notes", "browser", "presence", "changes"]);
 
 const gzip = promisify(gzipCallback);
 
@@ -44,7 +48,8 @@ interface Poller {
     id: string;
     userId: string;
     client: Client;
-    queue: { seq: number; event: string; data: unknown }[];
+    queue: { seq: number; json: string; bytes: number }[];
+    queueBytes: number;
     seq: number;
     waiting: ServerResponse | undefined;
     /** Whether the waiting request takes a gzip answer. */
@@ -66,7 +71,16 @@ function newClient(url: URL, user: User, send: Client["send"]): Client {
     const raw = url.searchParams.get("c");
     const tail = viewTail(url.searchParams.get("tail"));
 
-    return {
+    const generation =
+        url.searchParams.get("subscriptions") === "1"
+            ? Number(url.searchParams.get("generation"))
+            : undefined;
+
+    if (generation !== undefined && (!Number.isSafeInteger(generation) || generation < 0)) {
+        throw new HttpError(400, SUBSCRIPTION_COPY.invalidRequest);
+    }
+
+    const client: Client = {
         id: (url.searchParams.get("tab") ?? randomUUID()).slice(0, 64),
         connection: randomUUID(),
         sessionDeltas: url.searchParams.get("sessions") === "delta",
@@ -78,12 +92,23 @@ function newClient(url: URL, user: User, send: Client["send"]): Client {
         ...(tail === undefined ? {} : { viewTail: tail }),
         sentEntries: new Set(),
         orderKey: "",
-        send,
+        subscriptionGeneration: generation,
+        send(event, data) {
+            // Stamp before serialization/enqueue, never when an old poll batch is retransmitted.
+            send(
+                event,
+                generation !== undefined && ROOM_EVENTS.has(event)
+                    ? { generation: client.subscriptionGeneration, data }
+                    : data,
+            );
+        },
     };
+
+    return client;
 }
 
 /** The event routes of one HTTP handler, with their own pollers. */
-export function createEventStreams(app: PocketApp, maxStreamBytes = STREAM_BUFFER_BYTES) {
+export function createEventStreams(app: PocketApp, maxBufferedBytes = STREAM_BUFFER_BYTES) {
     const events = async (
         request: IncomingMessage,
         response: ServerResponse,
@@ -109,7 +134,7 @@ export function createEventStreams(app: PocketApp, maxStreamBytes = STREAM_BUFFE
                     ? 0
                     : compressor.writableLength + compressor.readableLength);
 
-            if (buffered + Buffer.byteLength(frame) > maxStreamBytes) {
+            if (buffered + Buffer.byteLength(frame) > maxBufferedBytes) {
                 overflowed = true;
                 compressor?.destroy();
                 response.destroy();
@@ -176,7 +201,8 @@ export function createEventStreams(app: PocketApp, maxStreamBytes = STREAM_BUFFE
         poller.waiting = undefined;
 
         if (response !== undefined && !response.writableEnded) {
-            const body = JSON.stringify({ session: poller.id, events: poller.queue });
+            // Each event is frozen at enqueue time. Retransmission only joins those strings.
+            const body = `{"session":"${poller.id}","events":[${poller.queue.map((item) => item.json).join(",")}]}`;
 
             // A first answer carries the whole view: compressed off the main thread when it is worth it.
             if (!poller.gzip || body.length < 1024) {
@@ -205,6 +231,8 @@ export function createEventStreams(app: PocketApp, maxStreamBytes = STREAM_BUFFE
         }
 
         answerPoll(poller);
+        poller.queue = [];
+        poller.queueBytes = 0;
         app.detach(poller.client);
     };
 
@@ -244,6 +272,7 @@ export function createEventStreams(app: PocketApp, maxStreamBytes = STREAM_BUFFE
                 userId: user.id,
                 client: undefined as unknown as Client,
                 queue: [],
+                queueBytes: 0,
                 seq: 0,
                 waiting: undefined,
                 gzip: false,
@@ -252,7 +281,26 @@ export function createEventStreams(app: PocketApp, maxStreamBytes = STREAM_BUFFE
             };
 
             created.client = newClient(url, user, (event, data) => {
-                created.queue.push({ seq: ++created.seq, event, data });
+                if (!pollers.has(created.id)) {
+                    return;
+                }
+
+                const seq = ++created.seq;
+                const json = JSON.stringify({ seq, event, data });
+                // Include the array separator. The fixed UUID envelope adds only constant overhead.
+                const bytes = Buffer.byteLength(json) + 1;
+
+                if (created.queueBytes + bytes > maxBufferedBytes) {
+                    // Never send a partial initial view as success. A new poll gets a fresh full view.
+                    created.waiting?.destroy();
+                    created.waiting = undefined;
+                    closePoller(created);
+
+                    return;
+                }
+
+                created.queue.push({ seq, json, bytes });
+                created.queueBytes += bytes;
 
                 if (pushChannel.hasSubscribers) {
                     pushChannel.publish({
@@ -272,11 +320,33 @@ export function createEventStreams(app: PocketApp, maxStreamBytes = STREAM_BUFFE
             pollers.set(created.id, created);
             keepPoller(created);
             await app.attach(created.client);
+
+            if (!pollers.has(created.id)) {
+                response.destroy();
+
+                return;
+            }
+
             poller = created;
         } else {
             const ack = Number(url.searchParams.get("ack") ?? 0);
 
-            poller.queue = poller.queue.filter((item) => item.seq > ack);
+            if (!Number.isSafeInteger(ack) || ack < 0 || ack > poller.seq) {
+                throw new HttpError(400, SUBSCRIPTION_COPY.invalidAck);
+            }
+
+            let acknowledgedBytes = 0;
+
+            poller.queue = poller.queue.filter((item) => {
+                if (item.seq > ack) {
+                    return true;
+                }
+
+                acknowledgedBytes += item.bytes;
+
+                return false;
+            });
+            poller.queueBytes -= acknowledgedBytes;
             keepPoller(poller);
         }
 

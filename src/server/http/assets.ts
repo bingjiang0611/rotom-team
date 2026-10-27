@@ -1,11 +1,12 @@
 /** The web app's own files and the modules it imports, its content security policy, and image files it shows. */
 import { createHash } from "node:crypto";
-import { closeSync, createReadStream, openSync, readFileSync, readSync, statSync } from "node:fs";
+import { closeSync, createReadStream, openSync, readSync, statSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { basename, extname, join } from "node:path";
 import { APP_ROOT } from "../config.ts";
 import { HttpError } from "../errors.ts";
 import { send } from "./io.ts";
+import { asset, readAsset, sendAsset } from "./static-cache.ts";
 
 export const WEB = join(APP_ROOT, "web");
 const MODULES = join(APP_ROOT, "node_modules");
@@ -126,44 +127,150 @@ function appPolicy(html: string): string {
     ].join("; ");
 }
 
-/** The app page, with its content security policy. */
-export function serveApp(response: ServerResponse): void {
-    let body: string;
+let page:
+    { sources: Map<string, string>; value: ReturnType<typeof asset>; policy: string } | undefined;
+let preparingPage: Promise<Awaited<ReturnType<typeof appPage>>> | undefined;
+
+/** Static imports only. Preloads fetch modules; the original script/import order still controls evaluation. */
+async function appPage() {
+    const index = join(WEB, "index.html");
+    const original = await readAsset(index);
 
     try {
-        body = readFileSync(join(WEB, "index.html"), "utf8");
+        if (page) {
+            const unchanged = await Promise.all(
+                [...page.sources].map(
+                    async ([file, etag]) =>
+                        (file === index ? original.etag : (await readAsset(file)).etag) === etag,
+                ),
+            );
+
+            if (unchanged.every(Boolean)) {
+                return page;
+            }
+        }
+
+        const html = original.body.toString("utf8");
+        const importMap = /<script type="importmap">([\s\S]*?)<\/script>/.exec(html);
+        const imports = importMap
+            ? (JSON.parse(importMap[1]!) as { imports: Record<string, string> }).imports
+            : {};
+        const sources = new Map([[index, original.etag]]);
+        const urls = new Set<string>();
+
+        const visit = async (url: string): Promise<void> => {
+            if (urls.has(url)) {
+                return;
+            }
+
+            urls.add(url);
+            const file = url.startsWith("/vendor/")
+                ? VENDOR[url.slice(8)]
+                : join(WEB, url.slice(1));
+
+            if (!file) {
+                throw new Error(`Unknown module preload: ${url}`);
+            }
+
+            const module = await readAsset(file);
+
+            sources.set(file, module.etag);
+
+            // The repository uses literal static ESM imports; dynamic imports remain lazy. If the
+            // module syntax changes, replace this scanner with a parser, not speculative extra links.
+            for (const match of module.body
+                .toString("utf8")
+                .matchAll(
+                    /(?:^|\n)\s*(?:import\s*(?:[^'";]*?\sfrom\s*)?|export\s+[^'";]*?\sfrom\s*)["']([^"']+)["']/g,
+                )) {
+                const name = match[1]!;
+                const target =
+                    imports[name] ??
+                    (name.startsWith(".") || name.startsWith("/")
+                        ? new URL(name, `http://app.local${url}`).pathname
+                        : undefined);
+
+                if (target?.startsWith("/") && !target.startsWith("//")) {
+                    await visit(target);
+                }
+            }
+        };
+
+        for (const match of html.matchAll(/<script\s+type="module"\s+src="([^"]+)"/g)) {
+            await visit(match[1]!);
+        }
+
+        // After the import map, before the body. No script text or execution order is changed.
+        const body = html.replace(
+            "</head>",
+            `${[...urls].map((url) => `<link rel="modulepreload" href="${url}" />`).join("\n")}\n</head>`,
+        );
+
+        page = { sources, value: asset(Buffer.from(body)), policy: appPolicy(body) };
+
+        return page;
     } catch {
+        // Preloads are optional hints: even a scanner false positive or a disappearing
+        // cached source must not break the page. Retry discovery on the next request.
+        page = undefined;
+
+        return { value: original, policy: appPolicy(original.body.toString("utf8")) };
+    }
+}
+
+/** The app page with a revalidated import graph and its unchanged script policy. */
+export async function serveApp(request: IncomingMessage, response: ServerResponse): Promise<void> {
+    preparingPage ??= appPage().finally(() => {
+        preparingPage = undefined;
+    });
+    let current: Awaited<ReturnType<typeof appPage>>;
+
+    try {
+        current = await preparingPage;
+    } catch (error) {
+        if (
+            !["ENOENT", "ENOTDIR", "EISDIR"].includes((error as NodeJS.ErrnoException).code ?? "")
+        ) {
+            throw error;
+        }
+
         send(response, 404, "Not found");
 
         return;
     }
 
-    send(response, 200, body, "text/html; charset=utf-8", {
-        "cache-control": "no-cache",
-        "content-security-policy": appPolicy(body),
+    await sendAsset(request, response, current.value, "text/html; charset=utf-8", {
+        "content-security-policy": current.policy,
     });
 }
 
-export function serveFile(response: ServerResponse, file: string, fallbackType?: string): void {
-    let body: Buffer;
+export async function serveFile(
+    request: IncomingMessage,
+    response: ServerResponse,
+    file: string,
+    fallbackType?: string,
+): Promise<void> {
+    let value: Awaited<ReturnType<typeof readAsset>>;
 
     try {
-        body = readFileSync(file);
-    } catch {
+        value = await readAsset(file);
+    } catch (error) {
+        if (
+            !["ENOENT", "ENOTDIR", "EISDIR"].includes((error as NodeJS.ErrnoException).code ?? "")
+        ) {
+            throw error;
+        }
+
         send(response, 404, "Not found");
 
         return;
     }
 
-    // No caching: the app is edited live, and a reload should always get the newest files.
-    send(
+    await sendAsset(
+        request,
         response,
-        200,
-        body,
+        value,
         fallbackType ?? TYPES[extname(file).toLowerCase()] ?? "application/octet-stream",
-        {
-            "cache-control": "no-cache",
-        },
     );
 }
 

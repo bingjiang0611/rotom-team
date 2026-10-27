@@ -1,5 +1,12 @@
 // Session catalogue pushes: versioned full snapshots, changed rows only, per-user visibility and a stream-local resync.
-import { cleanUp, fakeTab, newSession, openApp, owner, scriptedModel } from "./helpers.ts";
+import {
+    cleanUp,
+    fakeTab,
+    seedHistoricalSession,
+    openApp,
+    owner,
+    scriptedModel,
+} from "./helpers.ts";
 import assert from "node:assert/strict";
 import { setTimeout as delay } from "node:timers/promises";
 import { test } from "node:test";
@@ -149,8 +156,8 @@ test("each tab has its own permitted rows and versions; resync cannot target ano
     const app = await openApp(scriptedModel());
 
     try {
-        const first = await newSession(app);
-        const hidden = await newSession(app);
+        const first = await seedHistoricalSession(app);
+        const hidden = await seedHistoricalSession(app);
         const scoped = app.config.addUser("Scoped", "guest", [String(first)]).user;
         const all = app.config.addUser("All", "guest").user;
         const own = deltaTab(owner(app));
@@ -168,15 +175,20 @@ test("each tab has its own permitted rows and versions; resync cannot target ano
         guest.events.length = 0;
         own.events.length = 0;
 
-        await app.commands.updateSession(hidden, owner(app), { title: "Private rename" });
-        await until(() => own.last("sessions-delta") !== undefined);
-        assert.ok(JSON.stringify(own.last("sessions-delta")).includes("Private rename"));
+        await assert.rejects(
+            app.commands.updateSession(hidden, owner(app), { title: "Private rename" }),
+            /read-only archive/,
+        );
+        assert.equal(own.last("sessions-delta"), undefined);
         assert.equal(
             guest.events.some((each) => each.event.startsWith("sessions")),
             false,
         );
-        assert.throws(() => app.resyncSessionList(scoped, own.client.connection), { status: 404 });
-        app.resyncSessionList(scoped, guest.client.connection);
+        await assert.rejects(
+            async () => await app.resyncSessionList(scoped, own.client.connection),
+            { status: 404 },
+        );
+        await app.resyncSessionList(scoped, guest.client.connection);
         assert.deepEqual(
             (guest.last("sessions")!.items as Row[]).map((item) => item.id),
             [first],
@@ -192,8 +204,11 @@ test("each tab has its own permitted rows and versions; resync cannot target ano
             [first],
         );
         wide.events.length = 0;
-        await app.commands.updateSession(hidden, owner(app), { title: "Still private" });
-        await delay(500);
+        await assert.rejects(
+            app.commands.updateSession(hidden, owner(app), { title: "Still private" }),
+            /read-only archive/,
+        );
+        await delay(100);
         assert.equal(
             wide.events.some((each) => each.event.startsWith("sessions")),
             false,
@@ -201,9 +216,12 @@ test("each tab has its own permitted rows and versions; resync cannot target ano
         app.detach(own.client);
         app.detach(guest.client);
         app.detach(wide.client);
-        assert.throws(() => app.resyncSessionList(scoped, guest.client.connection), {
-            status: 404,
-        });
+        await assert.rejects(
+            async () => await app.resyncSessionList(scoped, guest.client.connection),
+            {
+                status: 404,
+            },
+        );
     } finally {
         await app.close();
         cleanUp();

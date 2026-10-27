@@ -1,5 +1,5 @@
 // Files for @ mentions: git's list in a repository, a walk elsewhere, kept while fresh, and sent compressed or not at all.
-import { cleanUp, newSession, openApp, root, scriptedModel } from "./helpers.ts";
+import { cleanUp, seedHistoricalSession, openApp, root, scriptedModel } from "./helpers.ts";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -132,7 +132,7 @@ test("the files route sends the list compressed, then only its version while it 
         const dir = join(root, "mention-route");
 
         files(dir, ["src/a.ts", "b.md"]);
-        const id = await newSession(app, dir);
+        const id = await seedHistoricalSession(app, dir);
         const url = `http://127.0.0.1:${(server.address() as { port: number }).port}/api/c/${id}/files`;
         const headers = { authorization: `Bearer ${app.config.ownerToken}` };
         const response = await fetch(url, { headers: { ...headers, "accept-encoding": "gzip" } });

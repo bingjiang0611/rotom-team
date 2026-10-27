@@ -1,0 +1,2415 @@
+{
+    "scope": "Existing evidence only; packaged after rebase onto c6947a8. No new performance run. Instrumented/truncated diagnostics are not formal latency evidence.",
+    "originalCommits": {
+        "baseline": "0785f51",
+        "head": "93dbc7c plus D8a working tree"
+    },
+    "rebasedCommits": {
+        "baseline": "4e8571a",
+        "head": "28dd658 plus byte-identical D8a working tree; c6947a8 changes HANDOFF only"
+    },
+    "environment": {
+        "node": "24.18.0",
+        "platform": "darwin-arm64",
+        "cpu": "Apple M1 (8 cores)"
+    },
+    "comparisons": {
+        "change": {
+            "runsPerSide": 5,
+            "counters": [
+                {
+                    "key": "turn.warm/sql.statements",
+                    "base": 158,
+                    "head": 168,
+                    "delta": 10,
+                    "verdict": "worse",
+                    "baseRuns": [158, 158, 158, 158, 158],
+                    "headRuns": [149, 149, 149, 149, 168]
+                },
+                {
+                    "key": "turn.warm/sql.rows",
+                    "base": 112,
+                    "head": 127,
+                    "delta": 15,
+                    "verdict": "worse",
+                    "baseRuns": [112, 112, 112, 112, 112],
+                    "headRuns": [104, 104, 104, 104, 127]
+                },
+                {
+                    "key": "turn.warm/json.parse.calls",
+                    "base": 140,
+                    "head": 156,
+                    "delta": 16,
+                    "verdict": "worse",
+                    "baseRuns": [140, 140, 140, 140, 140],
+                    "headRuns": [139, 139, 139, 139, 156]
+                },
+                {
+                    "key": "turn.warm/json.parse.chars",
+                    "base": 291842,
+                    "head": 343670,
+                    "delta": 51828,
+                    "verdict": "worse",
+                    "baseRuns": [291835, 291835, 291835, 291842, 291835],
+                    "headRuns": [291294, 291294, 291294, 291294, 343670]
+                },
+                {
+                    "key": "turn.warm/json.parse.journal.calls",
+                    "base": 32,
+                    "head": 41,
+                    "delta": 9,
+                    "verdict": "worse",
+                    "baseRuns": [32, 32, 32, 32, 32],
+                    "headRuns": [31, 31, 31, 31, 41]
+                },
+                {
+                    "key": "turn.warm/json.parse.journal.chars",
+                    "base": 22924,
+                    "head": 27792,
+                    "delta": 4868,
+                    "verdict": "worse",
+                    "baseRuns": [22923, 22923, 22923, 22924, 22923],
+                    "headRuns": [22382, 22382, 22382, 22382, 27792]
+                },
+                {
+                    "key": "turn.warm/json.stringify.chars",
+                    "base": 85250,
+                    "head": 89122,
+                    "delta": 3872,
+                    "verdict": "worse",
+                    "baseRuns": [85248, 85248, 85248, 85250, 85248],
+                    "headRuns": [85248, 85248, 85248, 85248, 89122]
+                },
+                {
+                    "key": "turn.warm/view.entry.visits",
+                    "base": 8,
+                    "head": 15,
+                    "delta": 7,
+                    "verdict": "worse",
+                    "baseRuns": [8, 8, 8, 8, 8],
+                    "headRuns": [8, 8, 8, 8, 15]
+                },
+                {
+                    "key": "turn.warm/view.stats.entry.scans",
+                    "base": 8,
+                    "head": 15,
+                    "delta": 7,
+                    "verdict": "worse",
+                    "baseRuns": [8, 8, 8, 8, 8],
+                    "headRuns": [8, 8, 8, 8, 15]
+                },
+                {
+                    "key": "turn.warm/view.fields.stringify.calls",
+                    "base": 24,
+                    "head": 48,
+                    "delta": 24,
+                    "verdict": "worse",
+                    "baseRuns": [24, 24, 24, 24, 24],
+                    "headRuns": [24, 24, 24, 24, 48]
+                },
+                {
+                    "key": "turn.warm/view.fields.stringify.chars",
+                    "base": 279,
+                    "head": 558,
+                    "delta": 279,
+                    "verdict": "worse",
+                    "baseRuns": [279, 279, 279, 279, 279],
+                    "headRuns": [279, 279, 279, 279, 558]
+                },
+                {
+                    "key": "turn.warm/view.live.project.calls",
+                    "base": 2,
+                    "head": 4,
+                    "delta": 2,
+                    "verdict": "worse",
+                    "baseRuns": [2, 2, 2, 2, 2],
+                    "headRuns": [2, 2, 2, 2, 4]
+                },
+                {
+                    "key": "turn.warm/view.inbox.project.calls",
+                    "base": 2,
+                    "head": 4,
+                    "delta": 2,
+                    "verdict": "worse",
+                    "baseRuns": [2, 2, 2, 2, 2],
+                    "headRuns": [2, 2, 2, 2, 4]
+                },
+                {
+                    "key": "turn.warm/view.kernel.project.calls",
+                    "base": 2,
+                    "head": 4,
+                    "delta": 2,
+                    "verdict": "worse",
+                    "baseRuns": [2, 2, 2, 2, 2],
+                    "headRuns": [2, 2, 2, 2, 4]
+                },
+                {
+                    "key": "turn.warm/view.kernel.sql.heads",
+                    "base": 2,
+                    "head": 4,
+                    "delta": 2,
+                    "verdict": "worse",
+                    "baseRuns": [2, 2, 2, 2, 2],
+                    "headRuns": [2, 2, 2, 2, 4]
+                },
+                {
+                    "key": "turn.warm/view.kernel.sql.attempts",
+                    "base": 4,
+                    "head": 8,
+                    "delta": 4,
+                    "verdict": "worse",
+                    "baseRuns": [4, 4, 4, 4, 4],
+                    "headRuns": [4, 4, 4, 4, 8]
+                },
+                {
+                    "key": "turn.warm/view.kernel.sql.command_inputs",
+                    "base": 3,
+                    "head": 4,
+                    "delta": 1,
+                    "verdict": "worse",
+                    "baseRuns": [3, 3, 3, 3, 3],
+                    "headRuns": [2, 2, 2, 2, 4]
+                },
+                {
+                    "key": "turn.warm/push.events",
+                    "base": 3,
+                    "head": 5,
+                    "delta": 2,
+                    "verdict": "worse",
+                    "baseRuns": [3, 3, 3, 3, 3],
+                    "headRuns": [3, 3, 3, 3, 5]
+                },
+                {
+                    "key": "turn.warm/push.bytes",
+                    "base": 13102,
+                    "head": 15621,
+                    "delta": 2519,
+                    "verdict": "worse",
+                    "baseRuns": [13102, 13102, 13102, 13102, 13102],
+                    "headRuns": [13102, 13102, 13102, 13102, 15621]
+                },
+                {
+                    "key": "turn.warm/push.view.count",
+                    "base": 2,
+                    "head": 4,
+                    "delta": 2,
+                    "verdict": "worse",
+                    "baseRuns": [2, 2, 2, 2, 2],
+                    "headRuns": [2, 2, 2, 2, 4]
+                },
+                {
+                    "key": "turn.warm/push.view.bytes",
+                    "base": 8656,
+                    "head": 11175,
+                    "delta": 2519,
+                    "verdict": "worse",
+                    "baseRuns": [8656, 8656, 8656, 8656, 8656],
+                    "headRuns": [8656, 8656, 8656, 8656, 11175]
+                },
+                {
+                    "key": "turn.prewarmed/fs.read.calls",
+                    "base": 25,
+                    "head": 26,
+                    "delta": 1,
+                    "verdict": "worse",
+                    "baseRuns": [25, 25, 25, 25, 25],
+                    "headRuns": [25, 25, 26, 25, 25]
+                },
+                {
+                    "key": "turn.prewarmed/json.parse.durableStorage.calls",
+                    "base": 18,
+                    "head": 20,
+                    "delta": 2,
+                    "verdict": "worse",
+                    "baseRuns": [18, 18, 18, 18, 18],
+                    "headRuns": [18, 18, 20, 18, 18]
+                },
+                {
+                    "key": "turn.prewarmed/json.parse.durableStorage.chars",
+                    "base": 1122,
+                    "head": 1424,
+                    "delta": 302,
+                    "verdict": "worse",
+                    "baseRuns": [1122, 1122, 1122, 1122, 1122],
+                    "headRuns": [1122, 1122, 1424, 1122, 1122]
+                },
+                {
+                    "key": "web.send.poll/cdp.LayoutCount",
+                    "base": 18,
+                    "head": 19,
+                    "delta": 1,
+                    "verdict": "worse",
+                    "baseRuns": [18, 18, 18, 18, 18],
+                    "headRuns": [18, 18, 19, 18, 18]
+                }
+            ],
+            "slower": []
+        },
+        "main": {
+            "runsPerSide": 1,
+            "counters": [
+                {
+                    "key": "startup.restart/sql.statements",
+                    "base": 848,
+                    "head": 851,
+                    "delta": 3,
+                    "verdict": "worse",
+                    "baseRuns": [848],
+                    "headRuns": [851]
+                },
+                {
+                    "key": "turn.warm/sql.statements",
+                    "base": 157,
+                    "head": 169,
+                    "delta": 12,
+                    "verdict": "worse",
+                    "baseRuns": [157],
+                    "headRuns": [169]
+                },
+                {
+                    "key": "turn.warm/sql.rows",
+                    "base": 116,
+                    "head": 141,
+                    "delta": 25,
+                    "verdict": "worse",
+                    "baseRuns": [116],
+                    "headRuns": [141]
+                },
+                {
+                    "key": "turn.warm/json.parse.calls",
+                    "base": 147,
+                    "head": 156,
+                    "delta": 9,
+                    "verdict": "worse",
+                    "baseRuns": [147],
+                    "headRuns": [156]
+                },
+                {
+                    "key": "turn.warm/json.parse.chars",
+                    "base": 338695,
+                    "head": 343677,
+                    "delta": 4982,
+                    "verdict": "worse",
+                    "baseRuns": [338695],
+                    "headRuns": [343677]
+                },
+                {
+                    "key": "turn.warm/json.parse.journal.calls",
+                    "base": 32,
+                    "head": 41,
+                    "delta": 9,
+                    "verdict": "worse",
+                    "baseRuns": [32],
+                    "headRuns": [41]
+                },
+                {
+                    "key": "turn.warm/json.parse.journal.chars",
+                    "base": 22923,
+                    "head": 27793,
+                    "delta": 4870,
+                    "verdict": "worse",
+                    "baseRuns": [22923],
+                    "headRuns": [27793]
+                },
+                {
+                    "key": "turn.warm/json.stringify.chars",
+                    "base": 85248,
+                    "head": 93866,
+                    "delta": 8618,
+                    "verdict": "worse",
+                    "baseRuns": [85248],
+                    "headRuns": [93866]
+                },
+                {
+                    "key": "turn.warm/view.entry.visits",
+                    "base": 8,
+                    "head": 15,
+                    "delta": 7,
+                    "verdict": "worse",
+                    "baseRuns": [8],
+                    "headRuns": [15]
+                },
+                {
+                    "key": "turn.warm/view.stats.entry.scans",
+                    "base": 8,
+                    "head": 15,
+                    "delta": 7,
+                    "verdict": "worse",
+                    "baseRuns": [8],
+                    "headRuns": [15]
+                },
+                {
+                    "key": "turn.warm/view.fields.stringify.calls",
+                    "base": 24,
+                    "head": 48,
+                    "delta": 24,
+                    "verdict": "worse",
+                    "baseRuns": [24],
+                    "headRuns": [48]
+                },
+                {
+                    "key": "turn.warm/view.fields.stringify.chars",
+                    "base": 279,
+                    "head": 603,
+                    "delta": 324,
+                    "verdict": "worse",
+                    "baseRuns": [279],
+                    "headRuns": [603]
+                },
+                {
+                    "key": "turn.warm/view.live.project.calls",
+                    "base": 2,
+                    "head": 4,
+                    "delta": 2,
+                    "verdict": "worse",
+                    "baseRuns": [2],
+                    "headRuns": [4]
+                },
+                {
+                    "key": "turn.warm/view.inbox.project.calls",
+                    "base": 2,
+                    "head": 4,
+                    "delta": 2,
+                    "verdict": "worse",
+                    "baseRuns": [2],
+                    "headRuns": [4]
+                },
+                {
+                    "key": "turn.warm/view.kernel.project.calls",
+                    "base": 2,
+                    "head": 4,
+                    "delta": 2,
+                    "verdict": "worse",
+                    "baseRuns": [2],
+                    "headRuns": [4]
+                },
+                {
+                    "key": "turn.warm/view.kernel.sql.heads",
+                    "base": 2,
+                    "head": 4,
+                    "delta": 2,
+                    "verdict": "worse",
+                    "baseRuns": [2],
+                    "headRuns": [4]
+                },
+                {
+                    "key": "turn.warm/view.kernel.sql.attempts",
+                    "base": 4,
+                    "head": 8,
+                    "delta": 4,
+                    "verdict": "worse",
+                    "baseRuns": [4],
+                    "headRuns": [8]
+                },
+                {
+                    "key": "turn.warm/view.kernel.sql.command_inputs",
+                    "base": 3,
+                    "head": 4,
+                    "delta": 1,
+                    "verdict": "worse",
+                    "baseRuns": [3],
+                    "headRuns": [4]
+                },
+                {
+                    "key": "turn.warm/push.events",
+                    "base": 3,
+                    "head": 6,
+                    "delta": 3,
+                    "verdict": "worse",
+                    "baseRuns": [3],
+                    "headRuns": [6]
+                },
+                {
+                    "key": "turn.warm/push.bytes",
+                    "base": 13102,
+                    "head": 20342,
+                    "delta": 7240,
+                    "verdict": "worse",
+                    "baseRuns": [13102],
+                    "headRuns": [20342]
+                },
+                {
+                    "key": "turn.warm/push.view.count",
+                    "base": 2,
+                    "head": 4,
+                    "delta": 2,
+                    "verdict": "worse",
+                    "baseRuns": [2],
+                    "headRuns": [4]
+                },
+                {
+                    "key": "turn.warm/push.view.bytes",
+                    "base": 8656,
+                    "head": 11451,
+                    "delta": 2795,
+                    "verdict": "worse",
+                    "baseRuns": [8656],
+                    "headRuns": [11451]
+                },
+                {
+                    "key": "git.changes/json.stringify.chars",
+                    "base": 2539,
+                    "head": 3108,
+                    "delta": 569,
+                    "verdict": "worse",
+                    "baseRuns": [2539],
+                    "headRuns": [3108]
+                },
+                {
+                    "key": "web.open/push.events",
+                    "base": 10,
+                    "head": 11,
+                    "delta": 1,
+                    "verdict": "worse",
+                    "baseRuns": [10],
+                    "headRuns": [11]
+                },
+                {
+                    "key": "web.open/push.bytes",
+                    "base": 83736,
+                    "head": 83964,
+                    "delta": 228,
+                    "verdict": "worse",
+                    "baseRuns": [83736],
+                    "headRuns": [83964]
+                },
+                {
+                    "key": "web.open/push.view.bytes",
+                    "base": 76309,
+                    "head": 76333,
+                    "delta": 24,
+                    "verdict": "worse",
+                    "baseRuns": [76309],
+                    "headRuns": [76333]
+                },
+                {
+                    "key": "web.open/cdp.Nodes",
+                    "base": 972,
+                    "head": 1138,
+                    "delta": 166,
+                    "verdict": "worse",
+                    "baseRuns": [972],
+                    "headRuns": [1138]
+                },
+                {
+                    "key": "web.open/web.event.parse.calls",
+                    "base": 9,
+                    "head": 10,
+                    "delta": 1,
+                    "verdict": "worse",
+                    "baseRuns": [9],
+                    "headRuns": [10]
+                },
+                {
+                    "key": "web.open/web.event.parse.chars",
+                    "base": 82941,
+                    "head": 83141,
+                    "delta": 200,
+                    "verdict": "worse",
+                    "baseRuns": [82941],
+                    "headRuns": [83141]
+                },
+                {
+                    "key": "web.open.long/push.view.bytes",
+                    "base": 165859,
+                    "head": 165883,
+                    "delta": 24,
+                    "verdict": "worse",
+                    "baseRuns": [165859],
+                    "headRuns": [165883]
+                },
+                {
+                    "key": "web.open.long/http.requests",
+                    "base": 80,
+                    "head": 81,
+                    "delta": 1,
+                    "verdict": "worse",
+                    "baseRuns": [80],
+                    "headRuns": [81]
+                },
+                {
+                    "key": "web.open.long/cdp.Nodes",
+                    "base": 1585,
+                    "head": 1703,
+                    "delta": 118,
+                    "verdict": "worse",
+                    "baseRuns": [1585],
+                    "headRuns": [1703]
+                },
+                {
+                    "key": "web.open.long/web.event.parse.calls",
+                    "base": 8,
+                    "head": 9,
+                    "delta": 1,
+                    "verdict": "worse",
+                    "baseRuns": [8],
+                    "headRuns": [9]
+                },
+                {
+                    "key": "web.open.long/web.event.parse.chars",
+                    "base": 173290,
+                    "head": 173492,
+                    "delta": 202,
+                    "verdict": "worse",
+                    "baseRuns": [173290],
+                    "headRuns": [173492]
+                },
+                {
+                    "key": "native.warm/sql.rows",
+                    "base": 10,
+                    "head": 11,
+                    "delta": 1,
+                    "verdict": "worse",
+                    "baseRuns": [10],
+                    "headRuns": [11]
+                },
+                {
+                    "key": "web.reopen/push.events",
+                    "base": 9,
+                    "head": 10,
+                    "delta": 1,
+                    "verdict": "worse",
+                    "baseRuns": [9],
+                    "headRuns": [10]
+                },
+                {
+                    "key": "web.reopen/push.bytes",
+                    "base": 10313,
+                    "head": 10541,
+                    "delta": 228,
+                    "verdict": "worse",
+                    "baseRuns": [10313],
+                    "headRuns": [10541]
+                },
+                {
+                    "key": "web.reopen/push.view.bytes",
+                    "base": 2001,
+                    "head": 2025,
+                    "delta": 24,
+                    "verdict": "worse",
+                    "baseRuns": [2001],
+                    "headRuns": [2025]
+                },
+                {
+                    "key": "web.reopen/cdp.Nodes",
+                    "base": 1090,
+                    "head": 1232,
+                    "delta": 142,
+                    "verdict": "worse",
+                    "baseRuns": [1090],
+                    "headRuns": [1232]
+                },
+                {
+                    "key": "web.reopen/web.event.parse.calls",
+                    "base": 8,
+                    "head": 9,
+                    "delta": 1,
+                    "verdict": "worse",
+                    "baseRuns": [8],
+                    "headRuns": [9]
+                },
+                {
+                    "key": "web.reopen/web.event.parse.chars",
+                    "base": 9527,
+                    "head": 9727,
+                    "delta": 200,
+                    "verdict": "worse",
+                    "baseRuns": [9527],
+                    "headRuns": [9727]
+                },
+                {
+                    "key": "web.paced/cdp.Nodes",
+                    "base": 1294,
+                    "head": 1412,
+                    "delta": 118,
+                    "verdict": "worse",
+                    "baseRuns": [1294],
+                    "headRuns": [1412]
+                },
+                {
+                    "key": "web.send.poll/cdp.Nodes",
+                    "base": 1481,
+                    "head": 1614,
+                    "delta": 133,
+                    "verdict": "worse",
+                    "baseRuns": [1481],
+                    "headRuns": [1614]
+                },
+                {
+                    "key": "web.send.stream/push.bytes",
+                    "base": 91291,
+                    "head": 91804,
+                    "delta": 513,
+                    "verdict": "worse",
+                    "baseRuns": [91291],
+                    "headRuns": [91804]
+                },
+                {
+                    "key": "web.send.stream/push.view.bytes",
+                    "base": 77497,
+                    "head": 77986,
+                    "delta": 489,
+                    "verdict": "worse",
+                    "baseRuns": [77497],
+                    "headRuns": [77986]
+                },
+                {
+                    "key": "web.send.stream/cdp.Nodes",
+                    "base": 1492,
+                    "head": 1628,
+                    "delta": 136,
+                    "verdict": "worse",
+                    "baseRuns": [1492],
+                    "headRuns": [1628]
+                },
+                {
+                    "key": "web.send.stream/web.event.parse.chars",
+                    "base": 30133,
+                    "head": 30445,
+                    "delta": 312,
+                    "verdict": "worse",
+                    "baseRuns": [30133],
+                    "headRuns": [30445]
+                },
+                {
+                    "key": "projection.large.paced/push.bytes",
+                    "base": 245028,
+                    "head": 250628,
+                    "delta": 5600,
+                    "verdict": "worse",
+                    "baseRuns": [245028],
+                    "headRuns": [250628]
+                },
+                {
+                    "key": "projection.large.paced/push.view.bytes",
+                    "base": 203656,
+                    "head": 209256,
+                    "delta": 5600,
+                    "verdict": "worse",
+                    "baseRuns": [203656],
+                    "headRuns": [209256]
+                },
+                {
+                    "key": "changes.poll.images/json.stringify.chars",
+                    "base": 20346,
+                    "head": 20396,
+                    "delta": 50,
+                    "verdict": "worse",
+                    "baseRuns": [20346],
+                    "headRuns": [20396]
+                },
+                {
+                    "key": "assets.first/http.requests",
+                    "base": 53,
+                    "head": 54,
+                    "delta": 1,
+                    "verdict": "worse",
+                    "baseRuns": [53],
+                    "headRuns": [54]
+                },
+                {
+                    "key": "assets.validated/http.requests",
+                    "base": 53,
+                    "head": 54,
+                    "delta": 1,
+                    "verdict": "worse",
+                    "baseRuns": [53],
+                    "headRuns": [54]
+                }
+            ],
+            "slower": [
+                {
+                    "key": "startup.restart/ms",
+                    "base": 77.4,
+                    "head": 100.1,
+                    "change": 0.293,
+                    "verdict": "slower",
+                    "baseRuns": [77.4],
+                    "headRuns": [100.1]
+                },
+                {
+                    "key": "sessions.list/ms",
+                    "base": 8.6,
+                    "head": 16.3,
+                    "change": 0.895,
+                    "verdict": "slower",
+                    "baseRuns": [8.6],
+                    "headRuns": [16.3]
+                },
+                {
+                    "key": "session.open/ms",
+                    "base": 38.5,
+                    "head": 53.7,
+                    "change": 0.395,
+                    "verdict": "slower",
+                    "baseRuns": [38.5],
+                    "headRuns": [53.7]
+                },
+                {
+                    "key": "session.open/roomLiveProjectMs",
+                    "base": 0.1,
+                    "head": 0.2,
+                    "change": 1,
+                    "verdict": "slower",
+                    "baseRuns": [0.1],
+                    "headRuns": [0.2]
+                },
+                {
+                    "key": "session.open/roomKernelProjectMs",
+                    "base": 1.1,
+                    "head": 1.4,
+                    "change": 0.273,
+                    "verdict": "slower",
+                    "baseRuns": [1.1],
+                    "headRuns": [1.4]
+                },
+                {
+                    "key": "turn.cold/nativeStartResourcesMs",
+                    "base": 63.1,
+                    "head": 82.6,
+                    "change": 0.309,
+                    "verdict": "slower",
+                    "baseRuns": [63.1],
+                    "headRuns": [82.6]
+                },
+                {
+                    "key": "turn.cold/nativeStartRpcSpawnMs",
+                    "base": 0.6,
+                    "head": 1,
+                    "change": 0.667,
+                    "verdict": "slower",
+                    "baseRuns": [0.6],
+                    "headRuns": [1]
+                },
+                {
+                    "key": "turn.warm/ms",
+                    "base": 88.8,
+                    "head": 504.9,
+                    "change": 4.686,
+                    "verdict": "slower",
+                    "baseRuns": [88.8],
+                    "headRuns": [504.9]
+                },
+                {
+                    "key": "turn.warm/roomKernelProjectMs",
+                    "base": 0.4,
+                    "head": 0.5,
+                    "change": 0.25,
+                    "verdict": "slower",
+                    "baseRuns": [0.4],
+                    "headRuns": [0.5]
+                },
+                {
+                    "key": "git.changes/ms",
+                    "base": 157.9,
+                    "head": 202.1,
+                    "change": 0.28,
+                    "verdict": "slower",
+                    "baseRuns": [157.9],
+                    "headRuns": [202.1]
+                },
+                {
+                    "key": "web.open/viewApplyMs",
+                    "base": 0.1,
+                    "head": 0.3,
+                    "change": 2,
+                    "verdict": "slower",
+                    "baseRuns": [0.1],
+                    "headRuns": [0.3]
+                },
+                {
+                    "key": "session.open.long/ms",
+                    "base": 16.5,
+                    "head": 26.8,
+                    "change": 0.624,
+                    "verdict": "slower",
+                    "baseRuns": [16.5],
+                    "headRuns": [26.8]
+                },
+                {
+                    "key": "web.open.long/viewApplyMs",
+                    "base": 0.2,
+                    "head": 0.3,
+                    "change": 0.5,
+                    "verdict": "slower",
+                    "baseRuns": [0.2],
+                    "headRuns": [0.3]
+                },
+                {
+                    "key": "native.warm/nativeStartRpcSpawnMs",
+                    "base": 1.3,
+                    "head": 3.1,
+                    "change": 1.385,
+                    "verdict": "slower",
+                    "baseRuns": [1.3],
+                    "headRuns": [3.1]
+                },
+                {
+                    "key": "web.paced/viewApplyMs",
+                    "base": 0.8,
+                    "head": 2.1,
+                    "change": 1.625,
+                    "verdict": "slower",
+                    "baseRuns": [0.8],
+                    "headRuns": [2.1]
+                },
+                {
+                    "key": "web.send.poll/submitSentMs",
+                    "base": 2.9,
+                    "head": 4.2,
+                    "change": 0.448,
+                    "verdict": "slower",
+                    "baseRuns": [2.9],
+                    "headRuns": [4.2]
+                },
+                {
+                    "key": "web.send.poll/submitAnsweredMs",
+                    "base": 19,
+                    "head": 23,
+                    "change": 0.211,
+                    "verdict": "slower",
+                    "baseRuns": [19],
+                    "headRuns": [23]
+                },
+                {
+                    "key": "web.send.poll/runAdmittedMs",
+                    "base": 8.7,
+                    "head": 10.7,
+                    "change": 0.23,
+                    "verdict": "slower",
+                    "baseRuns": [8.7],
+                    "headRuns": [10.7]
+                },
+                {
+                    "key": "web.send.poll/userEchoedMs",
+                    "base": 7.7,
+                    "head": 21,
+                    "change": 1.727,
+                    "verdict": "slower",
+                    "baseRuns": [7.7],
+                    "headRuns": [21]
+                },
+                {
+                    "key": "web.send.poll/scriptMs",
+                    "base": 32.7,
+                    "head": 40.4,
+                    "change": 0.235,
+                    "verdict": "slower",
+                    "baseRuns": [32.7],
+                    "headRuns": [40.4]
+                },
+                {
+                    "key": "web.send.stream/submitAnsweredMs",
+                    "base": 29.8,
+                    "head": 36.1,
+                    "change": 0.211,
+                    "verdict": "slower",
+                    "baseRuns": [29.8],
+                    "headRuns": [36.1]
+                },
+                {
+                    "key": "web.send.stream/promptDispatchedMs",
+                    "base": 45.9,
+                    "head": 60.6,
+                    "change": 0.32,
+                    "verdict": "slower",
+                    "baseRuns": [45.9],
+                    "headRuns": [60.6]
+                },
+                {
+                    "key": "web.send.stream/userEchoedMs",
+                    "base": 8,
+                    "head": 31.7,
+                    "change": 2.963,
+                    "verdict": "slower",
+                    "baseRuns": [8],
+                    "headRuns": [31.7]
+                },
+                {
+                    "key": "web.send.stream/clockUncertaintyMs",
+                    "base": 0.6,
+                    "head": 0.8,
+                    "change": 0.333,
+                    "verdict": "slower",
+                    "baseRuns": [0.6],
+                    "headRuns": [0.8]
+                },
+                {
+                    "key": "commands.discover.cold/nativeStartVerifyMs",
+                    "base": 0.9,
+                    "head": 1.6,
+                    "change": 0.778,
+                    "verdict": "slower",
+                    "baseRuns": [0.9],
+                    "headRuns": [1.6]
+                },
+                {
+                    "key": "commands.discover.cold/nativeStartRpcSpawnMs",
+                    "base": 0.8,
+                    "head": 1.8,
+                    "change": 1.25,
+                    "verdict": "slower",
+                    "baseRuns": [0.8],
+                    "headRuns": [1.8]
+                },
+                {
+                    "key": "projection.large.open/ms",
+                    "base": 55,
+                    "head": 68.2,
+                    "change": 0.24,
+                    "verdict": "slower",
+                    "baseRuns": [55],
+                    "headRuns": [68.2]
+                },
+                {
+                    "key": "image.single/imageLookupMs",
+                    "base": 2.4,
+                    "head": 3.2,
+                    "change": 0.333,
+                    "verdict": "slower",
+                    "baseRuns": [2.4],
+                    "headRuns": [3.2]
+                },
+                {
+                    "key": "image.single/imageDecodeMs",
+                    "base": 0.2,
+                    "head": 0.3,
+                    "change": 0.5,
+                    "verdict": "slower",
+                    "baseRuns": [0.2],
+                    "headRuns": [0.3]
+                },
+                {
+                    "key": "image.single/imageSendFinishMs",
+                    "base": 4,
+                    "head": 7.6,
+                    "change": 0.9,
+                    "verdict": "slower",
+                    "baseRuns": [4],
+                    "headRuns": [7.6]
+                },
+                {
+                    "key": "image.single/imageServerMs",
+                    "base": 12.7,
+                    "head": 17.3,
+                    "change": 0.362,
+                    "verdict": "slower",
+                    "baseRuns": [12.7],
+                    "headRuns": [17.3]
+                },
+                {
+                    "key": "image.single/imageClientMs",
+                    "base": 16.6,
+                    "head": 20.1,
+                    "change": 0.211,
+                    "verdict": "slower",
+                    "baseRuns": [16.6],
+                    "headRuns": [20.1]
+                },
+                {
+                    "key": "image.original.again/ms",
+                    "base": 31.3,
+                    "head": 75.5,
+                    "change": 1.412,
+                    "verdict": "slower",
+                    "baseRuns": [31.3],
+                    "headRuns": [75.5]
+                }
+            ]
+        }
+    },
+    "diagnostics": {
+        "naturalWarm": [
+            {
+                "side": "base",
+                "run": 1,
+                "ms": 101.3135000000002,
+                "views": 2,
+                "maxParentLoopDelayMs": 20.971519,
+                "dispatchMs": 66.67054199999984,
+                "firstOutputMs": 19.692290999999386
+            },
+            {
+                "side": "head",
+                "run": 1,
+                "ms": 85.88425000000097,
+                "views": 2,
+                "maxParentLoopDelayMs": 13.910015,
+                "dispatchMs": 56.13712499999929,
+                "firstOutputMs": 19.408167000001413
+            },
+            {
+                "side": "base",
+                "run": 2,
+                "ms": 95.04333299999962,
+                "views": 2,
+                "maxParentLoopDelayMs": 18.677759,
+                "dispatchMs": 58.957540999999765,
+                "firstOutputMs": 20.940167000000656
+            },
+            {
+                "side": "head",
+                "run": 2,
+                "ms": 71.52620799999931,
+                "views": 2,
+                "maxParentLoopDelayMs": 16.031743,
+                "dispatchMs": 43.73366700000042,
+                "firstOutputMs": 14.762541999998575
+            },
+            {
+                "side": "base",
+                "run": 3,
+                "ms": 74.02837499999987,
+                "views": 2,
+                "maxParentLoopDelayMs": 16.646143,
+                "dispatchMs": 45.42604199999914,
+                "firstOutputMs": 14.642416000000594
+            },
+            {
+                "side": "head",
+                "run": 3,
+                "ms": 84.08845800000017,
+                "views": 2,
+                "maxParentLoopDelayMs": 16.375807,
+                "dispatchMs": 57.16045899999881,
+                "firstOutputMs": 18.26683299999968
+            },
+            {
+                "side": "base",
+                "run": 4,
+                "ms": 92.13925000000017,
+                "views": 2,
+                "maxParentLoopDelayMs": 15.925247,
+                "dispatchMs": 58.56166699999994,
+                "firstOutputMs": 20.77745800000048
+            },
+            {
+                "side": "head",
+                "run": 4,
+                "ms": 89.86200000000099,
+                "views": 2,
+                "maxParentLoopDelayMs": 13.475839,
+                "dispatchMs": 57.26075000000128,
+                "firstOutputMs": 18.51574999999866
+            },
+            {
+                "side": "base",
+                "run": 5,
+                "ms": 92.29137499999888,
+                "views": 2,
+                "maxParentLoopDelayMs": 17.743871,
+                "dispatchMs": 57.190082999999504,
+                "firstOutputMs": 19.850584000001618
+            },
+            {
+                "side": "head",
+                "run": 5,
+                "ms": 88.95745900000111,
+                "views": 2,
+                "maxParentLoopDelayMs": 16.490495,
+                "dispatchMs": 56.90108400000099,
+                "firstOutputMs": 19.03166599999895
+            }
+        ],
+        "controlledWarm": [
+            {
+                "side": "base",
+                "run": 1,
+                "ms": 117.50779200000034,
+                "views": 3,
+                "viewBytes": 10202,
+                "sql": 173,
+                "rows": 131,
+                "parses": 153,
+                "maxParentLoopDelayMs": 11.476991,
+                "events": [
+                    {
+                        "at": 21.32787499999904,
+                        "kind": "view",
+                        "full": false,
+                        "entries": 0,
+                        "fields": [],
+                        "kernel": {
+                            "initializing": false,
+                            "pending": {
+                                "status": "dispatch-intent",
+                                "phase": "execution"
+                            }
+                        },
+                        "live": {
+                            "busy": true,
+                            "generation": false
+                        }
+                    },
+                    {
+                        "at": 30.17924999999923,
+                        "kind": "parent-gc",
+                        "start": 29.758457999998427,
+                        "duration": 0.28345775604248047,
+                        "detail": {
+                            "kind": 8,
+                            "flags": 0
+                        }
+                    },
+                    {
+                        "at": 45.910249999998996,
+                        "kind": "parent-gc",
+                        "start": 44.27558299999873,
+                        "duration": 1.5286250114440918,
+                        "detail": {
+                            "kind": 4,
+                            "flags": 64
+                        }
+                    },
+                    {
+                        "at": 56.96662499999911,
+                        "kind": "gate-request"
+                    },
+                    {
+                        "at": 57.104582999998456,
+                        "kind": "authorize-start",
+                        "operation": "inference"
+                    },
+                    {
+                        "at": 57.19104100000004,
+                        "kind": "authorize-end",
+                        "operation": "inference"
+                    },
+                    {
+                        "at": 57.31933299999946,
+                        "kind": "gate-finished",
+                        "status": 200
+                    },
+                    {
+                        "at": 62.97216599999956,
+                        "kind": "model-request"
+                    },
+                    {
+                        "at": 63.242457999998805,
+                        "kind": "model-body-read"
+                    },
+                    {
+                        "at": 63.78600000000006,
+                        "kind": "controlled-hold",
+                        "state": "live"
+                    },
+                    {
+                        "at": 107.0802079999994,
+                        "kind": "controlled-release",
+                        "state": "live"
+                    },
+                    {
+                        "at": 107.08624999999847,
+                        "kind": "view",
+                        "full": false,
+                        "entries": 1,
+                        "order": 3,
+                        "fields": [],
+                        "kernel": {
+                            "initializing": false,
+                            "pending": {
+                                "status": "dispatch-intent",
+                                "phase": "execution"
+                            }
+                        },
+                        "live": {
+                            "busy": true,
+                            "generation": true
+                        }
+                    },
+                    {
+                        "at": 107.296957999999,
+                        "kind": "model-response-finished"
+                    },
+                    {
+                        "at": 115.91629099999955,
+                        "kind": "kernel-run",
+                        "ms": 109.95579199999884,
+                        "outcome": "prompt:settled",
+                        "prompt": {
+                            "process": "reused",
+                            "dispatchMs": 44.8062919999993,
+                            "firstOutputMs": 14.295583000000988,
+                            "toolMs": 0,
+                            "tools": 0
+                        }
+                    },
+                    {
+                        "at": 197.7379579999997,
+                        "kind": "view",
+                        "full": false,
+                        "entries": 1,
+                        "order": 4,
+                        "fields": [],
+                        "kernel": {
+                            "initializing": false,
+                            "pending": null
+                        },
+                        "live": {
+                            "busy": false,
+                            "generation": false
+                        }
+                    }
+                ]
+            },
+            {
+                "side": "head",
+                "run": 1,
+                "ms": 118.50754199999938,
+                "views": 3,
+                "viewBytes": 10202,
+                "sql": 159,
+                "rows": 119,
+                "parses": 151,
+                "maxParentLoopDelayMs": 15.138815,
+                "events": [
+                    {
+                        "at": 26.670125000000553,
+                        "kind": "view",
+                        "full": false,
+                        "entries": 0,
+                        "fields": [],
+                        "kernel": {
+                            "initializing": false,
+                            "pending": {
+                                "status": "dispatch-intent",
+                                "phase": "execution"
+                            }
+                        },
+                        "live": {
+                            "busy": true,
+                            "generation": false
+                        }
+                    },
+                    {
+                        "at": 42.130166999999346,
+                        "kind": "parent-gc",
+                        "start": 41.455792000000656,
+                        "duration": 0.4246249198913574,
+                        "detail": {
+                            "kind": 8,
+                            "flags": 0
+                        }
+                    },
+                    {
+                        "at": 65.30254199999945,
+                        "kind": "parent-gc",
+                        "start": 62.889250000000175,
+                        "duration": 2.301332950592041,
+                        "detail": {
+                            "kind": 4,
+                            "flags": 64
+                        }
+                    },
+                    {
+                        "at": 81.3286250000001,
+                        "kind": "gate-request"
+                    },
+                    {
+                        "at": 81.50012500000048,
+                        "kind": "authorize-start",
+                        "operation": "inference"
+                    },
+                    {
+                        "at": 81.6009580000009,
+                        "kind": "authorize-end",
+                        "operation": "inference"
+                    },
+                    {
+                        "at": 81.75799999999981,
+                        "kind": "gate-finished",
+                        "status": 200
+                    },
+                    {
+                        "at": 88.74712499999987,
+                        "kind": "model-request"
+                    },
+                    {
+                        "at": 88.8330420000002,
+                        "kind": "model-body-read"
+                    },
+                    {
+                        "at": 89.08320800000001,
+                        "kind": "controlled-hold",
+                        "state": "live"
+                    },
+                    {
+                        "at": 110.74424999999974,
+                        "kind": "controlled-release",
+                        "state": "live"
+                    },
+                    {
+                        "at": 110.75029200000063,
+                        "kind": "view",
+                        "full": false,
+                        "entries": 1,
+                        "order": 3,
+                        "fields": [],
+                        "kernel": {
+                            "initializing": false,
+                            "pending": {
+                                "status": "dispatch-intent",
+                                "phase": "execution"
+                            }
+                        },
+                        "live": {
+                            "busy": true,
+                            "generation": true
+                        }
+                    },
+                    {
+                        "at": 110.9828749999997,
+                        "kind": "model-response-finished"
+                    },
+                    {
+                        "at": 118.09725000000071,
+                        "kind": "kernel-run",
+                        "ms": 107.94225000000006,
+                        "outcome": "prompt:settled",
+                        "prompt": {
+                            "process": "reused",
+                            "dispatchMs": 62.10950000000048,
+                            "firstOutputMs": 17.7639169999984,
+                            "toolMs": 0,
+                            "tools": 0
+                        }
+                    },
+                    {
+                        "at": 201.1493329999994,
+                        "kind": "view",
+                        "full": false,
+                        "entries": 1,
+                        "order": 4,
+                        "fields": [],
+                        "kernel": {
+                            "initializing": false,
+                            "pending": null
+                        },
+                        "live": {
+                            "busy": false,
+                            "generation": false
+                        }
+                    }
+                ]
+            },
+            {
+                "side": "base",
+                "run": 2,
+                "ms": 114.19770900000003,
+                "views": 3,
+                "viewBytes": 10202,
+                "sql": 173,
+                "rows": 131,
+                "parses": 153,
+                "maxParentLoopDelayMs": 18.923519,
+                "events": [
+                    {
+                        "at": 21.65137499999946,
+                        "kind": "view",
+                        "full": false,
+                        "entries": 0,
+                        "fields": [],
+                        "kernel": {
+                            "initializing": false,
+                            "pending": {
+                                "status": "dispatch-intent",
+                                "phase": "execution"
+                            }
+                        },
+                        "live": {
+                            "busy": true,
+                            "generation": false
+                        }
+                    },
+                    {
+                        "at": 30.780041999998502,
+                        "kind": "parent-gc",
+                        "start": 30.38066699999945,
+                        "duration": 0.2685408592224121,
+                        "detail": {
+                            "kind": 8,
+                            "flags": 0
+                        }
+                    },
+                    {
+                        "at": 54.102999999999156,
+                        "kind": "parent-gc",
+                        "start": 51.20691699999952,
+                        "duration": 2.7598328590393066,
+                        "detail": {
+                            "kind": 4,
+                            "flags": 64
+                        }
+                    },
+                    {
+                        "at": 69.6661669999994,
+                        "kind": "gate-request"
+                    },
+                    {
+                        "at": 69.83729199999834,
+                        "kind": "authorize-start",
+                        "operation": "inference"
+                    },
+                    {
+                        "at": 69.9477079999997,
+                        "kind": "authorize-end",
+                        "operation": "inference"
+                    },
+                    {
+                        "at": 70.1154579999984,
+                        "kind": "gate-finished",
+                        "status": 200
+                    },
+                    {
+                        "at": 77.71191699999872,
+                        "kind": "model-request"
+                    },
+                    {
+                        "at": 78.15366699999868,
+                        "kind": "model-body-read"
+                    },
+                    {
+                        "at": 78.57387500000004,
+                        "kind": "controlled-hold",
+                        "state": "live"
+                    },
+                    {
+                        "at": 107.14845799999966,
+                        "kind": "controlled-release",
+                        "state": "live"
+                    },
+                    {
+                        "at": 107.15529199999946,
+                        "kind": "view",
+                        "full": false,
+                        "entries": 1,
+                        "order": 3,
+                        "fields": [],
+                        "kernel": {
+                            "initializing": false,
+                            "pending": {
+                                "status": "dispatch-intent",
+                                "phase": "execution"
+                            }
+                        },
+                        "live": {
+                            "busy": true,
+                            "generation": true
+                        }
+                    },
+                    {
+                        "at": 107.43708299999889,
+                        "kind": "model-response-finished"
+                    },
+                    {
+                        "at": 113.27091699999983,
+                        "kind": "kernel-run",
+                        "ms": 106.72454199999993,
+                        "outcome": "prompt:settled",
+                        "prompt": {
+                            "process": "reused",
+                            "dispatchMs": 53.80291699999907,
+                            "firstOutputMs": 19.504375000000437,
+                            "toolMs": 0,
+                            "tools": 0
+                        }
+                    },
+                    {
+                        "at": 196.45783299999857,
+                        "kind": "view",
+                        "full": false,
+                        "entries": 1,
+                        "order": 4,
+                        "fields": [],
+                        "kernel": {
+                            "initializing": false,
+                            "pending": null
+                        },
+                        "live": {
+                            "busy": false,
+                            "generation": false
+                        }
+                    }
+                ]
+            },
+            {
+                "side": "head",
+                "run": 2,
+                "ms": 274.8696660000005,
+                "views": 4,
+                "viewBytes": 13327,
+                "sql": 168,
+                "rows": 127,
+                "parses": 156,
+                "maxParentLoopDelayMs": 14.622719,
+                "events": [
+                    {
+                        "at": 23.881875000000946,
+                        "kind": "view",
+                        "full": false,
+                        "entries": 0,
+                        "fields": [],
+                        "kernel": {
+                            "initializing": false,
+                            "pending": {
+                                "status": "dispatch-intent",
+                                "phase": "execution"
+                            }
+                        },
+                        "live": {
+                            "busy": true,
+                            "generation": false
+                        }
+                    },
+                    {
+                        "at": 31.811666000001424,
+                        "kind": "parent-gc",
+                        "start": 31.325541000000158,
+                        "duration": 0.33870887756347656,
+                        "detail": {
+                            "kind": 8,
+                            "flags": 0
+                        }
+                    },
+                    {
+                        "at": 41.68262500000128,
+                        "kind": "parent-gc",
+                        "start": 39.80933300000106,
+                        "duration": 1.7557916641235352,
+                        "detail": {
+                            "kind": 4,
+                            "flags": 64
+                        }
+                    },
+                    {
+                        "at": 53.647249999999985,
+                        "kind": "gate-request"
+                    },
+                    {
+                        "at": 53.77662500000042,
+                        "kind": "authorize-start",
+                        "operation": "inference"
+                    },
+                    {
+                        "at": 53.853416000001744,
+                        "kind": "authorize-end",
+                        "operation": "inference"
+                    },
+                    {
+                        "at": 53.97320800000125,
+                        "kind": "gate-finished",
+                        "status": 200
+                    },
+                    {
+                        "at": 59.64408300000105,
+                        "kind": "model-request"
+                    },
+                    {
+                        "at": 60.06608300000153,
+                        "kind": "model-body-read"
+                    },
+                    {
+                        "at": 60.34416600000077,
+                        "kind": "controlled-hold",
+                        "state": "live"
+                    },
+                    {
+                        "at": 111.53600000000006,
+                        "kind": "controlled-release",
+                        "state": "live"
+                    },
+                    {
+                        "at": 111.5418750000008,
+                        "kind": "view",
+                        "full": false,
+                        "entries": 1,
+                        "order": 3,
+                        "fields": [],
+                        "kernel": {
+                            "initializing": false,
+                            "pending": {
+                                "status": "dispatch-intent",
+                                "phase": "execution"
+                            }
+                        },
+                        "live": {
+                            "busy": true,
+                            "generation": true
+                        }
+                    },
+                    {
+                        "at": 111.76616600000125,
+                        "kind": "model-response-finished"
+                    },
+                    {
+                        "at": 271.1115830000017,
+                        "kind": "view",
+                        "full": false,
+                        "entries": 0,
+                        "fields": [],
+                        "kernel": {
+                            "initializing": false,
+                            "pending": {
+                                "status": "dispatch-intent",
+                                "phase": "execution"
+                            }
+                        },
+                        "live": {
+                            "busy": true,
+                            "generation": true
+                        }
+                    },
+                    {
+                        "at": 274.2672910000001,
+                        "kind": "kernel-run",
+                        "ms": 264.712042000001,
+                        "outcome": "prompt:settled",
+                        "prompt": {
+                            "process": "reused",
+                            "dispatchMs": 37.909459000000425,
+                            "firstOutputMs": 13.887624999999389,
+                            "toolMs": 0,
+                            "tools": 0
+                        }
+                    },
+                    {
+                        "at": 361.3922910000001,
+                        "kind": "view",
+                        "full": false,
+                        "entries": 1,
+                        "order": 4,
+                        "fields": [],
+                        "kernel": {
+                            "initializing": false,
+                            "pending": null
+                        },
+                        "live": {
+                            "busy": false,
+                            "generation": false
+                        }
+                    }
+                ]
+            },
+            {
+                "side": "base",
+                "run": 3,
+                "ms": 327.634,
+                "views": 5,
+                "viewBytes": 12700,
+                "sql": 201,
+                "rows": 155,
+                "parses": 165,
+                "maxParentLoopDelayMs": 18.579455,
+                "events": [
+                    {
+                        "at": 20.280416999999943,
+                        "kind": "view",
+                        "full": false,
+                        "entries": 0,
+                        "fields": [],
+                        "kernel": {
+                            "initializing": false,
+                            "pending": {
+                                "status": "dispatch-intent",
+                                "phase": "execution"
+                            }
+                        },
+                        "live": {
+                            "busy": true,
+                            "generation": false
+                        }
+                    },
+                    {
+                        "at": 32.391083999998955,
+                        "kind": "parent-gc",
+                        "start": 31.362584000000425,
+                        "duration": 0.647249698638916,
+                        "detail": {
+                            "kind": 8,
+                            "flags": 0
+                        }
+                    },
+                    {
+                        "at": 52.133834000000206,
+                        "kind": "parent-gc",
+                        "start": 48.55708400000003,
+                        "duration": 3.4039578437805176,
+                        "detail": {
+                            "kind": 4,
+                            "flags": 40
+                        }
+                    },
+                    {
+                        "at": 103.64966699999968,
+                        "kind": "view",
+                        "full": false,
+                        "entries": 0,
+                        "fields": [],
+                        "kernel": {
+                            "initializing": false,
+                            "pending": {
+                                "status": "dispatch-intent",
+                                "phase": "execution"
+                            }
+                        },
+                        "live": {
+                            "busy": true,
+                            "generation": false
+                        }
+                    },
+                    {
+                        "at": 231.45437499999935,
+                        "kind": "gate-request"
+                    },
+                    {
+                        "at": 231.56662499999948,
+                        "kind": "authorize-start",
+                        "operation": "inference"
+                    },
+                    {
+                        "at": 231.65287499999977,
+                        "kind": "authorize-end",
+                        "operation": "inference"
+                    },
+                    {
+                        "at": 231.77470899999935,
+                        "kind": "gate-finished",
+                        "status": 200
+                    },
+                    {
+                        "at": 232.40549999999894,
+                        "kind": "view",
+                        "full": false,
+                        "entries": 1,
+                        "order": 3,
+                        "fields": [],
+                        "kernel": {
+                            "initializing": false,
+                            "pending": {
+                                "status": "dispatch-intent",
+                                "phase": "execution"
+                            }
+                        },
+                        "live": {
+                            "busy": true,
+                            "generation": false
+                        }
+                    },
+                    {
+                        "at": 237.1090839999997,
+                        "kind": "model-request"
+                    },
+                    {
+                        "at": 237.20724999999948,
+                        "kind": "model-body-read"
+                    },
+                    {
+                        "at": 237.41499999999905,
+                        "kind": "controlled-hold",
+                        "state": "live"
+                    },
+                    {
+                        "at": 321.41191699999945,
+                        "kind": "controlled-release",
+                        "state": "live"
+                    },
+                    {
+                        "at": 321.42083399999865,
+                        "kind": "view",
+                        "full": false,
+                        "entries": 0,
+                        "fields": [],
+                        "kernel": {
+                            "initializing": false,
+                            "pending": {
+                                "status": "dispatch-intent",
+                                "phase": "execution"
+                            }
+                        },
+                        "live": {
+                            "busy": true,
+                            "generation": true
+                        }
+                    },
+                    {
+                        "at": 321.6777499999989,
+                        "kind": "model-response-finished"
+                    },
+                    {
+                        "at": 326.8678749999999,
+                        "kind": "kernel-run",
+                        "ms": 319.83150000000023,
+                        "outcome": "prompt:settled",
+                        "prompt": {
+                            "process": "reused",
+                            "dispatchMs": 52.42662500000006,
+                            "firstOutputMs": 178.74908400000095,
+                            "toolMs": 0,
+                            "tools": 0
+                        }
+                    },
+                    {
+                        "at": 410.9500420000004,
+                        "kind": "view",
+                        "full": false,
+                        "entries": 1,
+                        "order": 4,
+                        "fields": [],
+                        "kernel": {
+                            "initializing": false,
+                            "pending": null
+                        },
+                        "live": {
+                            "busy": false,
+                            "generation": false
+                        }
+                    }
+                ]
+            },
+            {
+                "side": "head",
+                "run": 3,
+                "ms": 250.49491599999965,
+                "views": 4,
+                "viewBytes": 11451,
+                "sql": 168,
+                "rows": 127,
+                "parses": 156,
+                "maxParentLoopDelayMs": 17.596415,
+                "events": [
+                    {
+                        "at": 28.487667000001238,
+                        "kind": "view",
+                        "full": false,
+                        "entries": 0,
+                        "fields": [],
+                        "kernel": {
+                            "initializing": false,
+                            "pending": {
+                                "status": "dispatch-intent",
+                                "phase": "execution"
+                            }
+                        },
+                        "live": {
+                            "busy": true,
+                            "generation": false
+                        }
+                    },
+                    {
+                        "at": 36.670625000000655,
+                        "kind": "parent-gc",
+                        "start": 36.177959000000556,
+                        "duration": 0.3111252784729004,
+                        "detail": {
+                            "kind": 8,
+                            "flags": 0
+                        }
+                    },
+                    {
+                        "at": 54.26729200000045,
+                        "kind": "parent-gc",
+                        "start": 51.646334000000934,
+                        "duration": 2.486374855041504,
+                        "detail": {
+                            "kind": 4,
+                            "flags": 64
+                        }
+                    },
+                    {
+                        "at": 70.81895900000018,
+                        "kind": "gate-request"
+                    },
+                    {
+                        "at": 71.01183400000082,
+                        "kind": "authorize-start",
+                        "operation": "inference"
+                    },
+                    {
+                        "at": 71.13545900000099,
+                        "kind": "authorize-end",
+                        "operation": "inference"
+                    },
+                    {
+                        "at": 71.32058400000096,
+                        "kind": "gate-finished",
+                        "status": 200
+                    },
+                    {
+                        "at": 110.68308400000024,
+                        "kind": "view",
+                        "full": false,
+                        "entries": 1,
+                        "order": 3,
+                        "fields": [],
+                        "kernel": {
+                            "initializing": false,
+                            "pending": {
+                                "status": "dispatch-intent",
+                                "phase": "execution"
+                            }
+                        },
+                        "live": {
+                            "busy": true,
+                            "generation": false
+                        }
+                    },
+                    {
+                        "at": 242.127625000001,
+                        "kind": "model-request"
+                    },
+                    {
+                        "at": 242.21237500000097,
+                        "kind": "model-body-read"
+                    },
+                    {
+                        "at": 242.421875,
+                        "kind": "controlled-hold",
+                        "state": "live"
+                    },
+                    {
+                        "at": 245.953042000001,
+                        "kind": "controlled-release",
+                        "state": "live"
+                    },
+                    {
+                        "at": 245.95537500000137,
+                        "kind": "view",
+                        "full": false,
+                        "entries": 0,
+                        "fields": [],
+                        "kernel": {
+                            "initializing": false,
+                            "pending": {
+                                "status": "dispatch-intent",
+                                "phase": "execution"
+                            }
+                        },
+                        "live": {
+                            "busy": true,
+                            "generation": true
+                        }
+                    },
+                    {
+                        "at": 246.11341700000048,
+                        "kind": "model-response-finished"
+                    },
+                    {
+                        "at": 250.0643340000006,
+                        "kind": "kernel-run",
+                        "ms": 238.18270800000028,
+                        "outcome": "prompt:settled",
+                        "prompt": {
+                            "process": "reused",
+                            "dispatchMs": 49.50916700000016,
+                            "firstOutputMs": 181.87129099999947,
+                            "toolMs": 0,
+                            "tools": 0
+                        }
+                    },
+                    {
+                        "at": 337.42204200000015,
+                        "kind": "view",
+                        "full": false,
+                        "entries": 1,
+                        "order": 4,
+                        "fields": [],
+                        "kernel": {
+                            "initializing": false,
+                            "pending": null
+                        },
+                        "live": {
+                            "busy": false,
+                            "generation": false
+                        }
+                    }
+                ]
+            }
+        ],
+        "remaining": [
+            {
+                "side": "base",
+                "run": 1,
+                "counts": {
+                    "fs": 25,
+                    "durable": 18,
+                    "chars": 1122,
+                    "layouts": 18
+                },
+                "parseShapes": {
+                    "pocket.sessions/75": 6,
+                    "id/11": 8,
+                    "pocket.authors/141": 2,
+                    "rotom-team.native-mirror/151": 2
+                },
+                "mirror": [
+                    {
+                        "at": 88.176667000007,
+                        "kind": "mirror-start"
+                    },
+                    {
+                        "at": 88.57454200000211,
+                        "kind": "mirror-read",
+                        "mirrored": 0,
+                        "added": 5
+                    },
+                    {
+                        "at": 127.42887499999779,
+                        "kind": "mirror-start"
+                    },
+                    {
+                        "at": 127.48333299999649,
+                        "kind": "mirror-read",
+                        "mirrored": 5,
+                        "added": 1
+                    },
+                    {
+                        "at": 130.9740829999937,
+                        "kind": "mirror-start"
+                    },
+                    {
+                        "at": 130.99358300000313,
+                        "kind": "mirror-read",
+                        "mirrored": 6,
+                        "added": 0
+                    },
+                    {
+                        "at": 130.99749999999767,
+                        "kind": "mirror-start"
+                    },
+                    {
+                        "at": 131.0035829999979,
+                        "kind": "mirror-read",
+                        "mirrored": 6,
+                        "added": 0
+                    }
+                ],
+                "layoutTrace": {
+                    "timeout": false,
+                    "truncated": false,
+                    "allFrames": 25,
+                    "targetFrame": 18
+                }
+            },
+            {
+                "side": "head",
+                "run": 1,
+                "counts": {
+                    "fs": 25,
+                    "durable": 18,
+                    "chars": 1122,
+                    "layouts": 18
+                },
+                "parseShapes": {
+                    "pocket.sessions/75": 6,
+                    "id/11": 8,
+                    "pocket.authors/141": 2,
+                    "rotom-team.native-mirror/151": 2
+                },
+                "mirror": [
+                    {
+                        "at": 85.83104200000525,
+                        "kind": "mirror-start"
+                    },
+                    {
+                        "at": 86.26912500000617,
+                        "kind": "mirror-read",
+                        "mirrored": 0,
+                        "added": 5
+                    },
+                    {
+                        "at": 120.5583340000012,
+                        "kind": "mirror-start"
+                    },
+                    {
+                        "at": 120.60774999999558,
+                        "kind": "mirror-read",
+                        "mirrored": 5,
+                        "added": 1
+                    },
+                    {
+                        "at": 124.01583400000527,
+                        "kind": "mirror-start"
+                    },
+                    {
+                        "at": 124.03316700000141,
+                        "kind": "mirror-read",
+                        "mirrored": 6,
+                        "added": 0
+                    },
+                    {
+                        "at": 124.04066699999385,
+                        "kind": "mirror-start"
+                    },
+                    {
+                        "at": 124.04762500000652,
+                        "kind": "mirror-read",
+                        "mirrored": 6,
+                        "added": 0
+                    }
+                ],
+                "layoutTrace": {
+                    "timeout": false,
+                    "truncated": false,
+                    "allFrames": 25,
+                    "targetFrame": 18
+                }
+            },
+            {
+                "side": "base",
+                "run": 2,
+                "counts": {
+                    "fs": 25,
+                    "durable": 18,
+                    "chars": 1122,
+                    "layouts": 18
+                },
+                "parseShapes": {
+                    "pocket.sessions/75": 6,
+                    "id/11": 8,
+                    "pocket.authors/141": 2,
+                    "rotom-team.native-mirror/151": 2
+                },
+                "mirror": [
+                    {
+                        "at": 87.30570799999987,
+                        "kind": "mirror-start"
+                    },
+                    {
+                        "at": 87.62200000000303,
+                        "kind": "mirror-read",
+                        "mirrored": 0,
+                        "added": 5
+                    },
+                    {
+                        "at": 123.11529200000223,
+                        "kind": "mirror-start"
+                    },
+                    {
+                        "at": 123.16066700000374,
+                        "kind": "mirror-read",
+                        "mirrored": 5,
+                        "added": 1
+                    },
+                    {
+                        "at": 126.56054200000654,
+                        "kind": "mirror-start"
+                    },
+                    {
+                        "at": 126.58299999999872,
+                        "kind": "mirror-read",
+                        "mirrored": 6,
+                        "added": 0
+                    },
+                    {
+                        "at": 126.5875420000084,
+                        "kind": "mirror-start"
+                    },
+                    {
+                        "at": 126.59379199999967,
+                        "kind": "mirror-read",
+                        "mirrored": 6,
+                        "added": 0
+                    }
+                ],
+                "layoutTrace": {
+                    "timeout": false,
+                    "truncated": false,
+                    "allFrames": 25,
+                    "targetFrame": 18
+                }
+            },
+            {
+                "side": "head",
+                "run": 2,
+                "counts": {
+                    "fs": 25,
+                    "durable": 18,
+                    "chars": 1122,
+                    "layouts": 18
+                },
+                "parseShapes": {
+                    "pocket.sessions/75": 6,
+                    "id/11": 8,
+                    "pocket.authors/141": 2,
+                    "rotom-team.native-mirror/151": 2
+                },
+                "mirror": [
+                    {
+                        "at": 65.16099999999278,
+                        "kind": "mirror-start"
+                    },
+                    {
+                        "at": 65.69999999999709,
+                        "kind": "mirror-read",
+                        "mirrored": 0,
+                        "added": 5
+                    },
+                    {
+                        "at": 112.15541700000176,
+                        "kind": "mirror-start"
+                    },
+                    {
+                        "at": 112.21833400000469,
+                        "kind": "mirror-read",
+                        "mirrored": 5,
+                        "added": 1
+                    },
+                    {
+                        "at": 115.78783400000248,
+                        "kind": "mirror-start"
+                    },
+                    {
+                        "at": 115.80687499999476,
+                        "kind": "mirror-read",
+                        "mirrored": 6,
+                        "added": 0
+                    },
+                    {
+                        "at": 115.81441700000141,
+                        "kind": "mirror-start"
+                    },
+                    {
+                        "at": 115.82104199999594,
+                        "kind": "mirror-read",
+                        "mirrored": 6,
+                        "added": 0
+                    }
+                ],
+                "layoutTrace": {
+                    "timeout": false,
+                    "truncated": false,
+                    "allFrames": 25,
+                    "targetFrame": 18
+                }
+            },
+            {
+                "side": "base",
+                "run": 3,
+                "counts": {
+                    "fs": 25,
+                    "durable": 18,
+                    "chars": 1122,
+                    "layouts": 18
+                },
+                "parseShapes": {
+                    "pocket.sessions/75": 6,
+                    "id/11": 8,
+                    "pocket.authors/141": 2,
+                    "rotom-team.native-mirror/151": 2
+                },
+                "mirror": [
+                    {
+                        "at": 70.25024999999732,
+                        "kind": "mirror-start"
+                    },
+                    {
+                        "at": 70.57016699999804,
+                        "kind": "mirror-read",
+                        "mirrored": 0,
+                        "added": 5
+                    },
+                    {
+                        "at": 107.60662500000035,
+                        "kind": "mirror-start"
+                    },
+                    {
+                        "at": 107.65608300000895,
+                        "kind": "mirror-read",
+                        "mirrored": 5,
+                        "added": 1
+                    },
+                    {
+                        "at": 110.91341700000339,
+                        "kind": "mirror-start"
+                    },
+                    {
+                        "at": 110.93499999999767,
+                        "kind": "mirror-read",
+                        "mirrored": 6,
+                        "added": 0
+                    },
+                    {
+                        "at": 110.93966699999874,
+                        "kind": "mirror-start"
+                    },
+                    {
+                        "at": 110.94637499999953,
+                        "kind": "mirror-read",
+                        "mirrored": 6,
+                        "added": 0
+                    }
+                ],
+                "layoutTrace": {
+                    "timeout": false,
+                    "truncated": false,
+                    "allFrames": 25,
+                    "targetFrame": 18
+                }
+            },
+            {
+                "side": "head",
+                "run": 3,
+                "counts": {
+                    "fs": 25,
+                    "durable": 18,
+                    "chars": 1122,
+                    "layouts": 18
+                },
+                "parseShapes": {
+                    "pocket.sessions/75": 6,
+                    "id/11": 8,
+                    "pocket.authors/141": 2,
+                    "rotom-team.native-mirror/151": 2
+                },
+                "mirror": [
+                    {
+                        "at": 72.32254200000898,
+                        "kind": "mirror-start"
+                    },
+                    {
+                        "at": 72.69666699999652,
+                        "kind": "mirror-read",
+                        "mirrored": 0,
+                        "added": 5
+                    },
+                    {
+                        "at": 112.17933400000038,
+                        "kind": "mirror-start"
+                    },
+                    {
+                        "at": 112.2377919999999,
+                        "kind": "mirror-read",
+                        "mirrored": 5,
+                        "added": 1
+                    },
+                    {
+                        "at": 115.65975000000617,
+                        "kind": "mirror-start"
+                    },
+                    {
+                        "at": 115.67816700000549,
+                        "kind": "mirror-read",
+                        "mirrored": 6,
+                        "added": 0
+                    },
+                    {
+                        "at": 115.68641700000444,
+                        "kind": "mirror-start"
+                    },
+                    {
+                        "at": 115.69379200000549,
+                        "kind": "mirror-read",
+                        "mirrored": 6,
+                        "added": 0
+                    }
+                ],
+                "layoutTrace": {
+                    "timeout": false,
+                    "truncated": false,
+                    "allFrames": 23,
+                    "targetFrame": 18
+                }
+            }
+        ]
+    }
+}

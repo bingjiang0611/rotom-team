@@ -8,6 +8,8 @@ export function SchedulesSheet() {
     const { view, users, me } = store.state;
     const [when, setWhen] = useState("");
     const steer = canSteer();
+    const readOnly = Boolean(view.readOnly);
+    const archive = view.schedules.find((schedule) => schedule.archive)?.archive;
     const setBy = (id) =>
         id === undefined
             ? "Pi"
@@ -26,6 +28,8 @@ export function SchedulesSheet() {
         </p>
         ${
             steer &&
+            !readOnly &&
+            !archive &&
             html`<div class="row">
                 <input
                     placeholder="in 2h check the deploy"
@@ -47,11 +51,13 @@ export function SchedulesSheet() {
                 <div class="grow">
                     <div>${schedule.text}</div>
                     <div class="muted small">
-                        ${schedule.repeat ? `${schedule.repeat} · next ${formatWhen(schedule.next)}` : formatWhen(schedule.next)} · set by ${setBy(schedule.by)}
+                        ${schedule.archive?.text ?? (schedule.repeat ? `${schedule.repeat} · next ${formatWhen(schedule.next)}` : formatWhen(schedule.next))}${schedule.archive ? "" : ` · set by ${setBy(schedule.by)}`}
                     </div>
                 </div>
                 ${
                     steer &&
+                    !readOnly &&
+                    !schedule.archive &&
                     html`<button
                         class="button small ghost"
                         onClick=${() => attempt(() => actions.cancelSchedule(schedule.id))}

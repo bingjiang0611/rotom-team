@@ -23,7 +23,7 @@ export const dollars = (amount: number) => `$${amount.toFixed(2)}`;
 export type SpendSummary = {
     /** Everything Pi spent on this server; only the owner sees it. */
     total?: number;
-    sessions: { id: number; title: string; spent: number; budget?: number }[];
+    sessions: { id: number; title: string; spent: number; budget?: number; readOnly: boolean }[];
     /** Everyone for the owner; others see themselves. */
     people: { id: string; name: string; spent: number; budget?: number }[];
 };
@@ -37,8 +37,6 @@ export class Spend {
     readonly #owed = new Map<ConversationId, Map<string, number>>();
     /** What `SpendDoc` says each person spent, as of the last count. */
     #people: Record<string, number> = {};
-    /** Runs being stopped for a limit, until they end: each is stopped, and announced, once. */
-    readonly #stopping = new Set<ConversationId>();
     #timer: NodeJS.Timeout | undefined;
 
     constructor(app: PocketApp) {
@@ -209,8 +207,6 @@ export class Spend {
 
             throw error;
         }
-
-        this.#stopOverLimit();
     }
 
     /** What a session spent: itself and its subagents. */
@@ -283,44 +279,13 @@ export class Spend {
             : `${reached.person.name} reached their ${dollars(reached.budget)} spend limit`;
     }
 
-    /** A conversation's run ended: a new one there is stopped again if it goes past a limit. */
-    runEnded(id: ConversationId): void {
-        this.#stopping.delete(id);
-    }
-
-    /** Stop every run that goes on past its session's limit or its payer's. */
-    #stopOverLimit(): void {
-        const app = this.#app;
-
-        for (const id of app.busyConversations()) {
-            if (this.#stopping.has(id)) {
-                continue;
-            }
-
-            const why = this.heldBack(id);
-
-            if (why === undefined) {
-                continue;
-            }
-
-            this.#stopping.add(id);
-            app.notice("warning", `Pi stopped: ${why}.`, id);
-            void app
-                .conversation(id)
-                .then((conversation) => conversation.abort(context))
-                .catch((error: unknown) => {
-                    // The next count tries again.
-                    this.#stopping.delete(id);
-                    app.log(`could not stop ${String(id)}: ${describe(error)}`);
-                });
-        }
-    }
-
     /** The owner limits what Pi may spend in a session (`null`: no limit). */
     async setSessionBudget(user: User, id: ConversationId, budget: unknown): Promise<void> {
         requireOwner(user);
+        this.#app.requireSee(user, id);
         const amount = budgetOf(budget);
 
+        this.#app.requireArchiveWriteAllowed(id);
         await this.#app.harness.commit(async (tx) => {
             const meta = (await tx.doc(SessionsDoc)).items[String(id)];
 
@@ -368,16 +333,17 @@ export class Spend {
     }
 
     /** Spend as this person may see it: the owner sees everything, others their own sessions and themselves. */
-    summary(user: User): SpendSummary {
+    async summary(user: User): Promise<SpendSummary> {
         const app = this.#app;
         const owner = user.role === "owner";
-        const sessions = app.sessions(user).map((session) => {
+        const sessions = (await app.sessions(user)).map((session) => {
             const budget = app.sessionMeta(session.id as unknown as ConversationId)?.budget;
 
             return {
                 id: session.id,
                 title: session.title ?? "New session",
                 spent: this.sessionSpent(session.id as unknown as ConversationId),
+                readOnly: app.sessionBackend(session.id as unknown as ConversationId) === "durable",
                 ...(budget === undefined ? {} : { budget }),
             };
         });

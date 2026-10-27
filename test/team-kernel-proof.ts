@@ -3,6 +3,8 @@ import { root, work, owner, until, context } from "./helpers.ts";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { once } from "node:events";
+import { execFileSync } from "node:child_process";
+import { Worker } from "node:worker_threads";
 import {
     mkdirSync,
     readFileSync,
@@ -470,12 +472,28 @@ const configureUserModels = (models: Runtime, user: User) =>
             throw new Error("Durable model path must not execute native conversations");
         },
     });
+const workerMode = process.argv.includes("--storage-worker");
+const workerPost = Worker.prototype.postMessage;
+let storageThread: Worker | undefined;
+let storageFailureInjected = false;
+
+if (workerMode) {
+    Worker.prototype.postMessage = function (...args) {
+        if (args[0]?.type === "next" && args[0].id === 0) {
+            storageThread = this;
+        }
+
+        return workerPost.apply(this, args);
+    };
+}
+
 const open = (kernel = true) =>
     PocketApp.open({
         dataDir: folder,
         defaultCwd: workspace,
         supervised: false,
         kernel,
+        storageWorker: kernel && workerMode,
         browser: null,
         log: () => {},
         configureUserModels,
@@ -527,13 +545,13 @@ try {
 
     await app.hello(bob.user);
 
-    const beforeInvalidBackend = app.sessions().length;
+    const beforeInvalidBackend = (await app.sessions()).length;
 
     for (const backend of [["rotom"], ["durable"], null, {}, "unsupported"]) {
         assert.equal((await request(aliceToken, "sessions", "POST", { backend })).status, 400);
     }
 
-    assert.equal(app.sessions().length, beforeInvalidBackend);
+    assert.equal((await app.sessions()).length, beforeInvalidBackend);
     assert.equal(calls, 0);
     report.invalidBackendRejectedWithoutFallback = true;
 
@@ -565,7 +583,7 @@ try {
         context,
     );
 
-    assert.equal(app.kernel!.executions.journal.hasConversation(String(gap.id)), false);
+    assert.equal(await app.kernel!.executions.journal.hasConversation(String(gap.id)), false);
     assert.equal(
         (
             await request(aliceToken, `c/${gap.id}/submit`, "POST", {
@@ -579,13 +597,16 @@ try {
     await app.close();
     app = await open();
     handler = createHandler({ app, listen: { host: "127.0.0.1", port: 0 }, restart: () => {} });
-    assert.deepEqual(app.kernel!.executions.journal.session(String(gap.id)).binding, planned);
+    assert.deepEqual(
+        (await app.kernel!.executions.journal.session(String(gap.id))).binding,
+        planned,
+    );
     assert.equal((await app.harness.snapshot(NativeSetupDoc, gap.id, context))?.bound, true);
-    assert.equal(app.kernel!.executions.journal.receipts(String(gap.id)).length, 0);
+    assert.equal((await app.kernel!.executions.journal.receipts(String(gap.id))).length, 0);
     assert.equal(calls, 0);
     report.creationGapRecoveredWithoutDispatch = true;
     // Test-only loss of a proven unused binding. Once marked bound, startup must not silently recreate it.
-    app.kernel!.executions.journal.reconcileOrphans(new Set());
+    await app.kernel!.executions.journal.reconcileOrphans(new Set());
     await app.close();
     await assert.rejects(open(), /execution journal is missing/);
     assert.equal(calls, 0);
@@ -687,7 +708,7 @@ try {
     assert.equal(resumed.status, 200, JSON.stringify(resumedBody));
     assert.equal(resumedBody.status, "settled");
     assert.equal(calls, 3);
-    assert.equal(app.kernel!.snapshot(id as never, owner(app)).usage.length, 3);
+    assert.equal((await app.kernel!.snapshot(id as never, owner(app))).usage.length, 3);
     const admissionDriver = app.requireDriver.bind(app);
 
     for (const change of ["stop", "handoff"]) {
@@ -717,7 +738,8 @@ try {
             if (change === "stop") {
                 assert.equal((await request(aliceToken, `c/${id}/abort`, "POST", {})).status, 200);
             } else {
-                const expectedHead = app.kernel!.executions.journal.session(String(id)).segmentId;
+                const expectedHead = (await app.kernel!.executions.journal.session(String(id)))
+                    .segmentId;
                 const handoff = await request(aliceToken, `c/${id}/handoff`, "POST", {
                     requestId: "admission-handoff",
                     expectedHead,
@@ -726,7 +748,7 @@ try {
                 assert.equal(handoff.status, 200);
                 assert.equal(((await handoff.json()) as { status: string }).status, "settled");
                 assert.notEqual(
-                    app.kernel!.executions.journal.session(String(id)).segmentId,
+                    (await app.kernel!.executions.journal.session(String(id))).segmentId,
                     expectedHead,
                 );
             }
@@ -734,7 +756,10 @@ try {
             admissionRelease.resolve();
             assert.equal((await stoppedAdmission).status, 409);
             assert.equal(
-                app.kernel!.executions.journal.request(String(id), `${a.id}:${change}-admission`),
+                await app.kernel!.executions.journal.request(
+                    String(id),
+                    `${a.id}:${change}-admission`,
+                ),
                 undefined,
             );
             assert.equal(calls, 3);
@@ -807,7 +832,7 @@ try {
             409,
         );
         assert.equal(
-            app.kernel!.executions.journal.request(
+            await app.kernel!.executions.journal.request(
                 String(bobSession.id),
                 `${bob.user.id}:${busyKey}`,
             ),
@@ -824,7 +849,7 @@ try {
     assert.equal(calls, 4);
     assert.ok(
         JSON.stringify(
-            app.kernel!.snapshot(bobSession.id, app.config.userById(bob.user.id)!),
+            await app.kernel!.snapshot(bobSession.id, app.config.userById(bob.user.id)!),
         ).includes('"stopReason":"aborted"'),
     );
     hold = false;
@@ -845,7 +870,7 @@ try {
     );
     assert.equal((await request(bob.token, `c/${bobSession.id}/mcp`)).status, 403);
     report.mcpSheetReportsProjectServers = true;
-    const beforeRejected = app.kernel!.executions.journal.receipts(String(id)).length;
+    const beforeRejected = (await app.kernel!.executions.journal.receipts(String(id))).length;
 
     for (const invalid of [
         { text: "/share", requestId: "slash" },
@@ -854,7 +879,10 @@ try {
         assert.equal((await request(aliceToken, `c/${id}/submit`, "POST", invalid)).status, 400);
     }
 
-    assert.equal(app.kernel!.executions.journal.receipts(String(id)).length, beforeRejected);
+    assert.equal(
+        (await app.kernel!.executions.journal.receipts(String(id))).length,
+        beforeRejected,
+    );
     assert.equal(calls, 4);
 
     const carla = app.config.addUser("Carla", "guest");
@@ -910,6 +938,21 @@ try {
         ).status,
         409,
     );
+    const budgetCalls = calls;
+    const budgetReceipts = await app.kernel!.executions.journal.receipts(String(scoped.id));
+    const compactBudget = await request(carla.token, `c/${scoped.id}/compact`, "POST", {
+        requestId: "budget-compact",
+        instructions: "Do not bypass the USD budget",
+    });
+
+    assert.equal(compactBudget.status, 409);
+    assert.match(await compactBudget.text(), /Native USD budget enforcement/);
+    assert.equal(calls, budgetCalls);
+    assert.deepEqual(
+        await app.kernel!.executions.journal.receipts(String(scoped.id)),
+        budgetReceipts,
+    );
+    report.nativeCompactBudgetAdmission = true;
     app.spend.setPersonBudget(owner(app), carla.user.id, null);
     app.accounts.beginChange(carla.user, "openai");
     app.accounts.endChange(carla.user);
@@ -968,7 +1011,7 @@ try {
     app = await open();
     handler = createHandler({ app, listen: { host: "127.0.0.1", port: 0 }, restart: () => {} });
     app.setAccess(owner(app), bob.user.id, { role: "guest" });
-    const observed = app.kernel!.snapshot(id as never, owner(app));
+    const observed = await app.kernel!.snapshot(id as never, owner(app));
 
     assert.equal(
         (
@@ -1007,7 +1050,10 @@ try {
     const transferred = (await transfer.json()) as { id: string; status: string };
 
     assert.equal(transferred.status, "settled");
-    const afterTransfer = app.kernel!.snapshot(id as never, app.config.userById(bob.user.id)!);
+    const afterTransfer = await app.kernel!.snapshot(
+        id as never,
+        app.config.userById(bob.user.id)!,
+    );
 
     assert.equal(afterTransfer.memberId, bob.user.id);
     assert.equal(afterTransfer.usage.length, 3);
@@ -1062,7 +1108,7 @@ try {
     const compactReceipt = (await compactResponse.json()) as { id: string; status: string };
 
     assert.equal(compactReceipt.status, "settled", JSON.stringify(compactReceipt));
-    const afterCompact = app.kernel!.snapshot(id as never, app.config.userById(bob.user.id)!);
+    const afterCompact = await app.kernel!.snapshot(id as never, app.config.userById(bob.user.id)!);
 
     assert.equal(afterCompact.usage.length, 4);
     assert.equal(afterCompact.usage.at(-1)?.memberId, bob.user.id);
@@ -1100,9 +1146,9 @@ try {
     report.apiHandoffAndCompaction = true;
     report.handoffHistoricalUsagePreserved = true;
 
-    const originalFile = app.kernel!.executions.journal.session(String(id)).sessionFile!;
+    const originalFile = (await app.kernel!.executions.journal.session(String(id))).sessionFile!;
     const originalBytes = readFileSync(originalFile);
-    const countBeforeFork = app.sessions().length;
+    const countBeforeFork = (await app.sessions()).length;
     const forkBody = { requestId: "fork-once", expectedHead: afterCompact.segmentId };
     const forkResponses = await Promise.all([
         request(aliceToken, `c/${id}/fork`, "POST", forkBody),
@@ -1149,7 +1195,7 @@ try {
         }
 
         assert.equal(
-            app.kernel!.executions.journal.request(String(id), `${a.id}:${requestId}`),
+            await app.kernel!.executions.journal.request(String(id), `${a.id}:${requestId}`),
             undefined,
         );
     };
@@ -1185,8 +1231,8 @@ try {
             .status,
         409,
     );
-    assert.equal(app.sessions().length, countBeforeFork + 1);
-    const forkSnapshot = app.kernel!.snapshot(forked.id as never, owner(app));
+    assert.equal((await app.sessions()).length, countBeforeFork + 1);
+    const forkSnapshot = await app.kernel!.snapshot(forked.id as never, owner(app));
 
     assert.equal(forkSnapshot.initializing, false);
     assert.equal(forkSnapshot.memberId, a.id);
@@ -1197,7 +1243,7 @@ try {
         app.sessionMeta(id as never)?.projectId,
     );
     assert.notEqual(
-        app.kernel!.executions.journal.session(String(forked.id)).sessionFile,
+        (await app.kernel!.executions.journal.session(String(forked.id))).sessionFile,
         originalFile,
     );
     assert.equal(calls, 6);
@@ -1233,7 +1279,9 @@ try {
     assert.equal(forkReceipt.status, "settled", JSON.stringify(forkReceipt));
     assert.equal(calls, 7);
     assert.deepEqual(
-        app.kernel!.snapshot(forked.id as never, owner(app)).usage.map((row) => row.memberId),
+        (await app.kernel!.snapshot(forked.id as never, owner(app))).usage.map(
+            (row) => row.memberId,
+        ),
         [a.id],
     );
     assert.deepEqual(readFileSync(originalFile), originalBytes);
@@ -1246,10 +1294,8 @@ try {
         (key) => !!app.config.userById(key),
     );
     await app.projectsChanged();
-    const carlaHead = app.kernel!.snapshot(
-        scoped.id,
-        app.config.userById(carla.user.id)!,
-    ).segmentId;
+    const carlaHead = (await app.kernel!.snapshot(scoped.id, app.config.userById(carla.user.id)!))
+        .segmentId;
     const sameMemberFork = await request(carla.token, `c/${scoped.id}/fork`, "POST", {
         requestId: "fork-only",
         expectedHead: carlaHead,
@@ -1274,7 +1320,7 @@ try {
         (key) => !!app.config.userById(key),
     );
     await app.projectsChanged();
-    const beforeDeniedFork = app.sessions().length;
+    const beforeDeniedFork = (await app.sessions()).length;
 
     assert.equal(
         (
@@ -1285,17 +1331,18 @@ try {
         ).status,
         403,
     );
-    assert.equal(app.sessions().length, beforeDeniedFork);
+    assert.equal((await app.sessions()).length, beforeDeniedFork);
     assert.equal(calls, 7);
     report.forkAndContinuePermissionsIndependent = true;
 
-    const beforeConfig = app.kernel!.executions.journal.session(String(forked.id));
+    const beforeConfig = await app.kernel!.executions.journal.session(String(forked.id));
     const configSourceBytes = readFileSync(beforeConfig.sessionFile!);
 
     // A rotom session starts layered: nothing is frozen until a member explicitly activates a snapshot.
-    assert.equal(app.configuration(forked.id as never), undefined);
+    assert.equal(await app.configuration(forked.id as never), undefined);
     assert.equal(
-        app.kernel!.executions.journal.session(String(forked.id)).binding.configurationDigest,
+        (await app.kernel!.executions.journal.session(String(forked.id))).binding
+            .configurationDigest,
         NATIVE_LAYERS,
     );
     const activateBody = {
@@ -1367,7 +1414,7 @@ try {
 
         assert.equal(collision.status, 409);
         assert.equal(
-            app.kernel!.executions.journal.request(
+            await app.kernel!.executions.journal.request(
                 String(forked.id),
                 `${a.id}:${activateBody.requestId}`,
             ),
@@ -1389,16 +1436,16 @@ try {
 
     assert.equal(activated.receipt.status, "settled");
     assert.equal(activated.receipt.operation, "configuration");
-    const activeConfiguration = app.configuration(forked.id as never)!;
+    const activeConfiguration = (await app.configuration(forked.id as never))!;
 
     assert.notEqual(activeConfiguration.digest, NATIVE_LAYERS);
     assert.equal(app.profiles.snapshot(forked.id as never), undefined);
     assert.deepEqual(readFileSync(beforeConfig.sessionFile!), configSourceBytes);
     assert.deepEqual(
-        app.kernel!.executions.journal.segment(beforeConfig.segmentId).binding,
+        (await app.kernel!.executions.journal.segment(beforeConfig.segmentId)).binding,
         beforeConfig.binding,
     );
-    assert.equal(app.kernel!.snapshot(forked.id as never, owner(app)).usage.length, 1);
+    assert.equal((await app.kernel!.snapshot(forked.id as never, owner(app))).usage.length, 1);
     assert.equal(calls, 7);
     assert.deepEqual(activeConfiguration.skills.map((skill) => skill.name).sort(), [
         "activation-skill",
@@ -1407,7 +1454,7 @@ try {
     const sameContentBody = {
         activate: "mine",
         requestId: "same-content-gap",
-        expectedHead: app.kernel!.snapshot(forked.id as never, owner(app)).segmentId,
+        expectedHead: (await app.kernel!.snapshot(forked.id as never, owner(app))).segmentId,
     };
     const handoff = app.kernel!.executions.handoff.bind(app.kernel!.executions);
 
@@ -1455,7 +1502,7 @@ try {
             ).json(),
             { targetId: forked.id, receipt: null, preparedOnly: true },
         );
-        assert.deepEqual(app.configuration(forked.id as never), activeConfiguration);
+        assert.deepEqual(await app.configuration(forked.id as never), activeConfiguration);
     } finally {
         releaseSeed();
         app.kernel!.executions.handoff = handoff;
@@ -1469,14 +1516,14 @@ try {
     await app.close();
     app = await open();
     handler = createHandler({ app, listen: { host: "127.0.0.1", port: 0 }, restart: () => {} });
-    assert.deepEqual(app.configuration(forked.id as never), activeConfiguration);
+    assert.deepEqual(await app.configuration(forked.id as never), activeConfiguration);
     assert.deepEqual(
         await (
             await request(aliceToken, `c/${forked.id}/configuration`, "POST", sameContentBody)
         ).json(),
         { receipt: null },
     );
-    assert.deepEqual(app.configuration(forked.id as never), activeConfiguration);
+    assert.deepEqual(await app.configuration(forked.id as never), activeConfiguration);
     report.sameDigestStagingPreservesSnapshotIdentity = true;
     assert.deepEqual(
         await (
@@ -1510,7 +1557,7 @@ try {
     assert.equal(configReply.status, 200);
     assert.equal(((await configReply.json()) as { status: string }).status, "settled");
     assert.equal(calls, 8);
-    const activeHead = app.kernel!.snapshot(forked.id as never, owner(app)).segmentId;
+    const activeHead = (await app.kernel!.snapshot(forked.id as never, owner(app))).segmentId;
     const configForkResponse = await request(aliceToken, `c/${forked.id}/fork`, "POST", {
         requestId: "config-fork",
         expectedHead: activeHead,
@@ -1520,9 +1567,10 @@ try {
     const configFork = (await configForkResponse.json()) as { id: number };
 
     // A fork runs on the forker's own layers; it never inherits the source's frozen personal snapshot.
-    assert.equal(app.configuration(configFork.id as never), undefined);
+    assert.equal(await app.configuration(configFork.id as never), undefined);
     assert.equal(
-        app.kernel!.executions.journal.session(String(configFork.id)).binding.configurationDigest,
+        (await app.kernel!.executions.journal.session(String(configFork.id))).binding
+            .configurationDigest,
         NATIVE_LAYERS,
     );
     const staged = app.profiles.capture(owner(app), workspace, []);
@@ -1534,7 +1582,7 @@ try {
         configurations.requests[`${a.id}:config-gap`] = {
             expectedHead: activeHead,
             binding: {
-                ...app.kernel!.executions.journal.session(String(forked.id)).binding,
+                ...(await app.kernel!.executions.journal.session(String(forked.id))).binding,
                 configurationDigest: staged.digest,
             },
         };
@@ -1552,7 +1600,7 @@ try {
         },
     );
 
-    assert.equal(app.kernel!.snapshot(forkGap.id, owner(app)).initializing, true);
+    assert.equal((await app.kernel!.snapshot(forkGap.id, owner(app))).initializing, true);
     assert.equal(
         (
             await request(aliceToken, `c/${forkGap.id}/submit`, "POST", {
@@ -1567,7 +1615,7 @@ try {
     });
 
     // Use Bob's existing native session but no model request: this is a simulated crash window.
-    app.kernel!.executions.journal.reserve(
+    await app.kernel!.executions.journal.reserve(
         String(bobSession.id),
         `${bob.user.id}:intent-only`,
         "never dispatched",
@@ -1576,8 +1624,8 @@ try {
     await assert.rejects(open(false), /pending or unknown/);
     app = await open();
     handler = createHandler({ app, listen: { host: "127.0.0.1", port: 0 }, restart: () => {} });
-    assert.equal(app.kernel!.executions.journal.pending(bob.user.id)?.status, "unknown");
-    assert.equal(app.kernel!.snapshot(forkGap.id, owner(app)).initializing, true);
+    assert.equal((await app.kernel!.executions.journal.pending(bob.user.id))?.status, "unknown");
+    assert.equal((await app.kernel!.snapshot(forkGap.id, owner(app))).initializing, true);
     assert.deepEqual(
         await (
             await request(aliceToken, `c/${id}/fork`, "POST", {
@@ -1587,9 +1635,9 @@ try {
         ).json(),
         { id: Number(forkGap.id), receipt: null },
     );
-    assert.equal(app.kernel!.executions.journal.receipts(String(forkGap.id)).length, 0);
-    const unknownHead = app.kernel!.snapshot(bobSession.id, owner(app)).segmentId;
-    const beforeUnknownFork = app.sessions().length;
+    assert.equal((await app.kernel!.executions.journal.receipts(String(forkGap.id))).length, 0);
+    const unknownHead = (await app.kernel!.snapshot(bobSession.id, owner(app))).segmentId;
+    const beforeUnknownFork = (await app.sessions()).length;
 
     assert.equal(
         (
@@ -1600,9 +1648,9 @@ try {
         ).status,
         409,
     );
-    assert.equal(app.sessions().length, beforeUnknownFork);
+    assert.equal((await app.sessions()).length, beforeUnknownFork);
     report.forkGapAndUnknownSourceNotReplayed = true;
-    assert.equal(app.configuration(forked.id as never)!.digest, activeConfiguration.digest);
+    assert.equal((await app.configuration(forked.id as never))!.digest, activeConfiguration.digest);
     await assertForkIdentity("fork-once");
     await assertForkIdentity("fork-gap");
     assert.deepEqual(
@@ -1616,7 +1664,7 @@ try {
         { receipt: null },
     );
     assert.equal(
-        app.kernel!.executions.journal.request(String(forked.id), `${a.id}:config-gap`),
+        await app.kernel!.executions.journal.request(String(forked.id), `${a.id}:config-gap`),
         undefined,
     );
     report.configurationGapNotReplayed = true;
@@ -1675,7 +1723,7 @@ try {
     ).json()) as { status: string };
 
     assert.equal(aliceRun.status, "settled");
-    const beforeTakeover = app.kernel!.snapshot(shared2.id as never, owner(app));
+    const beforeTakeover = await app.kernel!.snapshot(shared2.id as never, owner(app));
     const dana = app.config.addUser("Dana", "guest");
 
     await app.hello(dana.user);
@@ -1698,7 +1746,7 @@ try {
 
     assert.equal(danaRun.status, 200, await danaRun.clone().text());
     assert.equal(((await danaRun.json()) as { status: string }).status, "settled");
-    const afterTakeover = app.kernel!.snapshot(shared2.id as never, owner(app));
+    const afterTakeover = await app.kernel!.snapshot(shared2.id as never, owner(app));
 
     assert.equal(afterTakeover.memberId, dana.user.id);
     assert.notEqual(afterTakeover.segmentId, beforeTakeover.segmentId);
@@ -1733,7 +1781,7 @@ try {
 
     await app.kernel!.ensureBound(upgraded.id);
     const upgradeJournal = app.kernel!.executions.journal;
-    const pinnedSegment = upgradeJournal.session(String(upgraded.id)).segmentId;
+    const pinnedSegment = (await upgradeJournal.session(String(upgraded.id))).segmentId;
     const upgradeRun = await request(aliceToken, `c/${upgraded.id}/submit`, "POST", {
         text: "Write the proof file.",
         requestId: "after-upgrade",
@@ -1741,14 +1789,14 @@ try {
 
     assert.equal(upgradeRun.status, 200, await upgradeRun.clone().text());
     assert.equal(((await upgradeRun.json()) as { status: string }).status, "settled");
-    const materialized = upgradeJournal.session(String(upgraded.id));
+    const materialized = await upgradeJournal.session(String(upgraded.id));
 
     assert.equal(materialized.segmentId, pinnedSegment);
     assert.equal(materialized.binding.kernelVersion, verifyRotomKernel().version);
     assert.equal(calls, 14);
 
     // A session that already ran on the previous pin reopens its own native file on the new one.
-    upgradeJournal.upgradeKernel(String(upgraded.id), pinnedSegment, oldPin.kernelVersion);
+    await upgradeJournal.upgradeKernel(String(upgraded.id), pinnedSegment, oldPin.kernelVersion);
     const upgradedRun = await request(aliceToken, `c/${upgraded.id}/submit`, "POST", {
         text: "KERNEL_UPGRADE_CONTINUES the same session.",
         requestId: "after-materialized-upgrade",
@@ -1756,7 +1804,7 @@ try {
 
     assert.equal(upgradedRun.status, 200, await upgradedRun.clone().text());
     assert.equal(((await upgradedRun.json()) as { status: string }).status, "settled");
-    const reopened = upgradeJournal.session(String(upgraded.id));
+    const reopened = await upgradeJournal.session(String(upgraded.id));
 
     assert.equal(reopened.segmentId, pinnedSegment);
     assert.equal(reopened.kernelSessionId, materialized.kernelSessionId);
@@ -1799,7 +1847,8 @@ try {
 
     assert.equal(app.kernel!.clientLive(shared2.id as never).busy, false);
     assert.equal(
-        app.kernel!.executions.journal.request(String(shared2.id), `${a.id}:stream`)?.status,
+        (await app.kernel!.executions.journal.request(String(shared2.id), `${a.id}:stream`))
+            ?.status,
         "settled",
     );
     const room = await app.room(shared2.id as never);
@@ -1807,7 +1856,7 @@ try {
 
     assert.equal(
         mirrored.length,
-        app.kernel!.executions.journal.entries(String(shared2.id)).length,
+        (await app.kernel!.executions.journal.entries(String(shared2.id))).length,
     );
     const shown = mirrored.map((entry) => projectEntry(entry)).filter((entry) => entry);
     const users = shown.filter((entry) => entry!.kind === "user") as { id: number; text: string }[];
@@ -1848,19 +1897,23 @@ try {
     });
 
     assert.equal(asking.status, 200, await asking.clone().text());
-    const dialogsOf = () =>
-        (app.kernel!.roomState(shared2.id as never, a) as { dialogs?: unknown[] }).dialogs ?? [];
+    const dialogsOf = async () =>
+        ((await app.kernel!.roomState(shared2.id as never, a)) as { dialogs?: unknown[] })
+            .dialogs ?? [];
     let dialog: { id: string; method: string; title: string; options: string[] } | undefined;
 
     for (let tries = 0; tries < 2400 && !dialog; tries++) {
-        dialog = dialogsOf()[0] as typeof dialog;
+        dialog = (await dialogsOf())[0] as typeof dialog;
         await new Promise((resolve) => setTimeout(resolve, 25));
     }
 
     assert.ok(dialog, "the question is waiting in the room");
-    assert.equal(app.sessions(a).find((session) => session.id === shared2.id)?.needsAnswer, true);
     assert.equal(
-        app.sessions(dana.user).find((session) => session.id === shared2.id)?.needsAnswer,
+        (await app.sessions(a)).find((session) => session.id === shared2.id)?.needsAnswer,
+        true,
+    );
+    assert.equal(
+        (await app.sessions(dana.user)).find((session) => session.id === shared2.id)?.needsAnswer,
         undefined,
         "only the paying member's sidebar asks for an answer",
     );
@@ -1874,7 +1927,7 @@ try {
     assert.equal((await answer(aliceToken, { value: "Purple" })).status, 400);
     assert.equal((await answer(aliceToken, { value: green })).status, 200);
     assert.equal(
-        app.sessions(a).find((session) => session.id === shared2.id)?.needsAnswer,
+        (await app.sessions(a)).find((session) => session.id === shared2.id)?.needsAnswer,
         undefined,
         "answering clears the sidebar attention before the run finishes",
     );
@@ -1889,7 +1942,7 @@ try {
         .map((entry) => JSON.stringify(projectEntry(entry)));
 
     assert.ok(answered.at(-1)!.includes("ANSWER_WAS") && answered.at(-1)!.includes("Green"));
-    assert.equal(dialogsOf().length, 0);
+    assert.equal((await dialogsOf()).length, 0);
     assert.equal(calls, 18);
     report.extensionDialogsReachThePayer = true;
 
@@ -1946,7 +1999,8 @@ try {
         ],
     );
     assert.equal(
-        app.kernel!.executions.journal.request(String(shared2.id), `${a.id}:queue-host`)?.status,
+        (await app.kernel!.executions.journal.request(String(shared2.id), `${a.id}:queue-host`))
+            ?.status,
         "settled",
     );
     // The host answer, then the follow-up's own write-and-finish turn.
@@ -1992,11 +2046,11 @@ try {
     );
 
     assert.deepEqual(childMembers, [a.id], "the child spends the member who sent the prompt");
-    const subagentTurn = app
-        .kernel!.executions.journal.segmentEntries(
-            app.kernel!.executions.journal.session(String(shared2.id)).segmentId,
+    const subagentTurn = (
+        await app.kernel!.executions.journal.segmentEntries(
+            (await app.kernel!.executions.journal.session(String(shared2.id))).segmentId,
         )
-        .map((entry) => JSON.stringify(entry));
+    ).map((entry) => JSON.stringify(entry));
 
     assert.ok(subagentTurn.some((entry) => entry.includes("PARENT_AFTER_SUBAGENT")));
     assert.ok(
@@ -2009,9 +2063,9 @@ try {
         "{}",
         "no grant appears in the member HOME",
     );
-    const childUsage = app
-        .kernel!.executions.journal.usage(String(shared2.id))
-        .filter((each) => each.subagent);
+    const childUsage = (await app.kernel!.executions.journal.usage(String(shared2.id))).filter(
+        (each) => each.subagent,
+    );
 
     assert.deepEqual(
         childUsage.map((each) => each.memberId),
@@ -2030,9 +2084,9 @@ try {
     await hangingChild.promise;
     assert.equal(app.kernel!.isRunning(shared2.id as never), true, "the run waits for its child");
     await until(
-        () =>
-            (app.kernel!.roomState(shared2.id as never, a) as { subagents?: number }).subagents ===
-            1,
+        async () =>
+            ((await app.kernel!.roomState(shared2.id as never, a)) as { subagents?: number })
+                .subagents === 1,
         "the room shows the run waiting for its child",
         10000,
     );
@@ -2065,8 +2119,8 @@ try {
         handler = createHandler({ app, listen: { host: "127.0.0.1", port: 0 }, restart: () => {} });
     };
 
-    const startCutOff = async (requestId: string) => {
-        const started = await request(aliceToken, `c/${shared2.id}/submit`, "POST", {
+    const startCutOff = async (requestId: string, sessionId = shared2.id) => {
+        const started = await request(aliceToken, `c/${sessionId}/submit`, "POST", {
             text: `STREAM_SLOWLY until ${requestId}`,
             requestId,
             wait: false,
@@ -2075,7 +2129,7 @@ try {
         assert.equal(started.status, 200, await started.clone().text());
 
         for (let tries = 0; tries < 2400; tries++) {
-            if (JSON.stringify(app.kernel!.clientLive(shared2.id as never)).includes("PARTIAL")) {
+            if (JSON.stringify(app.kernel!.clientLive(sessionId as never)).includes("PARTIAL")) {
                 break;
             }
 
@@ -2089,15 +2143,15 @@ try {
         const key = `${a.id}:#resume-${attemptId}`;
 
         for (let tries = 0; tries < 2400; tries++) {
-            if (journalOf().request(String(shared2.id), key)?.status === "settled") {
+            if ((await journalOf().request(String(shared2.id), key))?.status === "settled") {
                 break;
             }
 
             await new Promise((resolve) => setTimeout(resolve, 25));
         }
 
-        assert.equal(journalOf().request(String(shared2.id), key)?.status, "settled");
-        assert.equal(journalOf().resume(attemptId)?.state, "started");
+        assert.equal((await journalOf().request(String(shared2.id), key))?.status, "settled");
+        assert.equal((await journalOf().resume(attemptId))?.state, "started");
 
         while (app.kernel!.isRunning(shared2.id as never)) {
             await new Promise((resolve) => setTimeout(resolve, 25));
@@ -2113,7 +2167,7 @@ try {
         assert.match(users.at(-1)!.text, /server restarted/);
         assert.equal(requestMembers.at(-1), a.id);
         assert.equal(
-            (app.kernel!.roomState(shared2.id as never, a) as { cutOff?: boolean }).cutOff,
+            ((await app.kernel!.roomState(shared2.id as never, a)) as { cutOff?: boolean }).cutOff,
             undefined,
         );
     };
@@ -2123,8 +2177,8 @@ try {
 
     await reopen();
     await continued(cleanHost);
-    assert.equal(journalOf().receipt(cleanHost).status, "settled");
-    assert.equal(journalOf().resume(cleanHost)?.chain, 1);
+    assert.equal((await journalOf().receipt(cleanHost)).status, "settled");
+    assert.equal((await journalOf().resume(cleanHost))?.chain, 1);
     assert.ok(calls > beforeRestart, "the continuation asked the model again");
     // A second start finds the continuation already made; it sends nothing more.
     const afterContinue = calls;
@@ -2179,7 +2233,8 @@ try {
 
     assert.ok(["dispatch-intent", "settled"].includes(skillReceipt.status));
     await until(
-        () => app.kernel!.executions.journal.receipt(skillReceipt.id).status === "settled",
+        async () =>
+            (await app.kernel!.executions.journal.receipt(skillReceipt.id)).status === "settled",
         "admitted skill finishes as an ordinary prompt",
         30000,
     );
@@ -2207,6 +2262,72 @@ try {
     );
     report.projectSkillRunsByName = true;
 
+    // A real native fork reuses its source checkout; it never invents a default cwd or a new worktree.
+    const worktreeRepo = join(workspace, "fork-worktree-source");
+
+    mkdirSync(join(worktreeRepo, "nested"), { recursive: true });
+    writeFileSync(join(worktreeRepo, "nested", "tracked.txt"), "source-only\n");
+    writeFileSync(join(worktreeRepo, "AGENTS.md"), readFileSync(join(workspace, "AGENTS.md")));
+    const git = (...args: string[]) =>
+        execFileSync("git", args, { cwd: worktreeRepo, encoding: "utf8" });
+
+    git("init", "-q");
+    git("config", "user.email", "fixture@example.test");
+    git("config", "user.name", "Fixture");
+    git("add", ".");
+    git("commit", "-qm", "fixture");
+    const worktreeSession = await app.commands.createSession(owner(app), {
+        backend: "rotom",
+        cwd: join(worktreeRepo, "nested"),
+        worktree: true,
+    });
+    const worktreeReply = await request(aliceToken, `c/${worktreeSession.id}/submit`, "POST", {
+        text: "Write the proof file in this worktree.",
+        requestId: "worktree-source",
+    });
+
+    assert.equal(worktreeReply.status, 200, await worktreeReply.clone().text());
+    assert.equal(((await worktreeReply.json()) as { status: string }).status, "settled");
+    const worktreeCwd = app.cwdOf(worktreeSession.id);
+    const worktreeSnapshot = await app.kernel!.snapshot(worktreeSession.id, owner(app));
+    const worktreeSessionFile = (
+        await app.kernel!.executions.journal.session(String(worktreeSession.id))
+    ).sessionFile;
+
+    assert.ok(worktreeSessionFile);
+    const sourceHistory = readFileSync(worktreeSessionFile);
+    const checkoutNames = readdirSync(join(app.dataDir, "worktrees")).sort();
+    const worktreeForkResponse = await request(aliceToken, `c/${worktreeSession.id}/fork`, "POST", {
+        requestId: "worktree-fork",
+        expectedHead: worktreeSnapshot.segmentId,
+    });
+
+    assert.equal(worktreeForkResponse.status, 200, await worktreeForkResponse.clone().text());
+    const worktreeFork = (await worktreeForkResponse.json()) as { id: number };
+
+    assert.equal(app.cwdOf(worktreeFork.id as never), worktreeCwd);
+    assert.equal(
+        readFileSync(join(app.cwdOf(worktreeFork.id as never), "native-app.txt"), "utf8"),
+        "APP_NATIVE_OK\n",
+    );
+    assert.equal(existsSync(join(worktreeRepo, "nested", "native-app.txt")), false);
+    assert.deepEqual(readdirSync(join(app.dataDir, "worktrees")).sort(), checkoutNames);
+    assert.deepEqual(readFileSync(worktreeSessionFile), sourceHistory);
+    report.nativeForkSharesWorktree = true;
+
+    // Bob may view and continue this project, but cannot change Alice's live payer-bound run.
+    project = app.projects.save(
+        owner(app),
+        {
+            ...project,
+            members: {
+                ...project.members,
+                [bob.user.id]: { view: true, continue: true, fork: true },
+            },
+        },
+        (key) => !!app.config.userById(key),
+    );
+    await app.projectsChanged();
     // One member runs several sessions at once: a run held in one session does not keep another from finishing.
     const heldSession = await app.commands.createSession(a, { backend: "rotom" });
     const otherSession = await app.commands.createSession(a, { backend: "rotom" });
@@ -2222,6 +2343,45 @@ try {
         "NATIVE_UI_HOLD in parallel",
         "the name is saved before the response finishes",
     );
+    const heldBinding = (await app.kernel!.executions.journal.session(String(heldSession.id)))
+        .binding;
+    const heldReceipts = await app.kernel!.executions.journal.receipts(String(heldSession.id));
+
+    for (const mode of ["steer", "followUp"]) {
+        const foreign = await request(bob.token, `c/${heldSession.id}/submit`, "POST", {
+            text: "Do not change Alice's run",
+            requestId: `foreign-${mode}`,
+            mode,
+        });
+
+        assert.equal(foreign.status, 409, await foreign.clone().text());
+    }
+
+    const foreignConfiguration = await request(bob.token, `c/${heldSession.id}/configure`, "POST", {
+        model: app.accounts.choice(app.config.userById(bob.user.id)!),
+    });
+
+    assert.equal(foreignConfiguration.status, 409, await foreignConfiguration.clone().text());
+    const foreignThinking = await request(bob.token, `c/${heldSession.id}/configure`, "POST", {
+        thinkingLevel: "off",
+    });
+
+    assert.equal(foreignThinking.status, 409);
+    assert.match(await foreignThinking.text(), /Only the paying member/);
+    await assert.rejects(
+        app.providers.startLogin(owner(app), "openai", "oauth"),
+        /still running in session/,
+    );
+    assert.deepEqual(
+        (await app.kernel!.executions.journal.session(String(heldSession.id))).binding,
+        heldBinding,
+    );
+    assert.deepEqual(
+        await app.kernel!.executions.journal.receipts(String(heldSession.id)),
+        heldReceipts,
+    );
+    assert.equal(calls, beforeParallel + 1);
+    report.nativeLiveForeignMutationDenied = true;
     const other = await request(aliceToken, `c/${otherSession.id}/submit`, "POST", {
         text: "Write the proof file.",
         requestId: "parallel-other",
@@ -2406,10 +2566,10 @@ try {
         "NATIVE_IMAGE_PROOF",
         "the name survives restart",
     );
-    const imageHead = app.kernel!.executions.journal.session(String(imageId)).segmentId;
+    const imageHead = (await app.kernel!.executions.journal.session(String(imageId))).segmentId;
 
     await app.kernel!.handoff(imageId, app.config.userById(a.id)!, "image-handoff", imageHead);
-    const afterHandoff = app.kernel!.snapshot(imageId, app.config.userById(a.id)!);
+    const afterHandoff = await app.kernel!.snapshot(imageId, app.config.userById(a.id)!);
 
     assert.ok(JSON.stringify(afterHandoff.messages).includes('"type":"image"'));
     const continuedImage = await request(aliceToken, `c/${imageId}/submit`, "POST", {
@@ -2418,7 +2578,8 @@ try {
     });
 
     assert.equal(continuedImage.status, 200);
-    const restoredContent = app.kernel!.snapshot(imageId, app.config.userById(a.id)!).messages;
+    const restoredContent = (await app.kernel!.snapshot(imageId, app.config.userById(a.id)!))
+        .messages;
 
     assert.ok(JSON.stringify(restoredContent.at(-1)).includes("NATIVE_IMAGE_SEEN"));
     report.nativeAttachmentsImagesAndHistory = true;
@@ -2602,7 +2763,7 @@ try {
         if (kind.endsWith("WORKFLOW")) {
             assert.deepEqual(readdirSync(resourceRuns), beforeArtifacts);
             assert.equal(descriptors().filter((name) => !beforeRuns.has(name)).length, 0);
-            const entries = app.kernel!.executions.journal.entries(String(resourceId));
+            const entries = await app.kernel!.executions.journal.entries(String(resourceId));
 
             assert.ok(
                 JSON.stringify(entries).includes(
@@ -2645,7 +2806,7 @@ try {
     if (process.argv.includes("--serve") || process.argv.includes("--ui")) {
         // Exercise real native compaction on a small UI fixture, without changing product defaults.
         const uiSettingsPath = join(
-            app.kernel!.executions.journal.session(String(forked.id)).binding.home,
+            (await app.kernel!.executions.journal.session(String(forked.id))).binding.home,
             ".pi",
             "agent",
             "settings.json",
@@ -2694,7 +2855,7 @@ try {
     // A dead PID is not evidence of a safe outcome. Keep this fence at the end so later fixtures cannot bypass it.
     const crashHost = await startCutOff("crash-host");
     // A shutdown plan made during execution cannot authorize continuation if the process then dies unknown.
-    const pendingPlan = journalOf().planResume(crashHost);
+    const pendingPlan = await journalOf().planResume(crashHost);
     const { DatabaseSync } = await import("node:sqlite");
     const reader = new DatabaseSync(join(folder, "kernel.sqlite"), { readOnly: true });
     const { pid } = reader.prepare("SELECT pid FROM kernel_attempts WHERE id=?").get(crashHost) as {
@@ -2708,17 +2869,17 @@ try {
         await new Promise((resolve) => setTimeout(resolve, 25));
     }
 
-    assert.equal(journalOf().receipt(crashHost).status, "unknown");
+    assert.equal((await journalOf().receipt(crashHost)).status, "unknown");
     const beforeCrashRestart = calls;
 
     for (let restart = 0; restart < 2; restart++) {
         await reopen();
         await app.kernel!.resumeInterrupted();
-        assert.equal(journalOf().receipt(crashHost).status, "unknown");
-        assert.deepEqual(journalOf().resume(crashHost), pendingPlan);
-        assert.equal(journalOf().latest(String(shared2.id))?.id, crashHost);
+        assert.equal((await journalOf().receipt(crashHost)).status, "unknown");
+        assert.deepEqual(await journalOf().resume(crashHost), pendingPlan);
+        assert.equal((await journalOf().latest(String(shared2.id)))?.id, crashHost);
         assert.equal(
-            journalOf().request(String(shared2.id), `${a.id}:#resume-${crashHost}`),
+            await journalOf().request(String(shared2.id), `${a.id}:#resume-${crashHost}`),
             undefined,
         );
         assert.equal(
@@ -2727,16 +2888,52 @@ try {
             "unknown startup never submits another model request",
         );
         assert.equal(
-            (app.kernel!.roomState(shared2.id as never, a) as { pending?: { status: string } })
-                .pending?.status,
+            (
+                (await app.kernel!.roomState(shared2.id as never, a)) as {
+                    pending?: { status: string };
+                }
+            ).pending?.status,
             "unknown",
         );
     }
 
     report.crashedKernelRemainsUnknownWithoutContinuation = true;
+
+    if (workerMode) {
+        const live = await app.commands.createSession(app.config.userById(a.id)!, {
+            backend: "rotom",
+        });
+        const active = await startCutOff("storage-owner-crash", Number(live.id));
+        const inspection = new DatabaseSync(join(folder, "kernel.sqlite"), { readOnly: true });
+        const running = inspection
+            .prepare("SELECT pid FROM kernel_attempts WHERE id=?")
+            .get(active) as { pid: number };
+
+        inspection.close();
+        assert.ok(running.pid > 0);
+        assert.ok(storageThread && storageThread.threadId > 0);
+        storageFailureInjected = true;
+        await storageThread.terminate();
+        await assert.rejects(app.close(), /Shutdown incomplete/);
+        assert.throws(
+            () => process.kill(running.pid, 0),
+            { code: "ESRCH" },
+            "native process closes even when resume planning cannot reach storage",
+        );
+        assert.ok(existsSync(join(folder, "kernel.lock")));
+        assert.ok(existsSync(join(folder, "harness.lock")));
+        report.storageWorkerFailureStopsNativeAndRetainsLeases = true;
+    }
+
     report.loopbackRequests = calls;
 } finally {
-    await app.close();
+    if (storageFailureInjected) {
+        await app.close().catch(() => {});
+    } else {
+        await app.close();
+    }
+
+    Worker.prototype.postMessage = workerPost;
     oauth.close();
     server.closeAllConnections();
     modelServer.closeAllConnections();

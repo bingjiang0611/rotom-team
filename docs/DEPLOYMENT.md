@@ -30,8 +30,8 @@ Importing existing OAuth material into a separate refresh-capable runtime can ra
 rotom runs new sessions by default. The installation above prepares the fixed product in `runtime/rotom/`; its
 version and hashes come from `runtime/rotom/pin.json`. Do not replace that installation while a run uses it.
 
-`--no-rotom-kernel` starts a Durable-only server; `--rotom-kernel` remains an explicit alias for the default. Stored
-Durable sessions retain their backend. Pending/unknown native receipts remain fenced even if native creation is
+`--no-rotom-kernel` starts a read-only archive server, never the retired Durable executor; `--rotom-kernel` remains an explicit alias for the default. Stored
+Durable sessions retain their backend as archives. Back up offline before first D9a startup; see [LEGACY-ARCHIVE.md](LEGACY-ARCHIVE.md) for atomic quarantine and rollback. Pending/unknown native receipts remain fenced even if native creation is
 disabled; changing the flag does not authorize bypassing quarantine.
 
 The parent remains the model credential refresh writer. Shared agent configuration, project context/skills/MCP and private member MCP sign-ins follow
