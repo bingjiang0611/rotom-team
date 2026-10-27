@@ -162,4 +162,6 @@ modifies. No broad size exception is assumed.
 
 The two diagnostic checkouts and the generated trace fixture were removed after successful completion. Logs, raw
 scenario reports, Trace2 events and one-off instruments remain under `/tmp/round2-git-*` for audit. No benchmark child
-is intentionally left running. This branch only records investigation evidence; publishing it requires approval.
+is intentionally left running. The owner subsequently approved publication of this investigation branch and preparation
+of the [native live-model resource proposal](../native-model-resource-contract.md). That approval covers design only,
+not native implementation, a pin update, deployment or a speed claim.
