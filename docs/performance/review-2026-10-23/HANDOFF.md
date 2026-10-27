@@ -1611,6 +1611,17 @@ owner 批准先同步 main，再自行开 PR 和合并；本次不拆文件、�
 
 本次只合并 main 和记录验收，不拆超限文件、不改预算、不部署、不重启线上、不使用真实账号。只向 `review/2026-10-23-perf-design-arch` 推送；**PR 由 owner 自己开、自己合，执行方推送后停止。**
 
+### 第 19 轮核验:合并 main 后(HEAD `8dabedf`,2026-10-27)
+
+**结论:合并后的分支核验通过,可以由 owner 开 PR 合并。**
+
+- `d4d13e0` 的两个父提交是 `1098d85` 和 `origin/main`(`e649d9d`),main 已完整包含,没有冲突。
+- **推送里额外带进了几个之前没经过审查方核验的提交**(都是 owner 本地另一条线的工作):`3610688`(房间历史追加时复用已投影前缀,改 `src/server/room.ts`)、它在 `test/perf/ledger.json` 里收紧的 6 个 `darwin-arm64` 基线、`e2a1eb0`/`0d5410a`(图片测量等待,和 D9b 已核验的修复相同)、`5bde0dd`(10 月 26 日性能笔记和 `opportunities.md`),以及 3 个合并提交。本轮一并核验:
+    - `room.ts`:只在原有的「前缀未变」判断成立时复用上一次的投影数组,只投影新增的后缀。`#entry()` 的缓存按条目 id 永久保存,只在 room 关闭时和序列一起清空,所以复用前缀和原来全量重建得到的结果相同;head 变化时仍然全量重建。我接受。
+    - `ledger.json`:6 处都是把基线调低(例如 267 → 2),容差和 ceiling 没动,是收紧不是放宽。
+- 验收:`check` / `lint` / `format:check` 通过;默认 `npm test` 724 项:719 通过 / 1 失败 / 4 跳过,唯一失败是本机环境导致的 snap 用例;`room-projection`、`perf-image-compat`、`perf-images` 单独连跑 3 次全过;`test:kernel:app`、`native-commands-proof` 在 worker 关、开时都通过。
+- 未重跑 perf:ci(按 owner 决定)。20KB 文件预算的拆分作为后续任务。
+
 ## C 方案（执行方追加）
 
 ### 边界与建议顺序
