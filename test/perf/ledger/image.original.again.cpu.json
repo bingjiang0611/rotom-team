@@ -26,7 +26,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 114
+                "darwin-arm64": 83
             }
         },
         "image.original.again/json.parse.http.calls": {
@@ -82,7 +82,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 114
+                "darwin-arm64": 83
             }
         },
         "image.original.again/json.stringify.chars": {
@@ -96,7 +96,7 @@
             "tolerance": 34,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 114
+                "darwin-arm64": 83
             }
         }
     }

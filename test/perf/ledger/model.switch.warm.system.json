@@ -1,0 +1,89 @@
+{
+    "schema": 1,
+    "metrics": {
+        "model.switch.warm/fs.read.calls": {
+            "scenario": "model.switch.warm",
+            "metric": "fs.read.calls",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "same isolated session after cold switch; POST configure from faux-2 to faux-1 with a retained native process; require handled receipt, unchanged native session identity and matching model projection; no inference",
+            "source": "synchronous readSync calls in instrumented parent/storage-worker processes (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 23
+            }
+        },
+        "model.switch.warm/fs.read.bytes": {
+            "scenario": "model.switch.warm",
+            "metric": "fs.read.bytes",
+            "layer": "storage",
+            "unit": "bytes",
+            "workload": "same isolated session after cold switch; POST configure from faux-2 to faux-1 with a retained native process; require handled receipt, unchanged native session identity and matching model projection; no inference",
+            "source": "bytes returned by synchronous readSync in instrumented parent/storage-worker processes (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 148720
+            }
+        },
+        "model.switch.warm/sql.statements": {
+            "scenario": "model.switch.warm",
+            "metric": "sql.statements",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "same isolated session after cold switch; POST configure from faux-2 to faux-1 with a retained native process; require handled receipt, unchanged native session identity and matching model projection; no inference",
+            "source": "node:sqlite StatementSync run/get/all/iterate + DatabaseSync.exec (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 67
+            }
+        },
+        "model.switch.warm/sql.rows": {
+            "scenario": "model.switch.warm",
+            "metric": "sql.rows",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "same isolated session after cold switch; POST configure from faux-2 to faux-1 with a retained native process; require handled receipt, unchanged native session identity and matching model projection; no inference",
+            "source": "rows returned by StatementSync all/get (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 36
+            }
+        },
+        "model.switch.warm/subprocess.total": {
+            "scenario": "model.switch.warm",
+            "metric": "subprocess.total",
+            "layer": "process",
+            "unit": "count",
+            "workload": "same isolated session after cold switch; POST configure from faux-2 to faux-1 with a retained native process; require handled receipt, unchanged native session identity and matching model projection; no inference",
+            "source": "ChildProcess.prototype.spawn + spawnSync/execFileSync/execSync (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "model.switch.warm/subprocess.rotom": {
+            "scenario": "model.switch.warm",
+            "metric": "subprocess.rotom",
+            "layer": "process",
+            "unit": "count",
+            "workload": "same isolated session after cold switch; POST configure from faux-2 to faux-1 with a retained native process; require handled receipt, unchanged native session identity and matching model projection; no inference",
+            "source": "child processes whose program is rotom (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        }
+    }
+}

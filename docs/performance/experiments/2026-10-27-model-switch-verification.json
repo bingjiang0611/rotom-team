@@ -1,0 +1,233 @@
+{
+    "schema": 2,
+    "base": {
+        "revision": "2ccde05d8875",
+        "platform": "darwin-arm64",
+        "node": "24.18.0",
+        "runs": 3,
+        "load": {
+            "before": [5.2998046875, 3.8203125, 2.60888671875],
+            "after": [3.2841796875, 3.84375, 3.30517578125],
+            "cores": 8
+        }
+    },
+    "head": {
+        "revision": "9edad43879c4",
+        "platform": "darwin-arm64",
+        "node": "24.18.0",
+        "runs": 3,
+        "load": {
+            "before": [5.2998046875, 3.8203125, 2.60888671875],
+            "after": [3.2841796875, 3.84375, 3.30517578125],
+            "cores": 8
+        }
+    },
+    "reportHashes": {
+        "base": "56f6337b82e6980c1f9815563600cd840585c467a59b1376f6b5498f9ad2d031",
+        "head": "cb4fbbecd8328d1e0b4f6267651a4ddbc727385714f284d37041931445e5982f"
+    },
+    "scenarios": 44,
+    "observations": 1896,
+    "unavailable": 0,
+    "ratchetPassed": true,
+    "gates": [
+        {
+            "key": "git.changes/subprocess.git",
+            "layer": "process",
+            "unit": "count",
+            "status": "gating",
+            "ceiling": 3,
+            "tolerance": 0,
+            "value": 3,
+            "min": 3,
+            "spread": 0,
+            "result": "pass",
+            "gateFailed": false
+        },
+        {
+            "key": "git.branches/subprocess.git",
+            "layer": "process",
+            "unit": "count",
+            "status": "gating",
+            "ceiling": 2,
+            "tolerance": 0,
+            "value": 2,
+            "min": 2,
+            "spread": 0,
+            "result": "pass",
+            "gateFailed": false
+        }
+    ],
+    "modelTimings": [
+        {
+            "key": "model.switch.cold/ms",
+            "base": 2082.6,
+            "head": 2072.9,
+            "change": -0.005,
+            "verdict": "noise",
+            "baseRuns": [2127.4, 2082.6, 2077.7],
+            "headRuns": [2072.9, 2105.4, 1933.9]
+        },
+        {
+            "key": "model.switch.warm/ms",
+            "base": 2132.8,
+            "head": 60.3,
+            "change": -0.972,
+            "verdict": "faster",
+            "baseRuns": [2132.8, 2134, 2018.4],
+            "headRuns": [60.3, 63.7, 51.8]
+        },
+        {
+            "key": "model.switch.next-operation/ms",
+            "base": 81.1,
+            "head": 780.4,
+            "change": 8.623,
+            "verdict": "slower",
+            "baseRuns": [85.9, 81.1, 80.2],
+            "headRuns": [780.4, 788.4, 716.2]
+        }
+    ],
+    "modelWork": [
+        {
+            "key": "model.switch.warm/fs.read.calls",
+            "base": 48,
+            "head": 23,
+            "delta": -25,
+            "verdict": "better"
+        },
+        {
+            "key": "model.switch.warm/sql.statements",
+            "base": 70,
+            "head": 67,
+            "delta": -3,
+            "verdict": "better"
+        },
+        {
+            "key": "model.switch.warm/json.parse.calls",
+            "base": 107,
+            "head": 59,
+            "delta": -48,
+            "verdict": "better"
+        },
+        {
+            "key": "model.switch.warm/subprocess.rotom",
+            "base": 1,
+            "head": 0,
+            "delta": -1,
+            "verdict": "better"
+        }
+    ],
+    "counterIncreases": {
+        "files": [
+            "2026-10-27-model-switch-verification-web.json",
+            "2026-10-27-model-switch-verification-other.json"
+        ],
+        "count": 89,
+        "order": [
+            "session.open/json.parse.chars",
+            "session.open/json.parse.durableStorage.chars",
+            "turn.cold/json.parse.nativeReadback.chars",
+            "turn.cold/json.parse.nativeRpc.chars",
+            "turn.cold/json.parse.nativeRpcRecord.chars",
+            "turn.warm/json.parse.chars",
+            "turn.warm/json.parse.nativeReadback.chars",
+            "turn.warm/json.parse.nativeRpc.chars",
+            "turn.warm/json.parse.nativeRpcRecord.chars",
+            "turn.paced/json.parse.chars",
+            "turn.paced/json.parse.nativeReadback.chars",
+            "turn.paced/json.parse.nativeRpc.chars",
+            "turn.paced/json.parse.nativeRpcRecord.chars",
+            "git.changes/json.parse.chars",
+            "git.changes/json.parse.durableStorage.chars",
+            "web.open/cdp.Nodes",
+            "turn.prewarmed/json.parse.nativeReadback.chars",
+            "turn.prewarmed/json.parse.nativeRpc.chars",
+            "turn.prewarmed/json.parse.nativeRpcRecord.chars",
+            "web.paced/sql.statements",
+            "web.paced/sql.rows",
+            "web.paced/view.fields.stringify.calls",
+            "web.paced/view.fields.stringify.chars",
+            "web.paced/view.live.project.calls",
+            "web.paced/view.inbox.project.calls",
+            "web.paced/view.kernel.project.calls",
+            "web.paced/view.kernel.sql.statements",
+            "web.paced/view.kernel.sql.heads",
+            "web.paced/view.kernel.sql.attempts",
+            "web.paced/view.kernel.sql.command_inputs",
+            "web.paced/view.kernel.sql.rows",
+            "web.paced/view.kernel.json.parse.calls",
+            "web.paced/view.kernel.json.parse.chars",
+            "web.paced/push.events",
+            "web.paced/push.view.count",
+            "web.paced/web.event.parse.calls",
+            "web.paced/web.view.apply.calls",
+            "web.send.stream/sql.statements",
+            "web.send.stream/sql.rows",
+            "web.send.stream/view.fields.stringify.calls",
+            "web.send.stream/view.fields.stringify.chars",
+            "web.send.stream/view.live.project.calls",
+            "web.send.stream/view.inbox.project.calls",
+            "web.send.stream/view.kernel.project.calls",
+            "web.send.stream/view.kernel.sql.statements",
+            "web.send.stream/view.kernel.sql.heads",
+            "web.send.stream/view.kernel.sql.attempts",
+            "web.send.stream/view.kernel.sql.command_inputs",
+            "web.send.stream/view.kernel.sql.rows",
+            "web.send.stream/view.kernel.json.parse.calls",
+            "web.send.stream/view.kernel.json.parse.chars",
+            "web.send.stream/push.events",
+            "web.send.stream/push.bytes",
+            "web.send.stream/push.view.count",
+            "web.send.stream/push.view.bytes",
+            "web.send.stream/web.event.parse.calls",
+            "web.send.stream/web.event.parse.chars",
+            "web.send.stream/web.view.apply.calls",
+            "commands.discover.cold/json.parse.chars",
+            "commands.discover.cold/json.parse.nativeReadback.chars",
+            "commands.discover.cold/json.parse.nativeRpc.chars",
+            "commands.discover.cold/json.parse.nativeRpcRecord.chars",
+            "commands.discover.warm/json.parse.chars",
+            "commands.discover.warm/json.parse.nativeReadback.chars",
+            "commands.discover.warm/json.parse.nativeRpc.chars",
+            "commands.discover.warm/json.parse.nativeRpcRecord.chars",
+            "turn.prepared/json.parse.nativeReadback.chars",
+            "turn.prepared/json.parse.nativeRpc.chars",
+            "turn.prepared/json.parse.nativeRpcRecord.chars",
+            "projection.large.paced/json.parse.chars",
+            "projection.large.paced/json.parse.nativeReadback.chars",
+            "projection.large.paced/json.parse.nativeRpc.chars",
+            "projection.large.paced/json.parse.nativeRpcRecord.chars",
+            "model.switch.cold/json.parse.chars",
+            "model.switch.cold/json.parse.nativeReadback.chars",
+            "model.switch.cold/json.parse.nativeRpc.chars",
+            "model.switch.cold/json.parse.nativeRpcRecord.chars",
+            "model.switch.next-operation/native.rpc.notify.records",
+            "model.switch.next-operation/json.parse.calls",
+            "model.switch.next-operation/json.parse.chars",
+            "model.switch.next-operation/json.parse.nativeReadback.calls",
+            "model.switch.next-operation/json.parse.nativeReadback.chars",
+            "model.switch.next-operation/json.parse.nativeRpc.calls",
+            "model.switch.next-operation/json.parse.nativeRpc.chars",
+            "model.switch.next-operation/json.parse.nativeRpcRecord.calls",
+            "model.switch.next-operation/json.parse.nativeRpcRecord.chars",
+            "model.switch.next-operation/json.parse.nativeRpcNotify.calls",
+            "model.switch.next-operation/json.parse.nativeRpcNotify.chars",
+            "model.switch.next-operation/json.stringify.chars"
+        ]
+    },
+    "otherTimingChanges": [
+        {
+            "key": "turn.cold/nativeStartResourcesMs",
+            "base": 59.1,
+            "head": 73.3,
+            "change": 0.24,
+            "verdict": "slower"
+        }
+    ],
+    "ledger": {
+        "changed": 137,
+        "model": 32,
+        "allCandidate": true,
+        "onlyBaselinesChanged": true
+    }
+}

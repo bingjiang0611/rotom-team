@@ -30,11 +30,12 @@ export async function launchRotom(
     owned: Owned,
     hooks: { beforeStart?: () => void; started?: (kernel: RotomRpc) => void } = {},
 ): Promise<PersistentKernel> {
-    const token = randomBytes(32).toString("base64url");
+    let identity = { binding, prepared, token: randomBytes(32).toString("base64url") };
     const gate = createServer(async (req, res) => {
-        // This process has one immutable binding; only the currently active receipt may spend.
+        // Rotation invalidates old tokens and authorization already waiting on account checks.
+        const admittedIdentity = identity;
         const authorization = Buffer.from(String(req.headers.authorization ?? "")),
-            expected = Buffer.from(`Bearer ${token}`);
+            expected = Buffer.from(`Bearer ${admittedIdentity.token}`);
 
         if (
             req.method !== "POST" ||
@@ -62,14 +63,14 @@ export async function launchRotom(
 
             const active = gateState.active;
 
-            if (!active || active.operation === "discover") {
+            if (!active || active.operation === "discover" || identity !== admittedIdentity) {
                 throw new Error("No active inference receipt");
             }
 
             if (
                 !["inference", "refresh", "usage"].includes(value.operation) ||
-                value.provider !== binding.provider ||
-                (value.operation !== "refresh" && value.model !== binding.model)
+                value.provider !== admittedIdentity.binding.provider ||
+                (value.operation !== "refresh" && value.model !== admittedIdentity.binding.model)
             ) {
                 throw new Error("identity denied");
             }
@@ -98,15 +99,19 @@ export async function launchRotom(
                 throw new Error("execution stopped");
             }
 
-            const auth = await ctx.authorize(binding, value.operation, sessionId);
+            const auth = await ctx.authorize(admittedIdentity.binding, value.operation, sessionId);
 
             // No journal await after authorization: that would reopen a revocation/Stop window.
             // This owner clears active before every finish/fail, so the latch also fences settlement.
-            if (active.running.aborted || gateState.active !== active) {
+            if (
+                active.running.aborted ||
+                gateState.active !== active ||
+                identity !== admittedIdentity
+            ) {
                 throw new Error("attempt ended during authorization");
             }
 
-            if (prepared && value.operation === "inference") {
+            if (admittedIdentity.prepared && value.operation === "inference") {
                 if (!auth) {
                     throw new Error("No request auth");
                 }
@@ -151,17 +156,22 @@ export async function launchRotom(
 
     const gateFile = join(folder, `${name}.json`);
 
-    writeFileSync(
-        gateFile,
-        JSON.stringify({
-            url: `http://127.0.0.1:${(gate.address() as { port: number }).port}/authorize`,
-            token,
-            provider: binding.provider,
-            model: binding.model,
-            ...(prepared ? { modelDefinition: prepared.modelDefinition } : {}),
-        }),
-        { mode: 0o600, flag: "wx" },
-    );
+    const writeIdentity = (flag: "wx" | "w") =>
+        writeFileSync(
+            gateFile,
+            JSON.stringify({
+                url: `http://127.0.0.1:${(gate.address() as { port: number }).port}/authorize`,
+                token: identity.token,
+                provider: identity.binding.provider,
+                model: identity.binding.model,
+                ...(identity.prepared
+                    ? { modelDefinition: identity.prepared.modelDefinition }
+                    : {}),
+            }),
+            { mode: 0o600, flag },
+        );
+
+    writeIdentity("wx");
     owned.gateFile = gateFile;
     let contextFile: string | undefined;
 
@@ -213,6 +223,16 @@ export async function launchRotom(
         gateFile,
         ...(contextFile ? { contextFile } : {}),
         gateState,
+        modelApi: prepared?.modelDefinition.api,
+        needsReload: false,
+        rebind: (nextBinding, nextPrepared) => {
+            identity = {
+                binding: nextBinding,
+                prepared: nextPrepared,
+                token: randomBytes(32).toString("base64url"),
+            };
+            writeIdentity("w");
+        },
         state,
     };
 }

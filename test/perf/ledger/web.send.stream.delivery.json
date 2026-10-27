@@ -26,7 +26,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 93633
+                "darwin-arm64": 93567
             }
         },
         "web.send.stream/push.view.count": {
@@ -54,7 +54,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 79839
+                "darwin-arm64": 79749
             }
         },
         "web.send.stream/http.requests": {

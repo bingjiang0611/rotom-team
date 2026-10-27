@@ -40,7 +40,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 16
+                "darwin-arm64": 13
             }
         },
         "session.open.long/sql.rows": {
@@ -54,7 +54,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 47
+                "darwin-arm64": 45
             }
         },
         "session.open.long/subprocess.total": {

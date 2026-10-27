@@ -1,0 +1,103 @@
+{
+    "schema": 1,
+    "metrics": {
+        "model.switch.cold/json.parse.calls": {
+            "scenario": "model.switch.cold",
+            "metric": "json.parse.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after existing scenarios; isolated kernel app and synthetic account, no inference; POST configure from faux-1 to faux-2 before any native process, require handled receipt and matching native model projection",
+            "source": "global JSON.parse calls in the server process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 102
+            }
+        },
+        "model.switch.cold/json.parse.chars": {
+            "scenario": "model.switch.cold",
+            "metric": "json.parse.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after existing scenarios; isolated kernel app and synthetic account, no inference; POST configure from faux-1 to faux-2 before any native process, require handled receipt and matching native model projection",
+            "source": "characters given to JSON.parse (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 319460
+            }
+        },
+        "model.switch.cold/json.parse.http.calls": {
+            "scenario": "model.switch.cold",
+            "metric": "json.parse.http.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after existing scenarios; isolated kernel app and synthetic account, no inference; POST configure from faux-1 to faux-2 before any native process, require handled receipt and matching native model projection",
+            "source": "JSON.parse in exclusive http scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "model.switch.cold/json.parse.http.chars": {
+            "scenario": "model.switch.cold",
+            "metric": "json.parse.http.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after existing scenarios; isolated kernel app and synthetic account, no inference; POST configure from faux-1 to faux-2 before any native process, require handled receipt and matching native model projection",
+            "source": "JSON.parse in exclusive http scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 50
+            }
+        },
+        "model.switch.cold/json.parse.other.calls": {
+            "scenario": "model.switch.cold",
+            "metric": "json.parse.other.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after existing scenarios; isolated kernel app and synthetic account, no inference; POST configure from faux-1 to faux-2 before any native process, require handled receipt and matching native model projection",
+            "source": "JSON.parse in exclusive other scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 2
+            }
+        },
+        "model.switch.cold/json.parse.other.chars": {
+            "scenario": "model.switch.cold",
+            "metric": "json.parse.other.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after existing scenarios; isolated kernel app and synthetic account, no inference; POST configure from faux-1 to faux-2 before any native process, require handled receipt and matching native model projection",
+            "source": "JSON.parse in exclusive other scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 217
+            }
+        },
+        "model.switch.cold/json.stringify.chars": {
+            "scenario": "model.switch.cold",
+            "metric": "json.stringify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after existing scenarios; isolated kernel app and synthetic account, no inference; POST configure from faux-1 to faux-2 before any native process, require handled receipt and matching native model projection",
+            "source": "characters JSON.stringify produced (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 12085
+            }
+        }
+    }
+}

@@ -54,7 +54,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 216
+                "darwin-arm64": 169
             }
         },
         "web.send.stream/view.fields.stringify.chars": {
@@ -68,7 +68,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 13266
+                "darwin-arm64": 9587
             }
         },
         "web.send.stream/view.live.project.calls": {

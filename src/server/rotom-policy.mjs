@@ -7,24 +7,12 @@ import { bindSessionAccount } from "../../runtime/rotom/node_modules/@bingjiang0
 import { CREDIT_ENTRY } from "../../runtime/rotom/node_modules/@bingjiang0611/rotom/extensions/qoder/credits.mjs";
 import { SnapshotBuilder } from "../../runtime/rotom/node_modules/@bingjiang0611/rotom/extensions/third-party/node_modules/pi-context-view/src/capture/builder.ts";
 import { registerCapture } from "../../runtime/rotom/node_modules/@bingjiang0611/rotom/extensions/third-party/node_modules/pi-context-view/src/capture/register.ts";
-import {
-    buildFallbackInjectionsSnapshot,
-    buildInjectionsSnapshot,
-} from "../../runtime/rotom/node_modules/@bingjiang0611/rotom/extensions/third-party/node_modules/pi-context-view/src/injections.ts";
-import { collectPromptSources } from "../../runtime/rotom/node_modules/@bingjiang0611/rotom/extensions/third-party/node_modules/pi-context-view/src/prompt-additions.ts";
-import { applyRequestSnapshot } from "../../runtime/rotom/node_modules/@bingjiang0611/rotom/extensions/third-party/node_modules/pi-context-view/src/projection.ts";
-import { buildUsageSnapshot } from "../../runtime/rotom/node_modules/@bingjiang0611/rotom/extensions/third-party/node_modules/pi-context-view/src/replay.ts";
-import { readAutoCompactReserveTokens } from "../../runtime/rotom/node_modules/@bingjiang0611/rotom/extensions/third-party/node_modules/pi-context-view/src/settings.ts";
 import { SnapshotStore } from "../../runtime/rotom/node_modules/@bingjiang0611/rotom/extensions/third-party/node_modules/pi-context-view/src/snapshot.ts";
-import {
-    computeUsage,
-    toReportedUsage,
-} from "../../runtime/rotom/node_modules/@bingjiang0611/rotom/extensions/third-party/node_modules/pi-context-view/src/usage.ts";
 import {
     contentText,
     lazyStream,
 } from "../../runtime/rotom/node_modules/@bingjiang0611/rotom/runtime/pi/node_modules/@earendil-works/pi-ai/dist/index.js";
-
+import { contextResult } from "./rotom-context-view.mjs";
 const contextSnapshots = new SnapshotStore();
 const contextMessages = {
     get isCurrentRun() {
@@ -33,102 +21,8 @@ const contextMessages = {
     filterMessages: (messages) => messages,
 };
 
-function contextCategory(category) {
-    return {
-        id: category.id,
-        label: category.label,
-        tokens: category.tokens,
-        ...(category.children?.length ? { children: category.children.map(contextCategory) } : {}),
-    };
-}
-
-function contextItem(item) {
-    return {
-        label: item.label,
-        tokens: item.tokens,
-        ...(item.change ? { change: item.change } : {}),
-        ...(item.dropped ? { dropped: true } : {}),
-        ...(item.moved ? { moved: true } : {}),
-        ...(item.requestOnly ? { requestOnly: true } : {}),
-        ...(item.children?.length ? { children: item.children.map(contextItem) } : {}),
-    };
-}
-
-function contextInputs(pi, ctx) {
-    return {
-        entries: ctx.sessionManager.getEntries(),
-        options: ctx.getSystemPromptOptions(),
-        allTools: pi.getAllTools(),
-        activeToolNames: pi.getActiveTools(),
-        promptSources: collectPromptSources(pi.getAllTools(), pi.getCommands()),
-        systemPrompt: ctx.getSystemPrompt(),
-    };
-}
-
-function contextResult(pi, ctx, view) {
-    const snapshot = contextSnapshots.latest();
-    const common = contextInputs(pi, ctx);
-
-    if (view === "injections") {
-        const injections = snapshot
-            ? buildInjectionsSnapshot({
-                  ...common,
-                  snapshot,
-                  filterMessages: contextMessages.filterMessages,
-              })
-            : buildFallbackInjectionsSnapshot(common);
-
-        return {
-            type: "native-context",
-            title: "Context injections",
-            view,
-            captured: Boolean(snapshot),
-            totalTokens: injections.totalTokens,
-            hiddenTools: injections.hiddenTools ?? [],
-            groups: injections.groups.map((group) => ({
-                source: group.source.label,
-                native: group.source.native,
-                totalTokens: group.totalTokens,
-                items: group.items.map(contextItem),
-            })),
-        };
-    }
-
-    const applied = applyRequestSnapshot({
-        snapshot,
-        entries: common.entries,
-        leafId: ctx.sessionManager.getLeafId(),
-        filterMessages: contextMessages.filterMessages,
-    });
-    const current = buildUsageSnapshot({
-        ...common,
-        messages: applied.messages,
-        systemChanges: applied.systemChanges,
-        forcedPrompt: applied.forcedPrompt,
-    });
-    const usage = computeUsage({
-        snapshot: current,
-        messages: applied.messages,
-        reported: toReportedUsage(ctx.getContextUsage()),
-        modelLabel: ctx.model?.id,
-        autoCompactReserveTokens: readAutoCompactReserveTokens(pi, ctx.model),
-    });
-
-    return {
-        type: "native-context",
-        title: "Context usage",
-        view: "usage",
-        captured: Boolean(snapshot),
-        model: usage.modelLabel,
-        reported: usage.reported,
-        estimatedTokens: usage.estimatedTokens,
-        autoCompactReserveTokens: usage.autoCompactReserveTokens,
-        categories: usage.categories.map(contextCategory),
-    };
-}
-
 export default function (pi) {
-    const config = JSON.parse(readFileSync(process.env.ROTOM_TEAM_KERNEL_GATE, "utf8"));
+    let config = JSON.parse(readFileSync(process.env.ROTOM_TEAM_KERNEL_GATE, "utf8"));
     let ready = false;
 
     // The product's own context extension owns a TUI-only store. Team keeps a parallel read-only capture so the Web
@@ -157,15 +51,17 @@ export default function (pi) {
     }
 
     const authorize = async (operation, provider, model, signal, usage) => {
-        if (provider !== config.provider || (model !== undefined && model !== config.model)) {
+        const identity = config;
+
+        if (provider !== identity.provider || (model !== undefined && model !== identity.model)) {
             throw new Error("team_kernel_identity_denied");
         }
 
-        const response = await fetch(config.url, {
+        const response = await fetch(identity.url, {
             method: "POST",
             redirect: "error",
             headers: {
-                Authorization: `Bearer ${config.token}`,
+                Authorization: `Bearer ${identity.token}`,
                 "Content-Type": "application/json",
             },
             body: JSON.stringify({ operation, provider, model, ...(usage ? { usage } : {}) }),
@@ -174,9 +70,19 @@ export default function (pi) {
                 : AbortSignal.timeout(10000),
         });
 
-        if (config.modelDefinition && operation === "inference" && response.status === 200) {
+        if (identity !== config) {
+            await response.body?.cancel();
+
+            throw new Error("team_kernel_identity_changed");
+        }
+
+        if (identity.modelDefinition && operation === "inference" && response.status === 200) {
             // A private request credential, never a prompt/event/file. Native streams receive it only as auth options.
             const body = await response.text();
+
+            if (identity !== config) {
+                throw new Error("team_kernel_identity_changed");
+            }
 
             if (Buffer.byteLength(body) > 65536) {
                 throw new Error("team_kernel_auth_too_large");
@@ -297,7 +203,13 @@ export default function (pi) {
                 JSON.stringify({
                     kind: "team-kernel-context-v1",
                     nonce,
-                    result: contextResult(pi, ctx, view),
+                    result: contextResult(
+                        pi,
+                        ctx,
+                        view,
+                        contextSnapshots.latest(),
+                        contextMessages.filterMessages,
+                    ),
                 }),
                 "info",
             );
@@ -336,6 +248,31 @@ export default function (pi) {
             }
 
             ctx.ui.notify(JSON.stringify({ kind: "team-kernel-tree-v1", nonce, result }), "info");
+        },
+    });
+    pi.registerCommand("team-kernel-rebind", {
+        description: "Private Team model authorization rotation",
+        handler: async (_args, ctx) => {
+            await ctx.waitForIdle();
+            const next = JSON.parse(readFileSync(process.env.ROTOM_TEAM_KERNEL_GATE, "utf8"));
+
+            if (
+                children.size !== 0 ||
+                next.provider !== config.provider ||
+                !next.modelDefinition ||
+                next.modelDefinition.api !== config.modelDefinition?.api ||
+                next.modelDefinition.id !== next.model ||
+                next.token === config.token
+            ) {
+                throw new Error("team_kernel_rebind_denied");
+            }
+
+            const provider = ctx.modelRegistry.getProvider(config.provider);
+
+            config = next;
+            // Keep the gated stream methods. Their catalog closures read the new definition;
+            // native registration refreshes its model snapshot without reloading extensions.
+            ctx.modelRegistry.registerProvider(provider);
         },
     });
     pi.registerCommand("team-kernel-reload", {

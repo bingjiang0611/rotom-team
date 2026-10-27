@@ -152,8 +152,8 @@ costs memory (about 330 MiB RSS measured) while it waits.
 Tracked shared settings/resource metadata and project configuration changes trigger a native reload on the next
 authorized receipt. This preserves settings-sheet updates without restarting the process. The freshness hint does not
 recursively hash dependency/resource trees; use `/reload` for deeper file changes. Reload may reset extension memory
-and reconnect MCP. The process stays on its admitted payer/model; neither project defaults nor child roles can change
-that authorization.
+and reconnect MCP. Each execution stays on its admitted payer/model; only an explicit idle model-selection receipt
+can rotate the same-account process's model authorization. Neither project defaults nor child roles can change it.
 
 ## Backup and restore of installed packages
 
@@ -184,344 +184,59 @@ paging/streaming protocol, not silently truncating data or raising limits withou
 
 ## Native pin and subagent defaults
 
-The pin is rotom 0.1.26. Team does not override native retry, compaction or builtin role settings. An empty shared
-profile uses native defaults: automatic retry enabled (3 retries, 2-second exponential base delay, 60-second maximum),
-automatic compaction enabled (16,384 reserve tokens and approximately 20,000 recent tokens retained), and all five builtin
-roles: scout, worker, reviewer, delegate and oracle (alias advisor for oracle). Compaction triggers when the
-native context estimate exceeds the selected model's context window minus reserve tokens, and uses native overflow
-recovery. Context windows come from model metadata, not a Team-wide limit. Shared `compaction.modelOverrides` and
-`retry.provider` settings retain native precedence. Provider request retry options are forwarded unchanged; the pinned
-OpenAI provider helper defaults to zero HTTP retries when no override is set. Agent-level retry is separate and defaults
-to three. Automatic compaction usage and rotom's evidence-preserving reducer usage are journaled under the same prompt payer;
-missing usage remains unknown. Unless an owner/shared or trusted project `sol-pi.json` explicitly selects otherwise,
-Team writes native SoL-Pi configuration with rotom's feature defaults and the admitted provider/model. Shared
-`sol-pi.json` is a managed configuration file. The reducer may run only on the admitted provider/model: an explicitly
-selected foreign reducer is blocked and leaves the operation unknown rather than charging an unbound account. All inference, including
-retry, compaction and reduction, still passes through the fixed payer/model gate. Unknown Team operations and
-credential refreshes are not replayed. Existing managed role/recovery overrides are replaced from the shared profile on
-the next startup; private/unclassified state is untouched. This is not an OS sandbox or a claim that a plugin cannot read
-project files.
-
-Optional child named skills, user/project memory and existing project refinement overlays use native injection.
-User memory stays under the paying member's native agent directory and is never copied on handoff. Project memory is
-shared by that project. Native read/write and size limits apply. Private routing is not secrecy after a model quotes
-memory into a shared conversation, and is not an OS sandbox. The old Team recovery-descriptor injection gate is removed;
-native owned admission and the fd-3 lifeline remain authoritative.
-
-`workflowScript` remains blocked in Team RPC. Pinned native synchronous controllers and standalone foreground launches
-are refused by owned scope. Native asynchronous controllers are supported natively, but the RPC UI skips the headless
-auto-drain; `agent_settled` and `ctx.waitForIdle()` do not prove controller/child closure. The fixed pin exports no public
-drain bridge. Enabling this requires a supported native drain request/response plus Team integration and closure tests,
-not a new Team executor, status-file polling, or spoofing `hasUI`. Native refinement generation also uses an unsupported
-foreground reviewer; this release enables existing overlays, not generation. See
-[NATIVE-COMMAND-COMPATIBILITY.md](NATIVE-COMMAND-COMPATIBILITY.md).
+See [Native pin and subagent defaults](CONFIGURATION-NATIVE.md#native-pin-and-subagent-defaults).
 
 ## Native slash commands
 
-Typing `/` uses pinned native metadata. Dynamic extensions, prompt templates and skills from native `get_commands`
-are admitted by default; Team only protects terminal-only builtins for credentials, trust, uploads and session lifecycle,
-plus private `team-kernel-*` commands. `GET /api/c/:id/prompts` reads a snapshot; it never starts native code. Opening slash suggestions through composer input, or choosing **Refresh shared agent commands on my account**, explicitly starts the trusted native runtime under the member's ordinary permissions, admission and lease. Discovery denies Team
-inference and credential-refresh requests. It needs no paid prompt, but shared extension startup is still trusted executable
-code, not a sandbox. An idle session owned by another member is first handed over using public history.
-
-Snapshots belong to one member, segment and immutable binding. Another member never receives their HOME-derived
-descriptions. Snapshots persist and do not disappear after 30 idle seconds. Freshness distinguishes undiscovered, live, last-known and configuration-changed. The bounded fingerprint reads declared configuration and immediate resource metadata, never npm dependency trees or
-symlink targets. Linked/external code and nested file edits require explicit Refresh or `/reload`; this is a freshness hint,
-not a complete content attestation. Settings/failure invalidation retains the last-known names; authorized startup/reload captures again. This is not a file-watching or freshness guarantee for arbitrary external resources: refresh after editing configuration. Catalog errors are visible. Failed discovery needs explicit review/refresh, not automatic retry after the cache TTL.
-Unknown discovery blocks startup even with a new request ID; exact receipt readback starts no process. Known command-sheet
-input does not race an automatic discovery. Dispatch validates the current native registry. Unknown names and private `team-kernel-*` commands do
-not become model prompts. Native skills/templates are expanded by native APIs, including queued input. Selecting a
-skill or prompt-template suggestion only fills the draft; submitting it starts the model request.
-After the native registry admits that input as a skill/template, submit returns its active prompt receipt and the
-composer clears the submitted draft without waiting for inference to finish. Side-effectful commands still wait for
-their own result; cancellation/rejection/unknown does not clear the draft.
-
-Team's fixed Web adapters remain `settings, model, thinking, tree, fork, clone, compact, reload`; Goal, context, account
-commands and other native extensions use command-specific or native handlers after live discovery. The protected
-terminal-only builtins are `scoped-models, export, import, share, bug, changelog, hotkeys, trust, login, logout, new,
-resume, quit`. Resolving native name precedence before protection prevents a same-name template from bypassing a
-protected builtin. The actual native registry is checked again immediately before idle or queued dispatch, including
-when a retained process reloads resources or registers a new command. Separate Team APIs and internal lifecycle/recovery
-operations are unchanged. Catalog entries also carry Web guidance, not another registry. `/llama` remains visible as
-Terminal only but cannot execute in Web. MCP supports the personal sign-in manager and login/logout/reconnect syntax;
-owner server-definition/enable/exposure commands and extra positional arguments are rejected. Bare `/subagents-stop`
-requires an explicit run id. Unknown trusted extensions are labeled unverified; skills/templates explicitly warn about
-inference and service-machine prerequisites. See the complete dynamic-command audit in the compatibility document.
-
-`/context` and `/context usage` open a Web context-usage sheet; `/context injections` groups current request injections
-by native/extension source. Both reuse pinned `pi-context-view` capture and measurement code, never make a paid/silent
-probe, and return only labels/counts—not raw prompt, message or tool text. `/context config` is refused because plugin
-configuration belongs to the owner-managed shared profile. Context commands are read-only receipts, idempotent by
-request ID, and busy-gated rather than queued into a running prompt. The usage sheet follows the pinned terminal's
-16×16 proportional map, category colors, token precision and window percentages. Tool Output opens its measured
-per-tool breakdown by default. Auto-Compact Buffer is capped at remaining window space, and Free Space excludes it;
-an unknown window stays unknown. Desktop map/legend columns stack on phones. Browser colors use the active Team
-theme; terminal custom color/map-size overrides, Fit zoom and raw-content previews are not ported.
-
-Tab and partial-name Enter fill the draft without executing. Complete-name Enter runs the command. Thinking and fork
-have dedicated keyboard selectors; settings writes remain owner-only and busy-gated. Bare Goal opens a Web manager,
-with native grammar, personal billing and no-replay fences intact. Its safety-settings editor remains unavailable.
-The composer shows a separate current thinking control, including `off`. During a live prompt, only its paying member
-with continue/driver permission may change thinking, through the picker or `/thinking <level>`. Native clamps the level;
-the next model request uses it, not the response already streaming. The same process, payer, model, segment and initial
-receipt binding remain unchanged. Native thinking history preserves the level after process retirement/restart; current
-live readback takes precedence while the process is retained. A durable command-input fence prevents unknown writes
-from being replayed or making the parent prompt eligible for automatic continuation. Startup, finalization, Stop and
-unknown operations still refuse live changes. When idle, the paying member's own change stays in the same native
-session and segment, so project hooks keep seeing one session id. A thinking-only change runs as the native `/thinking`
-command receipt on the retained process. A model or account change of the same member is one `/model` command receipt:
-its intent and the segment's current model commit together, the idle process retires, and native restarts on the same
-session file with the new model, then records `model_change` and reapplies the selected thinking level. The segment's
-original binding stays the immutable identity anchor; each attempt keeps its own binding for response validation and
-usage. A known rejection restores the previous model; an unknown outcome keeps the new one and stays fenced. After a
-kernel pin upgrade, the paying member's own next dispatch (prompt, command, model/thinking change, compaction or
-discovery) moves the idle head segment to the new kernel in place: only the current binding's version changes, the
-same session file reopens on it, and the native session id and full history stay. Running or unknown work refuses the
-move. A payer change, or another member sending, still uses the existing handoff path. Rolling the executable back to
-the previous kernel makes such a segment's version differ again, so its next send on the old release hands off.
-Session-list model labels read the current native journal binding,
-not the legacy Durable agent's stale preference. A single batch read joins current conversation heads and model overrides,
-without a per-row native session lookup or a second model-state cache. Model switches and server restarts do not change historical receipt bindings.
-
-Browser/computer-use refer to the service host, not the viewer's device. Quota results remain member-private account
-snapshots. See [NATIVE-COMMAND-COMPATIBILITY.md](NATIVE-COMMAND-COMPATIBILITY.md) for every supported interaction and limit.
-
-### Branch interaction and outcomes
-
-The pinned RPC `navigateTree` adapter returns only `cancelled`; it drops the native session's `editorText`, `aborted`
-and summary result. Team therefore preserves native cancellation, extracts draft text with the pinned native
-`contentText(content, "")` helper **after successful, non-no-op navigation**, and reads only newly persisted native
-summary entries. The cancellation reason is unavailable, not inferred. String content and multiple text blocks use
-native concatenation; image-only/empty entries are not offered by the fork selector. Cancellation, error and unknown
-outcomes leave an existing draft untouched. Tree result readback is durable and does not replay navigation.
-
-The shared transcript and the native snapshot API's `messages` are **immutable audit history**, including abandoned
-branches. Navigation does not delete those records. A notice identifies this after branching; `/tree` labels active
-versus abandoned branch entries. Native JSONL export follows the selected branch. Compaction may further reduce the
-context sent to a model; branch membership is not a promise that every ancestor message is sent verbatim.
-
-Native status/widget events replace or clear keyed live slots. Ordinary `notify` text/JSON creates notices;
-Team's existing `team-kernel-*-v1` notify envelopes are private controls, not notices. The shared decoder validates
-children/policy/barrier/tree/context fields before dispatch to readers; command adapters still correlate their own
-nonce. Unknown reserved kinds, invalid fields or malformed reserved `{"kind":"team-kernel-` prefixes fence the RPC
-transport as unknown, without replay or payload logging. Other incomplete JSON remains ordinary notification text.
-The wire format and pinned native sender are unchanged.
-
-A `handled` receipt means the handler completed, not that a requested navigation occurred: inspect its cancellation/result.
-Side-effectful slash handlers use `command` receipts and are not automatically continued after unknown outcomes.
-Only native-discovered prompt templates/skills become ordinary recoverable `prompt` operations. Existing stored
-receipts stay readable and are not rewritten. Goal Stop may remain unknown; it does not certify external effects.
+See [Native slash commands](CONFIGURATION-NATIVE.md#native-slash-commands).
 
 ## Outputs and conversation copies
 
-The **Outputs** entry groups successful `write`/`edit` records and separately published artifacts. It uses the already
-public transcript projection, not a scan of the server filesystem, raw native history, parsed shell commands or script
-source. Successful codemode child-call metadata is included, even if a later script step failed. Failed/pending writes
-and clipped direct path arguments do not create links. Only child metadata with an already-public path is indexed;
-native nested-call records without public paths are not mined for arguments and remain accessible via Browse project
-files. Existing file-view/download authorization remains authoritative.
-The button count and sheet share this history-based definition. Browse project files finds shell-created and other
-unindexed outputs without enabling the legacy artifact extension.
-
-This is an audit-history shortcut, **not** a manifest of the active native branch, an existence check, a saved file
-version or a new filesystem permission. Inherited/discarded history may refer to files that have changed or disappeared;
-opening resolves the current path through the existing authorized endpoint. Clones/forks share the project folder.
-The UI states these limits instead of implying independent file copies. Native `/clone` keeps the visible source title
-plus `· Copy`; an earlier-message fork uses `· Fork`. Imported source `session_info` remains in audit history but cannot
-rename the destination. Subsequent explicit live naming still works.
+See [Outputs and conversation copies](CONFIGURATION-NATIVE.md#outputs-and-conversation-copies).
 
 ## MCP credentials
 
-MCP server definitions can be shared or project-local; OAuth tokens remain in each member's
-`kernel-homes/<member>/.pi/agent/mcp-auth.json`. The browserless native sign-in bridge never opens the service user's browser.
-Only the initiating member's loopback callback origin/path is accepted. The MCP-only native CLI runs from the project's
-cwd, so relative stdio arguments and config precedence match Agent execution. Its native trust record enables project MCP
-parsing; this CLI exits before project extension/package loading. Agent/child startup independently grants native project
-trust. Project `auth.provider` remains rejected by the native
-parser: a repository cannot redirect a member's model login token. Config add/edit/remove changes the next startup and
-command freshness; `/reload` reconnects native MCP. Project workspaces remain separately backed up.
-
-Do not put personal access tokens or global-account credentials in shared config. Environment lookups use the scrubbed
-member environment, not the service's ambient secrets. Backups/restores continue to exclude refresh grants; members sign
-in again. Declared config paths cannot name auth, model stores or session storage.
+See [MCP credentials](CONFIGURATION-NATIVE.md#mcp-credentials).
 
 ## Forty-five terminal entries and TUI compatibility
 
-See [NATIVE-COMMAND-COMPATIBILITY.md](NATIVE-COMMAND-COMPATIBILITY.md) for the supported interactions and actual coverage.
-The attested 0.1.22 terminal comparison contains 24 builtins, 15 extension commands and 6 skill commands. The empty
-shared Team profile on rotom 0.1.25 has 40 raw native entries: `/context` is now packaged and the other five personal
-skills remain absent. Twenty-seven remain public after protecting thirteen terminal-only builtins. Inventory presence
-is not proof of terminal-equivalent interactions.
-
-`/context` has structured Web usage/injection-source adapters. `/llama` remains discoverable but its custom manager
-requires TUI support that pinned RPC cannot supply. A handled response containing a TUI-only warning is not success. Five personal skills remain deliberately uninstalled
-by user choice; this is not permission to publish private memory/preferences/device lessons.
-
-Production TUI transport is outside this delivery scope. A bounded OS-PTY prototype renders and interacts with an actual native custom component, preserving an isolated member
-session and an unknown command receipt. It is **not** a production transport: public extension APIs expose no generic
-command-completion/error observer to the external TUI frontend. Terminal exit or visual messages are not sufficient to
-settle a receipt. No context.mode spoofing or native monkeypatch is used. The separate `/context` Web adapter reuses
-native measurement functions; it is not a generic TUI transport.
+See [Forty-five terminal entries and TUI compatibility](CONFIGURATION-NATIVE.md#forty-five-terminal-entries-and-tui-compatibility).
 
 ## Recover an existing member's browser sign-in
 
-The owner can open **Settings → People → Recover sign-in** beside an existing non-owner member.
-Check the member name and ID (names may repeat), then send the recovery link only to that person.
-Anyone holding it can sign in as that member, including using their connected personal model/MCP accounts.
-This is trusted-owner account recovery, not anonymous self-service identity verification.
-
-Recovery links expire after 15 minutes and work once, only after an explicit confirmation POST.
-Replacing a displayed recovery link cancels it; closing the sheet leaves a delivered link valid until expiry.
-Only a hash is persisted. Unused links and redeemed device credentials survive ordinary server restarts.
-Deleting the member or rotating the owner login token invalidates pending recovery links.
-Recovery creates a revocable device credential for the same member ID. It does not rename the member, reset
-permissions/session scope/tunnel binding, copy credentials, or sign out existing devices. Use the member's
-original access address when it has a tunnel restriction. This is not model OAuth reauthentication and does
-not reconcile unknown model/tool outcomes. Device credentials are managed in the member's Profile; the
-existing 32-device limit still applies. At capacity, redemption returns an error without spending the link;
-revoke an old device from a signed-in member device before retrying.
-
-Do not roll back to a version without recovery support while recovery links remain live: cancel them or
-wait 15 minutes first. This feature does not diagnose or prevent browser Cookie deletion.
+See [Recover an existing member's browser sign-in](CONFIGURATION-SESSIONS.md#recover-an-existing-members-browser-sign-in).
 
 ## Stored image previews
 
-On macOS, the server uses the system `sips` tool to generate smaller copies of stored-message images: 480 px
-thumbnails in the transcript and 1600 px previews in the full-screen viewer. **Open** still opens the unmodified
-original. GIF animation and small images are preserved; unsupported platforms or resize failures use originals.
-Generation does not use a model account and does not change what the model originally received.
-
-Private cached copies, now including byte-identical originals, live under `<data>/media/`, sharing a cap of 256 MiB
-and 8192 files. They can be regenerated from stored entries; Durable remains authoritative. Do not share that
-directory: it contains conversation images. The existing offline backup includes these files. Fork visibility and
-session permissions are checked on every request, including conditional GET/HEAD. Damaged/missing copies are rebuilt,
-and cache failure falls back to the source. Images support content ETag, single byte Range and HEAD; invalid/multipart
-range units or stale If-Range fall back to full responses. Unsatisfiable byte ranges return 416. Range/304 still read
-and verify the entire cached file, rather than providing zero-copy disk streaming.
-
-Large static PNG/JPEG clipboard images are bounded to 2000 px before upload, preserving aspect ratio/transparency.
-Only a smaller PNG is substituted; the original is **not** separately uploaded/retained. Ordinary file selection,
-small/animated/unknown images, unsupported browsers and failed/unhelpful conversions are unchanged. This does not
-raise the 5 MiB per-model-image limit: a noisy PNG may still be too large to send.
-
-Live event streams and large long-poll responses negotiate gzip when accepted. Events flush immediately; an SSE
-client with more than 8 MiB of buffered data is disconnected so it can reconnect for a fresh view. A long-poll
-connection likewise retains at most 8 MiB of serialized UTF-8 event data (including separators, plus a fixed response
-envelope). Each event is serialized once; unacknowledged responses reuse those bytes. Overflow closes and detaches
-the poller instead of returning a partial view; the next poll receives a new session and full view. An individual
-initial event larger than the limit cannot be delivered through that connection. Use the supported history tail/pages
-below; supporting an oversized single event requires a separately designed bounded event protocol.
+See [Stored image previews](CONFIGURATION-SESSIONS.md#stored-image-previews).
 
 ## Session subscriptions
 
-Each new web tab keeps one SSE connection or long-poll session while switching conversations, including Back/Forward
-and returning home. `subscriptions=1&generation=N` opts in on the initial GET; `hello.subscriptions` confirms support.
-`POST /api/subscribe` carries the authenticated connection id, a strictly newer safe-integer generation, a numeric
-`conversationId` (or `null` for home), and an optional saved-view `have` claim. It uses the normal authenticated,
-`X-Pocket: 1` write guard. It changes only the read subscription, not a user's send or native execution.
-
-The server checks connection ownership, removes the previous room synchronously, and checks access both before and
-after opening the new room. Older/equal generations cannot undo a newer selection. An ordered `subscription` event
-acknowledges the generation and target before its full view or missing result; home needs only the ACK. Room events
-(`view`, `missing`, `chat`, `notes`, `browser`, `presence`, `changes`) use `{ generation, data }` envelopes. The tab
-rejects events from another generation or room, including an old A snapshot after A→B→A. Global events remain unwrapped;
-normal switches do not repeat hello or reset the session-list version. Poll queues freeze the generation at enqueue,
-retain their transport sequence across switches, and reject invalid/future sequence ACKs without discarding data.
-
-Old tabs keep their original unwrapped format and reconnect behavior. A new tab also reconnects when an older server
-does not negotiate support. Saved-copy reads do not paint after the member/access key changes. A lost subscription
-response or six seconds without its completed view/ACK replaces only the read connection; the POST and user send are
-not replayed. SSE network errors reconnect with the latest route, not the original EventSource URL. After poll expiry
-or server restart, the client discards the replacement batch for the obsolete URL, closes that poller and opens a fresh
-connection for the current route. This exceptional recovery can require an extra handshake; normal switches do not.
+See [Session subscriptions](CONFIGURATION-SESSIONS.md#session-subscriptions).
 
 ## Session-list updates
 
-The web app opts into versioned session lists on its event stream or long-poll connection. It receives a full list
-first, then only changed/removed rows; unchanged refreshes send nothing. A missed version requests a fresh full list
-on the same connection. Permissions are checked when each member's list is prepared, and permission changes force a
-filtered full list. Reconnects start a new version namespace. Old clients and `GET /api/sessions` retain full arrays.
-
-The server still scans the member's visible catalogue to compare rows; server-side catalogue pagination is not
-implemented. Per-connection comparison baselines are capped at 2048 rows and 2,097,152 JSON characters; larger lists
-fall back to full snapshots without retaining that baseline.
+See [Session-list updates](CONFIGURATION-SESSIONS.md#session-list-updates).
 
 ## Saved session copies
 
-The web app keeps a copy of the 10 sessions this browser opened most recently, in IndexedDB (`rotom-views`). Each
-copy holds the newest transcript entries the tab holds, up to 400, the session's title information and message authors. It does not hold
-live state, approvals, queued messages or rotom payer/segment state. Coming back to a session shows its copy at once,
-marked "saved copy · checking for changes…", with no message box. The server's own view then replaces it.
-
-When a tab connects, it names the run of entries it holds, and the server sends only the rest. This also applies to
-ordinary reconnects without a saved copy. The claim names the server's run, so after a restart everything is sent
-again. It can only reduce what that tab receives; access checks are unchanged. A tab that turns out to lack part of
-the named run reconnects for the full view.
-
-Copies belong to one person and one level of access. Signing out (Settings or an expired sign-in) clears all of them.
-So does a change of the signed-in person, role or session grants. A session the server says is missing loses its copy,
-and copies of sessions no longer in the person's list are dropped. Anyone using the same browser profile before
-sign-out could read the copies. Where IndexedDB is unavailable, nothing is saved.
+See [Saved session copies](CONFIGURATION-SESSIONS.md#saved-session-copies).
 
 ## Streaming Markdown
 
-Live text/thinking/tool updates refresh the transcript locally when busy and all non-live data are unchanged.
-Busy, permission/account, native status/dialog/widget, cost and persisted-entry changes still refresh the whole UI.
-This does not filter store notifications, change subscription order or alter transport/authorization behavior.
-
-Growing Markdown text updates are combined per browser animation frame. The first text and completed result render
-without waiting for a frame; completion still uses the full parser and sanitizer, including final code folding.
-A paused/background frame may delay intermediate text, never the completed result's render. Conversation or document
-base-path changes invalidate immediately, and unmounting cancels pending work. No stream versions are persisted.
-The transcript keeps following content height while the reader is at the bottom; scrolling up still stops following.
+See [Streaming Markdown](CONFIGURATION-SESSIONS.md#streaming-markdown).
 
 ## Long sessions
 
-Opening a session, the web app asks for its newest 240 entries (`tail=240` on the event connection). The view still
-names every entry in order, but sends only those, plus anything new later. Scrolling up near the top, or "Show earlier
-messages", reads the entries before them 200 at a time (`GET /api/c/:id/entries?before=<entry id>`); the rows on screen
-stay where they are. Find in session, the Outputs list and a jump to a message the tab does not hold read the rest of
-the history first; the Outputs badge reads `n+` until it is all here. Export reads the whole history on the server as
-before. Each page is checked like any other read of the session, and comes from the same projection as the view, so it
-is identical to what an unpaged view sends. Connections that do not ask for a tail (older tabs, other clients) get
-every entry, as before. History before a compaction or a new context still loads separately, as before.
+See [Long sessions](CONFIGURATION-SESSIONS.md#long-sessions).
 
 ## Changes view freshness
 
-While a tab has a session open, the server watches that session's Git repository (on macOS and Windows, where the
-system watches a folder tree cheaply; elsewhere nothing is watched). A tab that may read Changes gets a small
-`changes` event saying only that something moved; it then reads Changes with its own permissions, as before. An
-open Changes tab therefore shows a person's or a tool's file edits within about a second, and no longer re-reads after
-every entry. It still re-reads after write/edit/codemode results, when shown, after a reconnect, and every 30 s while
-the tab is visible, because watches can miss events (for example on network file systems). Without watching, the old
-re-read after entries remains. The server keeps each recently used session's Pi-edit list in memory (at most 32
-sessions) and reads only new entries per listing; concurrent listings of one folder share a Git run that started
-after they asked.
+See [Changes view freshness](CONFIGURATION-SESSIONS.md#changes-view-freshness).
 
 ## Optional TLS and HTTP/2
 
-The default listener is still plain HTTP/1.1 on loopback. For a private, explicitly selected HTTPS route, pass both
-`--tls-cert /absolute/certificate-chain.pem` and `--tls-key /absolute/private-key.pem` to `node bin/rotom-team.js`,
-alongside the usual explicit `--data`, `--cwd` and non-production test port. Use a certificate trusted by the client
-and valid for the hostname; protect the key. Do **not** use the repository's self-signed test fixture for deployment.
-TLS enables HTTP/2 multiplexing with HTTP/1.1 fallback on the same port. Certificate changes require a normal server
-restart. The legacy tunnel launcher does not support these flags and fails explicitly rather than printing HTTP URLs.
-Nothing automatically changes the running listener, binds another address or obtains a certificate.
-
-HTTP/2 requests use the same redacted journal schema, excluding held streams/polls. Their `wireBytes` is `null`
-(unavailable): streams share a connection, so a socket byte delta cannot be attributed to one request.
-
-A remote tab falls back to polling if its initial event stream does not deliver a complete view/session list within
-six seconds. While polling, it actively retries the stream after one hour without needing navigation. Hidden/offline
-tabs defer an overdue retry until visible/online. The poll closes before the stream opens; another incomplete stream
-starts a fresh one-hour polling period. A complete stream clears the saved fallback choice. Local loopback addresses
-keep using event streams. No journal fields or collection semantics change: fallback reasons are not yet journaled.
-A private trusted HTTPS/HTTP2 route can avoid HTTP/1 connection limits, but cannot force a buffering proxy to flush SSE.
-
-New tabs negotiate live text deltas with `live=delta` on either transport. Each connection keeps one bounded live
-baseline; append-only text/thinking blocks send only their suffix, while replacements, tool calls, retries and other
-metadata remain snapshots. Full views/reconnects always carry complete live text. A missing/wrong patch baseline
-causes read-only full resynchronization, never a send retry. Older tabs that do not negotiate still receive full text.
+See [Optional TLS and HTTP/2](CONFIGURATION-SESSIONS.md#optional-tls-and-http2).
 
 ## Verification
 

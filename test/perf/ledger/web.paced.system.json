@@ -12,7 +12,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 295
+                "darwin-arm64": 263
             }
         },
         "web.paced/sql.rows": {
@@ -26,7 +26,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 520
+                "darwin-arm64": 274
             }
         },
         "web.paced/subprocess.total": {
@@ -54,7 +54,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 49
+                "darwin-arm64": 48
             }
         },
         "web.paced/view.kernel.sql.rows": {
@@ -124,7 +124,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 19
+                "darwin-arm64": 12
             }
         },
         "web.paced/view.kernel.sql.resume": {

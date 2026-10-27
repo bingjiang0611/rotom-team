@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { sendPhase } from "../send-trace.ts";
+import { prepareRetainedModel } from "./model-preflight.ts";
 import { TeamResourcePolicyError } from "../rotom-resource-policy.ts";
 import { teamResourceRevision } from "../rotom-resources.ts";
 import { nativeBuiltinCommands, verifyRotomKernel } from "../rotom-kernel.ts";
@@ -112,8 +113,15 @@ export async function executeRun(
 
     const prepared = ctx.prepare?.(binding, sessionId);
 
-    if (rebind) {
-        // The retained process is gated to the previous model; the same session file restarts on the new one.
+    if (
+        rebind &&
+        (binding.accountGeneration !== admitted.binding.accountGeneration ||
+            binding.provider !== admitted.binding.provider ||
+            !prepared ||
+            ctx.kernel(admitted.segmentId)?.modelApi !== prepared.modelDefinition.api)
+    ) {
+        // Account/provider changes retain the stronger process boundary. Journal reservation also
+        // checks member, HOME, workspace, kernel and configuration identity.
         await ctx.retire(admitted.segmentId);
     }
 
@@ -147,6 +155,7 @@ export async function executeRun(
     }
 
     let persistent = ctx.kernel(admitted.segmentId);
+    const reusing = persistent !== undefined;
 
     if (running.timing) {
         running.timing.process = persistent ? "reused" : "started";
@@ -286,16 +295,16 @@ export async function executeRun(
             throw new RpcFailure("rejected", "Stopped before prompt dispatch");
         }
 
-        if (persistent.revision !== revision && nativeCommandName(prompt) !== "reload") {
-            // Shared settings edits used to apply on every startup. Reload the same process
-            // under the new receipt instead of silently retaining the old settings.
-            await kernel.command("/team-kernel-reload");
-            await kernel.barrier();
-
-            if (extensionError) {
-                throw new RpcFailure("unknown", "Native resource reload failed");
-            }
-        }
+        await prepareRetainedModel({
+            persistent,
+            binding,
+            prepared,
+            revision,
+            prompt,
+            rebind: rebind !== undefined,
+            reusing,
+            extensionError: () => extensionError,
+        });
 
         const catalog = (await kernel.request({ type: "get_commands" })) as {
             commands?: Array<Record<string, unknown> & { name?: unknown }>;
@@ -360,6 +369,10 @@ export async function executeRun(
 
         operation = completedOperation;
 
+        if (nativeCommandName(prompt) === "reload") {
+            persistent.needsReload = false;
+        }
+
         // Finalization must not outrun a live thinking write or hide its unknown outcome.
         await running.thinkingChange;
 
@@ -368,7 +381,16 @@ export async function executeRun(
             sessionFile?: unknown;
             sessionName?: unknown;
             thinkingLevel: string;
+            model?: { provider?: unknown; id?: unknown };
         };
+
+        if (
+            rebind &&
+            (finalState.model?.provider !== binding.provider ||
+                finalState.model?.id !== binding.model)
+        ) {
+            throw new RpcFailure("unknown", "Native model does not match the admitted binding");
+        }
 
         if (
             finalState.sessionId !== state.sessionId ||

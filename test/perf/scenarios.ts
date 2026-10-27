@@ -26,6 +26,7 @@ import { runHistoryScenarios } from "./scenario-history.ts";
 import { runImageScenarios } from "./scenario-images.ts";
 import { runAssetScenarios, runJournalScenario } from "./scenario-journal-assets.ts";
 import { runNativeLongScenario, runNativeWarmScenarios } from "./scenario-native.ts";
+import { measureModelSwitch } from "./model-switch.ts";
 import { runEstablishedSends, runNetworkSends } from "./scenario-sends.ts";
 export type { ScenarioResult } from "./scenario-context.ts";
 const out = process.argv[2];
@@ -515,6 +516,7 @@ await runJournalScenario(context);
 await runNativeLongScenario(context);
 await runAssetScenarios(context);
 await runNetworkSends(context);
+await measureModelSwitch(scenario);
 
 writeFileSync(out, raw.stringify({ workload: WORKLOAD, results }, null, 2));
 server.closeAllConnections();

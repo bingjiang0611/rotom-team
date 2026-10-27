@@ -17,8 +17,9 @@ Do not promise a millisecond transition for arbitrary trusted extensions. A cust
 unproven model captures still requires the existing full reload. Explicit `/reload`, actual resource changes, account
 replacement, unknown outcomes, process retirement and cold startup retain their current semantics.
 
-The earlier fast switch is on `21bd757`, not integrated into current split main. This proposal builds on its reviewed
-same-account authorization rotation; it does not invent a replacement journal or gate protocol.
+The earlier fast switch was developed at `21bd757`; the session integration ports it onto main's current modules,
+retaining one deferred full reload. This proposal builds on its reviewed same-account authorization rotation; it does
+not invent a replacement journal/gate protocol or implement the proposed reload removal.
 
 ## 2. Why a smaller design is sufficient for the known capture
 
@@ -162,14 +163,14 @@ because the final model string matches A.
 
 ## 6. Code ownership and integration sequence
 
-| Owner / repository                   | Smallest authorized implementation after separate implementation approval                                                              |
-| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
-| Native rotom / bundled SoL-Pi        | Parse the selector; resolve the reducer model at point of use; keep fixed config; test one-root A → B → A                              |
-| Native rotom core/loader             | Compute the positive capability from the actual reviewed profile and expose it in existing `get_state`; invalidate it with the runtime |
-| Team resource preparation            | Emit selector only for derived configuration, after pinning the supporting native release                                              |
-| Team `rotom-executions/processes.ts` | Retain existing authorization rotation and per-attempt gate checks                                                                     |
-| Team `execute.ts` / native dispatch  | Consume existing actual state readback and the positive capability; preserve all reload/error/finalization paths                       |
-| Team verification/performance        | Exercise real native captures with loopback providers; measure switching **and the following operation**                               |
+| Owner / repository                | Smallest authorized implementation after separate implementation approval                                                              |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Native rotom / bundled SoL-Pi     | Parse the selector; resolve the reducer model at point of use; keep fixed config; test one-root A → B → A                              |
+| Native rotom core/loader          | Compute the positive capability from the actual reviewed profile and expose it in existing `get_state`; invalidate it with the runtime |
+| Team resource preparation         | Emit selector only for derived configuration, after pinning the supporting native release                                              |
+| Team `rotom-executions/launch.ts` | Retain existing authorization rotation and per-attempt gate checks                                                                     |
+| Team `run.ts` / `operations.ts`   | Consume existing actual state readback and the positive capability; preserve all reload/error/finalization paths                       |
+| Team verification/performance     | Exercise real native captures with loopback providers; measure switching **and the following operation**                               |
 
 First land and verify the native change in its source repository, release the verified artifact, then update Team's
 runtime lock/pin using the normal integrity check. Do not patch installed `node_modules`, broaden a trust exception,

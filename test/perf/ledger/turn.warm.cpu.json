@@ -222,7 +222,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 1
+                "darwin-arm64": 0
             }
         },
         "turn.warm/json.parse.other.chars": {
@@ -236,7 +236,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 90
+                "darwin-arm64": 0
             }
         }
     }

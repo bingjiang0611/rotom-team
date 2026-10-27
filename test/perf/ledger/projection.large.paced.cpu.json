@@ -12,7 +12,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 1577
+                "darwin-arm64": 634
             }
         },
         "projection.large.paced/json.parse.chars": {
@@ -26,7 +26,7 @@
             "tolerance": 266,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 1202211
+                "darwin-arm64": 539040
             }
         },
         "projection.large.paced/json.stringify.chars": {
@@ -40,7 +40,7 @@
             "tolerance": 41,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 476326
+                "darwin-arm64": 430044
             }
         },
         "projection.large.paced/view.entry.visits": {
@@ -96,7 +96,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 432
+                "darwin-arm64": 143
             }
         },
         "projection.large.paced/view.fields.stringify.chars": {
@@ -110,7 +110,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 107892
+                "darwin-arm64": 32966
             }
         },
         "projection.large.paced/view.live.project.calls": {
@@ -166,7 +166,7 @@
             "tolerance": 16,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 104
+                "darwin-arm64": 88
             }
         },
         "projection.large.paced/view.kernel.json.parse.chars": {
@@ -180,7 +180,7 @@
             "tolerance": 8656,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 56264
+                "darwin-arm64": 47608
             }
         },
         "projection.large.paced/json.parse.http.calls": {
@@ -222,7 +222,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 1
+                "darwin-arm64": 0
             }
         },
         "projection.large.paced/json.parse.other.chars": {
@@ -236,7 +236,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 90
+                "darwin-arm64": 0
             }
         }
     }

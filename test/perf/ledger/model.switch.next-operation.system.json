@@ -1,0 +1,89 @@
+{
+    "schema": 1,
+    "metrics": {
+        "model.switch.next-operation/fs.read.calls": {
+            "scenario": "model.switch.next-operation",
+            "metric": "fs.read.calls",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "same isolated session after warm model switch; POST prompts with a fresh request ID; require handled discovery and unchanged selected model; includes any resource reload deferred by model switching; no inference",
+            "source": "synchronous readSync calls in instrumented parent/storage-worker processes (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 29
+            }
+        },
+        "model.switch.next-operation/fs.read.bytes": {
+            "scenario": "model.switch.next-operation",
+            "metric": "fs.read.bytes",
+            "layer": "storage",
+            "unit": "bytes",
+            "workload": "same isolated session after warm model switch; POST prompts with a fresh request ID; require handled discovery and unchanged selected model; includes any resource reload deferred by model switching; no inference",
+            "source": "bytes returned by synchronous readSync in instrumented parent/storage-worker processes (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 197950
+            }
+        },
+        "model.switch.next-operation/sql.statements": {
+            "scenario": "model.switch.next-operation",
+            "metric": "sql.statements",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "same isolated session after warm model switch; POST prompts with a fresh request ID; require handled discovery and unchanged selected model; includes any resource reload deferred by model switching; no inference",
+            "source": "node:sqlite StatementSync run/get/all/iterate + DatabaseSync.exec (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 64
+            }
+        },
+        "model.switch.next-operation/sql.rows": {
+            "scenario": "model.switch.next-operation",
+            "metric": "sql.rows",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "same isolated session after warm model switch; POST prompts with a fresh request ID; require handled discovery and unchanged selected model; includes any resource reload deferred by model switching; no inference",
+            "source": "rows returned by StatementSync all/get (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 30
+            }
+        },
+        "model.switch.next-operation/subprocess.total": {
+            "scenario": "model.switch.next-operation",
+            "metric": "subprocess.total",
+            "layer": "process",
+            "unit": "count",
+            "workload": "same isolated session after warm model switch; POST prompts with a fresh request ID; require handled discovery and unchanged selected model; includes any resource reload deferred by model switching; no inference",
+            "source": "ChildProcess.prototype.spawn + spawnSync/execFileSync/execSync (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "model.switch.next-operation/subprocess.rotom": {
+            "scenario": "model.switch.next-operation",
+            "metric": "subprocess.rotom",
+            "layer": "process",
+            "unit": "count",
+            "workload": "same isolated session after warm model switch; POST prompts with a fresh request ID; require handled discovery and unchanged selected model; includes any resource reload deferred by model switching; no inference",
+            "source": "child processes whose program is rotom (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        }
+    }
+}

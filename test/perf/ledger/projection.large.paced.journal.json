@@ -40,7 +40,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 152
+                "darwin-arm64": 141
             }
         },
         "projection.large.paced/json.parse.journal.chars": {
@@ -54,7 +54,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 87858
+                "darwin-arm64": 81907
             }
         },
         "projection.large.paced/json.parse.journalHistory.calls": {
@@ -124,7 +124,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 1198
+                "darwin-arm64": 267
             }
         },
         "projection.large.paced/json.parse.journalSegments.chars": {
@@ -138,7 +138,7 @@
             "tolerance": 288,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 851770
+                "darwin-arm64": 194335
             }
         }
     }

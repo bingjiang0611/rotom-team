@@ -12,7 +12,7 @@
             "tolerance": 2,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 35
+                "darwin-arm64": 5
             }
         },
         "session.reclaim/json.parse.chars": {
@@ -26,7 +26,7 @@
             "tolerance": 1087,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 129808
+                "darwin-arm64": 2705
             }
         },
         "session.reclaim/json.parse.http.calls": {

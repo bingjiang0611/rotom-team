@@ -122,6 +122,9 @@ for (const phase of ["discover", "prompt", "goal"] as const) {
             },
         };
         const persistent: PersistentKernel = {
+            rebind: () => assert.fail("This fixture does not switch models"),
+            modelApi: undefined,
+            needsReload: false,
             kernel: rpc as unknown as RotomRpc,
             gate: createServer(),
             gateFile: join(root, "gate"),

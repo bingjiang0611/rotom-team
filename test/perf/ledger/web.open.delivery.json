@@ -82,7 +82,7 @@
             "tolerance": 2,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 9
+                "darwin-arm64": 8
             }
         },
         "web.open/cdp.RecalcStyleCount": {

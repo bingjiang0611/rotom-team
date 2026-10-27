@@ -40,7 +40,7 @@
             "tolerance": 5,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 14
+                "darwin-arm64": 10
             }
         },
         "session.reclaim/sql.rows": {
@@ -54,7 +54,7 @@
             "tolerance": 19,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 57
+                "darwin-arm64": 24
             }
         },
         "session.reclaim/subprocess.total": {

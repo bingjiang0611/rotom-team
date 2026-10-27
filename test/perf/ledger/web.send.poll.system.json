@@ -12,7 +12,7 @@
             "tolerance": 19,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 354
+                "darwin-arm64": 324
             }
         },
         "web.send.poll/sql.rows": {
@@ -26,7 +26,7 @@
             "tolerance": 46,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 595
+                "darwin-arm64": 330
             }
         },
         "web.send.poll/subprocess.total": {
@@ -68,7 +68,7 @@
             "tolerance": 10,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 98
+                "darwin-arm64": 96
             }
         },
         "web.send.poll/view.kernel.sql.heads": {
@@ -124,7 +124,7 @@
             "tolerance": 4,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 38
+                "darwin-arm64": 24
             }
         },
         "web.send.poll/view.kernel.sql.resume": {

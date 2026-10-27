@@ -1,0 +1,273 @@
+{
+    "schema": 1,
+    "base": "aa2ac945e8b4",
+    "head": "e6c1fff7cdb4-dirty",
+    "platform": "darwin-arm64",
+    "node": "24.18.0",
+    "load": {
+        "before": [3.72802734375, 4.3232421875, 3.72998046875],
+        "after": [3.96240234375, 3.98046875, 3.95068359375],
+        "cores": 8
+    },
+    "runs": 3,
+    "scenarios": 46,
+    "observations": 1968,
+    "unavailable": 0,
+    "modelTimings": [
+        {
+            "key": "model.switch.cold/ms",
+            "base": 1725.4,
+            "head": 1853.1,
+            "change": 0.074,
+            "verdict": "noise",
+            "baseRuns": [1858, 1725.4, 1664.8],
+            "headRuns": [2047.6, 1853.1, 1641.6]
+        },
+        {
+            "key": "model.switch.warm/ms",
+            "base": 1754.2,
+            "head": 67.9,
+            "change": -0.961,
+            "verdict": "faster",
+            "baseRuns": [1754.2, 1742, 1763.1],
+            "headRuns": [62.8, 67.9, 68.1]
+        },
+        {
+            "key": "model.switch.next-operation/ms",
+            "base": 84.2,
+            "head": 814.1,
+            "change": 8.669,
+            "verdict": "slower",
+            "baseRuns": [84.2, 62.1, 86.1],
+            "headRuns": [824.2, 787.2, 814.1]
+        }
+    ],
+    "modelWork": [
+        {
+            "key": "model.switch.cold/fs.read.calls",
+            "base": 45,
+            "head": 45,
+            "delta": 0,
+            "verdict": "same"
+        },
+        {
+            "key": "model.switch.cold/sql.statements",
+            "base": 79,
+            "head": 79,
+            "delta": 0,
+            "verdict": "same"
+        },
+        {
+            "key": "model.switch.cold/json.parse.calls",
+            "base": 102,
+            "head": 102,
+            "delta": 0,
+            "verdict": "same"
+        },
+        {
+            "key": "model.switch.cold/subprocess.rotom",
+            "base": 1,
+            "head": 1,
+            "delta": 0,
+            "verdict": "same"
+        },
+        {
+            "key": "model.switch.warm/fs.read.calls",
+            "base": 48,
+            "head": 23,
+            "delta": -25,
+            "verdict": "better"
+        },
+        {
+            "key": "model.switch.warm/sql.statements",
+            "base": 70,
+            "head": 67,
+            "delta": -3,
+            "verdict": "better"
+        },
+        {
+            "key": "model.switch.warm/json.parse.calls",
+            "base": 107,
+            "head": 59,
+            "delta": -48,
+            "verdict": "better"
+        },
+        {
+            "key": "model.switch.warm/subprocess.rotom",
+            "base": 1,
+            "head": 0,
+            "delta": -1,
+            "verdict": "better"
+        },
+        {
+            "key": "model.switch.next-operation/fs.read.calls",
+            "base": 29,
+            "head": 29,
+            "delta": 0,
+            "verdict": "same"
+        },
+        {
+            "key": "model.switch.next-operation/sql.statements",
+            "base": 64,
+            "head": 64,
+            "delta": 0,
+            "verdict": "same"
+        },
+        {
+            "key": "model.switch.next-operation/json.parse.calls",
+            "base": 63,
+            "head": 71,
+            "delta": 8,
+            "verdict": "worse"
+        },
+        {
+            "key": "model.switch.next-operation/subprocess.rotom",
+            "base": 0,
+            "head": 0,
+            "delta": 0,
+            "verdict": "same"
+        }
+    ],
+    "gates": [
+        {
+            "key": "git.branches/subprocess.git",
+            "layer": "process",
+            "unit": "count",
+            "status": "gating",
+            "ceiling": 2,
+            "tolerance": 0,
+            "value": 2,
+            "min": 2,
+            "spread": 0,
+            "result": "pass",
+            "gateFailed": false
+        },
+        {
+            "key": "git.changes/subprocess.git",
+            "layer": "process",
+            "unit": "count",
+            "status": "gating",
+            "ceiling": 3,
+            "tolerance": 0,
+            "value": 3,
+            "min": 3,
+            "spread": 0,
+            "result": "pass",
+            "gateFailed": false
+        }
+    ],
+    "worse": {
+        "count": 65,
+        "file": "2026-10-27-session-main-counter-increases.json"
+    },
+    "otherTimingChanges": [
+        {
+            "key": "web.reopen/eventParseMs",
+            "base": 0.3,
+            "head": 0,
+            "change": -1,
+            "verdict": "faster"
+        },
+        {
+            "key": "web.send.stream/submitSentMs",
+            "base": 2.6,
+            "head": 1.4,
+            "change": -0.462,
+            "verdict": "faster"
+        },
+        {
+            "key": "image.single/imageDecodeMs",
+            "base": 0.2,
+            "head": 0.3,
+            "change": 0.5,
+            "verdict": "slower"
+        },
+        {
+            "key": "image.concurrent/imageSendFinishMs",
+            "base": 19.2,
+            "head": 13.9,
+            "change": -0.276,
+            "verdict": "faster"
+        }
+    ],
+    "preservation": {
+        "configurationSectionsPreserved": 20,
+        "historicalCounterRecordsPreserved": 89,
+        "ledgerGuard": {
+            "passed": true,
+            "violations": []
+        }
+    },
+    "contextProjection": {
+        "matched": ["contextCategory", "contextItem", "contextInputs", "contextResult"],
+        "scope": "Function syntax tokens; contextResult receives original snapshot and filter as parameters. Capture ownership stays in policy."
+    },
+    "negativeControl": {
+        "detected": true,
+        "mutation": "Remove explicit-reload exclusion from preflight",
+        "assertion": "explicit reload must not run in preflight",
+        "observed": ["/team-kernel-reload", "barrier"],
+        "productionSourceUnchanged": true
+    },
+    "ledgerMerge": {
+        "added": 138,
+        "tightened": 105,
+        "total": 1968
+    },
+    "sourceHashes": {
+        "src/server/rotom-executions.ts": "5990a5c0259c012f82de048867f94698a2aee3cbad488d4435f6815f481e6237",
+        "src/server/rotom-executions/contracts.ts": "460a5644cab79cad63f00ff5cb6f1e673e57c5913c265a3cb83da27f51f2e4f3",
+        "src/server/rotom-executions/launch.ts": "848b937523200f64da0a99c45079a8324267dd9460e1a3eef9f86ba4037ca330",
+        "src/server/rotom-executions/run.ts": "6b51bb521fa26aadc85700675a5bd5dc37d9c3b1ea283f3cbc7d6b577c643095",
+        "src/server/rotom-executions/model-preflight.ts": "cbacdbd54587598fccf2976f54b180c5952c4fd15a4d3db0c827b1f99f476da4",
+        "src/server/rotom-executions/operations.ts": "cd967195b852e709fbdec84bb052afb82e9ff2cfe71fb5a07e92c421a12d20dd",
+        "src/server/rotom-policy.mjs": "93a7b3e9a028fc7f08dcfcd67ca9ebd98e0f65904a5ae267cbdce18743ad6856",
+        "src/server/rotom-context-view.mjs": "d30b5bdc2e8215c17431ed594cd78469fecd7495dfb7b0c353b241661e081137",
+        "src/server/rotom-skills.mjs": "232d88eba111ffb3366fe202b16eda070f748cb16cb4f7b67c846c66d326483a",
+        "test/model-switch-proof.ts": "6f63d3c0d2572e1d331c65633b4dd354e56d34c5a23f77f0a8b8a11b8a7b09f2",
+        "test/model-preflight.test.ts": "25c3f73e9002bfe06f4e51fe339362217fe0d340d64fdda92fbe503e7ce9541d",
+        "test/perf/scenarios.ts": "bc4d9d098d0731195c35cc7f5b276ede949e909e7ea4e612553bb1801575a45e",
+        "test/perf/model-switch.ts": "50157447524c3b547124ba5ddb74d5aa9a1b4ca1f0d5aca364d735191c9b72ae",
+        "test/perf/model-switch-measure.ts": "89e45c15e38813abf6e5bef8e58cd7367c143ff8d90b52fd6095205aa0ee4219",
+        "test/perf/workload-scenarios.ts": "6967c70eb88429fa25718b4631bc78f588d7216b60eaa681c1cceb71f0ee2938",
+        "test/perf/workload-metrics.ts": "6fab874a28edbf05a5dd68033b441bc2546e1eae2b756867d833d698447eb6c9",
+        "runtime/rotom/pin.json": "92d474b3aaf4cf6fc8ce1099a49887973a276e533d58a3e607368a464445a2ed"
+    },
+    "reportHashes": {
+        "base": "17302a19f15d76a92dd585be4a9756094ff674b63b1774865b8de6a812aa6033",
+        "head": "2bbfb7d96e28e4562fa9ddb04c51e6d7b265c6da18c90a94636fe8f05ddc2bee"
+    },
+    "verification": {
+        "fullTests": 747,
+        "failures": 0,
+        "skipped": 0,
+        "modelProof": true,
+        "nativeCommands": true,
+        "teamKernel": true,
+        "nativeCommandsUi": true,
+        "realAccounts": false,
+        "hookBypass": false,
+        "runtimePinChanged": false
+    },
+    "timingWrapper": {
+        "label": "session-model-main-integration",
+        "command": [
+            "npm",
+            "run",
+            "perf:ci",
+            "--",
+            "aa2ac94",
+            "--runs",
+            "3",
+            "--out",
+            "/tmp/session-merge-perf"
+        ],
+        "exit": 0,
+        "signal": null,
+        "wallMs": 762613,
+        "cores": 8,
+        "loadBefore": 3.83,
+        "loadAfter": 4.05,
+        "highLoad": false
+    }
+}

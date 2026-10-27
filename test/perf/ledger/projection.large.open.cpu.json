@@ -12,7 +12,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 699
+                "darwin-arm64": 303
             }
         },
         "projection.large.open/json.parse.chars": {
@@ -26,7 +26,7 @@
             "tolerance": 105,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 498640
+                "darwin-arm64": 217483
             }
         },
         "projection.large.open/json.stringify.chars": {
@@ -40,7 +40,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 199740
+                "darwin-arm64": 181938
             }
         },
         "projection.large.open/view.entry.visits": {
@@ -96,7 +96,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 120
+                "darwin-arm64": 52
             }
         },
         "projection.large.open/view.fields.stringify.chars": {
@@ -110,7 +110,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 29520
+                "darwin-arm64": 11824
             }
         },
         "projection.large.open/view.live.project.calls": {

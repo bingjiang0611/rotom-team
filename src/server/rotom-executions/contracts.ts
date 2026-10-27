@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
 import type { ImageContent } from "@earendil-works/pi-ai";
 import type { KernelRunSignal } from "../perf-channels.ts";
-import type { KernelEntry, KernelReceipt } from "../rotom-journal.ts";
+import type { KernelBinding, KernelEntry, KernelReceipt } from "../rotom-journal.ts";
 import type { RotomRpc, RpcRecord } from "../rotom-rpc.ts";
 import { materializeSeed } from "./seed.ts";
 
@@ -204,6 +204,9 @@ export type Owned = {
 };
 
 export type PersistentKernel = {
+    rebind: (binding: Readonly<KernelBinding>, prepared: KernelLaunchContext | undefined) => void;
+    modelApi: string | undefined;
+    needsReload: boolean;
     revision: string;
     kernel: RotomRpc;
     gate: ReturnType<typeof createServer>;

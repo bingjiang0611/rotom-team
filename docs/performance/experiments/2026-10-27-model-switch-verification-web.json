@@ -1,0 +1,365 @@
+{
+    "schema": 1,
+    "counterIncreases": [
+        {
+            "key": "web.open/cdp.Nodes",
+            "base": 1114,
+            "head": 1138,
+            "delta": 24,
+            "verdict": "worse",
+            "baseRuns": [1114, 1114, 1114],
+            "headRuns": [1114, 1114, 1138]
+        },
+        {
+            "key": "web.paced/sql.statements",
+            "base": 254,
+            "head": 263,
+            "delta": 9,
+            "verdict": "worse",
+            "baseRuns": [254, 254, 254],
+            "headRuns": [263, 254, 254]
+        },
+        {
+            "key": "web.paced/sql.rows",
+            "base": 266,
+            "head": 274,
+            "delta": 8,
+            "verdict": "worse",
+            "baseRuns": [266, 266, 266],
+            "headRuns": [274, 266, 266]
+        },
+        {
+            "key": "web.paced/view.fields.stringify.calls",
+            "base": 143,
+            "head": 156,
+            "delta": 13,
+            "verdict": "worse",
+            "baseRuns": [143, 143, 143],
+            "headRuns": [156, 143, 143]
+        },
+        {
+            "key": "web.paced/view.fields.stringify.chars",
+            "base": 7094,
+            "head": 7743,
+            "delta": 649,
+            "verdict": "worse",
+            "baseRuns": [7094, 7094, 7094],
+            "headRuns": [7743, 7094, 7094]
+        },
+        {
+            "key": "web.paced/view.live.project.calls",
+            "base": 11,
+            "head": 12,
+            "delta": 1,
+            "verdict": "worse",
+            "baseRuns": [11, 11, 11],
+            "headRuns": [12, 11, 11]
+        },
+        {
+            "key": "web.paced/view.inbox.project.calls",
+            "base": 11,
+            "head": 12,
+            "delta": 1,
+            "verdict": "worse",
+            "baseRuns": [11, 11, 11],
+            "headRuns": [12, 11, 11]
+        },
+        {
+            "key": "web.paced/view.kernel.project.calls",
+            "base": 11,
+            "head": 12,
+            "delta": 1,
+            "verdict": "worse",
+            "baseRuns": [11, 11, 11],
+            "headRuns": [12, 11, 11]
+        },
+        {
+            "key": "web.paced/view.kernel.sql.statements",
+            "base": 44,
+            "head": 48,
+            "delta": 4,
+            "verdict": "worse",
+            "baseRuns": [44, 44, 44],
+            "headRuns": [48, 44, 44]
+        },
+        {
+            "key": "web.paced/view.kernel.sql.heads",
+            "base": 11,
+            "head": 12,
+            "delta": 1,
+            "verdict": "worse",
+            "baseRuns": [11, 11, 11],
+            "headRuns": [12, 11, 11]
+        },
+        {
+            "key": "web.paced/view.kernel.sql.attempts",
+            "base": 22,
+            "head": 24,
+            "delta": 2,
+            "verdict": "worse",
+            "baseRuns": [22, 22, 22],
+            "headRuns": [24, 22, 22]
+        },
+        {
+            "key": "web.paced/view.kernel.sql.command_inputs",
+            "base": 11,
+            "head": 12,
+            "delta": 1,
+            "verdict": "worse",
+            "baseRuns": [11, 11, 11],
+            "headRuns": [12, 11, 11]
+        },
+        {
+            "key": "web.paced/view.kernel.sql.rows",
+            "base": 32,
+            "head": 35,
+            "delta": 3,
+            "verdict": "worse",
+            "baseRuns": [32, 32, 32],
+            "headRuns": [35, 32, 32]
+        },
+        {
+            "key": "web.paced/view.kernel.json.parse.calls",
+            "base": 22,
+            "head": 24,
+            "delta": 2,
+            "verdict": "worse",
+            "baseRuns": [22, 22, 22],
+            "headRuns": [24, 22, 22]
+        },
+        {
+            "key": "web.paced/view.kernel.json.parse.chars",
+            "base": 11902,
+            "head": 12984,
+            "delta": 1082,
+            "verdict": "worse",
+            "baseRuns": [11902, 11902, 11902],
+            "headRuns": [12984, 11902, 11902]
+        },
+        {
+            "key": "web.paced/push.events",
+            "base": 15,
+            "head": 16,
+            "delta": 1,
+            "verdict": "worse",
+            "baseRuns": [15, 15, 15],
+            "headRuns": [16, 15, 15]
+        },
+        {
+            "key": "web.paced/push.view.count",
+            "base": 11,
+            "head": 12,
+            "delta": 1,
+            "verdict": "worse",
+            "baseRuns": [11, 11, 11],
+            "headRuns": [12, 11, 11]
+        },
+        {
+            "key": "web.paced/web.event.parse.calls",
+            "base": 13,
+            "head": 14,
+            "delta": 1,
+            "verdict": "worse",
+            "baseRuns": [13, 13, 13],
+            "headRuns": [14, 13, 13]
+        },
+        {
+            "key": "web.paced/web.view.apply.calls",
+            "base": 11,
+            "head": 12,
+            "delta": 1,
+            "verdict": "worse",
+            "baseRuns": [11, 11, 11],
+            "headRuns": [12, 11, 11]
+        },
+        {
+            "key": "web.send.stream/sql.statements",
+            "base": 316,
+            "head": 329,
+            "delta": 13,
+            "verdict": "worse",
+            "baseRuns": [316, 316, 316],
+            "headRuns": [329, 316, 316]
+        },
+        {
+            "key": "web.send.stream/sql.rows",
+            "base": 330,
+            "head": 341,
+            "delta": 11,
+            "verdict": "worse",
+            "baseRuns": [330, 330, 330],
+            "headRuns": [341, 330, 330]
+        },
+        {
+            "key": "web.send.stream/view.fields.stringify.calls",
+            "base": 156,
+            "head": 169,
+            "delta": 13,
+            "verdict": "worse",
+            "baseRuns": [156, 156, 156],
+            "headRuns": [169, 156, 156]
+        },
+        {
+            "key": "web.send.stream/view.fields.stringify.chars",
+            "base": 8846,
+            "head": 9587,
+            "delta": 741,
+            "verdict": "worse",
+            "baseRuns": [8846, 8846, 8846],
+            "headRuns": [9587, 8846, 8846]
+        },
+        {
+            "key": "web.send.stream/view.live.project.calls",
+            "base": 24,
+            "head": 26,
+            "delta": 2,
+            "verdict": "worse",
+            "baseRuns": [24, 24, 24],
+            "headRuns": [26, 24, 24]
+        },
+        {
+            "key": "web.send.stream/view.inbox.project.calls",
+            "base": 24,
+            "head": 26,
+            "delta": 2,
+            "verdict": "worse",
+            "baseRuns": [24, 24, 24],
+            "headRuns": [26, 24, 24]
+        },
+        {
+            "key": "web.send.stream/view.kernel.project.calls",
+            "base": 24,
+            "head": 26,
+            "delta": 2,
+            "verdict": "worse",
+            "baseRuns": [24, 24, 24],
+            "headRuns": [26, 24, 24]
+        },
+        {
+            "key": "web.send.stream/view.kernel.sql.statements",
+            "base": 96,
+            "head": 104,
+            "delta": 8,
+            "verdict": "worse",
+            "baseRuns": [96, 96, 96],
+            "headRuns": [104, 96, 96]
+        },
+        {
+            "key": "web.send.stream/view.kernel.sql.heads",
+            "base": 24,
+            "head": 26,
+            "delta": 2,
+            "verdict": "worse",
+            "baseRuns": [24, 24, 24],
+            "headRuns": [26, 24, 24]
+        },
+        {
+            "key": "web.send.stream/view.kernel.sql.attempts",
+            "base": 48,
+            "head": 52,
+            "delta": 4,
+            "verdict": "worse",
+            "baseRuns": [48, 48, 48],
+            "headRuns": [52, 48, 48]
+        },
+        {
+            "key": "web.send.stream/view.kernel.sql.command_inputs",
+            "base": 24,
+            "head": 26,
+            "delta": 2,
+            "verdict": "worse",
+            "baseRuns": [24, 24, 24],
+            "headRuns": [26, 24, 24]
+        },
+        {
+            "key": "web.send.stream/view.kernel.sql.rows",
+            "base": 70,
+            "head": 76,
+            "delta": 6,
+            "verdict": "worse",
+            "baseRuns": [70, 70, 70],
+            "headRuns": [76, 70, 70]
+        },
+        {
+            "key": "web.send.stream/view.kernel.json.parse.calls",
+            "base": 48,
+            "head": 52,
+            "delta": 4,
+            "verdict": "worse",
+            "baseRuns": [48, 48, 48],
+            "headRuns": [52, 48, 48]
+        },
+        {
+            "key": "web.send.stream/view.kernel.json.parse.chars",
+            "base": 25968,
+            "head": 28132,
+            "delta": 2164,
+            "verdict": "worse",
+            "baseRuns": [25968, 25968, 25968],
+            "headRuns": [28132, 25968, 25968]
+        },
+        {
+            "key": "web.send.stream/push.events",
+            "base": 30,
+            "head": 32,
+            "delta": 2,
+            "verdict": "worse",
+            "baseRuns": [30, 30, 30],
+            "headRuns": [32, 30, 30]
+        },
+        {
+            "key": "web.send.stream/push.bytes",
+            "base": 91804,
+            "head": 93567,
+            "delta": 1763,
+            "verdict": "worse",
+            "baseRuns": [91603, 91804, 91603],
+            "headRuns": [93567, 91804, 92005]
+        },
+        {
+            "key": "web.send.stream/push.view.count",
+            "base": 24,
+            "head": 26,
+            "delta": 2,
+            "verdict": "worse",
+            "baseRuns": [24, 24, 24],
+            "headRuns": [26, 24, 24]
+        },
+        {
+            "key": "web.send.stream/push.view.bytes",
+            "base": 77986,
+            "head": 79749,
+            "delta": 1763,
+            "verdict": "worse",
+            "baseRuns": [77785, 77986, 77785],
+            "headRuns": [79749, 77986, 78187]
+        },
+        {
+            "key": "web.send.stream/web.event.parse.calls",
+            "base": 15,
+            "head": 16,
+            "delta": 1,
+            "verdict": "worse",
+            "baseRuns": [15, 15, 15],
+            "headRuns": [16, 15, 15]
+        },
+        {
+            "key": "web.send.stream/web.event.parse.chars",
+            "base": 30445,
+            "head": 31528,
+            "delta": 1083,
+            "verdict": "worse",
+            "baseRuns": [30445, 30445, 30445],
+            "headRuns": [31528, 30445, 30445]
+        },
+        {
+            "key": "web.send.stream/web.view.apply.calls",
+            "base": 12,
+            "head": 13,
+            "delta": 1,
+            "verdict": "worse",
+            "baseRuns": [12, 12, 12],
+            "headRuns": [13, 12, 12]
+        }
+    ]
+}

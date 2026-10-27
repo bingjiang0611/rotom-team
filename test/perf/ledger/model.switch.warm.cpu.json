@@ -1,0 +1,103 @@
+{
+    "schema": 1,
+    "metrics": {
+        "model.switch.warm/json.parse.calls": {
+            "scenario": "model.switch.warm",
+            "metric": "json.parse.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "same isolated session after cold switch; POST configure from faux-2 to faux-1 with a retained native process; require handled receipt, unchanged native session identity and matching model projection; no inference",
+            "source": "global JSON.parse calls in the server process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 59
+            }
+        },
+        "model.switch.warm/json.parse.chars": {
+            "scenario": "model.switch.warm",
+            "metric": "json.parse.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "same isolated session after cold switch; POST configure from faux-2 to faux-1 with a retained native process; require handled receipt, unchanged native session identity and matching model projection; no inference",
+            "source": "characters given to JSON.parse (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 125255
+            }
+        },
+        "model.switch.warm/json.parse.http.calls": {
+            "scenario": "model.switch.warm",
+            "metric": "json.parse.http.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "same isolated session after cold switch; POST configure from faux-2 to faux-1 with a retained native process; require handled receipt, unchanged native session identity and matching model projection; no inference",
+            "source": "JSON.parse in exclusive http scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "model.switch.warm/json.parse.http.chars": {
+            "scenario": "model.switch.warm",
+            "metric": "json.parse.http.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "same isolated session after cold switch; POST configure from faux-2 to faux-1 with a retained native process; require handled receipt, unchanged native session identity and matching model projection; no inference",
+            "source": "JSON.parse in exclusive http scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 50
+            }
+        },
+        "model.switch.warm/json.parse.other.calls": {
+            "scenario": "model.switch.warm",
+            "metric": "json.parse.other.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "same isolated session after cold switch; POST configure from faux-2 to faux-1 with a retained native process; require handled receipt, unchanged native session identity and matching model projection; no inference",
+            "source": "JSON.parse in exclusive other scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "model.switch.warm/json.parse.other.chars": {
+            "scenario": "model.switch.warm",
+            "metric": "json.parse.other.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "same isolated session after cold switch; POST configure from faux-2 to faux-1 with a retained native process; require handled receipt, unchanged native session identity and matching model projection; no inference",
+            "source": "JSON.parse in exclusive other scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 215
+            }
+        },
+        "model.switch.warm/json.stringify.chars": {
+            "scenario": "model.switch.warm",
+            "metric": "json.stringify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "same isolated session after cold switch; POST configure from faux-2 to faux-1 with a retained native process; require handled receipt, unchanged native session identity and matching model projection; no inference",
+            "source": "characters JSON.stringify produced (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 10931
+            }
+        }
+    }
+}

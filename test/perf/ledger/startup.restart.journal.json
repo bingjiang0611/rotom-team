@@ -68,7 +68,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 56
+                "darwin-arm64": 0
             }
         },
         "startup.restart/json.parse.journalHistory.chars": {
@@ -82,7 +82,7 @@
             "tolerance": 1,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 135546
+                "darwin-arm64": 0
             }
         },
         "startup.restart/json.parse.journalThinking.calls": {

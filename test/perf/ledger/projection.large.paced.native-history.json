@@ -54,7 +54,7 @@
             "tolerance": 26,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 100636
+                "darwin-arm64": 100635
             }
         },
         "projection.large.paced/json.parse.nativeJsonlIngest.calls": {
@@ -82,7 +82,7 @@
             "tolerance": 12,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 100636
+                "darwin-arm64": 100635
             }
         },
         "projection.large.paced/json.parse.nativeJsonlSnapshot.calls": {

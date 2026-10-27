@@ -12,7 +12,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 244
+                "darwin-arm64": 234
             }
         },
         "turn.paced/sql.rows": {
@@ -26,7 +26,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 249
+                "darwin-arm64": 202
             }
         },
         "turn.paced/subprocess.total": {
@@ -138,7 +138,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 15
+                "darwin-arm64": 11
             }
         },
         "turn.paced/view.kernel.sql.resume": {

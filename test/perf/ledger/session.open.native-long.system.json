@@ -12,7 +12,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 3
+                "darwin-arm64": 0
             }
         }
     }

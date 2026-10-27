@@ -1,0 +1,89 @@
+{
+    "schema": 1,
+    "metrics": {
+        "model.switch.cold/fs.read.calls": {
+            "scenario": "model.switch.cold",
+            "metric": "fs.read.calls",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "after existing scenarios; isolated kernel app and synthetic account, no inference; POST configure from faux-1 to faux-2 before any native process, require handled receipt and matching native model projection",
+            "source": "synchronous readSync calls in instrumented parent/storage-worker processes (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 45
+            }
+        },
+        "model.switch.cold/fs.read.bytes": {
+            "scenario": "model.switch.cold",
+            "metric": "fs.read.bytes",
+            "layer": "storage",
+            "unit": "bytes",
+            "workload": "after existing scenarios; isolated kernel app and synthetic account, no inference; POST configure from faux-1 to faux-2 before any native process, require handled receipt and matching native model projection",
+            "source": "bytes returned by synchronous readSync in instrumented parent/storage-worker processes (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 297234
+            }
+        },
+        "model.switch.cold/sql.statements": {
+            "scenario": "model.switch.cold",
+            "metric": "sql.statements",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "after existing scenarios; isolated kernel app and synthetic account, no inference; POST configure from faux-1 to faux-2 before any native process, require handled receipt and matching native model projection",
+            "source": "node:sqlite StatementSync run/get/all/iterate + DatabaseSync.exec (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 79
+            }
+        },
+        "model.switch.cold/sql.rows": {
+            "scenario": "model.switch.cold",
+            "metric": "sql.rows",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "after existing scenarios; isolated kernel app and synthetic account, no inference; POST configure from faux-1 to faux-2 before any native process, require handled receipt and matching native model projection",
+            "source": "rows returned by StatementSync all/get (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 39
+            }
+        },
+        "model.switch.cold/subprocess.total": {
+            "scenario": "model.switch.cold",
+            "metric": "subprocess.total",
+            "layer": "process",
+            "unit": "count",
+            "workload": "after existing scenarios; isolated kernel app and synthetic account, no inference; POST configure from faux-1 to faux-2 before any native process, require handled receipt and matching native model projection",
+            "source": "ChildProcess.prototype.spawn + spawnSync/execFileSync/execSync (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "model.switch.cold/subprocess.rotom": {
+            "scenario": "model.switch.cold",
+            "metric": "subprocess.rotom",
+            "layer": "process",
+            "unit": "count",
+            "workload": "after existing scenarios; isolated kernel app and synthetic account, no inference; POST configure from faux-1 to faux-2 before any native process, require handled receipt and matching native model projection",
+            "source": "child processes whose program is rotom (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        }
+    }
+}

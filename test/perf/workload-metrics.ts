@@ -513,6 +513,9 @@ export const REPORTED: Record<string, string[]> = {
         "json.parse.journalSegments.calls",
         "json.parse.journalSegments.chars",
     ],
+    "model.switch.cold": [...common, "subprocess.rotom"],
+    "model.switch.warm": [...common, "subprocess.rotom"],
+    "model.switch.next-operation": [...common, "subprocess.rotom"],
     "assets.first": ["http.requests", "http.body.bytes"],
     "assets.validated": ["http.requests", "http.body.bytes"],
 };

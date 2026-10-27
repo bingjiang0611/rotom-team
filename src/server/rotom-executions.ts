@@ -532,7 +532,7 @@ export class RotomExecutions {
         );
     }
 
-    /** The paying member's idle model change: same native session, restarted on the new model. */
+    /** Change the model on the same native session; retain eligible same-account processes. */
     setModel(
         sessionId: string,
         requestId: string,

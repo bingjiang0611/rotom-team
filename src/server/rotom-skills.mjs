@@ -1,4 +1,5 @@
 /** Keep automatic skills shared/project-scoped while native trust loads all project resources. */
+import { readFileSync } from "node:fs";
 import { getAgentDir } from "../../runtime/rotom/node_modules/@bingjiang0611/rotom/runtime/pi/node_modules/@earendil-works/pi-coding-agent/dist/config.js";
 import { DefaultPackageManager } from "../../runtime/rotom/node_modules/@bingjiang0611/rotom/runtime/pi/node_modules/@earendil-works/pi-coding-agent/dist/core/package-manager.js";
 import { SettingsManager } from "../../runtime/rotom/node_modules/@bingjiang0611/rotom/runtime/pi/node_modules/@earendil-works/pi-coding-agent/dist/core/settings-manager.js";
@@ -36,7 +37,16 @@ export default function (pi) {
     });
     pi.on("session_shutdown", async ({ reason }, ctx) => {
         if (reason === "reload") {
-            await prepareTeamResources(process.env.HOME, process.env.ROTOM_TEAM_AGENT_DIR, ctx.cwd);
+            const { provider, model } = JSON.parse(
+                readFileSync(process.env.ROTOM_TEAM_KERNEL_GATE, "utf8"),
+            );
+
+            await prepareTeamResources(
+                process.env.HOME,
+                process.env.ROTOM_TEAM_AGENT_DIR,
+                ctx.cwd,
+                { provider, model },
+            );
         }
     });
     pi.on("resources_discover", async ({ cwd }) => {

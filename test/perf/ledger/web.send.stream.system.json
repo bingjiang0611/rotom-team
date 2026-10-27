@@ -26,7 +26,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 563
+                "darwin-arm64": 341
             }
         },
         "web.send.stream/subprocess.total": {
@@ -124,7 +124,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 34
+                "darwin-arm64": 26
             }
         },
         "web.send.stream/view.kernel.sql.resume": {
