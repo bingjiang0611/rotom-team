@@ -24616,6 +24616,1014 @@
             "baselines": {
                 "darwin-arm64": 1142870
             }
+        },
+        "web.send.poll.network/sql.statements": {
+            "scenario": "web.send.poll.network",
+            "metric": "sql.statements",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now 15 turns), using long polling; CDP-emulated 150 ms response latency and 500000 bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; 1000 ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency",
+            "source": "node:sqlite StatementSync run/get/all/iterate + DatabaseSync.exec (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 318
+            }
+        },
+        "web.send.poll.network/sql.rows": {
+            "scenario": "web.send.poll.network",
+            "metric": "sql.rows",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now 15 turns), using long polling; CDP-emulated 150 ms response latency and 500000 bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; 1000 ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency",
+            "source": "rows returned by StatementSync all/get (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 338
+            }
+        },
+        "web.send.poll.network/subprocess.total": {
+            "scenario": "web.send.poll.network",
+            "metric": "subprocess.total",
+            "layer": "process",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now 15 turns), using long polling; CDP-emulated 150 ms response latency and 500000 bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; 1000 ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency",
+            "source": "ChildProcess.prototype.spawn + spawnSync/execFileSync/execSync (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "web.send.poll.network/subprocess.rotom": {
+            "scenario": "web.send.poll.network",
+            "metric": "subprocess.rotom",
+            "layer": "process",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now 15 turns), using long polling; CDP-emulated 150 ms response latency and 500000 bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; 1000 ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency",
+            "source": "child processes whose program is rotom (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "web.send.poll.network/view.entry.visits": {
+            "scenario": "web.send.poll.network",
+            "metric": "view.entry.visits",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now 15 turns), using long polling; CDP-emulated 150 ms response latency and 500000 bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; 1000 ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency",
+            "source": "durable entries traversed to project room views (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 2
+            }
+        },
+        "web.send.poll.network/view.client.entry.scans": {
+            "scenario": "web.send.poll.network",
+            "metric": "view.client.entry.scans",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now 15 turns), using long polling; CDP-emulated 150 ms response latency and 500000 bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; 1000 ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency",
+            "source": "cached projected entries scanned for a client's missing IDs (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 4
+            }
+        },
+        "web.send.poll.network/view.stats.entry.scans": {
+            "scenario": "web.send.poll.network",
+            "metric": "view.stats.entry.scans",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now 15 turns), using long polling; CDP-emulated 150 ms response latency and 500000 bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; 1000 ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency",
+            "source": "entries visited in the stats reverse scan (src/server/projection.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 73
+            }
+        },
+        "web.send.poll.network/view.fields.stringify.calls": {
+            "scenario": "web.send.poll.network",
+            "metric": "view.fields.stringify.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now 15 turns), using long polling; CDP-emulated 150 ms response latency and 500000 bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; 1000 ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency",
+            "source": "slow view fields serialized for per-client change detection (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 156
+            }
+        },
+        "web.send.poll.network/view.fields.stringify.chars": {
+            "scenario": "web.send.poll.network",
+            "metric": "view.fields.stringify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now 15 turns), using long polling; CDP-emulated 150 ms response latency and 500000 bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; 1000 ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency",
+            "source": "characters of slow view fields serialized before unchanged fields are omitted (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 9398
+            }
+        },
+        "web.send.poll.network/view.live.project.calls": {
+            "scenario": "web.send.poll.network",
+            "metric": "view.live.project.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now 15 turns), using long polling; CDP-emulated 150 ms response latency and 500000 bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; 1000 ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency",
+            "source": "live projections constructed per client push (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 24
+            }
+        },
+        "web.send.poll.network/view.inbox.project.calls": {
+            "scenario": "web.send.poll.network",
+            "metric": "view.inbox.project.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now 15 turns), using long polling; CDP-emulated 150 ms response latency and 500000 bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; 1000 ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency",
+            "source": "inbox projections constructed per client push (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 24
+            }
+        },
+        "web.send.poll.network/view.kernel.project.calls": {
+            "scenario": "web.send.poll.network",
+            "metric": "view.kernel.project.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now 15 turns), using long polling; CDP-emulated 150 ms response latency and 500000 bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; 1000 ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency",
+            "source": "native kernel projections constructed per client push (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 24
+            }
+        },
+        "web.send.poll.network/view.kernel.sql.statements": {
+            "scenario": "web.send.poll.network",
+            "metric": "view.kernel.sql.statements",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now 15 turns), using long polling; CDP-emulated 150 ms response latency and 500000 bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; 1000 ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency",
+            "source": "SQL statements inside synchronous native kernel roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 96
+            }
+        },
+        "web.send.poll.network/view.kernel.sql.heads": {
+            "scenario": "web.send.poll.network",
+            "metric": "view.kernel.sql.heads",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now 15 turns), using long polling; CDP-emulated 150 ms response latency and 500000 bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; 1000 ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency",
+            "source": "SQL FROM kernel_heads during synchronous roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 24
+            }
+        },
+        "web.send.poll.network/view.kernel.sql.sessions": {
+            "scenario": "web.send.poll.network",
+            "metric": "view.kernel.sql.sessions",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now 15 turns), using long polling; CDP-emulated 150 ms response latency and 500000 bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; 1000 ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency",
+            "source": "SQL FROM kernel_sessions during synchronous roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "web.send.poll.network/view.kernel.sql.attempts": {
+            "scenario": "web.send.poll.network",
+            "metric": "view.kernel.sql.attempts",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now 15 turns), using long polling; CDP-emulated 150 ms response latency and 500000 bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; 1000 ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency",
+            "source": "SQL FROM kernel_attempts during synchronous roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 48
+            }
+        },
+        "web.send.poll.network/view.kernel.sql.command_inputs": {
+            "scenario": "web.send.poll.network",
+            "metric": "view.kernel.sql.command_inputs",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now 15 turns), using long polling; CDP-emulated 150 ms response latency and 500000 bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; 1000 ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency",
+            "source": "SQL FROM kernel_command_inputs during synchronous roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 24
+            }
+        },
+        "web.send.poll.network/view.kernel.sql.resume": {
+            "scenario": "web.send.poll.network",
+            "metric": "view.kernel.sql.resume",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now 15 turns), using long polling; CDP-emulated 150 ms response latency and 500000 bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; 1000 ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency",
+            "source": "SQL FROM kernel_resume during synchronous roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "web.send.poll.network/view.kernel.sql.rows": {
+            "scenario": "web.send.poll.network",
+            "metric": "view.kernel.sql.rows",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now 15 turns), using long polling; CDP-emulated 150 ms response latency and 500000 bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; 1000 ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency",
+            "source": "SQL rows returned inside synchronous native kernel roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 70
+            }
+        },
+        "web.send.poll.network/view.kernel.json.parse.calls": {
+            "scenario": "web.send.poll.network",
+            "metric": "view.kernel.json.parse.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now 15 turns), using long polling; CDP-emulated 150 ms response latency and 500000 bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; 1000 ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency",
+            "source": "JSON decodes inside synchronous native kernel roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 48
+            }
+        },
+        "web.send.poll.network/view.kernel.json.parse.chars": {
+            "scenario": "web.send.poll.network",
+            "metric": "view.kernel.json.parse.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now 15 turns), using long polling; CDP-emulated 150 ms response latency and 500000 bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; 1000 ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency",
+            "source": "characters decoded inside synchronous native kernel roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 25968
+            }
+        },
+        "web.send.poll.network/push.events": {
+            "scenario": "web.send.poll.network",
+            "metric": "push.events",
+            "layer": "push",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now 15 turns), using long polling; CDP-emulated 150 ms response latency and 500000 bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; 1000 ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency",
+            "source": "events written to tabs, rotom-team:push channel (src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 30
+            }
+        },
+        "web.send.poll.network/push.bytes": {
+            "scenario": "web.send.poll.network",
+            "metric": "push.bytes",
+            "layer": "push",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now 15 turns), using long polling; CDP-emulated 150 ms response latency and 500000 bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; 1000 ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency",
+            "source": "event-stream bytes written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 603,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 62121
+            }
+        },
+        "web.send.poll.network/push.view.count": {
+            "scenario": "web.send.poll.network",
+            "metric": "push.view.count",
+            "layer": "push",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now 15 turns), using long polling; CDP-emulated 150 ms response latency and 500000 bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; 1000 ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency",
+            "source": "view events written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 24
+            }
+        },
+        "web.send.poll.network/push.view.bytes": {
+            "scenario": "web.send.poll.network",
+            "metric": "push.view.bytes",
+            "layer": "push",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now 15 turns), using long polling; CDP-emulated 150 ms response latency and 500000 bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; 1000 ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency",
+            "source": "view event bytes written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 603,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 49054
+            }
+        },
+        "web.send.poll.network/http.requests": {
+            "scenario": "web.send.poll.network",
+            "metric": "http.requests",
+            "layer": "http",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now 15 turns), using long polling; CDP-emulated 150 ms response latency and 500000 bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; 1000 ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency",
+            "source": "http.server.request.start diagnostics channel; static bundle completed node:http responses (test/perf/counters.ts and test/perf/static-assets.ts)",
+            "status": "candidate",
+            "tolerance": 1,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 21
+            }
+        },
+        "web.send.poll.network/cdp.LayoutCount": {
+            "scenario": "web.send.poll.network",
+            "metric": "cdp.LayoutCount",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now 15 turns), using long polling; CDP-emulated 150 ms response latency and 500000 bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; 1000 ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency",
+            "source": "Chromium Performance.getMetrics LayoutCount delta (test/perf/browser.ts)",
+            "status": "candidate",
+            "tolerance": 1,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 16
+            }
+        },
+        "web.send.poll.network/cdp.RecalcStyleCount": {
+            "scenario": "web.send.poll.network",
+            "metric": "cdp.RecalcStyleCount",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now 15 turns), using long polling; CDP-emulated 150 ms response latency and 500000 bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; 1000 ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency",
+            "source": "Chromium Performance.getMetrics RecalcStyleCount delta (test/perf/browser.ts)",
+            "status": "candidate",
+            "tolerance": 6,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 109
+            }
+        },
+        "web.send.poll.network/cdp.Nodes": {
+            "scenario": "web.send.poll.network",
+            "metric": "cdp.Nodes",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now 15 turns), using long polling; CDP-emulated 150 ms response latency and 500000 bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; 1000 ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency",
+            "source": "Chromium Performance.getMetrics Nodes once the answer shows (test/perf/browser.ts)",
+            "status": "candidate",
+            "tolerance": 16,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1673
+            }
+        },
+        "web.send.poll.network/web.event.parse.calls": {
+            "scenario": "web.send.poll.network",
+            "metric": "web.event.parse.calls",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now 15 turns), using long polling; CDP-emulated 150 ms response latency and 500000 bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; 1000 ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency",
+            "source": "browser event-stream JSON.parse calls (web/store.js)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "web.send.poll.network/web.event.parse.chars": {
+            "scenario": "web.send.poll.network",
+            "metric": "web.event.parse.chars",
+            "layer": "web",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now 15 turns), using long polling; CDP-emulated 150 ms response latency and 500000 bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; 1000 ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency",
+            "source": "browser event-stream characters parsed as JSON (web/store.js)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "web.send.poll.network/web.view.apply.calls": {
+            "scenario": "web.send.poll.network",
+            "metric": "web.view.apply.calls",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now 15 turns), using long polling; CDP-emulated 150 ms response latency and 500000 bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; 1000 ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency",
+            "source": "browser view events applied to the store (web/store.js)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 12
+            }
+        },
+        "web.send.poll.network/web.view.base.entry.copies": {
+            "scenario": "web.send.poll.network",
+            "metric": "web.view.base.entry.copies",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now 15 turns), using long polling; CDP-emulated 150 ms response latency and 500000 bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; 1000 ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency",
+            "source": "existing Map entries copied while applying view events (web/store.js)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 61
+            }
+        },
+        "web.send.poll.network/web.view.delta.entries": {
+            "scenario": "web.send.poll.network",
+            "metric": "web.view.delta.entries",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now 15 turns), using long polling; CDP-emulated 150 ms response latency and 500000 bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; 1000 ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency",
+            "source": "new or replacement entries merged while applying view events (web/store.js)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 2
+            }
+        },
+        "web.send.poll.network/web.view.prune.checks": {
+            "scenario": "web.send.poll.network",
+            "metric": "web.view.prune.checks",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now 15 turns), using long polling; CDP-emulated 150 ms response latency and 500000 bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; 1000 ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency",
+            "source": "browser entry IDs tested against a changed server order (web/store.js)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 63
+            }
+        },
+        "web.send.poll.network/web.view.order.ids": {
+            "scenario": "web.send.poll.network",
+            "metric": "web.view.order.ids",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now 15 turns), using long polling; CDP-emulated 150 ms response latency and 500000 bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; 1000 ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency",
+            "source": "server order IDs copied into browser keep sets (web/store.js)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 63
+            }
+        },
+        "web.send.stream.network/sql.statements": {
+            "scenario": "web.send.stream.network",
+            "metric": "sql.statements",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "node:sqlite StatementSync run/get/all/iterate + DatabaseSync.exec (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 13,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 333
+            }
+        },
+        "web.send.stream.network/sql.rows": {
+            "scenario": "web.send.stream.network",
+            "metric": "sql.rows",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "rows returned by StatementSync all/get (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 11,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 355
+            }
+        },
+        "web.send.stream.network/subprocess.total": {
+            "scenario": "web.send.stream.network",
+            "metric": "subprocess.total",
+            "layer": "process",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "ChildProcess.prototype.spawn + spawnSync/execFileSync/execSync (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "web.send.stream.network/subprocess.rotom": {
+            "scenario": "web.send.stream.network",
+            "metric": "subprocess.rotom",
+            "layer": "process",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "child processes whose program is rotom (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "web.send.stream.network/view.entry.visits": {
+            "scenario": "web.send.stream.network",
+            "metric": "view.entry.visits",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "durable entries traversed to project room views (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 2
+            }
+        },
+        "web.send.stream.network/view.client.entry.scans": {
+            "scenario": "web.send.stream.network",
+            "metric": "view.client.entry.scans",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "cached projected entries scanned for a client's missing IDs (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 4
+            }
+        },
+        "web.send.stream.network/view.stats.entry.scans": {
+            "scenario": "web.send.stream.network",
+            "metric": "view.stats.entry.scans",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "entries visited in the stats reverse scan (src/server/projection.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 77
+            }
+        },
+        "web.send.stream.network/view.fields.stringify.calls": {
+            "scenario": "web.send.stream.network",
+            "metric": "view.fields.stringify.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "slow view fields serialized for per-client change detection (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 13,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 169
+            }
+        },
+        "web.send.stream.network/view.fields.stringify.chars": {
+            "scenario": "web.send.stream.network",
+            "metric": "view.fields.stringify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "characters of slow view fields serialized before unchanged fields are omitted (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 833,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 10783
+            }
+        },
+        "web.send.stream.network/view.live.project.calls": {
+            "scenario": "web.send.stream.network",
+            "metric": "view.live.project.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "live projections constructed per client push (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 2,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 26
+            }
+        },
+        "web.send.stream.network/view.inbox.project.calls": {
+            "scenario": "web.send.stream.network",
+            "metric": "view.inbox.project.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "inbox projections constructed per client push (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 2,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 26
+            }
+        },
+        "web.send.stream.network/view.kernel.project.calls": {
+            "scenario": "web.send.stream.network",
+            "metric": "view.kernel.project.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "native kernel projections constructed per client push (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 2,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 26
+            }
+        },
+        "web.send.stream.network/view.kernel.sql.statements": {
+            "scenario": "web.send.stream.network",
+            "metric": "view.kernel.sql.statements",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "SQL statements inside synchronous native kernel roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 8,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 104
+            }
+        },
+        "web.send.stream.network/view.kernel.sql.heads": {
+            "scenario": "web.send.stream.network",
+            "metric": "view.kernel.sql.heads",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "SQL FROM kernel_heads during synchronous roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 2,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 26
+            }
+        },
+        "web.send.stream.network/view.kernel.sql.sessions": {
+            "scenario": "web.send.stream.network",
+            "metric": "view.kernel.sql.sessions",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "SQL FROM kernel_sessions during synchronous roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "web.send.stream.network/view.kernel.sql.attempts": {
+            "scenario": "web.send.stream.network",
+            "metric": "view.kernel.sql.attempts",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "SQL FROM kernel_attempts during synchronous roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 4,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 52
+            }
+        },
+        "web.send.stream.network/view.kernel.sql.command_inputs": {
+            "scenario": "web.send.stream.network",
+            "metric": "view.kernel.sql.command_inputs",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "SQL FROM kernel_command_inputs during synchronous roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 2,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 26
+            }
+        },
+        "web.send.stream.network/view.kernel.sql.resume": {
+            "scenario": "web.send.stream.network",
+            "metric": "view.kernel.sql.resume",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "SQL FROM kernel_resume during synchronous roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "web.send.stream.network/view.kernel.sql.rows": {
+            "scenario": "web.send.stream.network",
+            "metric": "view.kernel.sql.rows",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "SQL rows returned inside synchronous native kernel roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 6,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 76
+            }
+        },
+        "web.send.stream.network/view.kernel.json.parse.calls": {
+            "scenario": "web.send.stream.network",
+            "metric": "view.kernel.json.parse.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "JSON decodes inside synchronous native kernel roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 4,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 52
+            }
+        },
+        "web.send.stream.network/view.kernel.json.parse.chars": {
+            "scenario": "web.send.stream.network",
+            "metric": "view.kernel.json.parse.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "characters decoded inside synchronous native kernel roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 2164,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 28132
+            }
+        },
+        "web.send.stream.network/push.events": {
+            "scenario": "web.send.stream.network",
+            "metric": "push.events",
+            "layer": "push",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "events written to tabs, rotom-team:push channel (src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 2,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 32
+            }
+        },
+        "web.send.stream.network/push.bytes": {
+            "scenario": "web.send.stream.network",
+            "metric": "push.bytes",
+            "layer": "push",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "event-stream bytes written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 2868,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 95266
+            }
+        },
+        "web.send.stream.network/push.view.count": {
+            "scenario": "web.send.stream.network",
+            "metric": "push.view.count",
+            "layer": "push",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "view events written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 2,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 26
+            }
+        },
+        "web.send.stream.network/push.view.bytes": {
+            "scenario": "web.send.stream.network",
+            "metric": "push.view.bytes",
+            "layer": "push",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "view event bytes written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 2868,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 80840
+            }
+        },
+        "web.send.stream.network/http.requests": {
+            "scenario": "web.send.stream.network",
+            "metric": "http.requests",
+            "layer": "http",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "http.server.request.start diagnostics channel; static bundle completed node:http responses (test/perf/counters.ts and test/perf/static-assets.ts)",
+            "status": "candidate",
+            "tolerance": 2,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 8
+            }
+        },
+        "web.send.stream.network/cdp.LayoutCount": {
+            "scenario": "web.send.stream.network",
+            "metric": "cdp.LayoutCount",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "Chromium Performance.getMetrics LayoutCount delta (test/perf/browser.ts)",
+            "status": "candidate",
+            "tolerance": 1,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 18
+            }
+        },
+        "web.send.stream.network/cdp.RecalcStyleCount": {
+            "scenario": "web.send.stream.network",
+            "metric": "cdp.RecalcStyleCount",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "Chromium Performance.getMetrics RecalcStyleCount delta (test/perf/browser.ts)",
+            "status": "candidate",
+            "tolerance": 7,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 116
+            }
+        },
+        "web.send.stream.network/cdp.Nodes": {
+            "scenario": "web.send.stream.network",
+            "metric": "cdp.Nodes",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "Chromium Performance.getMetrics Nodes once the answer shows (test/perf/browser.ts)",
+            "status": "candidate",
+            "tolerance": 51,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1737
+            }
+        },
+        "web.send.stream.network/web.event.parse.calls": {
+            "scenario": "web.send.stream.network",
+            "metric": "web.event.parse.calls",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "browser event-stream JSON.parse calls (web/store.js)",
+            "status": "candidate",
+            "tolerance": 1,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 16
+            }
+        },
+        "web.send.stream.network/web.event.parse.chars": {
+            "scenario": "web.send.stream.network",
+            "metric": "web.event.parse.chars",
+            "layer": "web",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "browser event-stream characters parsed as JSON (web/store.js)",
+            "status": "candidate",
+            "tolerance": 1362,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 31873
+            }
+        },
+        "web.send.stream.network/web.view.apply.calls": {
+            "scenario": "web.send.stream.network",
+            "metric": "web.view.apply.calls",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "browser view events applied to the store (web/store.js)",
+            "status": "candidate",
+            "tolerance": 1,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 13
+            }
+        },
+        "web.send.stream.network/web.view.base.entry.copies": {
+            "scenario": "web.send.stream.network",
+            "metric": "web.view.base.entry.copies",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "existing Map entries copied while applying view events (web/store.js)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 65
+            }
+        },
+        "web.send.stream.network/web.view.delta.entries": {
+            "scenario": "web.send.stream.network",
+            "metric": "web.view.delta.entries",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "new or replacement entries merged while applying view events (web/store.js)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 2
+            }
+        },
+        "web.send.stream.network/web.view.prune.checks": {
+            "scenario": "web.send.stream.network",
+            "metric": "web.view.prune.checks",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "browser entry IDs tested against a changed server order (web/store.js)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 67
+            }
+        },
+        "web.send.stream.network/web.view.order.ids": {
+            "scenario": "web.send.stream.network",
+            "metric": "web.view.order.ids",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "server order IDs copied into browser keep sets (web/store.js)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 67
+            }
         }
     }
 }

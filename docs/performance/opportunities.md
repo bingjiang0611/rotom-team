@@ -8,6 +8,28 @@ Workload: `test/perf/workload.ts` as of 2026-10-16 (12 seeded turns of 6000-char
 `darwin-arm64` ledger baselines (worst of 10 runs from temporary checkouts) and benchmark medians, Apple M1, load below
 the core count.
 
+## Send response-latency measurement — 2026-10-27
+
+Added `web.send.poll.network` and `web.send.stream.network` after all established workloads, with Chromium CDP
+response latency of 150 ms and throughput of 500,000 bytes/s each way. A paired no-store HTTP probe must observe
+at least 120 ms added delay. Disabling that delay fails the probe (2.7 → 3.4 ms); restoring it passes.
+
+Two three-run reports, both `highLoad: false`, observe approximately 168 ms submit responses. The application's
+`send.shown` medians are **183.1 ms for poll** and **113.7 ms for stream**. The shaped stream displays confirmation before
+the submit response in every run. Its reference-to-browser gap is inside clock uncertainty: CDP response latency
+does **not** establish physical propagation latency on the ongoing stream. This fixture therefore cannot rule out
+real transport delay, and it still does not reproduce the production 1.554 s median. The old/new histories differ;
+do not treat their median differences as isolated network costs.
+
+Kept as a measurement foundation: **72 new darwin-arm64 candidates**, no promotions or changes to existing ledger
+entries. No production code changed; there is no new L1 reduction, L2 speed improvement, or L3 improvement claim.
+See [the profile, controls, phase table and limits](experiments/2026-10-27-send-network-profiles.md).
+
+Next owner: the coding agent, after approval to change journal collection, should define bounded, content-free
+per-send phase correlation across submit, native admission/user-entry visibility, push receipt and confirmed display.
+Deployment and real-account use remain separately gated. Do not reduce push coalescing or add a cache from this
+fixture alone.
+
 ## Room append climb — 2026-10-26
 
 **Kept at L1, not a speed claim.** `Room.#sequence` now reuses its existing immutable-prefix test before
