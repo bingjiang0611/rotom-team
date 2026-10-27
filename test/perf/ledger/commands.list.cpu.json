@@ -1,0 +1,103 @@
+{
+    "schema": 1,
+    "metrics": {
+        "commands.list/json.parse.calls": {
+            "scenario": "commands.list",
+            "metric": "json.parse.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; GET the native slash-command list",
+            "source": "global JSON.parse calls in the server process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 31
+            }
+        },
+        "commands.list/json.parse.chars": {
+            "scenario": "commands.list",
+            "metric": "json.parse.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; GET the native slash-command list",
+            "source": "characters given to JSON.parse (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 170825
+            }
+        },
+        "commands.list/json.stringify.chars": {
+            "scenario": "commands.list",
+            "metric": "json.stringify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; GET the native slash-command list",
+            "source": "characters JSON.stringify produced (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 34,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 3916
+            }
+        },
+        "commands.list/json.parse.http.calls": {
+            "scenario": "commands.list",
+            "metric": "json.parse.http.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; GET the native slash-command list",
+            "source": "JSON.parse in exclusive http scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "commands.list/json.parse.http.chars": {
+            "scenario": "commands.list",
+            "metric": "json.parse.http.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; GET the native slash-command list",
+            "source": "JSON.parse in exclusive http scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "commands.list/json.parse.other.calls": {
+            "scenario": "commands.list",
+            "metric": "json.parse.other.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; GET the native slash-command list",
+            "source": "JSON.parse in exclusive other scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "commands.list/json.parse.other.chars": {
+            "scenario": "commands.list",
+            "metric": "json.parse.other.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; GET the native slash-command list",
+            "source": "JSON.parse in exclusive other scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        }
+    }
+}

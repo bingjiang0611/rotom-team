@@ -1,0 +1,243 @@
+{
+    "schema": 1,
+    "metrics": {
+        "session.reclaim/json.parse.calls": {
+            "scenario": "session.reclaim",
+            "metric": "json.parse.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, an unmeasured tab loads its full view; a new event-stream tab then claims every entry it held (server run, first id, count, digest) until its first full view; the rebuilt transcript must equal the held one",
+            "source": "global JSON.parse calls in the server process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 2,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 35
+            }
+        },
+        "session.reclaim/json.parse.chars": {
+            "scenario": "session.reclaim",
+            "metric": "json.parse.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, an unmeasured tab loads its full view; a new event-stream tab then claims every entry it held (server run, first id, count, digest) until its first full view; the rebuilt transcript must equal the held one",
+            "source": "characters given to JSON.parse (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 1087,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 129808
+            }
+        },
+        "session.reclaim/json.parse.http.calls": {
+            "scenario": "session.reclaim",
+            "metric": "json.parse.http.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, an unmeasured tab loads its full view; a new event-stream tab then claims every entry it held (server run, first id, count, digest) until its first full view; the rebuilt transcript must equal the held one",
+            "source": "JSON.parse in exclusive http scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.reclaim/json.parse.http.chars": {
+            "scenario": "session.reclaim",
+            "metric": "json.parse.http.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, an unmeasured tab loads its full view; a new event-stream tab then claims every entry it held (server run, first id, count, digest) until its first full view; the rebuilt transcript must equal the held one",
+            "source": "JSON.parse in exclusive http scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.reclaim/json.parse.other.calls": {
+            "scenario": "session.reclaim",
+            "metric": "json.parse.other.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, an unmeasured tab loads its full view; a new event-stream tab then claims every entry it held (server run, first id, count, digest) until its first full view; the rebuilt transcript must equal the held one",
+            "source": "JSON.parse in exclusive other scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.reclaim/json.parse.other.chars": {
+            "scenario": "session.reclaim",
+            "metric": "json.parse.other.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, an unmeasured tab loads its full view; a new event-stream tab then claims every entry it held (server run, first id, count, digest) until its first full view; the rebuilt transcript must equal the held one",
+            "source": "JSON.parse in exclusive other scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.reclaim/json.stringify.chars": {
+            "scenario": "session.reclaim",
+            "metric": "json.stringify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, an unmeasured tab loads its full view; a new event-stream tab then claims every entry it held (server run, first id, count, digest) until its first full view; the rebuilt transcript must equal the held one",
+            "source": "characters JSON.stringify produced (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 9222,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 12025
+            }
+        },
+        "session.reclaim/view.entry.visits": {
+            "scenario": "session.reclaim",
+            "metric": "view.entry.visits",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, an unmeasured tab loads its full view; a new event-stream tab then claims every entry it held (server run, first id, count, digest) until its first full view; the rebuilt transcript must equal the held one",
+            "source": "durable entries traversed to project room views (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.reclaim/view.client.entry.scans": {
+            "scenario": "session.reclaim",
+            "metric": "view.client.entry.scans",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, an unmeasured tab loads its full view; a new event-stream tab then claims every entry it held (server run, first id, count, digest) until its first full view; the rebuilt transcript must equal the held one",
+            "source": "cached projected entries scanned for a client's missing IDs (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 26
+            }
+        },
+        "session.reclaim/view.stats.entry.scans": {
+            "scenario": "session.reclaim",
+            "metric": "view.stats.entry.scans",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, an unmeasured tab loads its full view; a new event-stream tab then claims every entry it held (server run, first id, count, digest) until its first full view; the rebuilt transcript must equal the held one",
+            "source": "entries visited in the stats reverse scan (src/server/projection.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.reclaim/view.fields.stringify.calls": {
+            "scenario": "session.reclaim",
+            "metric": "view.fields.stringify.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, an unmeasured tab loads its full view; a new event-stream tab then claims every entry it held (server run, first id, count, digest) until its first full view; the rebuilt transcript must equal the held one",
+            "source": "slow view fields serialized for per-client change detection (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 12,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 12
+            }
+        },
+        "session.reclaim/view.fields.stringify.chars": {
+            "scenario": "session.reclaim",
+            "metric": "view.fields.stringify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, an unmeasured tab loads its full view; a new event-stream tab then claims every entry it held (server run, first id, count, digest) until its first full view; the rebuilt transcript must equal the held one",
+            "source": "characters of slow view fields serialized before unchanged fields are omitted (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 645,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 645
+            }
+        },
+        "session.reclaim/view.live.project.calls": {
+            "scenario": "session.reclaim",
+            "metric": "view.live.project.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, an unmeasured tab loads its full view; a new event-stream tab then claims every entry it held (server run, first id, count, digest) until its first full view; the rebuilt transcript must equal the held one",
+            "source": "live projections constructed per client push (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 1,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "session.reclaim/view.inbox.project.calls": {
+            "scenario": "session.reclaim",
+            "metric": "view.inbox.project.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, an unmeasured tab loads its full view; a new event-stream tab then claims every entry it held (server run, first id, count, digest) until its first full view; the rebuilt transcript must equal the held one",
+            "source": "inbox projections constructed per client push (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 1,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "session.reclaim/view.kernel.project.calls": {
+            "scenario": "session.reclaim",
+            "metric": "view.kernel.project.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, an unmeasured tab loads its full view; a new event-stream tab then claims every entry it held (server run, first id, count, digest) until its first full view; the rebuilt transcript must equal the held one",
+            "source": "native kernel projections constructed per client push (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 1,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "session.reclaim/view.kernel.json.parse.calls": {
+            "scenario": "session.reclaim",
+            "metric": "view.kernel.json.parse.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, an unmeasured tab loads its full view; a new event-stream tab then claims every entry it held (server run, first id, count, digest) until its first full view; the rebuilt transcript must equal the held one",
+            "source": "JSON decodes inside synchronous native kernel roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 2,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 2
+            }
+        },
+        "session.reclaim/view.kernel.json.parse.chars": {
+            "scenario": "session.reclaim",
+            "metric": "view.kernel.json.parse.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, an unmeasured tab loads its full view; a new event-stream tab then claims every entry it held (server run, first id, count, digest) until its first full view; the rebuilt transcript must equal the held one",
+            "source": "characters decoded inside synchronous native kernel roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 1082,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1082
+            }
+        }
+    }
+}

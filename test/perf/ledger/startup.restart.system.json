@@ -1,0 +1,75 @@
+{
+    "schema": 1,
+    "metrics": {
+        "startup.restart/sql.statements": {
+            "scenario": "startup.restart",
+            "metric": "sql.statements",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; close the app and open it again",
+            "source": "node:sqlite StatementSync run/get/all/iterate + DatabaseSync.exec (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 848
+            }
+        },
+        "startup.restart/sql.rows": {
+            "scenario": "startup.restart",
+            "metric": "sql.rows",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; close the app and open it again",
+            "source": "rows returned by StatementSync all/get (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 1,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 528
+            }
+        },
+        "startup.restart/subprocess.total": {
+            "scenario": "startup.restart",
+            "metric": "subprocess.total",
+            "layer": "process",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; close the app and open it again",
+            "source": "ChildProcess.prototype.spawn + spawnSync/execFileSync/execSync (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "startup.restart/fs.read.calls": {
+            "scenario": "startup.restart",
+            "metric": "fs.read.calls",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; close the app and open it again",
+            "source": "synchronous readSync calls in the parent process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 14
+            }
+        },
+        "startup.restart/fs.read.bytes": {
+            "scenario": "startup.restart",
+            "metric": "fs.read.bytes",
+            "layer": "storage",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; close the app and open it again",
+            "source": "bytes returned by synchronous readSync in the parent process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 98864
+            }
+        }
+    }
+}

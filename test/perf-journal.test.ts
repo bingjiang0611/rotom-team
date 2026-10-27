@@ -19,6 +19,7 @@ import {
     startPerformanceJournal,
 } from "../src/server/perf-journal.ts";
 import { analyse, readJournal, snapshot } from "./perf/report.ts";
+import { sendPhase, sendTraceTag } from "../src/server/send-trace.ts";
 
 after(cleanUp);
 
@@ -165,6 +166,40 @@ test("the server's requests, pushed events, and native runs reach the journal, w
         200,
     );
 
+    const send = { conversationId: id, requestId: "private-request" };
+    const sendTimings = [{ name: "send.shown", ms: 123, transport: "stream" }];
+    const trace = sendTraceTag(String(id), `${owner(app).id}:private-request`);
+
+    assert.equal((await report({ timings: sendTimings, send })).status, 200);
+    sendPhase(String(id), `${owner(app).id}:private-request`, "mirrored");
+
+    for (const body of [
+        { timings: sendTimings, send: { ...send, text: "private-words" } },
+        { timings: sendTimings, send: { ...send, requestId: "x".repeat(129) } },
+        { timings: sendTimings, send: { ...send, trace } },
+        { timings: sendTimings, send: null },
+        { timings: sendTimings, trace },
+        { timings: [{ name: "reply.first", ms: 1, transport: "stream" }], send },
+    ]) {
+        assert.equal((await report(body)).status, 400, JSON.stringify(body));
+    }
+
+    const limited = app.config.addUser("Timing guest", "guest").user;
+
+    app.setAccess(owner(app), limited.id, { sessions: [] });
+    const limitedToken = app.config.addDevice(limited.id).token;
+    const refused = await fetch(`${base}/api/perf`, {
+        method: "POST",
+        headers: {
+            authorization: `Bearer ${limitedToken}`,
+            "x-pocket": "1",
+            "content-type": "application/json",
+        },
+        body: JSON.stringify({ timings: sendTimings, send }),
+    });
+
+    assert.equal(refused.status, 404, "timings cannot name a conversation the member cannot see");
+
     // A tab is not trusted: a report carrying anything outside the closed set is refused whole.
     for (const timings of [
         [{ name: "switch", ms: 5, transport: "stream", text: "private-words" }],
@@ -256,6 +291,7 @@ test("the server's requests, pushed events, and native runs reach the journal, w
         [
             { kind: "web", name: "switch", transport: "stream", ms: 81.3 },
             { kind: "web", name: "reply.first", transport: "poll", unavailable: "hidden" },
+            { kind: "web", name: "send.shown", transport: "stream", ms: 123, trace },
         ],
     );
     assert.deepEqual(
@@ -273,7 +309,15 @@ test("the server's requests, pushed events, and native runs reach the journal, w
     assert.ok(kinds.some((each) => each.kind === "push" && (each.events.view?.count ?? 0) >= 1));
     assert.ok(kinds.some((each) => each.kind === "process" && each.rssBytes > 0));
     assert.equal(kinds.at(-1)!.kind, "health");
-    assert.doesNotMatch(raw, /private-words|12345|token|Bearer/);
+    const phases = kinds.filter((each) => each.kind === "send-phase");
+
+    assert.equal(phases.length, 1);
+    assert.equal(phases[0]!.trace, trace);
+    assert.equal(phases[0]!.phase, "mirrored");
+    assert.doesNotMatch(
+        raw,
+        /private-words|private-request|12345|token|Bearer|"requestId"|"requestKey"/,
+    );
     assert.ok(!raw.includes(token));
 });
 

@@ -1,0 +1,215 @@
+{
+    "schema": 1,
+    "metrics": {
+        "web.send.poll/push.events": {
+            "scenario": "web.send.poll",
+            "metric": "push.events",
+            "layer": "push",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all other scenarios, headless Chromium on a non-loopback name with long polling opens that history (now 13 turns) unmeasured, focuses the message box, warms the native process and types; from Enter until the first chunk of the 6000-char answer (sent 1000 ms after the request, then paced 25 ms per chunk) is painted, its milliseconds split into phases; one more Node event-stream tab watches; counted until settled and quiet",
+            "source": "events written to tabs, rotom-team:push channel (src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 2,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 26
+            }
+        },
+        "web.send.poll/push.bytes": {
+            "scenario": "web.send.poll",
+            "metric": "push.bytes",
+            "layer": "push",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all other scenarios, headless Chromium on a non-loopback name with long polling opens that history (now 13 turns) unmeasured, focuses the message box, warms the native process and types; from Enter until the first chunk of the 6000-char answer (sent 1000 ms after the request, then paced 25 ms per chunk) is painted, its milliseconds split into phases; one more Node event-stream tab watches; counted until settled and quiet",
+            "source": "event-stream bytes written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 1260,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 55026
+            }
+        },
+        "web.send.poll/push.view.count": {
+            "scenario": "web.send.poll",
+            "metric": "push.view.count",
+            "layer": "push",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all other scenarios, headless Chromium on a non-loopback name with long polling opens that history (now 13 turns) unmeasured, focuses the message box, warms the native process and types; from Enter until the first chunk of the 6000-char answer (sent 1000 ms after the request, then paced 25 ms per chunk) is painted, its milliseconds split into phases; one more Node event-stream tab watches; counted until settled and quiet",
+            "source": "view events written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 2,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 20
+            }
+        },
+        "web.send.poll/push.view.bytes": {
+            "scenario": "web.send.poll",
+            "metric": "push.view.bytes",
+            "layer": "push",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all other scenarios, headless Chromium on a non-loopback name with long polling opens that history (now 13 turns) unmeasured, focuses the message box, warms the native process and types; from Enter until the first chunk of the 6000-char answer (sent 1000 ms after the request, then paced 25 ms per chunk) is painted, its milliseconds split into phases; one more Node event-stream tab watches; counted until settled and quiet",
+            "source": "view event bytes written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 1260,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 42567
+            }
+        },
+        "web.send.poll/http.requests": {
+            "scenario": "web.send.poll",
+            "metric": "http.requests",
+            "layer": "http",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all other scenarios, headless Chromium on a non-loopback name with long polling opens that history (now 13 turns) unmeasured, focuses the message box, warms the native process and types; from Enter until the first chunk of the 6000-char answer (sent 1000 ms after the request, then paced 25 ms per chunk) is painted, its milliseconds split into phases; one more Node event-stream tab watches; counted until settled and quiet",
+            "source": "http.server.request.start diagnostics channel (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 1,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 17
+            }
+        },
+        "web.send.poll/cdp.LayoutCount": {
+            "scenario": "web.send.poll",
+            "metric": "cdp.LayoutCount",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all other scenarios, headless Chromium on a non-loopback name with long polling opens that history (now 13 turns) unmeasured, focuses the message box, warms the native process and types; from Enter until the first chunk of the 6000-char answer (sent 1000 ms after the request, then paced 25 ms per chunk) is painted, its milliseconds split into phases; one more Node event-stream tab watches; counted until settled and quiet",
+            "source": "Chromium Performance.getMetrics LayoutCount delta (test/perf/browser.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 17
+            }
+        },
+        "web.send.poll/cdp.RecalcStyleCount": {
+            "scenario": "web.send.poll",
+            "metric": "cdp.RecalcStyleCount",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all other scenarios, headless Chromium on a non-loopback name with long polling opens that history (now 13 turns) unmeasured, focuses the message box, warms the native process and types; from Enter until the first chunk of the 6000-char answer (sent 1000 ms after the request, then paced 25 ms per chunk) is painted, its milliseconds split into phases; one more Node event-stream tab watches; counted until settled and quiet",
+            "source": "Chromium Performance.getMetrics RecalcStyleCount delta (test/perf/browser.ts)",
+            "status": "candidate",
+            "tolerance": 7,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 116
+            }
+        },
+        "web.send.poll/cdp.Nodes": {
+            "scenario": "web.send.poll",
+            "metric": "cdp.Nodes",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all other scenarios, headless Chromium on a non-loopback name with long polling opens that history (now 13 turns) unmeasured, focuses the message box, warms the native process and types; from Enter until the first chunk of the 6000-char answer (sent 1000 ms after the request, then paced 25 ms per chunk) is painted, its milliseconds split into phases; one more Node event-stream tab watches; counted until settled and quiet",
+            "source": "Chromium Performance.getMetrics Nodes once the answer shows (test/perf/browser.ts)",
+            "status": "candidate",
+            "tolerance": 5,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1349
+            }
+        },
+        "web.send.poll/web.event.parse.calls": {
+            "scenario": "web.send.poll",
+            "metric": "web.event.parse.calls",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all other scenarios, headless Chromium on a non-loopback name with long polling opens that history (now 13 turns) unmeasured, focuses the message box, warms the native process and types; from Enter until the first chunk of the 6000-char answer (sent 1000 ms after the request, then paced 25 ms per chunk) is painted, its milliseconds split into phases; one more Node event-stream tab watches; counted until settled and quiet",
+            "source": "browser event-stream JSON.parse calls (web/store.js)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "web.send.poll/web.event.parse.chars": {
+            "scenario": "web.send.poll",
+            "metric": "web.event.parse.chars",
+            "layer": "web",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all other scenarios, headless Chromium on a non-loopback name with long polling opens that history (now 13 turns) unmeasured, focuses the message box, warms the native process and types; from Enter until the first chunk of the 6000-char answer (sent 1000 ms after the request, then paced 25 ms per chunk) is painted, its milliseconds split into phases; one more Node event-stream tab watches; counted until settled and quiet",
+            "source": "browser event-stream characters parsed as JSON (web/store.js)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "web.send.poll/web.view.apply.calls": {
+            "scenario": "web.send.poll",
+            "metric": "web.view.apply.calls",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all other scenarios, headless Chromium on a non-loopback name with long polling opens that history (now 13 turns) unmeasured, focuses the message box, warms the native process and types; from Enter until the first chunk of the 6000-char answer (sent 1000 ms after the request, then paced 25 ms per chunk) is painted, its milliseconds split into phases; one more Node event-stream tab watches; counted until settled and quiet",
+            "source": "browser view events applied to the store (web/store.js)",
+            "status": "candidate",
+            "tolerance": 1,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 10
+            }
+        },
+        "web.send.poll/web.view.base.entry.copies": {
+            "scenario": "web.send.poll",
+            "metric": "web.view.base.entry.copies",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all other scenarios, headless Chromium on a non-loopback name with long polling opens that history (now 13 turns) unmeasured, focuses the message box, warms the native process and types; from Enter until the first chunk of the 6000-char answer (sent 1000 ms after the request, then paced 25 ms per chunk) is painted, its milliseconds split into phases; one more Node event-stream tab watches; counted until settled and quiet",
+            "source": "existing Map entries copied while applying view events (web/store.js)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 53
+            }
+        },
+        "web.send.poll/web.view.delta.entries": {
+            "scenario": "web.send.poll",
+            "metric": "web.view.delta.entries",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all other scenarios, headless Chromium on a non-loopback name with long polling opens that history (now 13 turns) unmeasured, focuses the message box, warms the native process and types; from Enter until the first chunk of the 6000-char answer (sent 1000 ms after the request, then paced 25 ms per chunk) is painted, its milliseconds split into phases; one more Node event-stream tab watches; counted until settled and quiet",
+            "source": "new or replacement entries merged while applying view events (web/store.js)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 2
+            }
+        },
+        "web.send.poll/web.view.prune.checks": {
+            "scenario": "web.send.poll",
+            "metric": "web.view.prune.checks",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all other scenarios, headless Chromium on a non-loopback name with long polling opens that history (now 13 turns) unmeasured, focuses the message box, warms the native process and types; from Enter until the first chunk of the 6000-char answer (sent 1000 ms after the request, then paced 25 ms per chunk) is painted, its milliseconds split into phases; one more Node event-stream tab watches; counted until settled and quiet",
+            "source": "browser entry IDs tested against a changed server order (web/store.js)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 55
+            }
+        },
+        "web.send.poll/web.view.order.ids": {
+            "scenario": "web.send.poll",
+            "metric": "web.view.order.ids",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all other scenarios, headless Chromium on a non-loopback name with long polling opens that history (now 13 turns) unmeasured, focuses the message box, warms the native process and types; from Enter until the first chunk of the 6000-char answer (sent 1000 ms after the request, then paced 25 ms per chunk) is painted, its milliseconds split into phases; one more Node event-stream tab watches; counted until settled and quiet",
+            "source": "server order IDs copied into browser keep sets (web/store.js)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 55
+            }
+        }
+    }
+}

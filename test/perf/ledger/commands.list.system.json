@@ -1,0 +1,75 @@
+{
+    "schema": 1,
+    "metrics": {
+        "commands.list/sql.statements": {
+            "scenario": "commands.list",
+            "metric": "sql.statements",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; GET the native slash-command list",
+            "source": "node:sqlite StatementSync run/get/all/iterate + DatabaseSync.exec (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 10
+            }
+        },
+        "commands.list/sql.rows": {
+            "scenario": "commands.list",
+            "metric": "sql.rows",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; GET the native slash-command list",
+            "source": "rows returned by StatementSync all/get (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 17
+            }
+        },
+        "commands.list/subprocess.total": {
+            "scenario": "commands.list",
+            "metric": "subprocess.total",
+            "layer": "process",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; GET the native slash-command list",
+            "source": "ChildProcess.prototype.spawn + spawnSync/execFileSync/execSync (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "commands.list/fs.read.calls": {
+            "scenario": "commands.list",
+            "metric": "fs.read.calls",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; GET the native slash-command list",
+            "source": "synchronous readSync calls in the parent process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 7
+            }
+        },
+        "commands.list/fs.read.bytes": {
+            "scenario": "commands.list",
+            "metric": "fs.read.bytes",
+            "layer": "storage",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; GET the native slash-command list",
+            "source": "bytes returned by synchronous readSync in the parent process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 49432
+            }
+        }
+    }
+}

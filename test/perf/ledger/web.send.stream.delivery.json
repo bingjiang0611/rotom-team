@@ -1,0 +1,215 @@
+{
+    "schema": 1,
+    "metrics": {
+        "web.send.stream/push.events": {
+            "scenario": "web.send.stream",
+            "metric": "push.events",
+            "layer": "push",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll, the same send to that history (now 14 turns) from a new headless Chromium on the same name using the event stream; one more Node event-stream tab watches; counted until settled and quiet",
+            "source": "events written to tabs, rotom-team:push channel (src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 24
+            }
+        },
+        "web.send.stream/push.bytes": {
+            "scenario": "web.send.stream",
+            "metric": "push.bytes",
+            "layer": "push",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll, the same send to that history (now 14 turns) from a new headless Chromium on the same name using the event stream; one more Node event-stream tab watches; counted until settled and quiet",
+            "source": "event-stream bytes written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 93633
+            }
+        },
+        "web.send.stream/push.view.count": {
+            "scenario": "web.send.stream",
+            "metric": "push.view.count",
+            "layer": "push",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll, the same send to that history (now 14 turns) from a new headless Chromium on the same name using the event stream; one more Node event-stream tab watches; counted until settled and quiet",
+            "source": "view events written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 18
+            }
+        },
+        "web.send.stream/push.view.bytes": {
+            "scenario": "web.send.stream",
+            "metric": "push.view.bytes",
+            "layer": "push",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll, the same send to that history (now 14 turns) from a new headless Chromium on the same name using the event stream; one more Node event-stream tab watches; counted until settled and quiet",
+            "source": "view event bytes written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 79839
+            }
+        },
+        "web.send.stream/http.requests": {
+            "scenario": "web.send.stream",
+            "metric": "http.requests",
+            "layer": "http",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll, the same send to that history (now 14 turns) from a new headless Chromium on the same name using the event stream; one more Node event-stream tab watches; counted until settled and quiet",
+            "source": "http.server.request.start diagnostics channel (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 4
+            }
+        },
+        "web.send.stream/cdp.LayoutCount": {
+            "scenario": "web.send.stream",
+            "metric": "cdp.LayoutCount",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll, the same send to that history (now 14 turns) from a new headless Chromium on the same name using the event stream; one more Node event-stream tab watches; counted until settled and quiet",
+            "source": "Chromium Performance.getMetrics LayoutCount delta (test/perf/browser.ts)",
+            "status": "candidate",
+            "tolerance": 1,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 17
+            }
+        },
+        "web.send.stream/cdp.RecalcStyleCount": {
+            "scenario": "web.send.stream",
+            "metric": "cdp.RecalcStyleCount",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll, the same send to that history (now 14 turns) from a new headless Chromium on the same name using the event stream; one more Node event-stream tab watches; counted until settled and quiet",
+            "source": "Chromium Performance.getMetrics RecalcStyleCount delta (test/perf/browser.ts)",
+            "status": "candidate",
+            "tolerance": 5,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 104
+            }
+        },
+        "web.send.stream/cdp.Nodes": {
+            "scenario": "web.send.stream",
+            "metric": "cdp.Nodes",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll, the same send to that history (now 14 turns) from a new headless Chromium on the same name using the event stream; one more Node event-stream tab watches; counted until settled and quiet",
+            "source": "Chromium Performance.getMetrics Nodes once the answer shows (test/perf/browser.ts)",
+            "status": "candidate",
+            "tolerance": 6,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1388
+            }
+        },
+        "web.send.stream/web.event.parse.calls": {
+            "scenario": "web.send.stream",
+            "metric": "web.event.parse.calls",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll, the same send to that history (now 14 turns) from a new headless Chromium on the same name using the event stream; one more Node event-stream tab watches; counted until settled and quiet",
+            "source": "browser event-stream JSON.parse calls (web/store.js)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 12
+            }
+        },
+        "web.send.stream/web.event.parse.chars": {
+            "scenario": "web.send.stream",
+            "metric": "web.event.parse.chars",
+            "layer": "web",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll, the same send to that history (now 14 turns) from a new headless Chromium on the same name using the event stream; one more Node event-stream tab watches; counted until settled and quiet",
+            "source": "browser event-stream characters parsed as JSON (web/store.js)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 31393
+            }
+        },
+        "web.send.stream/web.view.apply.calls": {
+            "scenario": "web.send.stream",
+            "metric": "web.view.apply.calls",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll, the same send to that history (now 14 turns) from a new headless Chromium on the same name using the event stream; one more Node event-stream tab watches; counted until settled and quiet",
+            "source": "browser view events applied to the store (web/store.js)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 9
+            }
+        },
+        "web.send.stream/web.view.base.entry.copies": {
+            "scenario": "web.send.stream",
+            "metric": "web.view.base.entry.copies",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll, the same send to that history (now 14 turns) from a new headless Chromium on the same name using the event stream; one more Node event-stream tab watches; counted until settled and quiet",
+            "source": "existing Map entries copied while applying view events (web/store.js)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 57
+            }
+        },
+        "web.send.stream/web.view.delta.entries": {
+            "scenario": "web.send.stream",
+            "metric": "web.view.delta.entries",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll, the same send to that history (now 14 turns) from a new headless Chromium on the same name using the event stream; one more Node event-stream tab watches; counted until settled and quiet",
+            "source": "new or replacement entries merged while applying view events (web/store.js)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 2
+            }
+        },
+        "web.send.stream/web.view.prune.checks": {
+            "scenario": "web.send.stream",
+            "metric": "web.view.prune.checks",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll, the same send to that history (now 14 turns) from a new headless Chromium on the same name using the event stream; one more Node event-stream tab watches; counted until settled and quiet",
+            "source": "browser entry IDs tested against a changed server order (web/store.js)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 59
+            }
+        },
+        "web.send.stream/web.view.order.ids": {
+            "scenario": "web.send.stream",
+            "metric": "web.view.order.ids",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll, the same send to that history (now 14 turns) from a new headless Chromium on the same name using the event stream; one more Node event-stream tab watches; counted until settled and quiet",
+            "source": "server order IDs copied into browser keep sets (web/store.js)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 59
+            }
+        }
+    }
+}

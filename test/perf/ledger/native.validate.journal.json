@@ -1,0 +1,145 @@
+{
+    "schema": 1,
+    "metrics": {
+        "native.validate/json.parse.durableStorage.calls": {
+            "scenario": "native.validate",
+            "metric": "json.parse.durableStorage.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after turn.prewarmed, the team validator a subagent start runs (rotom-child.ts, its own Node process) in that member's HOME and workspace, until it exits",
+            "source": "JSON.parse in exclusive durableStorage scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "native.validate/json.parse.durableStorage.chars": {
+            "scenario": "native.validate",
+            "metric": "json.parse.durableStorage.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after turn.prewarmed, the team validator a subagent start runs (rotom-child.ts, its own Node process) in that member's HOME and workspace, until it exits",
+            "source": "JSON.parse in exclusive durableStorage scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "native.validate/json.parse.journal.calls": {
+            "scenario": "native.validate",
+            "metric": "json.parse.journal.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after turn.prewarmed, the team validator a subagent start runs (rotom-child.ts, its own Node process) in that member's HOME and workspace, until it exits",
+            "source": "JSON.parse in exclusive journal scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "native.validate/json.parse.journal.chars": {
+            "scenario": "native.validate",
+            "metric": "json.parse.journal.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after turn.prewarmed, the team validator a subagent start runs (rotom-child.ts, its own Node process) in that member's HOME and workspace, until it exits",
+            "source": "JSON.parse in exclusive journal scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "native.validate/json.parse.journalHistory.calls": {
+            "scenario": "native.validate",
+            "metric": "json.parse.journalHistory.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after turn.prewarmed, the team validator a subagent start runs (rotom-child.ts, its own Node process) in that member's HOME and workspace, until it exits",
+            "source": "JSON.parse in exclusive journalHistory scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "native.validate/json.parse.journalHistory.chars": {
+            "scenario": "native.validate",
+            "metric": "json.parse.journalHistory.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after turn.prewarmed, the team validator a subagent start runs (rotom-child.ts, its own Node process) in that member's HOME and workspace, until it exits",
+            "source": "JSON.parse in exclusive journalHistory scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "native.validate/json.parse.journalThinking.calls": {
+            "scenario": "native.validate",
+            "metric": "json.parse.journalThinking.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after turn.prewarmed, the team validator a subagent start runs (rotom-child.ts, its own Node process) in that member's HOME and workspace, until it exits",
+            "source": "JSON.parse in exclusive journalThinking scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "native.validate/json.parse.journalThinking.chars": {
+            "scenario": "native.validate",
+            "metric": "json.parse.journalThinking.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after turn.prewarmed, the team validator a subagent start runs (rotom-child.ts, its own Node process) in that member's HOME and workspace, until it exits",
+            "source": "JSON.parse in exclusive journalThinking scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "native.validate/json.parse.journalSegments.calls": {
+            "scenario": "native.validate",
+            "metric": "json.parse.journalSegments.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after turn.prewarmed, the team validator a subagent start runs (rotom-child.ts, its own Node process) in that member's HOME and workspace, until it exits",
+            "source": "JSON.parse in exclusive journalSegments scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "native.validate/json.parse.journalSegments.chars": {
+            "scenario": "native.validate",
+            "metric": "json.parse.journalSegments.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after turn.prewarmed, the team validator a subagent start runs (rotom-child.ts, its own Node process) in that member's HOME and workspace, until it exits",
+            "source": "JSON.parse in exclusive journalSegments scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        }
+    }
+}

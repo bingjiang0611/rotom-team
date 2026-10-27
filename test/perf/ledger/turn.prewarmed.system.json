@@ -1,0 +1,103 @@
+{
+    "schema": 1,
+    "metrics": {
+        "turn.prewarmed/fs.read.calls": {
+            "scenario": "turn.prewarmed",
+            "metric": "fs.read.calls",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "after native.warm, the first prompt of that session, until settled and quiet",
+            "source": "synchronous readSync calls in the parent process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 25
+            }
+        },
+        "turn.prewarmed/fs.read.bytes": {
+            "scenario": "turn.prewarmed",
+            "metric": "fs.read.bytes",
+            "layer": "storage",
+            "unit": "bytes",
+            "workload": "after native.warm, the first prompt of that session, until settled and quiet",
+            "source": "bytes returned by synchronous readSync in the parent process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 242540
+            }
+        },
+        "turn.prewarmed/sql.statements": {
+            "scenario": "turn.prewarmed",
+            "metric": "sql.statements",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "after native.warm, the first prompt of that session, until settled and quiet",
+            "source": "node:sqlite StatementSync run/get/all/iterate + DatabaseSync.exec (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 14,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 189
+            }
+        },
+        "turn.prewarmed/sql.rows": {
+            "scenario": "turn.prewarmed",
+            "metric": "sql.rows",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "after native.warm, the first prompt of that session, until settled and quiet",
+            "source": "rows returned by StatementSync all/get (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 17,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 122
+            }
+        },
+        "turn.prewarmed/subprocess.total": {
+            "scenario": "turn.prewarmed",
+            "metric": "subprocess.total",
+            "layer": "process",
+            "unit": "count",
+            "workload": "after native.warm, the first prompt of that session, until settled and quiet",
+            "source": "ChildProcess.prototype.spawn + spawnSync/execFileSync/execSync (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "turn.prewarmed/subprocess.git": {
+            "scenario": "turn.prewarmed",
+            "metric": "subprocess.git",
+            "layer": "process",
+            "unit": "count",
+            "workload": "after native.warm, the first prompt of that session, until settled and quiet",
+            "source": "child processes whose program is git (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "turn.prewarmed/subprocess.rotom": {
+            "scenario": "turn.prewarmed",
+            "metric": "subprocess.rotom",
+            "layer": "process",
+            "unit": "count",
+            "workload": "after native.warm, the first prompt of that session, until settled and quiet",
+            "source": "child processes whose program is rotom (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        }
+    }
+}

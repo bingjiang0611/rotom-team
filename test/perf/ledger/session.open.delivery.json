@@ -1,0 +1,61 @@
+{
+    "schema": 1,
+    "metrics": {
+        "session.open/push.events": {
+            "scenario": "session.open",
+            "metric": "push.events",
+            "layer": "push",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; a new event-stream tab on it, until its first full view",
+            "source": "events written to tabs, rotom-team:push channel (src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 8
+            }
+        },
+        "session.open/push.bytes": {
+            "scenario": "session.open",
+            "metric": "push.bytes",
+            "layer": "push",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; a new event-stream tab on it, until its first full view",
+            "source": "event-stream bytes written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 81884
+            }
+        },
+        "session.open/push.view.count": {
+            "scenario": "session.open",
+            "metric": "push.view.count",
+            "layer": "push",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; a new event-stream tab on it, until its first full view",
+            "source": "view events written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "session.open/push.view.bytes": {
+            "scenario": "session.open",
+            "metric": "push.view.bytes",
+            "layer": "push",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; a new event-stream tab on it, until its first full view",
+            "source": "view event bytes written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 75997
+            }
+        }
+    }
+}

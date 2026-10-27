@@ -1,0 +1,145 @@
+{
+    "schema": 1,
+    "metrics": {
+        "projection.large.open/json.parse.durableStorage.calls": {
+            "scenario": "projection.large.open",
+            "metric": "json.parse.durableStorage.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "JSON.parse in exclusive durableStorage scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 139
+            }
+        },
+        "projection.large.open/json.parse.durableStorage.chars": {
+            "scenario": "projection.large.open",
+            "metric": "json.parse.durableStorage.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "JSON.parse in exclusive durableStorage scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 8,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 104782
+            }
+        },
+        "projection.large.open/json.parse.journal.calls": {
+            "scenario": "projection.large.open",
+            "metric": "json.parse.journal.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "JSON.parse in exclusive journal scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 32
+            }
+        },
+        "projection.large.open/json.parse.journal.chars": {
+            "scenario": "projection.large.open",
+            "metric": "json.parse.journal.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "JSON.parse in exclusive journal scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 17312
+            }
+        },
+        "projection.large.open/json.parse.journalHistory.calls": {
+            "scenario": "projection.large.open",
+            "metric": "json.parse.journalHistory.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "JSON.parse in exclusive journalHistory scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "projection.large.open/json.parse.journalHistory.chars": {
+            "scenario": "projection.large.open",
+            "metric": "json.parse.journalHistory.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "JSON.parse in exclusive journalHistory scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "projection.large.open/json.parse.journalThinking.calls": {
+            "scenario": "projection.large.open",
+            "metric": "json.parse.journalThinking.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "JSON.parse in exclusive journalThinking scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "projection.large.open/json.parse.journalThinking.chars": {
+            "scenario": "projection.large.open",
+            "metric": "json.parse.journalThinking.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "JSON.parse in exclusive journalThinking scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "projection.large.open/json.parse.journalSegments.calls": {
+            "scenario": "projection.large.open",
+            "metric": "json.parse.journalSegments.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "JSON.parse in exclusive journalSegments scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 528
+            }
+        },
+        "projection.large.open/json.parse.journalSegments.chars": {
+            "scenario": "projection.large.open",
+            "metric": "json.parse.journalSegments.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "JSON.parse in exclusive journalSegments scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 112,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 374860
+            }
+        }
+    }
+}

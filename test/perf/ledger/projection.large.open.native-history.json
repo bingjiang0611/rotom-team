@@ -1,0 +1,117 @@
+{
+    "schema": 1,
+    "metrics": {
+        "projection.large.open/json.parse.nativeReadback.calls": {
+            "scenario": "projection.large.open",
+            "metric": "json.parse.nativeReadback.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "JSON.parse in exclusive nativeReadback scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "projection.large.open/json.parse.nativeReadback.chars": {
+            "scenario": "projection.large.open",
+            "metric": "json.parse.nativeReadback.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "JSON.parse in exclusive nativeReadback scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "projection.large.open/json.parse.nativeJsonl.calls": {
+            "scenario": "projection.large.open",
+            "metric": "json.parse.nativeJsonl.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "JSON.parse in exclusive nativeJsonl scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "projection.large.open/json.parse.nativeJsonl.chars": {
+            "scenario": "projection.large.open",
+            "metric": "json.parse.nativeJsonl.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "JSON.parse in exclusive nativeJsonl scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "projection.large.open/json.parse.nativeJsonlIngest.calls": {
+            "scenario": "projection.large.open",
+            "metric": "json.parse.nativeJsonlIngest.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "JSON.parse in exclusive nativeJsonlIngest scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "projection.large.open/json.parse.nativeJsonlIngest.chars": {
+            "scenario": "projection.large.open",
+            "metric": "json.parse.nativeJsonlIngest.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "JSON.parse in exclusive nativeJsonlIngest scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "projection.large.open/json.parse.nativeJsonlSnapshot.calls": {
+            "scenario": "projection.large.open",
+            "metric": "json.parse.nativeJsonlSnapshot.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "JSON.parse in exclusive nativeJsonlSnapshot scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "projection.large.open/json.parse.nativeJsonlSnapshot.chars": {
+            "scenario": "projection.large.open",
+            "metric": "json.parse.nativeJsonlSnapshot.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "JSON.parse in exclusive nativeJsonlSnapshot scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        }
+    }
+}

@@ -1,0 +1,33 @@
+{
+    "schema": 1,
+    "metrics": {
+        "image.paste.network/http.upload.bytes": {
+            "scenario": "image.paste.network",
+            "metric": "http.upload.bytes",
+            "layer": "http",
+            "unit": "bytes",
+            "workload": "after all other scenarios, real Chromium prepares and uploads one deterministic xorshift-noise 3000x1500 opaque PNG from its clipboard path to the same synthetic session, on a CDP-emulated 4 Mbit/s uplink and 40 ms latency; includes browser resize, HTTP upload, metadata response and decode, excludes fixture construction/module loading; older revisions without the helper upload the original, matching their unchanged paste behavior; no inference, synthetic link",
+            "source": "browser File.size of the actual uploaded body, checked against server attachment readback (test/perf/paste-network.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 6772807
+            }
+        },
+        "image.paste.network/http.requests": {
+            "scenario": "image.paste.network",
+            "metric": "http.requests",
+            "layer": "http",
+            "unit": "count",
+            "workload": "after all other scenarios, real Chromium prepares and uploads one deterministic xorshift-noise 3000x1500 opaque PNG from its clipboard path to the same synthetic session, on a CDP-emulated 4 Mbit/s uplink and 40 ms latency; includes browser resize, HTTP upload, metadata response and decode, excludes fixture construction/module loading; older revisions without the helper upload the original, matching their unchanged paste behavior; no inference, synthetic link",
+            "source": "http.server.request.start diagnostics channel (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        }
+    }
+}

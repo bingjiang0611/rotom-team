@@ -1,0 +1,103 @@
+{
+    "schema": 1,
+    "metrics": {
+        "image.original.again/json.parse.calls": {
+            "scenario": "image.original.again",
+            "metric": "json.parse.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after browser network scenarios, request original images 1 through 4 again concurrently (first retrieved by image.concurrent), exact binary readback, until bodies and quiet",
+            "source": "global JSON.parse calls in the server process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "image.original.again/json.parse.chars": {
+            "scenario": "image.original.again",
+            "metric": "json.parse.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after browser network scenarios, request original images 1 through 4 again concurrently (first retrieved by image.concurrent), exact binary readback, until bodies and quiet",
+            "source": "characters given to JSON.parse (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 114
+            }
+        },
+        "image.original.again/json.parse.http.calls": {
+            "scenario": "image.original.again",
+            "metric": "json.parse.http.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after browser network scenarios, request original images 1 through 4 again concurrently (first retrieved by image.concurrent), exact binary readback, until bodies and quiet",
+            "source": "JSON.parse in exclusive http scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "image.original.again/json.parse.http.chars": {
+            "scenario": "image.original.again",
+            "metric": "json.parse.http.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after browser network scenarios, request original images 1 through 4 again concurrently (first retrieved by image.concurrent), exact binary readback, until bodies and quiet",
+            "source": "JSON.parse in exclusive http scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "image.original.again/json.parse.other.calls": {
+            "scenario": "image.original.again",
+            "metric": "json.parse.other.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after browser network scenarios, request original images 1 through 4 again concurrently (first retrieved by image.concurrent), exact binary readback, until bodies and quiet",
+            "source": "JSON.parse in exclusive other scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "image.original.again/json.parse.other.chars": {
+            "scenario": "image.original.again",
+            "metric": "json.parse.other.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after browser network scenarios, request original images 1 through 4 again concurrently (first retrieved by image.concurrent), exact binary readback, until bodies and quiet",
+            "source": "JSON.parse in exclusive other scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 114
+            }
+        },
+        "image.original.again/json.stringify.chars": {
+            "scenario": "image.original.again",
+            "metric": "json.stringify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after browser network scenarios, request original images 1 through 4 again concurrently (first retrieved by image.concurrent), exact binary readback, until bodies and quiet",
+            "source": "characters JSON.stringify produced (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 34,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 114
+            }
+        }
+    }
+}

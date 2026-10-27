@@ -1,0 +1,215 @@
+{
+    "schema": 1,
+    "metrics": {
+        "web.send.poll.network/push.events": {
+            "scenario": "web.send.poll.network",
+            "metric": "push.events",
+            "layer": "push",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now 15 turns), using long polling; CDP-emulated 150 ms response latency and 500000 bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; 1000 ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency",
+            "source": "events written to tabs, rotom-team:push channel (src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 30
+            }
+        },
+        "web.send.poll.network/push.bytes": {
+            "scenario": "web.send.poll.network",
+            "metric": "push.bytes",
+            "layer": "push",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now 15 turns), using long polling; CDP-emulated 150 ms response latency and 500000 bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; 1000 ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency",
+            "source": "event-stream bytes written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 603,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 62121
+            }
+        },
+        "web.send.poll.network/push.view.count": {
+            "scenario": "web.send.poll.network",
+            "metric": "push.view.count",
+            "layer": "push",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now 15 turns), using long polling; CDP-emulated 150 ms response latency and 500000 bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; 1000 ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency",
+            "source": "view events written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 24
+            }
+        },
+        "web.send.poll.network/push.view.bytes": {
+            "scenario": "web.send.poll.network",
+            "metric": "push.view.bytes",
+            "layer": "push",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now 15 turns), using long polling; CDP-emulated 150 ms response latency and 500000 bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; 1000 ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency",
+            "source": "view event bytes written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 603,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 49054
+            }
+        },
+        "web.send.poll.network/http.requests": {
+            "scenario": "web.send.poll.network",
+            "metric": "http.requests",
+            "layer": "http",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now 15 turns), using long polling; CDP-emulated 150 ms response latency and 500000 bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; 1000 ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency",
+            "source": "http.server.request.start diagnostics channel; static bundle completed node:http responses (test/perf/counters.ts and test/perf/static-assets.ts)",
+            "status": "candidate",
+            "tolerance": 1,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 21
+            }
+        },
+        "web.send.poll.network/cdp.LayoutCount": {
+            "scenario": "web.send.poll.network",
+            "metric": "cdp.LayoutCount",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now 15 turns), using long polling; CDP-emulated 150 ms response latency and 500000 bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; 1000 ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency",
+            "source": "Chromium Performance.getMetrics LayoutCount delta (test/perf/browser.ts)",
+            "status": "candidate",
+            "tolerance": 1,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 16
+            }
+        },
+        "web.send.poll.network/cdp.RecalcStyleCount": {
+            "scenario": "web.send.poll.network",
+            "metric": "cdp.RecalcStyleCount",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now 15 turns), using long polling; CDP-emulated 150 ms response latency and 500000 bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; 1000 ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency",
+            "source": "Chromium Performance.getMetrics RecalcStyleCount delta (test/perf/browser.ts)",
+            "status": "candidate",
+            "tolerance": 6,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 109
+            }
+        },
+        "web.send.poll.network/cdp.Nodes": {
+            "scenario": "web.send.poll.network",
+            "metric": "cdp.Nodes",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now 15 turns), using long polling; CDP-emulated 150 ms response latency and 500000 bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; 1000 ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency",
+            "source": "Chromium Performance.getMetrics Nodes once the answer shows (test/perf/browser.ts)",
+            "status": "candidate",
+            "tolerance": 16,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1673
+            }
+        },
+        "web.send.poll.network/web.event.parse.calls": {
+            "scenario": "web.send.poll.network",
+            "metric": "web.event.parse.calls",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now 15 turns), using long polling; CDP-emulated 150 ms response latency and 500000 bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; 1000 ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency",
+            "source": "browser event-stream JSON.parse calls (web/store.js)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "web.send.poll.network/web.event.parse.chars": {
+            "scenario": "web.send.poll.network",
+            "metric": "web.event.parse.chars",
+            "layer": "web",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now 15 turns), using long polling; CDP-emulated 150 ms response latency and 500000 bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; 1000 ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency",
+            "source": "browser event-stream characters parsed as JSON (web/store.js)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "web.send.poll.network/web.view.apply.calls": {
+            "scenario": "web.send.poll.network",
+            "metric": "web.view.apply.calls",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now 15 turns), using long polling; CDP-emulated 150 ms response latency and 500000 bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; 1000 ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency",
+            "source": "browser view events applied to the store (web/store.js)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 12
+            }
+        },
+        "web.send.poll.network/web.view.base.entry.copies": {
+            "scenario": "web.send.poll.network",
+            "metric": "web.view.base.entry.copies",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now 15 turns), using long polling; CDP-emulated 150 ms response latency and 500000 bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; 1000 ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency",
+            "source": "existing Map entries copied while applying view events (web/store.js)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 61
+            }
+        },
+        "web.send.poll.network/web.view.delta.entries": {
+            "scenario": "web.send.poll.network",
+            "metric": "web.view.delta.entries",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now 15 turns), using long polling; CDP-emulated 150 ms response latency and 500000 bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; 1000 ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency",
+            "source": "new or replacement entries merged while applying view events (web/store.js)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 2
+            }
+        },
+        "web.send.poll.network/web.view.prune.checks": {
+            "scenario": "web.send.poll.network",
+            "metric": "web.view.prune.checks",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now 15 turns), using long polling; CDP-emulated 150 ms response latency and 500000 bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; 1000 ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency",
+            "source": "browser entry IDs tested against a changed server order (web/store.js)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 63
+            }
+        },
+        "web.send.poll.network/web.view.order.ids": {
+            "scenario": "web.send.poll.network",
+            "metric": "web.view.order.ids",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now 15 turns), using long polling; CDP-emulated 150 ms response latency and 500000 bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; 1000 ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency",
+            "source": "server order IDs copied into browser keep sets (web/store.js)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 63
+            }
+        }
+    }
+}

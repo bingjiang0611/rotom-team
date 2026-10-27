@@ -1,0 +1,75 @@
+{
+    "schema": 1,
+    "metrics": {
+        "commands.discover.cold/push.events": {
+            "scenario": "commands.discover.cold",
+            "metric": "push.events",
+            "layer": "push",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all existing scenarios, an additional new native session with one tab; first explicit POST prompts, with no model request",
+            "source": "events written to tabs, rotom-team:push channel (src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 3
+            }
+        },
+        "commands.discover.cold/push.bytes": {
+            "scenario": "commands.discover.cold",
+            "metric": "push.bytes",
+            "layer": "push",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all existing scenarios, an additional new native session with one tab; first explicit POST prompts, with no model request",
+            "source": "event-stream bytes written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 10499
+            }
+        },
+        "commands.discover.cold/push.view.count": {
+            "scenario": "commands.discover.cold",
+            "metric": "push.view.count",
+            "layer": "push",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all existing scenarios, an additional new native session with one tab; first explicit POST prompts, with no model request",
+            "source": "view events written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "commands.discover.cold/push.view.bytes": {
+            "scenario": "commands.discover.cold",
+            "metric": "push.view.bytes",
+            "layer": "push",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all existing scenarios, an additional new native session with one tab; first explicit POST prompts, with no model request",
+            "source": "view event bytes written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1052
+            }
+        },
+        "commands.discover.cold/http.body.bytes": {
+            "scenario": "commands.discover.cold",
+            "metric": "http.body.bytes",
+            "layer": "http",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all existing scenarios, an additional new native session with one tab; first explicit POST prompts, with no model request",
+            "source": "answer body bytes the benchmark received (test/perf/scenarios.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 7050
+            }
+        }
+    }
+}

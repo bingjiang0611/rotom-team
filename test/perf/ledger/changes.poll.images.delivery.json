@@ -1,0 +1,33 @@
+{
+    "schema": 1,
+    "metrics": {
+        "changes.poll.images/http.requests": {
+            "scenario": "changes.poll.images",
+            "metric": "http.requests",
+            "layer": "http",
+            "unit": "count",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after all image scenarios, 4 concurrent GET changes for that image session (same Git workspace with 20 changed files), then the same 4 again with nothing changed; every answer identical, until quiet",
+            "source": "http.server.request.start diagnostics channel (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 8
+            }
+        },
+        "changes.poll.images/http.body.bytes": {
+            "scenario": "changes.poll.images",
+            "metric": "http.body.bytes",
+            "layer": "http",
+            "unit": "bytes",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after all image scenarios, 4 concurrent GET changes for that image session (same Git workspace with 20 changed files), then the same 4 again with nothing changed; every answer identical, until quiet",
+            "source": "answer body bytes the benchmark received (test/perf/scenarios.ts)",
+            "status": "candidate",
+            "tolerance": 24,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 20304
+            }
+        }
+    }
+}

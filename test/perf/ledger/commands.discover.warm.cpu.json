@@ -1,0 +1,103 @@
+{
+    "schema": 1,
+    "metrics": {
+        "commands.discover.warm/json.parse.calls": {
+            "scenario": "commands.discover.warm",
+            "metric": "json.parse.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; same additional session/tab after cold discovery; a second explicit POST prompts with a new request ID, with no model request",
+            "source": "global JSON.parse calls in the server process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 67
+            }
+        },
+        "commands.discover.warm/json.parse.chars": {
+            "scenario": "commands.discover.warm",
+            "metric": "json.parse.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; same additional session/tab after cold discovery; a second explicit POST prompts with a new request ID, with no model request",
+            "source": "characters given to JSON.parse (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 213297
+            }
+        },
+        "commands.discover.warm/json.stringify.chars": {
+            "scenario": "commands.discover.warm",
+            "metric": "json.stringify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; same additional session/tab after cold discovery; a second explicit POST prompts with a new request ID, with no model request",
+            "source": "characters JSON.stringify produced (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 22738
+            }
+        },
+        "commands.discover.warm/json.parse.http.calls": {
+            "scenario": "commands.discover.warm",
+            "metric": "json.parse.http.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; same additional session/tab after cold discovery; a second explicit POST prompts with a new request ID, with no model request",
+            "source": "JSON.parse in exclusive http scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "commands.discover.warm/json.parse.http.chars": {
+            "scenario": "commands.discover.warm",
+            "metric": "json.parse.http.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; same additional session/tab after cold discovery; a second explicit POST prompts with a new request ID, with no model request",
+            "source": "JSON.parse in exclusive http scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 34
+            }
+        },
+        "commands.discover.warm/json.parse.other.calls": {
+            "scenario": "commands.discover.warm",
+            "metric": "json.parse.other.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; same additional session/tab after cold discovery; a second explicit POST prompts with a new request ID, with no model request",
+            "source": "JSON.parse in exclusive other scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "commands.discover.warm/json.parse.other.chars": {
+            "scenario": "commands.discover.warm",
+            "metric": "json.parse.other.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; same additional session/tab after cold discovery; a second explicit POST prompts with a new request ID, with no model request",
+            "source": "JSON.parse in exclusive other scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 90
+            }
+        }
+    }
+}

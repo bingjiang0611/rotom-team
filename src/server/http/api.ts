@@ -2,11 +2,8 @@
  * `/api`: the routes the web app calls. Each needs a signed-in person, and each but a GET needs the `X-Pocket` header,
  * which a form on another site cannot send. A conversation's routes are in `conversation-routes.ts`.
  */
-import { readdirSync, statSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { homedir, networkInterfaces } from "node:os";
-import { dirname, join } from "node:path";
-import QRCode from "qrcode";
+import { join } from "node:path";
 import { listAgentResources } from "../agent-resource-list.ts";
 import { MAX_PEEKS } from "../app.ts";
 import {
@@ -16,7 +13,6 @@ import {
     INVITE_MINUTES,
     type InviteGrant,
     type InviteMinutes,
-    origin,
     parseCookies,
     quickTunnelHost,
 } from "../auth.ts";
@@ -30,7 +26,9 @@ import {
     transportChannel,
 } from "../perf-channels.ts";
 import { runningNow } from "../running.ts";
+import { parseSendContext, sendTraceTag } from "../send-trace.ts";
 import { serveImage } from "./assets.ts";
+import { apiAdminRoutes } from "./api-admin-routes.ts";
 import { browserRoutes } from "./browser-routes.ts";
 import { conversationRoutes } from "./conversation-routes.ts";
 import { createEventStreams } from "./events.ts";
@@ -38,14 +36,6 @@ import { parseClaim } from "../view-claim.ts";
 import { SUBSCRIPTION_COPY } from "../constants/copy.ts";
 import { type ApiRequest, conversationId, type HttpOptions, json, readJson } from "./io.ts";
 import { pushRoutes } from "./push-routes.ts";
-
-/** This machine's non-internal IPv4 addresses, for invite links other devices on its networks can open. */
-function lanAddresses(): string[] {
-    return Object.values(networkInterfaces())
-        .flat()
-        .filter((net) => net !== undefined && net.family === "IPv4" && !net.internal)
-        .map((net) => net!.address);
-}
 
 /** The `/api` routes. Each HTTP handler makes its own, and its event streams live as long as it does. */
 export function createApi(options: HttpOptions, auth: Auth) {
@@ -365,33 +355,34 @@ export function createApi(options: HttpOptions, auth: Auth) {
             return json(response, 200, { ok: true });
         }
 
-        if (first === "users" && second === undefined && method === "GET") {
-            return json(response, 200, app.people(user));
-        }
-
-        if (first === "users" && second !== undefined && third === "remove" && method === "POST") {
-            app.removeUser(user, second);
-
-            return json(response, 200, { ok: true });
-        }
-
-        if (first === "users" && second !== undefined && third === undefined && method === "POST") {
-            app.setAccess(user, second, await readJson(request));
-
-            return json(response, 200, app.people(user));
-        }
-
         // A tab's content-free timings for the daily performance journal; dropped while nothing journals.
         if (first === "perf" && method === "POST") {
-            const timings = parseWebTimings(await readJson(request));
+            const body = await readJson<{ timings?: unknown; send?: unknown }>(request);
+            const timings = parseWebTimings(body);
 
-            if (timings === null) {
+            if (
+                timings === null ||
+                !["timings", "send,timings"].includes(Object.keys(body).sort().join(","))
+            ) {
                 throw new HttpError(400, "Not a timing report");
+            }
+
+            let trace: string | undefined;
+
+            if (body.send !== undefined) {
+                const send = parseSendContext(body.send, user.id, timings);
+
+                if (send === null) {
+                    throw new HttpError(400, "Not a send timing context");
+                }
+
+                app.requireSee(user, conversationId(String(send.conversationId)));
+                trace = sendTraceTag(String(send.conversationId), send.requestKey);
             }
 
             if (webTimingChannel.hasSubscribers) {
                 for (const timing of timings) {
-                    webTimingChannel.publish(timing);
+                    webTimingChannel.publish({ ...timing, ...(trace ? { trace } : {}) });
                 }
             }
 
@@ -547,243 +538,17 @@ export function createApi(options: HttpOptions, auth: Auth) {
             return conversationRoutes(route, id, parts);
         }
 
-        if (first === "approvals" && second !== undefined && method === "POST") {
-            const body = await readJson<{ allow?: boolean }>(request);
-
-            if (!(await app.answerApproval(second, body.allow === true, user))) {
-                throw new HttpError(404, "That approval is no longer pending");
-            }
-
-            return json(response, 200, { ok: true });
-        }
-
-        if (first === "fs" && method === "GET") {
-            app.requireSteer(user);
-
-            if (user.sessions !== undefined) {
-                throw new HttpError(403, "You were invited to one session.");
-            }
-
-            const requested = url.searchParams.get("path") || "~";
-            const path = app.workspace.checkDirectory(requested);
-            const showHidden = url.searchParams.get("hidden") === "1";
-            const dirs: { name: string; path: string }[] = [];
-
-            for (const entry of readdirSync(path, { withFileTypes: true })) {
-                if (!showHidden && entry.name.startsWith(".")) {
-                    continue;
-                }
-
-                let isDir = entry.isDirectory();
-
-                if (entry.isSymbolicLink()) {
-                    try {
-                        isDir = statSync(join(path, entry.name)).isDirectory();
-                    } catch {
-                        isDir = false;
-                    }
-                }
-
-                if (isDir) {
-                    dirs.push({ name: entry.name, path: join(path, entry.name) });
-                }
-            }
-
-            dirs.sort((a, b) => a.name.localeCompare(b.name));
-            const recent = [
-                ...new Set((await app.sessions(user)).map((session) => session.cwd)),
-            ].slice(0, 8);
-
-            return json(response, 200, {
-                path,
-                parent: dirname(path) === path ? null : dirname(path),
-                home: homedir(),
-                dirs: dirs.slice(0, 1000),
-                recent,
-            });
-        }
-
-        // A new folder, from the folder picker: it opens in the picker, ready to use.
-        if (first === "fs" && second === undefined && method === "POST") {
-            const body = await readJson<{ path?: unknown }>(request);
-
-            if (typeof body.path !== "string") {
-                throw new HttpError(400, "Name the folder to make.");
-            }
-
-            return json(response, 200, { path: app.workspace.makeFolder(user, body.path) });
-        }
-
-        if (first === "settings" && method === "POST") {
-            const body = await readJson<{ approvalRule?: unknown }>(request);
-
-            if (body.approvalRule !== undefined) {
-                await app.setApprovalRule(user, body.approvalRule);
-            }
-
-            return json(response, 200, { ok: true });
-        }
-
-        if (first === "extensions" && second === undefined && method === "GET") {
-            return json(response, 200, await app.extensions(user));
-        }
-
         if (
-            first === "extensions" &&
-            second !== undefined &&
-            third === undefined &&
-            method === "POST"
+            await apiAdminRoutes(
+                route,
+                parts,
+                options,
+                auth,
+                requireOwner,
+                inviteGrant,
+                inviteMinutes,
+            )
         ) {
-            requireOwner(user);
-            const body = await readJson<{ enabled?: unknown }>(request);
-
-            if (typeof body.enabled !== "boolean") {
-                throw new HttpError(400, "enabled must be true or false");
-            }
-
-            await app.setExtensionEnabled(user, second, body.enabled);
-
-            return json(response, 200, await app.extensions(user));
-        }
-
-        if (
-            first === "extensions" &&
-            second !== undefined &&
-            third === "reload" &&
-            method === "POST"
-        ) {
-            requireOwner(user);
-            await app.reloadExtension(second);
-
-            return json(response, 200, await app.extensions(user));
-        }
-
-        if (first === "providers" && second === undefined && method === "GET") {
-            return json(response, 200, await app.providers.list(user));
-        }
-
-        if (
-            first === "providers" &&
-            second !== undefined &&
-            third === "login" &&
-            method === "POST"
-        ) {
-            app.requireSteer(user);
-            const body = await readJson<{ type?: string }>(request);
-
-            return json(response, 200, {
-                flowId: await app.providers.startLogin(
-                    user,
-                    second,
-                    body.type === "oauth" ? "oauth" : "api_key",
-                ),
-            });
-        }
-
-        if (
-            first === "providers" &&
-            second !== undefined &&
-            third === "logout" &&
-            method === "POST"
-        ) {
-            app.requireSteer(user);
-            await app.providers.logout(user, second);
-
-            return json(response, 200, { ok: true });
-        }
-
-        if (first === "auth" && second !== undefined && third === "cancel" && method === "POST") {
-            app.providers.cancelLogin(user, second);
-
-            return json(response, 200, { ok: true });
-        }
-
-        if (first === "auth" && second !== undefined && third !== undefined && method === "POST") {
-            const body = await readJson<{ value?: string; cancel?: boolean }>(request);
-
-            app.providers.answerLogin(
-                user,
-                second,
-                third,
-                body.cancel === true ? undefined : String(body.value ?? ""),
-            );
-
-            return json(response, 200, { ok: true });
-        }
-
-        if (first === "invite" && second === "cancel" && method === "POST") {
-            const body = (await readJson(request)) as { code?: unknown };
-
-            if (typeof body.code !== "string") {
-                throw new HttpError(400, "Say which invite.");
-            }
-
-            // Only whoever made it ends it; for anyone else it stays as it was, and nothing says whether it exists.
-            auth.cancelInvite(body.code, user);
-
-            return json(response, 200, { ok: true });
-        }
-
-        if (first === "invite" && second === undefined && method === "POST") {
-            const body = (await readJson(request)) as {
-                role?: unknown;
-                session?: unknown;
-                minutes?: unknown;
-                memberId?: unknown;
-            };
-            const grant = await inviteGrant(user, body);
-            const invite = auth.createInvite(user, grant, inviteMinutes(body));
-            const here = origin(request);
-            const loopback = /^https?:\/\/(localhost|127\.\d+\.\d+\.\d+|\[::1\])(:\d+)?$/.test(
-                here,
-            );
-            const wildcard = options.listen.host === "0.0.0.0" || options.listen.host === "::";
-            const lan =
-                loopback && wildcard
-                    ? lanAddresses().map((address) => `http://${address}:${options.listen.port}`)
-                    : [];
-            // A tunnel the launcher started is the way in for other devices.
-            const tunnel = loopback ? app.access?.url : undefined;
-            const base = tunnel ?? lan[0] ?? here;
-            const link = `${base}/join/${invite.code}`;
-            // An invite whose QR code could not be made is never shown: it ends rather than stay live, unseen.
-            const svg = await QRCode.toString(link, {
-                type: "svg",
-                margin: 1,
-                color: { dark: "#000000", light: "#ffffff" },
-            }).catch((error: unknown) => {
-                auth.cancelInvite(invite.code, user);
-
-                throw error;
-            });
-
-            return json(response, 200, {
-                ...invite,
-                grant,
-                url: link,
-                svg,
-                alternatives: (tunnel === undefined ? lan.slice(1) : lan).map(
-                    (address) => `${address}/join/${invite.code}`,
-                ),
-                // Only this device can open a loopback link.
-                local: loopback && lan.length === 0 && tunnel === undefined,
-                ...(app.access === undefined ? {} : { access: app.access }),
-            });
-        }
-
-        if (first === "restart" && method === "POST") {
-            requireOwner(user);
-
-            if (!app.supervised) {
-                throw new HttpError(
-                    409,
-                    "Start Pi Pocket with bin/pi-pocket.js to restart from the app.",
-                );
-            }
-
-            json(response, 200, { ok: true });
-            setTimeout(() => options.restart(), 100);
-
             return;
         }
 

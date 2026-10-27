@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ConversationId } from "@earendil-works/pi-durable";
 import { PocketApp } from "../src/server/app.ts";
-import { TeamKernel } from "../src/server/team-kernel.ts";
+import { createRoomDomain, type RoomOwner } from "../src/server/team-kernel-room.ts";
 import { currentBranchGoalState } from "../src/server/rotom-executions.ts";
 import { RotomJournal, type KernelBinding, type KernelEntry } from "../src/server/rotom-journal.ts";
 
@@ -58,10 +58,7 @@ test("room readback shares full entries by exact segment only within one call", 
         },
     };
     const info = async () =>
-        await TeamKernel.prototype.roomInfo.call(
-            fixture as unknown as TeamKernel,
-            1 as ConversationId,
-        );
+        await createRoomDomain(fixture as unknown as RoomOwner).roomInfo(1 as ConversationId);
 
     const countReads = () => {
         fixture.executions.journal = journal;

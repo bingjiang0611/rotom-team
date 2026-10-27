@@ -1,0 +1,215 @@
+{
+    "schema": 1,
+    "metrics": {
+        "web.open.long/push.events": {
+            "scenario": "web.open.long",
+            "metric": "push.events",
+            "layer": "push",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "events written to tabs, rotom-team:push channel (src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 2,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 9
+            }
+        },
+        "web.open.long/push.bytes": {
+            "scenario": "web.open.long",
+            "metric": "push.bytes",
+            "layer": "push",
+            "unit": "bytes",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "event-stream bytes written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 972,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 174003
+            }
+        },
+        "web.open.long/push.view.count": {
+            "scenario": "web.open.long",
+            "metric": "push.view.count",
+            "layer": "push",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "view events written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "web.open.long/push.view.bytes": {
+            "scenario": "web.open.long",
+            "metric": "push.view.bytes",
+            "layer": "push",
+            "unit": "bytes",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "view event bytes written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 165843
+            }
+        },
+        "web.open.long/http.requests": {
+            "scenario": "web.open.long",
+            "metric": "http.requests",
+            "layer": "http",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "http.server.request.start diagnostics channel (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 78
+            }
+        },
+        "web.open.long/cdp.LayoutCount": {
+            "scenario": "web.open.long",
+            "metric": "cdp.LayoutCount",
+            "layer": "web",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "Chromium Performance.getMetrics LayoutCount delta (test/perf/browser.ts)",
+            "status": "candidate",
+            "tolerance": 2,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 11
+            }
+        },
+        "web.open.long/cdp.RecalcStyleCount": {
+            "scenario": "web.open.long",
+            "metric": "cdp.RecalcStyleCount",
+            "layer": "web",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "Chromium Performance.getMetrics RecalcStyleCount delta (test/perf/browser.ts)",
+            "status": "candidate",
+            "tolerance": 3,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 21
+            }
+        },
+        "web.open.long/cdp.Nodes": {
+            "scenario": "web.open.long",
+            "metric": "cdp.Nodes",
+            "layer": "web",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "Chromium Performance.getMetrics Nodes once the answer shows (test/perf/browser.ts)",
+            "status": "candidate",
+            "tolerance": 24,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1585
+            }
+        },
+        "web.open.long/web.event.parse.calls": {
+            "scenario": "web.open.long",
+            "metric": "web.event.parse.calls",
+            "layer": "web",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "browser event-stream JSON.parse calls (web/store.js)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 8
+            }
+        },
+        "web.open.long/web.event.parse.chars": {
+            "scenario": "web.open.long",
+            "metric": "web.event.parse.chars",
+            "layer": "web",
+            "unit": "chars",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "browser event-stream characters parsed as JSON (web/store.js)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 173274
+            }
+        },
+        "web.open.long/web.view.apply.calls": {
+            "scenario": "web.open.long",
+            "metric": "web.view.apply.calls",
+            "layer": "web",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "browser view events applied to the store (web/store.js)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "web.open.long/web.view.base.entry.copies": {
+            "scenario": "web.open.long",
+            "metric": "web.view.base.entry.copies",
+            "layer": "web",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "existing Map entries copied while applying view events (web/store.js)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "web.open.long/web.view.delta.entries": {
+            "scenario": "web.open.long",
+            "metric": "web.view.delta.entries",
+            "layer": "web",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "new or replacement entries merged while applying view events (web/store.js)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 240
+            }
+        },
+        "web.open.long/web.view.prune.checks": {
+            "scenario": "web.open.long",
+            "metric": "web.view.prune.checks",
+            "layer": "web",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "browser entry IDs tested against a changed server order (web/store.js)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 240
+            }
+        },
+        "web.open.long/web.view.order.ids": {
+            "scenario": "web.open.long",
+            "metric": "web.view.order.ids",
+            "layer": "web",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "server order IDs copied into browser keep sets (web/store.js)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 600
+            }
+        }
+    }
+}

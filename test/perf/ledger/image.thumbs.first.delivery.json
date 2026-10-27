@@ -1,0 +1,33 @@
+{
+    "schema": 1,
+    "metrics": {
+        "image.thumbs.first/http.requests": {
+            "scenario": "image.thumbs.first",
+            "metric": "http.requests",
+            "layer": "http",
+            "unit": "count",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after image.concurrent, request images 5 through 8 concurrently as transcript thumbnails (?size=thumb), the first time this server sees them, until all client bodies and quiet",
+            "source": "http.server.request.start diagnostics channel (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 4
+            }
+        },
+        "image.thumbs.first/http.body.bytes": {
+            "scenario": "image.thumbs.first",
+            "metric": "http.body.bytes",
+            "layer": "http",
+            "unit": "bytes",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after image.concurrent, request images 5 through 8 concurrently as transcript thumbnails (?size=thumb), the first time this server sees them, until all client bodies and quiet",
+            "source": "answer body bytes the benchmark received (test/perf/scenarios.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 422503
+            }
+        }
+    }
+}

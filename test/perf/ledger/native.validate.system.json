@@ -1,0 +1,75 @@
+{
+    "schema": 1,
+    "metrics": {
+        "native.validate/fs.read.calls": {
+            "scenario": "native.validate",
+            "metric": "fs.read.calls",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "after turn.prewarmed, the team validator a subagent start runs (rotom-child.ts, its own Node process) in that member's HOME and workspace, until it exits",
+            "source": "synchronous readSync calls in the parent process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "native.validate/fs.read.bytes": {
+            "scenario": "native.validate",
+            "metric": "fs.read.bytes",
+            "layer": "storage",
+            "unit": "bytes",
+            "workload": "after turn.prewarmed, the team validator a subagent start runs (rotom-child.ts, its own Node process) in that member's HOME and workspace, until it exits",
+            "source": "bytes returned by synchronous readSync in the parent process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "native.validate/sql.statements": {
+            "scenario": "native.validate",
+            "metric": "sql.statements",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "after turn.prewarmed, the team validator a subagent start runs (rotom-child.ts, its own Node process) in that member's HOME and workspace, until it exits",
+            "source": "node:sqlite StatementSync run/get/all/iterate + DatabaseSync.exec (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "native.validate/sql.rows": {
+            "scenario": "native.validate",
+            "metric": "sql.rows",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "after turn.prewarmed, the team validator a subagent start runs (rotom-child.ts, its own Node process) in that member's HOME and workspace, until it exits",
+            "source": "rows returned by StatementSync all/get (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "native.validate/subprocess.total": {
+            "scenario": "native.validate",
+            "metric": "subprocess.total",
+            "layer": "process",
+            "unit": "count",
+            "workload": "after turn.prewarmed, the team validator a subagent start runs (rotom-child.ts, its own Node process) in that member's HOME and workspace, until it exits",
+            "source": "ChildProcess.prototype.spawn + spawnSync/execFileSync/execSync (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        }
+    }
+}

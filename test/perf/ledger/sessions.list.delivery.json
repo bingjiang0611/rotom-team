@@ -1,0 +1,19 @@
+{
+    "schema": 1,
+    "metrics": {
+        "sessions.list/http.body.bytes": {
+            "scenario": "sessions.list",
+            "metric": "http.body.bytes",
+            "layer": "http",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; GET /api/sessions",
+            "source": "answer body bytes the benchmark received (test/perf/scenarios.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 3980
+            }
+        }
+    }
+}

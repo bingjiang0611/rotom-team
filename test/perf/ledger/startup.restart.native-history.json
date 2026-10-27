@@ -1,0 +1,117 @@
+{
+    "schema": 1,
+    "metrics": {
+        "startup.restart/json.parse.nativeReadback.calls": {
+            "scenario": "startup.restart",
+            "metric": "json.parse.nativeReadback.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; close the app and open it again",
+            "source": "JSON.parse in exclusive nativeReadback scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 2
+            }
+        },
+        "startup.restart/json.parse.nativeReadback.chars": {
+            "scenario": "startup.restart",
+            "metric": "json.parse.nativeReadback.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; close the app and open it again",
+            "source": "JSON.parse in exclusive nativeReadback scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 240
+            }
+        },
+        "startup.restart/json.parse.nativeJsonl.calls": {
+            "scenario": "startup.restart",
+            "metric": "json.parse.nativeJsonl.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; close the app and open it again",
+            "source": "JSON.parse in exclusive nativeJsonl scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "startup.restart/json.parse.nativeJsonl.chars": {
+            "scenario": "startup.restart",
+            "metric": "json.parse.nativeJsonl.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; close the app and open it again",
+            "source": "JSON.parse in exclusive nativeJsonl scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "startup.restart/json.parse.nativeJsonlIngest.calls": {
+            "scenario": "startup.restart",
+            "metric": "json.parse.nativeJsonlIngest.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; close the app and open it again",
+            "source": "JSON.parse in exclusive nativeJsonlIngest scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "startup.restart/json.parse.nativeJsonlIngest.chars": {
+            "scenario": "startup.restart",
+            "metric": "json.parse.nativeJsonlIngest.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; close the app and open it again",
+            "source": "JSON.parse in exclusive nativeJsonlIngest scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "startup.restart/json.parse.nativeJsonlSnapshot.calls": {
+            "scenario": "startup.restart",
+            "metric": "json.parse.nativeJsonlSnapshot.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; close the app and open it again",
+            "source": "JSON.parse in exclusive nativeJsonlSnapshot scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "startup.restart/json.parse.nativeJsonlSnapshot.chars": {
+            "scenario": "startup.restart",
+            "metric": "json.parse.nativeJsonlSnapshot.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks, 12 more empty sessions; close the app and open it again",
+            "source": "JSON.parse in exclusive nativeJsonlSnapshot scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        }
+    }
+}

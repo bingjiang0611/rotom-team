@@ -1,0 +1,173 @@
+{
+    "schema": 1,
+    "metrics": {
+        "projection.large.open/sql.statements": {
+            "scenario": "projection.large.open",
+            "metric": "sql.statements",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "node:sqlite StatementSync run/get/all/iterate + DatabaseSync.exec (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 98
+            }
+        },
+        "projection.large.open/sql.rows": {
+            "scenario": "projection.large.open",
+            "metric": "sql.rows",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "rows returned by StatementSync all/get (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 799
+            }
+        },
+        "projection.large.open/subprocess.total": {
+            "scenario": "projection.large.open",
+            "metric": "subprocess.total",
+            "layer": "process",
+            "unit": "count",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "ChildProcess.prototype.spawn + spawnSync/execFileSync/execSync (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "projection.large.open/view.kernel.sql.statements": {
+            "scenario": "projection.large.open",
+            "metric": "view.kernel.sql.statements",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "SQL statements inside synchronous native kernel roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 40
+            }
+        },
+        "projection.large.open/view.kernel.sql.rows": {
+            "scenario": "projection.large.open",
+            "metric": "view.kernel.sql.rows",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "SQL rows returned inside synchronous native kernel roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 20
+            }
+        },
+        "projection.large.open/view.kernel.sql.heads": {
+            "scenario": "projection.large.open",
+            "metric": "view.kernel.sql.heads",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "SQL FROM kernel_heads during synchronous roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 10
+            }
+        },
+        "projection.large.open/view.kernel.sql.sessions": {
+            "scenario": "projection.large.open",
+            "metric": "view.kernel.sql.sessions",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "SQL FROM kernel_sessions during synchronous roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "projection.large.open/view.kernel.sql.attempts": {
+            "scenario": "projection.large.open",
+            "metric": "view.kernel.sql.attempts",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "SQL FROM kernel_attempts during synchronous roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 20
+            }
+        },
+        "projection.large.open/view.kernel.sql.command_inputs": {
+            "scenario": "projection.large.open",
+            "metric": "view.kernel.sql.command_inputs",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "SQL FROM kernel_command_inputs during synchronous roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 10
+            }
+        },
+        "projection.large.open/view.kernel.sql.resume": {
+            "scenario": "projection.large.open",
+            "metric": "view.kernel.sql.resume",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "SQL FROM kernel_resume during synchronous roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "projection.large.open/fs.read.calls": {
+            "scenario": "projection.large.open",
+            "metric": "fs.read.calls",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "synchronous readSync calls in the parent process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "projection.large.open/fs.read.bytes": {
+            "scenario": "projection.large.open",
+            "metric": "fs.read.bytes",
+            "layer": "storage",
+            "unit": "bytes",
+            "workload": "a separate 64-turn session with 120-char answers; open 4 event-stream tabs in sequence until each full view",
+            "source": "bytes returned by synchronous readSync in the parent process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        }
+    }
+}

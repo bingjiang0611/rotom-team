@@ -1,6 +1,7 @@
 // What people wait for in this tab, timed from their action to the first paint that shows its result, for the server's
 // daily performance journal (src/server/perf-journal.ts). A timing is a name from a closed set, a duration, and how
-// the tab gets events: never text, ids, or paths. The server checks each against that set (`parseWebTimings`).
+// the tab gets events: never text or paths. Send envelopes contain existing request identities only for the server
+// to derive an opaque process-local tag; raw identities never reach the journal (`parseWebTimings` / `parseSendContext`).
 //
 //   open.home / open.session  the page's navigation start to the session list, or the session, on screen
 //   switch                    picking another session to its view on screen
@@ -55,6 +56,7 @@ function shown(name) {
                 wait.hidden
                     ? { name, unavailable: "hidden" }
                     : { name, ms: Math.round((performance.now() - wait.at) * 10) / 10 },
+                name.startsWith("send.") ? wait.sendContext : undefined,
             );
         }, 0),
     );
@@ -69,7 +71,10 @@ function arrived(name) {
     }
 
     waits.delete(name);
-    report({ name, ms: Math.round((performance.now() - wait.at) * 10) / 10 });
+    report(
+        { name, ms: Math.round((performance.now() - wait.at) * 10) / 10 },
+        name.startsWith("send.") ? wait.sendContext : undefined,
+    );
 }
 
 /** A rare connection transition, reported once without retries or content (never a network error string). */
@@ -82,13 +87,13 @@ export function reportTransport(transition, from, to) {
     }).catch(() => {});
 }
 
-function report(timing) {
+function report(timing, send) {
     // Past the cap (the server unreachable for a long time) the newest are dropped: a journal gap, not a wrong number.
     if (queue.length >= MAX_QUEUED) {
         return;
     }
 
-    queue.push({ ...timing, transport });
+    queue.push({ ...timing, transport, send });
 
     if (queue.length >= BATCH) {
         flush();
@@ -103,13 +108,22 @@ function flush() {
     flushTimer = null;
 
     while (queue.length > 0) {
+        const send = queue[0].send;
+        let count = 0;
+
+        while (count < BATCH && count < queue.length && queue[count].send === send) {
+            count++;
+        }
+
+        const timings = queue.slice(0, count).map(({ send: _send, ...timing }) => timing);
+
         fetch("/api/perf", {
             method: "POST",
             keepalive: true,
             headers: { "X-Pocket": "1", "content-type": "application/json" },
-            body: JSON.stringify({ timings: queue.slice(0, BATCH) }),
+            body: JSON.stringify({ timings, ...(send ? { send } : {}) }),
         }).catch(() => {});
-        queue = queue.slice(BATCH);
+        queue = queue.slice(count);
     }
 }
 
@@ -139,12 +153,16 @@ export function switched(conversationId) {
 }
 
 /** A message is going to an idle session; `view` is what the tab shows now. Returns the send, for `sendFailed`. */
-export function sending(view, { echoed = false } = {}) {
+export function sending(view, { echoed = false, requestId } = {}) {
     const wait = {
         at: performance.now(),
         conversationId: view.conversation.id,
         known: new Set(view.order),
         inbox: (view.inbox ?? []).length,
+        sendContext:
+            view.kernel && requestId
+                ? { conversationId: view.conversation.id, requestId }
+                : undefined,
     };
 
     waits.delete("send.echoed");
@@ -187,8 +205,9 @@ export function sendFailed(at) {
 }
 
 /** The kinds of the entries shown since `known`. New entries are at the end of the order. */
-function newKinds(view, known) {
+function newKinds(view, known, requestId) {
     const kinds = new Set();
+    let confirmed = false;
 
     for (let index = view.order.length - 1; index >= 0; index--) {
         const id = view.order[index];
@@ -197,10 +216,13 @@ function newKinds(view, known) {
             break;
         }
 
-        kinds.add(view.entries.get(id)?.kind);
+        const entry = view.entries.get(id);
+
+        kinds.add(entry?.kind);
+        confirmed ||= entry?.kind === "user" && entry.requestId === requestId;
     }
 
-    return kinds;
+    return { kinds, confirmed };
 }
 
 /** Called on every store change: end the waits whose result the state now holds. */
@@ -259,13 +281,15 @@ export function observe(state) {
         return;
     }
 
-    const kinds = newKinds(view, send.known);
+    const { kinds, confirmed } = newKinds(view, send.known, send.sendContext?.requestId);
 
     if (state.pendingSends?.some((each) => each.conversationId === send.conversationId)) {
         shown("send.echoed");
     }
 
-    if (kinds.has("user") || (view.inbox ?? []).length > send.inbox) {
+    if (
+        send.sendContext ? confirmed : kinds.has("user") || (view.inbox ?? []).length > send.inbox
+    ) {
         arrived("send.arrived");
         shown("send.shown");
     }

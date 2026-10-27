@@ -1,0 +1,145 @@
+{
+    "schema": 1,
+    "metrics": {
+        "web.paced/sql.statements": {
+            "scenario": "web.paced",
+            "metric": "sql.statements",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, a new headless Chromium tab opens that history unmeasured, then submits one 6000-char answer paced 25 ms per chunk until it appears",
+            "source": "node:sqlite StatementSync run/get/all/iterate + DatabaseSync.exec (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 295
+            }
+        },
+        "web.paced/sql.rows": {
+            "scenario": "web.paced",
+            "metric": "sql.rows",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, a new headless Chromium tab opens that history unmeasured, then submits one 6000-char answer paced 25 ms per chunk until it appears",
+            "source": "rows returned by StatementSync all/get (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 520
+            }
+        },
+        "web.paced/subprocess.total": {
+            "scenario": "web.paced",
+            "metric": "subprocess.total",
+            "layer": "process",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, a new headless Chromium tab opens that history unmeasured, then submits one 6000-char answer paced 25 ms per chunk until it appears",
+            "source": "ChildProcess.prototype.spawn + spawnSync/execFileSync/execSync (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "web.paced/view.kernel.sql.statements": {
+            "scenario": "web.paced",
+            "metric": "view.kernel.sql.statements",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, a new headless Chromium tab opens that history unmeasured, then submits one 6000-char answer paced 25 ms per chunk until it appears",
+            "source": "SQL statements inside synchronous native kernel roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 49
+            }
+        },
+        "web.paced/view.kernel.sql.rows": {
+            "scenario": "web.paced",
+            "metric": "view.kernel.sql.rows",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, a new headless Chromium tab opens that history unmeasured, then submits one 6000-char answer paced 25 ms per chunk until it appears",
+            "source": "SQL rows returned inside synchronous native kernel roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 29
+            }
+        },
+        "web.paced/view.kernel.sql.heads": {
+            "scenario": "web.paced",
+            "metric": "view.kernel.sql.heads",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, a new headless Chromium tab opens that history unmeasured, then submits one 6000-char answer paced 25 ms per chunk until it appears",
+            "source": "SQL FROM kernel_heads during synchronous roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 10
+            }
+        },
+        "web.paced/view.kernel.sql.sessions": {
+            "scenario": "web.paced",
+            "metric": "view.kernel.sql.sessions",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, a new headless Chromium tab opens that history unmeasured, then submits one 6000-char answer paced 25 ms per chunk until it appears",
+            "source": "SQL FROM kernel_sessions during synchronous roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "web.paced/view.kernel.sql.attempts": {
+            "scenario": "web.paced",
+            "metric": "view.kernel.sql.attempts",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, a new headless Chromium tab opens that history unmeasured, then submits one 6000-char answer paced 25 ms per chunk until it appears",
+            "source": "SQL FROM kernel_attempts during synchronous roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 20
+            }
+        },
+        "web.paced/view.kernel.sql.command_inputs": {
+            "scenario": "web.paced",
+            "metric": "view.kernel.sql.command_inputs",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, a new headless Chromium tab opens that history unmeasured, then submits one 6000-char answer paced 25 ms per chunk until it appears",
+            "source": "SQL FROM kernel_command_inputs during synchronous roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 19
+            }
+        },
+        "web.paced/view.kernel.sql.resume": {
+            "scenario": "web.paced",
+            "metric": "view.kernel.sql.resume",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, a new headless Chromium tab opens that history unmeasured, then submits one 6000-char answer paced 25 ms per chunk until it appears",
+            "source": "SQL FROM kernel_resume during synchronous roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        }
+    }
+}

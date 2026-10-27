@@ -9,6 +9,7 @@ import { NATIVE_ENTRY } from "../src/server/entry-format.ts";
 import { PocketApp } from "../src/server/app.ts";
 import { NativeMirrorDoc } from "../src/server/team-kernel.ts";
 import type { KernelBinding, KernelEntry } from "../src/server/rotom-journal.ts";
+import { sendPhaseChannel, sendTraceTag, type SendPhaseSignal } from "../src/server/send-trace.ts";
 
 test.after(cleanUp);
 
@@ -125,6 +126,10 @@ for (const storageWorker of [false, true]) {
             const id = Number(session.id);
             const journal = app.kernel!.executions.journal;
             const binding = (await journal.session(String(id))).binding;
+            const phases: SendPhaseSignal[] = [];
+            const onPhase = (signal: unknown) => phases.push(signal as SendPhaseSignal);
+
+            sendPhaseChannel.subscribe(onPhase);
 
             const append = async (
                 requestId: string,
@@ -156,8 +161,12 @@ for (const storageWorker of [false, true]) {
                     messageEntry("prefix-answer", binding, "assistant"),
                 ];
 
-                await append("prefix", prefix);
+                await append("resume-in-user-request", prefix);
                 await app.kernel!.mirror(session.id);
+                assert.deepEqual(
+                    phases.map((phase) => phase.trace),
+                    [sendTraceTag(String(id), `${member.id}:resume-in-user-request`)],
+                );
 
                 const prefixRoom = await app.room(session.id);
                 const prefixNative = prefixRoom.value!.entries.filter(
@@ -168,7 +177,7 @@ for (const storageWorker of [false, true]) {
                 assert.equal(prefixDoc?.count, prefix.length);
                 assert.deepEqual(recordSummary(prefixNative), [
                     { id: "branch-marker", requestId: undefined },
-                    { id: "prefix-user", requestId: "prefix" },
+                    { id: "prefix-user", requestId: "resume-in-user-request" },
                     { id: "prefix-answer", requestId: undefined },
                 ]);
                 const prefixAuthors = await app.harness.snapshot(AuthorsDoc, session.id, context);
@@ -212,6 +221,7 @@ for (const storageWorker of [false, true]) {
                     app.kernel!.mirror(session.id),
                     /fixture Durable commit failure/,
                 );
+                assert.equal(phases.length, 1, "a failed mirror commit is not a measured delivery");
                 const afterFailure = await app.harness.snapshot(
                     NativeMirrorDoc,
                     session.id,
@@ -224,6 +234,14 @@ for (const storageWorker of [false, true]) {
                     "a failed commit does not advance the cursor",
                 );
                 await app.kernel!.mirror(session.id);
+                assert.equal(phases.length, 2);
+                assert.equal(
+                    phases[1]!.trace,
+                    sendTraceTag(String(id), `${member.id}:after-handoff`),
+                );
+                assert.equal(phases[1]!.phase, "mirrored");
+                await app.kernel!.mirror(session.id);
+                assert.equal(phases.length, 2, "an unchanged prefix is not measured again");
                 const afterRetry = await app.harness.snapshot(NativeMirrorDoc, session.id, context);
 
                 assert.equal(afterRetry?.count, prefix.length + 2);
@@ -280,7 +298,7 @@ for (const storageWorker of [false, true]) {
                 );
                 assert.deepEqual(recordSummary(restarted.native), [
                     { id: "branch-marker", requestId: undefined },
-                    { id: "prefix-user", requestId: "prefix" },
+                    { id: "prefix-user", requestId: "resume-in-user-request" },
                     { id: "prefix-answer", requestId: undefined },
                     { id: "after-handoff-user", requestId: "after-handoff" },
                     { id: "after-handoff-answer", requestId: undefined },
@@ -310,6 +328,8 @@ for (const storageWorker of [false, true]) {
                     "switching database ownership preserves the same persisted mirror and room payloads",
                 );
             } finally {
+                sendPhaseChannel.unsubscribe(onPhase);
+
                 if (!closed) {
                     await app.close();
                 }

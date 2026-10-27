@@ -1,0 +1,145 @@
+{
+    "schema": 1,
+    "metrics": {
+        "web.send.stream.network/view.entry.visits": {
+            "scenario": "web.send.stream.network",
+            "metric": "view.entry.visits",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "durable entries traversed to project room views (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 2
+            }
+        },
+        "web.send.stream.network/view.client.entry.scans": {
+            "scenario": "web.send.stream.network",
+            "metric": "view.client.entry.scans",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "cached projected entries scanned for a client's missing IDs (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 4
+            }
+        },
+        "web.send.stream.network/view.stats.entry.scans": {
+            "scenario": "web.send.stream.network",
+            "metric": "view.stats.entry.scans",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "entries visited in the stats reverse scan (src/server/projection.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 77
+            }
+        },
+        "web.send.stream.network/view.fields.stringify.calls": {
+            "scenario": "web.send.stream.network",
+            "metric": "view.fields.stringify.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "slow view fields serialized for per-client change detection (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 13,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 169
+            }
+        },
+        "web.send.stream.network/view.fields.stringify.chars": {
+            "scenario": "web.send.stream.network",
+            "metric": "view.fields.stringify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "characters of slow view fields serialized before unchanged fields are omitted (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 833,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 10783
+            }
+        },
+        "web.send.stream.network/view.live.project.calls": {
+            "scenario": "web.send.stream.network",
+            "metric": "view.live.project.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "live projections constructed per client push (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 2,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 26
+            }
+        },
+        "web.send.stream.network/view.inbox.project.calls": {
+            "scenario": "web.send.stream.network",
+            "metric": "view.inbox.project.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "inbox projections constructed per client push (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 2,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 26
+            }
+        },
+        "web.send.stream.network/view.kernel.project.calls": {
+            "scenario": "web.send.stream.network",
+            "metric": "view.kernel.project.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "native kernel projections constructed per client push (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 2,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 26
+            }
+        },
+        "web.send.stream.network/view.kernel.json.parse.calls": {
+            "scenario": "web.send.stream.network",
+            "metric": "view.kernel.json.parse.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "JSON decodes inside synchronous native kernel roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 4,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 52
+            }
+        },
+        "web.send.stream.network/view.kernel.json.parse.chars": {
+            "scenario": "web.send.stream.network",
+            "metric": "view.kernel.json.parse.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "characters decoded inside synchronous native kernel roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 2164,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 28132
+            }
+        }
+    }
+}

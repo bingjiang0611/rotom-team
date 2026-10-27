@@ -1,0 +1,145 @@
+{
+    "schema": 1,
+    "metrics": {
+        "image.concurrent/json.parse.calls": {
+            "scenario": "image.concurrent",
+            "metric": "json.parse.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after image.single, retrieve images 1 through 4 concurrently, until all client bodies and quiet; phase timings sum per-request intervals, not batch wall time",
+            "source": "global JSON.parse calls in the server process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 4
+            }
+        },
+        "image.concurrent/json.parse.chars": {
+            "scenario": "image.concurrent",
+            "metric": "json.parse.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after image.single, retrieve images 1 through 4 concurrently, until all client bodies and quiet; phase timings sum per-request intervals, not batch wall time",
+            "source": "characters given to JSON.parse (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 10516152
+            }
+        },
+        "image.concurrent/json.parse.http.calls": {
+            "scenario": "image.concurrent",
+            "metric": "json.parse.http.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after image.single, retrieve images 1 through 4 concurrently, until all client bodies and quiet; phase timings sum per-request intervals, not batch wall time",
+            "source": "JSON.parse in exclusive http scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "image.concurrent/json.parse.http.chars": {
+            "scenario": "image.concurrent",
+            "metric": "json.parse.http.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after image.single, retrieve images 1 through 4 concurrently, until all client bodies and quiet; phase timings sum per-request intervals, not batch wall time",
+            "source": "JSON.parse in exclusive http scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "image.concurrent/json.parse.other.calls": {
+            "scenario": "image.concurrent",
+            "metric": "json.parse.other.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after image.single, retrieve images 1 through 4 concurrently, until all client bodies and quiet; phase timings sum per-request intervals, not batch wall time",
+            "source": "JSON.parse in exclusive other scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "image.concurrent/json.parse.other.chars": {
+            "scenario": "image.concurrent",
+            "metric": "json.parse.other.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after image.single, retrieve images 1 through 4 concurrently, until all client bodies and quiet; phase timings sum per-request intervals, not batch wall time",
+            "source": "JSON.parse in exclusive other scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "image.concurrent/json.stringify.chars": {
+            "scenario": "image.concurrent",
+            "metric": "json.stringify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after image.single, retrieve images 1 through 4 concurrently, until all client bodies and quiet; phase timings sum per-request intervals, not batch wall time",
+            "source": "characters JSON.stringify produced (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 34,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "image.concurrent/image.decode.calls": {
+            "scenario": "image.concurrent",
+            "metric": "image.decode.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after image.single, retrieve images 1 through 4 concurrently, until all client bodies and quiet; phase timings sum per-request intervals, not batch wall time",
+            "source": "Buffer.from base64 calls in entryImage outside visibleEntry, request-local scope (test/perf/images.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 4
+            }
+        },
+        "image.concurrent/image.decode.chars": {
+            "scenario": "image.concurrent",
+            "metric": "image.decode.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after image.single, retrieve images 1 through 4 concurrently, until all client bodies and quiet; phase timings sum per-request intervals, not batch wall time",
+            "source": "base64 characters decoded in scoped Buffer.from calls (test/perf/images.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 10491120
+            }
+        },
+        "image.concurrent/image.decode.bytes": {
+            "scenario": "image.concurrent",
+            "metric": "image.decode.bytes",
+            "layer": "cpu",
+            "unit": "bytes",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after image.single, retrieve images 1 through 4 concurrently, until all client bodies and quiet; phase timings sum per-request intervals, not batch wall time",
+            "source": "decoded bytes returned by scoped Buffer.from calls (test/perf/images.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 7868332
+            }
+        }
+    }
+}

@@ -1,0 +1,61 @@
+{
+    "schema": 1,
+    "metrics": {
+        "image.thumbs.network/sql.statements": {
+            "scenario": "image.thumbs.network",
+            "metric": "sql.statements",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after all loopback scenarios, Chromium downloads and decodes 4 previously unrequested images (indices 9 through 12) as thumbnails, cache disabled, CDP-emulated 4 Mbit/s throughput and 40 ms latency; includes first server resize cost; synthetic link, not production network",
+            "source": "node:sqlite StatementSync run/get/all/iterate + DatabaseSync.exec (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 4
+            }
+        },
+        "image.thumbs.network/sql.rows": {
+            "scenario": "image.thumbs.network",
+            "metric": "sql.rows",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after all loopback scenarios, Chromium downloads and decodes 4 previously unrequested images (indices 9 through 12) as thumbnails, cache disabled, CDP-emulated 4 Mbit/s throughput and 40 ms latency; includes first server resize cost; synthetic link, not production network",
+            "source": "rows returned by StatementSync all/get (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 4
+            }
+        },
+        "image.thumbs.network/subprocess.total": {
+            "scenario": "image.thumbs.network",
+            "metric": "subprocess.total",
+            "layer": "process",
+            "unit": "count",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after all loopback scenarios, Chromium downloads and decodes 4 previously unrequested images (indices 9 through 12) as thumbnails, cache disabled, CDP-emulated 4 Mbit/s throughput and 40 ms latency; includes first server resize cost; synthetic link, not production network",
+            "source": "ChildProcess.prototype.spawn + spawnSync/execFileSync/execSync (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 8
+            }
+        },
+        "image.thumbs.network/subprocess.sips": {
+            "scenario": "image.thumbs.network",
+            "metric": "subprocess.sips",
+            "layer": "process",
+            "unit": "count",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after all loopback scenarios, Chromium downloads and decodes 4 previously unrequested images (indices 9 through 12) as thumbnails, cache disabled, CDP-emulated 4 Mbit/s throughput and 40 ms latency; includes first server resize cost; synthetic link, not production network",
+            "source": "child processes whose program is sips, macOS image resizing (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 8
+            }
+        }
+    }
+}

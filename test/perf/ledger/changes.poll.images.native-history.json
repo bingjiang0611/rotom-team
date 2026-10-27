@@ -1,0 +1,117 @@
+{
+    "schema": 1,
+    "metrics": {
+        "changes.poll.images/json.parse.nativeReadback.calls": {
+            "scenario": "changes.poll.images",
+            "metric": "json.parse.nativeReadback.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after all image scenarios, 4 concurrent GET changes for that image session (same Git workspace with 20 changed files), then the same 4 again with nothing changed; every answer identical, until quiet",
+            "source": "JSON.parse in exclusive nativeReadback scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "changes.poll.images/json.parse.nativeReadback.chars": {
+            "scenario": "changes.poll.images",
+            "metric": "json.parse.nativeReadback.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after all image scenarios, 4 concurrent GET changes for that image session (same Git workspace with 20 changed files), then the same 4 again with nothing changed; every answer identical, until quiet",
+            "source": "JSON.parse in exclusive nativeReadback scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "changes.poll.images/json.parse.nativeJsonl.calls": {
+            "scenario": "changes.poll.images",
+            "metric": "json.parse.nativeJsonl.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after all image scenarios, 4 concurrent GET changes for that image session (same Git workspace with 20 changed files), then the same 4 again with nothing changed; every answer identical, until quiet",
+            "source": "JSON.parse in exclusive nativeJsonl scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "changes.poll.images/json.parse.nativeJsonl.chars": {
+            "scenario": "changes.poll.images",
+            "metric": "json.parse.nativeJsonl.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after all image scenarios, 4 concurrent GET changes for that image session (same Git workspace with 20 changed files), then the same 4 again with nothing changed; every answer identical, until quiet",
+            "source": "JSON.parse in exclusive nativeJsonl scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "changes.poll.images/json.parse.nativeJsonlIngest.calls": {
+            "scenario": "changes.poll.images",
+            "metric": "json.parse.nativeJsonlIngest.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after all image scenarios, 4 concurrent GET changes for that image session (same Git workspace with 20 changed files), then the same 4 again with nothing changed; every answer identical, until quiet",
+            "source": "JSON.parse in exclusive nativeJsonlIngest scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "changes.poll.images/json.parse.nativeJsonlIngest.chars": {
+            "scenario": "changes.poll.images",
+            "metric": "json.parse.nativeJsonlIngest.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after all image scenarios, 4 concurrent GET changes for that image session (same Git workspace with 20 changed files), then the same 4 again with nothing changed; every answer identical, until quiet",
+            "source": "JSON.parse in exclusive nativeJsonlIngest scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "changes.poll.images/json.parse.nativeJsonlSnapshot.calls": {
+            "scenario": "changes.poll.images",
+            "metric": "json.parse.nativeJsonlSnapshot.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after all image scenarios, 4 concurrent GET changes for that image session (same Git workspace with 20 changed files), then the same 4 again with nothing changed; every answer identical, until quiet",
+            "source": "JSON.parse in exclusive nativeJsonlSnapshot scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "changes.poll.images/json.parse.nativeJsonlSnapshot.chars": {
+            "scenario": "changes.poll.images",
+            "metric": "json.parse.nativeJsonlSnapshot.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after all image scenarios, 4 concurrent GET changes for that image session (same Git workspace with 20 changed files), then the same 4 again with nothing changed; every answer identical, until quiet",
+            "source": "JSON.parse in exclusive nativeJsonlSnapshot scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        }
+    }
+}

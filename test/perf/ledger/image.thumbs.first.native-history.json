@@ -1,0 +1,117 @@
+{
+    "schema": 1,
+    "metrics": {
+        "image.thumbs.first/json.parse.nativeReadback.calls": {
+            "scenario": "image.thumbs.first",
+            "metric": "json.parse.nativeReadback.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after image.concurrent, request images 5 through 8 concurrently as transcript thumbnails (?size=thumb), the first time this server sees them, until all client bodies and quiet",
+            "source": "JSON.parse in exclusive nativeReadback scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "image.thumbs.first/json.parse.nativeReadback.chars": {
+            "scenario": "image.thumbs.first",
+            "metric": "json.parse.nativeReadback.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after image.concurrent, request images 5 through 8 concurrently as transcript thumbnails (?size=thumb), the first time this server sees them, until all client bodies and quiet",
+            "source": "JSON.parse in exclusive nativeReadback scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "image.thumbs.first/json.parse.nativeJsonl.calls": {
+            "scenario": "image.thumbs.first",
+            "metric": "json.parse.nativeJsonl.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after image.concurrent, request images 5 through 8 concurrently as transcript thumbnails (?size=thumb), the first time this server sees them, until all client bodies and quiet",
+            "source": "JSON.parse in exclusive nativeJsonl scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "image.thumbs.first/json.parse.nativeJsonl.chars": {
+            "scenario": "image.thumbs.first",
+            "metric": "json.parse.nativeJsonl.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after image.concurrent, request images 5 through 8 concurrently as transcript thumbnails (?size=thumb), the first time this server sees them, until all client bodies and quiet",
+            "source": "JSON.parse in exclusive nativeJsonl scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "image.thumbs.first/json.parse.nativeJsonlIngest.calls": {
+            "scenario": "image.thumbs.first",
+            "metric": "json.parse.nativeJsonlIngest.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after image.concurrent, request images 5 through 8 concurrently as transcript thumbnails (?size=thumb), the first time this server sees them, until all client bodies and quiet",
+            "source": "JSON.parse in exclusive nativeJsonlIngest scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "image.thumbs.first/json.parse.nativeJsonlIngest.chars": {
+            "scenario": "image.thumbs.first",
+            "metric": "json.parse.nativeJsonlIngest.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after image.concurrent, request images 5 through 8 concurrently as transcript thumbnails (?size=thumb), the first time this server sees them, until all client bodies and quiet",
+            "source": "JSON.parse in exclusive nativeJsonlIngest scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "image.thumbs.first/json.parse.nativeJsonlSnapshot.calls": {
+            "scenario": "image.thumbs.first",
+            "metric": "json.parse.nativeJsonlSnapshot.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after image.concurrent, request images 5 through 8 concurrently as transcript thumbnails (?size=thumb), the first time this server sees them, until all client bodies and quiet",
+            "source": "JSON.parse in exclusive nativeJsonlSnapshot scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "image.thumbs.first/json.parse.nativeJsonlSnapshot.chars": {
+            "scenario": "image.thumbs.first",
+            "metric": "json.parse.nativeJsonlSnapshot.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; separate Durable mirror of 24 native user messages, each with 6000 text chars and one distinct 1024x640 RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference; after image.concurrent, request images 5 through 8 concurrently as transcript thumbnails (?size=thumb), the first time this server sees them, until all client bodies and quiet",
+            "source": "JSON.parse in exclusive nativeJsonlSnapshot scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        }
+    }
+}

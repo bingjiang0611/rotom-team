@@ -1,0 +1,145 @@
+{
+    "schema": 1,
+    "metrics": {
+        "web.reopen/sql.statements": {
+            "scenario": "web.reopen",
+            "metric": "sql.statements",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after session.reclaim, headless Chromium opens /s/<session> in one tab until shown (and saved where the page keeps copies), closes it, then a fresh tab of the same profile opens it until the last answer shows without a saved-copy check marker",
+            "source": "node:sqlite StatementSync run/get/all/iterate + DatabaseSync.exec (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 15
+            }
+        },
+        "web.reopen/sql.rows": {
+            "scenario": "web.reopen",
+            "metric": "sql.rows",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after session.reclaim, headless Chromium opens /s/<session> in one tab until shown (and saved where the page keeps copies), closes it, then a fresh tab of the same profile opens it until the last answer shows without a saved-copy check marker",
+            "source": "rows returned by StatementSync all/get (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 74
+            }
+        },
+        "web.reopen/subprocess.total": {
+            "scenario": "web.reopen",
+            "metric": "subprocess.total",
+            "layer": "process",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after session.reclaim, headless Chromium opens /s/<session> in one tab until shown (and saved where the page keeps copies), closes it, then a fresh tab of the same profile opens it until the last answer shows without a saved-copy check marker",
+            "source": "ChildProcess.prototype.spawn + spawnSync/execFileSync/execSync (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "web.reopen/view.kernel.sql.statements": {
+            "scenario": "web.reopen",
+            "metric": "view.kernel.sql.statements",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after session.reclaim, headless Chromium opens /s/<session> in one tab until shown (and saved where the page keeps copies), closes it, then a fresh tab of the same profile opens it until the last answer shows without a saved-copy check marker",
+            "source": "SQL statements inside synchronous native kernel roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 4
+            }
+        },
+        "web.reopen/view.kernel.sql.heads": {
+            "scenario": "web.reopen",
+            "metric": "view.kernel.sql.heads",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after session.reclaim, headless Chromium opens /s/<session> in one tab until shown (and saved where the page keeps copies), closes it, then a fresh tab of the same profile opens it until the last answer shows without a saved-copy check marker",
+            "source": "SQL FROM kernel_heads during synchronous roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "web.reopen/view.kernel.sql.sessions": {
+            "scenario": "web.reopen",
+            "metric": "view.kernel.sql.sessions",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after session.reclaim, headless Chromium opens /s/<session> in one tab until shown (and saved where the page keeps copies), closes it, then a fresh tab of the same profile opens it until the last answer shows without a saved-copy check marker",
+            "source": "SQL FROM kernel_sessions during synchronous roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "web.reopen/view.kernel.sql.attempts": {
+            "scenario": "web.reopen",
+            "metric": "view.kernel.sql.attempts",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after session.reclaim, headless Chromium opens /s/<session> in one tab until shown (and saved where the page keeps copies), closes it, then a fresh tab of the same profile opens it until the last answer shows without a saved-copy check marker",
+            "source": "SQL FROM kernel_attempts during synchronous roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 2
+            }
+        },
+        "web.reopen/view.kernel.sql.command_inputs": {
+            "scenario": "web.reopen",
+            "metric": "view.kernel.sql.command_inputs",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after session.reclaim, headless Chromium opens /s/<session> in one tab until shown (and saved where the page keeps copies), closes it, then a fresh tab of the same profile opens it until the last answer shows without a saved-copy check marker",
+            "source": "SQL FROM kernel_command_inputs during synchronous roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "web.reopen/view.kernel.sql.resume": {
+            "scenario": "web.reopen",
+            "metric": "view.kernel.sql.resume",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after session.reclaim, headless Chromium opens /s/<session> in one tab until shown (and saved where the page keeps copies), closes it, then a fresh tab of the same profile opens it until the last answer shows without a saved-copy check marker",
+            "source": "SQL FROM kernel_resume during synchronous roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "web.reopen/view.kernel.sql.rows": {
+            "scenario": "web.reopen",
+            "metric": "view.kernel.sql.rows",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after session.reclaim, headless Chromium opens /s/<session> in one tab until shown (and saved where the page keeps copies), closes it, then a fresh tab of the same profile opens it until the last answer shows without a saved-copy check marker",
+            "source": "SQL rows returned inside synchronous native kernel roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 2
+            }
+        }
+    }
+}

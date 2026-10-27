@@ -1,0 +1,75 @@
+{
+    "schema": 1,
+    "metrics": {
+        "session.history.earlier/fs.read.calls": {
+            "scenario": "session.history.earlier",
+            "metric": "fs.read.calls",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "synchronous readSync calls in the parent process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/fs.read.bytes": {
+            "scenario": "session.history.earlier",
+            "metric": "fs.read.bytes",
+            "layer": "storage",
+            "unit": "bytes",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "bytes returned by synchronous readSync in the parent process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/sql.statements": {
+            "scenario": "session.history.earlier",
+            "metric": "sql.statements",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "node:sqlite StatementSync run/get/all/iterate + DatabaseSync.exec (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/sql.rows": {
+            "scenario": "session.history.earlier",
+            "metric": "sql.rows",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "rows returned by StatementSync all/get (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/subprocess.total": {
+            "scenario": "session.history.earlier",
+            "metric": "subprocess.total",
+            "layer": "process",
+            "unit": "count",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "ChildProcess.prototype.spawn + spawnSync/execFileSync/execSync (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        }
+    }
+}

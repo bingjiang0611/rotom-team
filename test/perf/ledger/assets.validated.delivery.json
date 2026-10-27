@@ -1,0 +1,33 @@
+{
+    "schema": 1,
+    "metrics": {
+        "assets.validated/http.requests": {
+            "scenario": "assets.validated",
+            "metric": "http.requests",
+            "layer": "http",
+            "unit": "count",
+            "workload": "root web/*.js and *.css, known VENDOR modules, and all synthetic public assets; request each asset again with If-None-Match when the first response supplied an ETag; accept matching empty 304 or decoded-equal full 200; raw node:http body bytes and completed request count are transport observations",
+            "source": "http.server.request.start diagnostics channel (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 53
+            }
+        },
+        "assets.validated/http.body.bytes": {
+            "scenario": "assets.validated",
+            "metric": "http.body.bytes",
+            "layer": "http",
+            "unit": "bytes",
+            "workload": "root web/*.js and *.css, known VENDOR modules, and all synthetic public assets; request each asset again with If-None-Match when the first response supplied an ETag; accept matching empty 304 or decoded-equal full 200; raw node:http body bytes and completed request count are transport observations",
+            "source": "raw response body bytes received by transport probes (test/perf/scenarios.ts and test/perf/static-assets.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1142870
+            }
+        }
+    }
+}

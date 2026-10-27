@@ -1,0 +1,145 @@
+{
+    "schema": 1,
+    "metrics": {
+        "session.open.long/json.parse.durableStorage.calls": {
+            "scenario": "session.open.long",
+            "metric": "json.parse.durableStorage.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "JSON.parse in exclusive durableStorage scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open.long/json.parse.durableStorage.chars": {
+            "scenario": "session.open.long",
+            "metric": "json.parse.durableStorage.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "JSON.parse in exclusive durableStorage scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open.long/json.parse.journal.calls": {
+            "scenario": "session.open.long",
+            "metric": "json.parse.journal.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "JSON.parse in exclusive journal scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 4
+            }
+        },
+        "session.open.long/json.parse.journal.chars": {
+            "scenario": "session.open.long",
+            "metric": "json.parse.journal.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "JSON.parse in exclusive journal scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 2164
+            }
+        },
+        "session.open.long/json.parse.journalHistory.calls": {
+            "scenario": "session.open.long",
+            "metric": "json.parse.journalHistory.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "JSON.parse in exclusive journalHistory scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open.long/json.parse.journalHistory.chars": {
+            "scenario": "session.open.long",
+            "metric": "json.parse.journalHistory.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "JSON.parse in exclusive journalHistory scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open.long/json.parse.journalThinking.calls": {
+            "scenario": "session.open.long",
+            "metric": "json.parse.journalThinking.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "JSON.parse in exclusive journalThinking scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "session.open.long/json.parse.journalThinking.chars": {
+            "scenario": "session.open.long",
+            "metric": "json.parse.journalThinking.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "JSON.parse in exclusive journalThinking scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 541
+            }
+        },
+        "session.open.long/json.parse.journalSegments.calls": {
+            "scenario": "session.open.long",
+            "metric": "json.parse.journalSegments.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "JSON.parse in exclusive journalSegments scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.open.long/json.parse.journalSegments.chars": {
+            "scenario": "session.open.long",
+            "metric": "json.parse.journalSegments.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "JSON.parse in exclusive journalSegments scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        }
+    }
+}

@@ -1,7 +1,8 @@
 /**
  * Content-free performance signals, as Node diagnostics channels. Publishing costs one check while nobody subscribes.
  * The daily performance journal (`perf-journal.ts`) and the controlled benchmarks (`test/perf/`) subscribe. A message
- * carries names, counts, sizes, and durations only: never text, paths, ids, or anything a user wrote.
+ * carries names, counts, sizes, and durations only: never text, paths, raw ids, or anything a user wrote.
+ * Send timings may carry an opaque, process-local HMAC tag, never the identity from which it was derived.
  */
 import { AsyncLocalStorage } from "node:async_hooks";
 import { channel } from "node:diagnostics_channel";
@@ -82,6 +83,8 @@ export const WEB_TIMINGS = [
 export type WebTimingSignal = {
     name: (typeof WEB_TIMINGS)[number];
     transport: "stream" | "poll";
+    /** Added by the authenticated server, never accepted directly from a tab. */
+    trace?: string;
 } & ({ ms: number } | { unavailable: "hidden" });
 
 /** Why one remote tab chose or left long polling. Content-free; no URL, id, path, text or network address. */

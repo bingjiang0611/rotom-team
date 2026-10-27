@@ -1,0 +1,19 @@
+{
+    "schema": 1,
+    "metrics": {
+        "git.changes/http.body.bytes": {
+            "scenario": "git.changes",
+            "metric": "http.body.bytes",
+            "layer": "http",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 20 changed files; GET changes",
+            "source": "answer body bytes the benchmark received (test/perf/scenarios.ts)",
+            "status": "candidate",
+            "tolerance": 7,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 2538
+            }
+        }
+    }
+}

@@ -4,14 +4,26 @@ import { test } from "node:test";
 import { runInNewContext } from "node:vm";
 
 // Exercise the real browser reducer, isolated from its network/navigation startup. The benchmark runs the full page.
-const source = readFileSync(new URL("../web/store.js", import.meta.url), "utf8");
-const empty = source.slice(
-    source.indexOf("const emptyView ="),
-    source.indexOf("export const store ="),
+const stateSource = readFileSync(new URL("../web/store-state.js", import.meta.url), "utf8");
+const projectionSource = readFileSync(
+    new URL("../web/store-projection.js", import.meta.url),
+    "utf8",
 );
-const apply = source.slice(
-    source.indexOf("function applyView(data)"),
-    source.indexOf("/** The `moving`"),
+const transportSource = readFileSync(new URL("../web/store-transport.js", import.meta.url), "utf8");
+const empty = stateSource
+    .slice(
+        stateSource.indexOf("export const emptyView ="),
+        stateSource.indexOf("export const store ="),
+    )
+    .replace("export const emptyView", "const emptyView")
+    .replace("export function savedView", "function savedView");
+const apply = projectionSource.slice(
+    projectionSource.indexOf("function applyView(data, resync)"),
+    projectionSource.indexOf("/** The `moving`"),
+);
+const resync = transportSource.slice(
+    transportSource.indexOf("function resyncView()"),
+    transportSource.indexOf("export function connect()"),
 );
 
 function reducer() {
@@ -48,7 +60,7 @@ function reducer() {
     };
 
     runInNewContext(
-        `${empty}\nstore.state.view = emptyView();\n${apply}\nthis.apply = applyView;`,
+        `${empty}\nstore.state.view = emptyView();\n${apply}\n${resync}\nthis.apply = (data) => applyView(data, resyncView);`,
         context,
     );
 

@@ -1,0 +1,33 @@
+{
+    "schema": 1,
+    "metrics": {
+        "session.open.native-long/json.parse.journalSegments.calls": {
+            "scenario": "session.open.native-long",
+            "metric": "json.parse.journalSegments.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after all other scenarios, a real app-created native session with 600 valid journal entries of about 1200 characters seeded outside the window without inference; call native roomInfo once before the window, then make 3 real roomInfo projections inside it and require identical goal and thinking values",
+            "source": "JSON.parse in exclusive journalSegments scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1800
+            }
+        },
+        "session.open.native-long/json.parse.journalSegments.chars": {
+            "scenario": "session.open.native-long",
+            "metric": "json.parse.journalSegments.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after all other scenarios, a real app-created native session with 600 valid journal entries of about 1200 characters seeded outside the window without inference; call native roomInfo once before the window, then make 3 real roomInfo projections inside it and require identical goal and thinking values",
+            "source": "JSON.parse in exclusive journalSegments scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 2370165
+            }
+        }
+    }
+}

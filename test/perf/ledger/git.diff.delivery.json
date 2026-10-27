@@ -1,0 +1,19 @@
+{
+    "schema": 1,
+    "metrics": {
+        "git.diff/http.body.bytes": {
+            "scenario": "git.diff",
+            "metric": "http.body.bytes",
+            "layer": "http",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; Git workspace with 20 changed files; GET changes/diff for tracked src/file-0.txt",
+            "source": "answer body bytes the benchmark received (test/perf/scenarios.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1195
+            }
+        }
+    }
+}

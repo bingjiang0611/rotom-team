@@ -13,19 +13,13 @@
  * not compared. CI runs this on pull requests (.github/workflows/performance.yml); it runs the same on a laptop.
  */
 import { execFileSync } from "node:child_process";
-import {
-    appendFileSync,
-    mkdirSync,
-    mkdtempSync,
-    readFileSync,
-    rmSync,
-    writeFileSync,
-} from "node:fs";
+import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { cpus, loadavg, tmpdir } from "node:os";
 import { join } from "node:path";
 import { prepareCheckout, removeCheckout, REPO } from "./checkout.ts";
 import { buildReport, formatReport, type Report, revision, runOnce } from "./measure.ts";
-import { check, compare, formatCheck, formatComparison, guard, type Ledger } from "./ratchet.ts";
+import { check, compare, formatCheck, formatComparison, guard } from "./ratchet.ts";
+import { parseLedger, readLedger } from "./ledger.ts";
 import type { ScenarioResult } from "./scenarios.ts";
 
 const args = process.argv.slice(2);
@@ -63,10 +57,10 @@ mkdirSync(out, { recursive: true });
 const baseCommit = git("rev-parse", "--verify", `${baseRef}^{commit}`);
 
 // The base's own ledger is what the head's ledger edit is guarded against.
-let baseLedger: Ledger | undefined;
+let baseLedgerText: string | undefined;
 
 try {
-    baseLedger = JSON.parse(git("show", `${baseCommit}:test/perf/ledger.json`)) as Ledger;
+    baseLedgerText = git("show", `${baseCommit}:test/perf/ledger.json`);
 } catch (error) {
     // Only a base without a ledger predates the benchmark; any other failure is a failure.
     if (
@@ -77,12 +71,15 @@ try {
         throw error;
     }
 
-    baseLedger = undefined;
+    baseLedgerText = undefined;
 }
 
-const headLedger = JSON.parse(
-    readFileSync(join(REPO, "test", "perf", "ledger.json"), "utf8"),
-) as Ledger;
+// Only the absent root predates the benchmark. A missing indexed fragment is corruption, not an absent ledger.
+const baseLedger =
+    baseLedgerText === undefined
+        ? undefined
+        : parseLedger(baseLedgerText, (name) => git("show", `${baseCommit}:test/perf/${name}`));
+const headLedger = readLedger();
 
 if (
     baseLedger === undefined ||

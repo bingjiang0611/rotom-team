@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { runInNewContext } from "node:vm";
 
-const source = readFileSync(new URL("../web/store.js", import.meta.url), "utf8");
+const source = readFileSync(new URL("../web/store-views.js", import.meta.url), "utf8");
 const warm = source.slice(
     source.indexOf("const warmedAt ="),
     source.indexOf("/** Entries that show as transcript rows."),

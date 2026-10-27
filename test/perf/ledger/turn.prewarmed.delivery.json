@@ -1,0 +1,61 @@
+{
+    "schema": 1,
+    "metrics": {
+        "turn.prewarmed/push.events": {
+            "scenario": "turn.prewarmed",
+            "metric": "push.events",
+            "layer": "push",
+            "unit": "count",
+            "workload": "after native.warm, the first prompt of that session, until settled and quiet",
+            "source": "events written to tabs, rotom-team:push channel (src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 1,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 3
+            }
+        },
+        "turn.prewarmed/push.bytes": {
+            "scenario": "turn.prewarmed",
+            "metric": "push.bytes",
+            "layer": "push",
+            "unit": "bytes",
+            "workload": "after native.warm, the first prompt of that session, until settled and quiet",
+            "source": "event-stream bytes written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 1237,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 14721
+            }
+        },
+        "turn.prewarmed/push.view.count": {
+            "scenario": "turn.prewarmed",
+            "metric": "push.view.count",
+            "layer": "push",
+            "unit": "count",
+            "workload": "after native.warm, the first prompt of that session, until settled and quiet",
+            "source": "view events written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 1,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 2
+            }
+        },
+        "turn.prewarmed/push.view.bytes": {
+            "scenario": "turn.prewarmed",
+            "metric": "push.view.bytes",
+            "layer": "push",
+            "unit": "bytes",
+            "workload": "after native.warm, the first prompt of that session, until settled and quiet",
+            "source": "view event bytes written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 1237,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 8572
+            }
+        }
+    }
+}

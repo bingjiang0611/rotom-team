@@ -1,0 +1,75 @@
+{
+    "schema": 1,
+    "metrics": {
+        "sessions.rename.tabs/fs.read.calls": {
+            "scenario": "sessions.rename.tabs",
+            "metric": "fs.read.calls",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "after all established scenarios, 4 authenticated SSE tabs without a selected conversation opt into session deltas and load the full catalogue unmeasured; rename the History session twice through HTTP, waiting for each title in every tab; all reconstructed lists must equal the server list; count through quiet",
+            "source": "synchronous readSync calls in the parent process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "sessions.rename.tabs/fs.read.bytes": {
+            "scenario": "sessions.rename.tabs",
+            "metric": "fs.read.bytes",
+            "layer": "storage",
+            "unit": "bytes",
+            "workload": "after all established scenarios, 4 authenticated SSE tabs without a selected conversation opt into session deltas and load the full catalogue unmeasured; rename the History session twice through HTTP, waiting for each title in every tab; all reconstructed lists must equal the server list; count through quiet",
+            "source": "bytes returned by synchronous readSync in the parent process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "sessions.rename.tabs/sql.statements": {
+            "scenario": "sessions.rename.tabs",
+            "metric": "sql.statements",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "after all established scenarios, 4 authenticated SSE tabs without a selected conversation opt into session deltas and load the full catalogue unmeasured; rename the History session twice through HTTP, waiting for each title in every tab; all reconstructed lists must equal the server list; count through quiet",
+            "source": "node:sqlite StatementSync run/get/all/iterate + DatabaseSync.exec (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 43
+            }
+        },
+        "sessions.rename.tabs/sql.rows": {
+            "scenario": "sessions.rename.tabs",
+            "metric": "sql.rows",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "after all established scenarios, 4 authenticated SSE tabs without a selected conversation opt into session deltas and load the full catalogue unmeasured; rename the History session twice through HTTP, waiting for each title in every tab; all reconstructed lists must equal the server list; count through quiet",
+            "source": "rows returned by StatementSync all/get (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 68
+            }
+        },
+        "sessions.rename.tabs/subprocess.total": {
+            "scenario": "sessions.rename.tabs",
+            "metric": "subprocess.total",
+            "layer": "process",
+            "unit": "count",
+            "workload": "after all established scenarios, 4 authenticated SSE tabs without a selected conversation opt into session deltas and load the full catalogue unmeasured; rename the History session twice through HTTP, waiting for each title in every tab; all reconstructed lists must equal the server list; count through quiet",
+            "source": "ChildProcess.prototype.spawn + spawnSync/execFileSync/execSync (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        }
+    }
+}

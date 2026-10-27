@@ -1,0 +1,145 @@
+{
+    "schema": 1,
+    "metrics": {
+        "web.open.long/sql.statements": {
+            "scenario": "web.open.long",
+            "metric": "sql.statements",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "node:sqlite StatementSync run/get/all/iterate + DatabaseSync.exec (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 1,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 17
+            }
+        },
+        "web.open.long/sql.rows": {
+            "scenario": "web.open.long",
+            "metric": "sql.rows",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "rows returned by StatementSync all/get (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 18,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 57
+            }
+        },
+        "web.open.long/subprocess.total": {
+            "scenario": "web.open.long",
+            "metric": "subprocess.total",
+            "layer": "process",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "ChildProcess.prototype.spawn + spawnSync/execFileSync/execSync (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "web.open.long/view.kernel.sql.statements": {
+            "scenario": "web.open.long",
+            "metric": "view.kernel.sql.statements",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "SQL statements inside synchronous native kernel roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 3
+            }
+        },
+        "web.open.long/view.kernel.sql.heads": {
+            "scenario": "web.open.long",
+            "metric": "view.kernel.sql.heads",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "SQL FROM kernel_heads during synchronous roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "web.open.long/view.kernel.sql.sessions": {
+            "scenario": "web.open.long",
+            "metric": "view.kernel.sql.sessions",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "SQL FROM kernel_sessions during synchronous roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "web.open.long/view.kernel.sql.attempts": {
+            "scenario": "web.open.long",
+            "metric": "view.kernel.sql.attempts",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "SQL FROM kernel_attempts during synchronous roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 2
+            }
+        },
+        "web.open.long/view.kernel.sql.command_inputs": {
+            "scenario": "web.open.long",
+            "metric": "view.kernel.sql.command_inputs",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "SQL FROM kernel_command_inputs during synchronous roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "web.open.long/view.kernel.sql.resume": {
+            "scenario": "web.open.long",
+            "metric": "view.kernel.sql.resume",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "SQL FROM kernel_resume during synchronous roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "web.open.long/view.kernel.sql.rows": {
+            "scenario": "web.open.long",
+            "metric": "view.kernel.sql.rows",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "SQL rows returned inside synchronous native kernel roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        }
+    }
+}

@@ -1,0 +1,61 @@
+{
+    "schema": 1,
+    "metrics": {
+        "turn.prepared/push.events": {
+            "scenario": "turn.prepared",
+            "metric": "push.events",
+            "layer": "push",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; same additional session/tab after both discoveries; first ordinary prompt, until settled and quiet",
+            "source": "events written to tabs, rotom-team:push channel (src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 1,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 2
+            }
+        },
+        "turn.prepared/push.bytes": {
+            "scenario": "turn.prepared",
+            "metric": "push.bytes",
+            "layer": "push",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; same additional session/tab after both discoveries; first ordinary prompt, until settled and quiet",
+            "source": "event-stream bytes written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 3314,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 12129
+            }
+        },
+        "turn.prepared/push.view.count": {
+            "scenario": "turn.prepared",
+            "metric": "push.view.count",
+            "layer": "push",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; same additional session/tab after both discoveries; first ordinary prompt, until settled and quiet",
+            "source": "view events written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 1,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "turn.prepared/push.view.bytes": {
+            "scenario": "turn.prepared",
+            "metric": "push.view.bytes",
+            "layer": "push",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; same additional session/tab after both discoveries; first ordinary prompt, until settled and quiet",
+            "source": "view event bytes written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 3314,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 7332
+            }
+        }
+    }
+}

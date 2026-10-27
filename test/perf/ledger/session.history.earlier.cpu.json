@@ -1,0 +1,103 @@
+{
+    "schema": 1,
+    "metrics": {
+        "session.history.earlier/json.parse.calls": {
+            "scenario": "session.history.earlier",
+            "metric": "json.parse.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "global JSON.parse calls in the server process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/json.parse.chars": {
+            "scenario": "session.history.earlier",
+            "metric": "json.parse.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "characters given to JSON.parse (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/json.parse.http.calls": {
+            "scenario": "session.history.earlier",
+            "metric": "json.parse.http.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "JSON.parse in exclusive http scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/json.parse.http.chars": {
+            "scenario": "session.history.earlier",
+            "metric": "json.parse.http.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "JSON.parse in exclusive http scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/json.parse.other.calls": {
+            "scenario": "session.history.earlier",
+            "metric": "json.parse.other.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "JSON.parse in exclusive other scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/json.parse.other.chars": {
+            "scenario": "session.history.earlier",
+            "metric": "json.parse.other.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "JSON.parse in exclusive other scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "session.history.earlier/json.stringify.chars": {
+            "scenario": "session.history.earlier",
+            "metric": "json.stringify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "characters JSON.stringify produced (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 243098
+            }
+        }
+    }
+}

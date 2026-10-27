@@ -1,0 +1,33 @@
+{
+    "schema": 1,
+    "metrics": {
+        "session.history.earlier/http.requests": {
+            "scenario": "session.history.earlier",
+            "metric": "http.requests",
+            "layer": "http",
+            "unit": "count",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "http.server.request.start diagnostics channel (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 2
+            }
+        },
+        "session.history.earlier/http.body.bytes": {
+            "scenario": "session.history.earlier",
+            "metric": "http.body.bytes",
+            "layer": "http",
+            "unit": "bytes",
+            "workload": "after session.open.long, that tab reads every entry it lacks, page by page, until it holds the whole history; servers that sent everything need no request",
+            "source": "answer body bytes the benchmark received (test/perf/scenarios.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 243098
+            }
+        }
+    }
+}

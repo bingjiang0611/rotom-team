@@ -1,0 +1,75 @@
+{
+    "schema": 1,
+    "metrics": {
+        "sessions.rename.tabs/push.events": {
+            "scenario": "sessions.rename.tabs",
+            "metric": "push.events",
+            "layer": "push",
+            "unit": "count",
+            "workload": "after all established scenarios, 4 authenticated SSE tabs without a selected conversation opt into session deltas and load the full catalogue unmeasured; rename the History session twice through HTTP, waiting for each title in every tab; all reconstructed lists must equal the server list; count through quiet",
+            "source": "events written to tabs, rotom-team:push channel (src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 8
+            }
+        },
+        "sessions.rename.tabs/push.bytes": {
+            "scenario": "sessions.rename.tabs",
+            "metric": "push.bytes",
+            "layer": "push",
+            "unit": "bytes",
+            "workload": "after all established scenarios, 4 authenticated SSE tabs without a selected conversation opt into session deltas and load the full catalogue unmeasured; rename the History session twice through HTTP, waiting for each title in every tab; all reconstructed lists must equal the server list; count through quiet",
+            "source": "event-stream bytes written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 4296
+            }
+        },
+        "sessions.rename.tabs/push.view.count": {
+            "scenario": "sessions.rename.tabs",
+            "metric": "push.view.count",
+            "layer": "push",
+            "unit": "count",
+            "workload": "after all established scenarios, 4 authenticated SSE tabs without a selected conversation opt into session deltas and load the full catalogue unmeasured; rename the History session twice through HTTP, waiting for each title in every tab; all reconstructed lists must equal the server list; count through quiet",
+            "source": "view events written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "sessions.rename.tabs/push.view.bytes": {
+            "scenario": "sessions.rename.tabs",
+            "metric": "push.view.bytes",
+            "layer": "push",
+            "unit": "bytes",
+            "workload": "after all established scenarios, 4 authenticated SSE tabs without a selected conversation opt into session deltas and load the full catalogue unmeasured; rename the History session twice through HTTP, waiting for each title in every tab; all reconstructed lists must equal the server list; count through quiet",
+            "source": "view event bytes written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "sessions.rename.tabs/http.requests": {
+            "scenario": "sessions.rename.tabs",
+            "metric": "http.requests",
+            "layer": "http",
+            "unit": "count",
+            "workload": "after all established scenarios, 4 authenticated SSE tabs without a selected conversation opt into session deltas and load the full catalogue unmeasured; rename the History session twice through HTTP, waiting for each title in every tab; all reconstructed lists must equal the server list; count through quiet",
+            "source": "http.server.request.start diagnostics channel (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 2
+            }
+        }
+    }
+}

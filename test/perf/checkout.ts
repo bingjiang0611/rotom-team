@@ -7,7 +7,15 @@
  * and the ledger keeps baselines per platform.
  */
 import { execFileSync } from "node:child_process";
-import { cpSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync } from "node:fs";
+import {
+    cpSync,
+    mkdirSync,
+    mkdtempSync,
+    readFileSync,
+    realpathSync,
+    rmSync,
+    symlinkSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -20,6 +28,28 @@ const git = (cwd: string, ...args: string[]) =>
         maxBuffer: 256 * 1024 * 1024,
     }).trim();
 const lines = (text: string) => text.split("\0").filter((each) => each !== "");
+
+/** Copy the complete on-disk change, including changes already staged for commit. */
+export function copyWorkingTree(repo: string, target: string): void {
+    // --no-renames keeps both ends of a move explicit; the target starts at HEAD.
+    for (const file of lines(
+        git(repo, "diff", "--no-renames", "--name-only", "--diff-filter=D", "-z", "HEAD"),
+    )) {
+        rmSync(join(target, file), { force: true });
+    }
+
+    const changed = [
+        ...lines(git(repo, "diff", "--no-renames", "--name-only", "--diff-filter=d", "-z", "HEAD")),
+        ...lines(git(repo, "ls-files", "-z", "--others", "--exclude-standard")),
+    ];
+
+    for (const file of changed) {
+        const destination = join(target, file);
+
+        mkdirSync(dirname(destination), { recursive: true });
+        cpSync(join(repo, file), destination);
+    }
+}
 
 /**
  * Check `commit` out into a temporary folder and make it runnable.
@@ -40,25 +70,7 @@ export function prepareCheckout(commit: string, options: { workingTree: boolean 
 
     try {
         if (options.workingTree) {
-            for (const file of lines(git(REPO, "ls-files", "-z", "--deleted"))) {
-                rmSync(join(path, file), { force: true });
-            }
-
-            const changed = git(
-                REPO,
-                "ls-files",
-                "-z",
-                "--modified",
-                "--others",
-                "--exclude-standard",
-            );
-
-            for (const file of lines(changed)) {
-                // A deleted file is also listed as modified.
-                if (lines(git(REPO, "ls-files", "-z", "--deleted", "--", file)).length === 0) {
-                    cpSync(join(REPO, file), join(path, file));
-                }
-            }
+            copyWorkingTree(REPO, path);
         }
 
         rmSync(join(path, "test", "perf"), { recursive: true, force: true });

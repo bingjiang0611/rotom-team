@@ -1,0 +1,103 @@
+{
+    "schema": 1,
+    "metrics": {
+        "native.validate/json.parse.calls": {
+            "scenario": "native.validate",
+            "metric": "json.parse.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after turn.prewarmed, the team validator a subagent start runs (rotom-child.ts, its own Node process) in that member's HOME and workspace, until it exits",
+            "source": "global JSON.parse calls in the server process (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "native.validate/json.parse.chars": {
+            "scenario": "native.validate",
+            "metric": "json.parse.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after turn.prewarmed, the team validator a subagent start runs (rotom-child.ts, its own Node process) in that member's HOME and workspace, until it exits",
+            "source": "characters given to JSON.parse (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "native.validate/json.parse.http.calls": {
+            "scenario": "native.validate",
+            "metric": "json.parse.http.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after turn.prewarmed, the team validator a subagent start runs (rotom-child.ts, its own Node process) in that member's HOME and workspace, until it exits",
+            "source": "JSON.parse in exclusive http scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "native.validate/json.parse.http.chars": {
+            "scenario": "native.validate",
+            "metric": "json.parse.http.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after turn.prewarmed, the team validator a subagent start runs (rotom-child.ts, its own Node process) in that member's HOME and workspace, until it exits",
+            "source": "JSON.parse in exclusive http scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "native.validate/json.parse.other.calls": {
+            "scenario": "native.validate",
+            "metric": "json.parse.other.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after turn.prewarmed, the team validator a subagent start runs (rotom-child.ts, its own Node process) in that member's HOME and workspace, until it exits",
+            "source": "JSON.parse in exclusive other scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "native.validate/json.parse.other.chars": {
+            "scenario": "native.validate",
+            "metric": "json.parse.other.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after turn.prewarmed, the team validator a subagent start runs (rotom-child.ts, its own Node process) in that member's HOME and workspace, until it exits",
+            "source": "JSON.parse in exclusive other scope; AsyncLocalStorage source attribution (test/perf/counters.ts, src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "native.validate/json.stringify.chars": {
+            "scenario": "native.validate",
+            "metric": "json.stringify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after turn.prewarmed, the team validator a subagent start runs (rotom-child.ts, its own Node process) in that member's HOME and workspace, until it exits",
+            "source": "characters JSON.stringify produced (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 34,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 651
+            }
+        }
+    }
+}

@@ -1,0 +1,159 @@
+{
+    "schema": 1,
+    "metrics": {
+        "web.send.stream.network/sql.statements": {
+            "scenario": "web.send.stream.network",
+            "metric": "sql.statements",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "node:sqlite StatementSync run/get/all/iterate + DatabaseSync.exec (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 13,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 333
+            }
+        },
+        "web.send.stream.network/sql.rows": {
+            "scenario": "web.send.stream.network",
+            "metric": "sql.rows",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "rows returned by StatementSync all/get (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 11,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 355
+            }
+        },
+        "web.send.stream.network/subprocess.total": {
+            "scenario": "web.send.stream.network",
+            "metric": "subprocess.total",
+            "layer": "process",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "ChildProcess.prototype.spawn + spawnSync/execFileSync/execSync (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "web.send.stream.network/subprocess.rotom": {
+            "scenario": "web.send.stream.network",
+            "metric": "subprocess.rotom",
+            "layer": "process",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "child processes whose program is rotom (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "web.send.stream.network/view.kernel.sql.statements": {
+            "scenario": "web.send.stream.network",
+            "metric": "view.kernel.sql.statements",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "SQL statements inside synchronous native kernel roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 8,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 104
+            }
+        },
+        "web.send.stream.network/view.kernel.sql.heads": {
+            "scenario": "web.send.stream.network",
+            "metric": "view.kernel.sql.heads",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "SQL FROM kernel_heads during synchronous roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 2,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 26
+            }
+        },
+        "web.send.stream.network/view.kernel.sql.sessions": {
+            "scenario": "web.send.stream.network",
+            "metric": "view.kernel.sql.sessions",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "SQL FROM kernel_sessions during synchronous roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "web.send.stream.network/view.kernel.sql.attempts": {
+            "scenario": "web.send.stream.network",
+            "metric": "view.kernel.sql.attempts",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "SQL FROM kernel_attempts during synchronous roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 4,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 52
+            }
+        },
+        "web.send.stream.network/view.kernel.sql.command_inputs": {
+            "scenario": "web.send.stream.network",
+            "metric": "view.kernel.sql.command_inputs",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "SQL FROM kernel_command_inputs during synchronous roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 2,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 26
+            }
+        },
+        "web.send.stream.network/view.kernel.sql.resume": {
+            "scenario": "web.send.stream.network",
+            "metric": "view.kernel.sql.resume",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "SQL FROM kernel_resume during synchronous roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "web.send.stream.network/view.kernel.sql.rows": {
+            "scenario": "web.send.stream.network",
+            "metric": "view.kernel.sql.rows",
+            "layer": "storage",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after web.send.poll.network, the same phased send to that history (now 16 turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network",
+            "source": "SQL rows returned inside synchronous native kernel roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 6,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 76
+            }
+        }
+    }
+}

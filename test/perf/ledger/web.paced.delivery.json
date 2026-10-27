@@ -1,0 +1,215 @@
+{
+    "schema": 1,
+    "metrics": {
+        "web.paced/push.events": {
+            "scenario": "web.paced",
+            "metric": "push.events",
+            "layer": "push",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, a new headless Chromium tab opens that history unmeasured, then submits one 6000-char answer paced 25 ms per chunk until it appears",
+            "source": "events written to tabs, rotom-team:push channel (src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 14
+            }
+        },
+        "web.paced/push.bytes": {
+            "scenario": "web.paced",
+            "metric": "push.bytes",
+            "layer": "push",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, a new headless Chromium tab opens that history unmeasured, then submits one 6000-char answer paced 25 ms per chunk until it appears",
+            "source": "event-stream bytes written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 1600,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 31430
+            }
+        },
+        "web.paced/push.view.count": {
+            "scenario": "web.paced",
+            "metric": "push.view.count",
+            "layer": "push",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, a new headless Chromium tab opens that history unmeasured, then submits one 6000-char answer paced 25 ms per chunk until it appears",
+            "source": "view events written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 10
+            }
+        },
+        "web.paced/push.view.bytes": {
+            "scenario": "web.paced",
+            "metric": "push.view.bytes",
+            "layer": "push",
+            "unit": "bytes",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, a new headless Chromium tab opens that history unmeasured, then submits one 6000-char answer paced 25 ms per chunk until it appears",
+            "source": "view event bytes written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 1600,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 29092
+            }
+        },
+        "web.paced/http.requests": {
+            "scenario": "web.paced",
+            "metric": "http.requests",
+            "layer": "http",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, a new headless Chromium tab opens that history unmeasured, then submits one 6000-char answer paced 25 ms per chunk until it appears",
+            "source": "http.server.request.start diagnostics channel (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 4
+            }
+        },
+        "web.paced/cdp.LayoutCount": {
+            "scenario": "web.paced",
+            "metric": "cdp.LayoutCount",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, a new headless Chromium tab opens that history unmeasured, then submits one 6000-char answer paced 25 ms per chunk until it appears",
+            "source": "Chromium Performance.getMetrics LayoutCount delta (test/perf/browser.ts)",
+            "status": "candidate",
+            "tolerance": 1,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 12
+            }
+        },
+        "web.paced/cdp.RecalcStyleCount": {
+            "scenario": "web.paced",
+            "metric": "cdp.RecalcStyleCount",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, a new headless Chromium tab opens that history unmeasured, then submits one 6000-char answer paced 25 ms per chunk until it appears",
+            "source": "Chromium Performance.getMetrics RecalcStyleCount delta (test/perf/browser.ts)",
+            "status": "candidate",
+            "tolerance": 10,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 51
+            }
+        },
+        "web.paced/cdp.Nodes": {
+            "scenario": "web.paced",
+            "metric": "cdp.Nodes",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, a new headless Chromium tab opens that history unmeasured, then submits one 6000-char answer paced 25 ms per chunk until it appears",
+            "source": "Chromium Performance.getMetrics Nodes once the answer shows (test/perf/browser.ts)",
+            "status": "candidate",
+            "tolerance": 33,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1222
+            }
+        },
+        "web.paced/web.event.parse.calls": {
+            "scenario": "web.paced",
+            "metric": "web.event.parse.calls",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, a new headless Chromium tab opens that history unmeasured, then submits one 6000-char answer paced 25 ms per chunk until it appears",
+            "source": "browser event-stream JSON.parse calls (web/store.js)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 12
+            }
+        },
+        "web.paced/web.event.parse.chars": {
+            "scenario": "web.paced",
+            "metric": "web.event.parse.chars",
+            "layer": "web",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, a new headless Chromium tab opens that history unmeasured, then submits one 6000-char answer paced 25 ms per chunk until it appears",
+            "source": "browser event-stream characters parsed as JSON (web/store.js)",
+            "status": "candidate",
+            "tolerance": 1600,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 29961
+            }
+        },
+        "web.paced/web.view.apply.calls": {
+            "scenario": "web.paced",
+            "metric": "web.view.apply.calls",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, a new headless Chromium tab opens that history unmeasured, then submits one 6000-char answer paced 25 ms per chunk until it appears",
+            "source": "browser view events applied to the store (web/store.js)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 10
+            }
+        },
+        "web.paced/web.view.base.entry.copies": {
+            "scenario": "web.paced",
+            "metric": "web.view.base.entry.copies",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, a new headless Chromium tab opens that history unmeasured, then submits one 6000-char answer paced 25 ms per chunk until it appears",
+            "source": "existing Map entries copied while applying view events (web/store.js)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 49
+            }
+        },
+        "web.paced/web.view.delta.entries": {
+            "scenario": "web.paced",
+            "metric": "web.view.delta.entries",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, a new headless Chromium tab opens that history unmeasured, then submits one 6000-char answer paced 25 ms per chunk until it appears",
+            "source": "new or replacement entries merged while applying view events (web/store.js)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 2
+            }
+        },
+        "web.paced/web.view.prune.checks": {
+            "scenario": "web.paced",
+            "metric": "web.view.prune.checks",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, a new headless Chromium tab opens that history unmeasured, then submits one 6000-char answer paced 25 ms per chunk until it appears",
+            "source": "browser entry IDs tested against a changed server order (web/store.js)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 51
+            }
+        },
+        "web.paced/web.view.order.ids": {
+            "scenario": "web.paced",
+            "metric": "web.view.order.ids",
+            "layer": "web",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, a new headless Chromium tab opens that history unmeasured, then submits one 6000-char answer paced 25 ms per chunk until it appears",
+            "source": "server order IDs copied into browser keep sets (web/store.js)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 51
+            }
+        }
+    }
+}

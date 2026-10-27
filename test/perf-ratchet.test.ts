@@ -1,19 +1,10 @@
 // The work-counter ratchet: gating counters fail on regression, instability, or missing evidence; candidates only
 // report; ceilings and baselines move down by themselves and up only with approval; injected reports never tighten.
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import type { Report } from "./perf/measure.ts";
-import {
-    check,
-    compare,
-    guard,
-    type Ledger,
-    LEDGER,
-    propose,
-    register,
-    validateLedger,
-} from "./perf/ratchet.ts";
+import { check, compare, guard, type Ledger, propose, register } from "./perf/ratchet.ts";
+import { readLedger } from "./perf/ledger.ts";
 
 const workload = "fixed work";
 const base = { layer: "process", unit: "count", workload, source: "test" } as const;
@@ -218,7 +209,7 @@ test("compare calls milliseconds faster or slower only when the runs separate pa
 });
 
 test("the committed ledger is valid, and every gating counter carries its evidence", () => {
-    const committed = validateLedger(JSON.parse(readFileSync(LEDGER, "utf8")) as Ledger);
+    const committed = readLedger();
     const gating = Object.values(committed.metrics).filter((entry) => entry.status === "gating");
 
     assert.ok(gating.length > 0);

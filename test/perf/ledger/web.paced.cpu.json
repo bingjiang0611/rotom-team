@@ -1,0 +1,145 @@
+{
+    "schema": 1,
+    "metrics": {
+        "web.paced/view.entry.visits": {
+            "scenario": "web.paced",
+            "metric": "view.entry.visits",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, a new headless Chromium tab opens that history unmeasured, then submits one 6000-char answer paced 25 ms per chunk until it appears",
+            "source": "durable entries traversed to project room views (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 2
+            }
+        },
+        "web.paced/view.client.entry.scans": {
+            "scenario": "web.paced",
+            "metric": "view.client.entry.scans",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, a new headless Chromium tab opens that history unmeasured, then submits one 6000-char answer paced 25 ms per chunk until it appears",
+            "source": "cached projected entries scanned for a client's missing IDs (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 2
+            }
+        },
+        "web.paced/view.stats.entry.scans": {
+            "scenario": "web.paced",
+            "metric": "view.stats.entry.scans",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, a new headless Chromium tab opens that history unmeasured, then submits one 6000-char answer paced 25 ms per chunk until it appears",
+            "source": "entries visited in the stats reverse scan (src/server/projection.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 59
+            }
+        },
+        "web.paced/view.fields.stringify.calls": {
+            "scenario": "web.paced",
+            "metric": "view.fields.stringify.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, a new headless Chromium tab opens that history unmeasured, then submits one 6000-char answer paced 25 ms per chunk until it appears",
+            "source": "slow view fields serialized for per-client change detection (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 120
+            }
+        },
+        "web.paced/view.fields.stringify.chars": {
+            "scenario": "web.paced",
+            "metric": "view.fields.stringify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, a new headless Chromium tab opens that history unmeasured, then submits one 6000-char answer paced 25 ms per chunk until it appears",
+            "source": "characters of slow view fields serialized before unchanged fields are omitted (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 6405
+            }
+        },
+        "web.paced/view.live.project.calls": {
+            "scenario": "web.paced",
+            "metric": "view.live.project.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, a new headless Chromium tab opens that history unmeasured, then submits one 6000-char answer paced 25 ms per chunk until it appears",
+            "source": "live projections constructed per client push (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 10
+            }
+        },
+        "web.paced/view.inbox.project.calls": {
+            "scenario": "web.paced",
+            "metric": "view.inbox.project.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, a new headless Chromium tab opens that history unmeasured, then submits one 6000-char answer paced 25 ms per chunk until it appears",
+            "source": "inbox projections constructed per client push (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 10
+            }
+        },
+        "web.paced/view.kernel.project.calls": {
+            "scenario": "web.paced",
+            "metric": "view.kernel.project.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, a new headless Chromium tab opens that history unmeasured, then submits one 6000-char answer paced 25 ms per chunk until it appears",
+            "source": "native kernel projections constructed per client push (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 10
+            }
+        },
+        "web.paced/view.kernel.json.parse.calls": {
+            "scenario": "web.paced",
+            "metric": "view.kernel.json.parse.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, a new headless Chromium tab opens that history unmeasured, then submits one 6000-char answer paced 25 ms per chunk until it appears",
+            "source": "JSON decodes inside synchronous native kernel roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 29
+            }
+        },
+        "web.paced/view.kernel.json.parse.chars": {
+            "scenario": "web.paced",
+            "metric": "view.kernel.json.parse.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "kernel mode; a session of 12 turns, 6000-char answers streamed in 30 chunks; after all established scenarios, a new headless Chromium tab opens that history unmeasured, then submits one 6000-char answer paced 25 ms per chunk until it appears",
+            "source": "characters decoded inside synchronous native kernel roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 15689
+            }
+        }
+    }
+}

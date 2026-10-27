@@ -1,0 +1,145 @@
+{
+    "schema": 1,
+    "metrics": {
+        "web.open.long/view.entry.visits": {
+            "scenario": "web.open.long",
+            "metric": "view.entry.visits",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "durable entries traversed to project room views (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "web.open.long/view.client.entry.scans": {
+            "scenario": "web.open.long",
+            "metric": "view.client.entry.scans",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "cached projected entries scanned for a client's missing IDs (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 600
+            }
+        },
+        "web.open.long/view.stats.entry.scans": {
+            "scenario": "web.open.long",
+            "metric": "view.stats.entry.scans",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "entries visited in the stats reverse scan (src/server/projection.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 0
+            }
+        },
+        "web.open.long/view.fields.stringify.calls": {
+            "scenario": "web.open.long",
+            "metric": "view.fields.stringify.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "slow view fields serialized for per-client change detection (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 12
+            }
+        },
+        "web.open.long/view.fields.stringify.chars": {
+            "scenario": "web.open.long",
+            "metric": "view.fields.stringify.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "characters of slow view fields serialized before unchanged fields are omitted (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 73
+            }
+        },
+        "web.open.long/view.live.project.calls": {
+            "scenario": "web.open.long",
+            "metric": "view.live.project.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "live projections constructed per client push (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "web.open.long/view.inbox.project.calls": {
+            "scenario": "web.open.long",
+            "metric": "view.inbox.project.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "inbox projections constructed per client push (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "web.open.long/view.kernel.project.calls": {
+            "scenario": "web.open.long",
+            "metric": "view.kernel.project.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "native kernel projections constructed per client push (src/server/room.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "web.open.long/view.kernel.json.parse.calls": {
+            "scenario": "web.open.long",
+            "metric": "view.kernel.json.parse.calls",
+            "layer": "cpu",
+            "unit": "count",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "JSON decodes inside synchronous native kernel roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "web.open.long/view.kernel.json.parse.chars": {
+            "scenario": "web.open.long",
+            "metric": "view.kernel.json.parse.chars",
+            "layer": "cpu",
+            "unit": "chars",
+            "workload": "after session.history.earlier, headless Chromium signed in opens /s/<long session> until its last answer is in the page",
+            "source": "characters decoded inside synchronous native kernel roomState projection (test/perf/counters.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 541
+            }
+        }
+    }
+}

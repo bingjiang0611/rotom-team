@@ -1,0 +1,61 @@
+{
+    "schema": 1,
+    "metrics": {
+        "session.open.long/push.events": {
+            "scenario": "session.open.long",
+            "metric": "push.events",
+            "layer": "push",
+            "unit": "count",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "events written to tabs, rotom-team:push channel (src/server/perf-channels.ts)",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 10
+            }
+        },
+        "session.open.long/push.bytes": {
+            "scenario": "session.open.long",
+            "metric": "push.bytes",
+            "layer": "push",
+            "unit": "bytes",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "event-stream bytes written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 179320
+            }
+        },
+        "session.open.long/push.view.count": {
+            "scenario": "session.open.long",
+            "metric": "push.view.count",
+            "layer": "push",
+            "unit": "count",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "view events written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 1
+            }
+        },
+        "session.open.long/push.view.bytes": {
+            "scenario": "session.open.long",
+            "metric": "push.view.bytes",
+            "layer": "push",
+            "unit": "bytes",
+            "workload": "after all other scenarios, a separate native history of 300 user/assistant turns (1200-char answers) seeded directly; a new event-stream tab asking for the newest 240 entries (as the web app does) until its full view; every entry it got must equal an unpaged reference view",
+            "source": "view event bytes written to tabs, rotom-team:push channel",
+            "status": "candidate",
+            "tolerance": 0,
+            "ceiling": null,
+            "baselines": {
+                "darwin-arm64": 165843
+            }
+        }
+    }
+}
