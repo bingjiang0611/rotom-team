@@ -1,0 +1,321 @@
+{
+    "schema": 1,
+    "base": "c379bb7cfb57",
+    "node": "24.18.0",
+    "platform": "darwin-arm64",
+    "original": {
+        "path": "src/server/rotom-executions.ts",
+        "bytes": 76716,
+        "sha256": "38a030af49ed8beab15eb7725de1b663fd4ae5ec7362192d0c3b9bcafe77a622"
+    },
+    "files": [
+        {
+            "path": "src/server/rotom-executions.ts",
+            "bytes": 16647,
+            "sha256": "ed5f5a46282d1e77c34a3a90a34f9877c96fc378c4e880fa445761992e007211"
+        },
+        {
+            "path": "src/server/rotom-executions/contracts.ts",
+            "bytes": 4415,
+            "sha256": "df333c9cb4a13cc311f859bed6f7a3c746b8773a419ff418568fd4843844d001"
+        },
+        {
+            "path": "src/server/rotom-executions/native-prompt.ts",
+            "bytes": 5964,
+            "sha256": "dcf9d8096a66ab4fe141ccd8a66a98f373d66d2c6e4dabd0d33b86486cf78fd8"
+        },
+        {
+            "path": "src/server/rotom-executions/history.ts",
+            "bytes": 9793,
+            "sha256": "e2c22d47ad54955901e0ff79136604ec55075be48526a5f33b005f2f17d88bfb"
+        },
+        {
+            "path": "src/server/rotom-executions/processes.ts",
+            "bytes": 17551,
+            "sha256": "a3bca4527ad324de180066ea3c982ca65c1f86028f955ee9e71a869da6e239e9"
+        },
+        {
+            "path": "src/server/rotom-executions/execute.ts",
+            "bytes": 19144,
+            "sha256": "83981b483ccd1705902b46d6949c334283c660a954fad8ee860a1ec32e275e6c"
+        },
+        {
+            "path": "src/server/rotom-executions/dispatch.ts",
+            "bytes": 7080,
+            "sha256": "25f694b73cc474e3129df68422e9b2cbdc9e90c25d36741e2b5f1dedc520ed56"
+        }
+    ],
+    "first": {
+        "base": "c379bb7cfb57",
+        "head": "c379bb7cfb57-dirty",
+        "load": {
+            "before": [5.255859375, 3.9970703125, 3.90673828125],
+            "after": [5.0625, 5.73974609375, 5.02392578125],
+            "cores": 8
+        },
+        "runs": 3,
+        "scenarios": 41,
+        "observations": 1758,
+        "unavailable": 0,
+        "gates": [
+            {
+                "key": "git.changes/subprocess.git",
+                "layer": "process",
+                "unit": "count",
+                "status": "gating",
+                "ceiling": 3,
+                "tolerance": 0,
+                "value": 3,
+                "min": 3,
+                "spread": 0,
+                "result": "pass",
+                "gateFailed": false
+            },
+            {
+                "key": "git.branches/subprocess.git",
+                "layer": "process",
+                "unit": "count",
+                "status": "gating",
+                "ceiling": 2,
+                "tolerance": 0,
+                "value": 2,
+                "min": 2,
+                "spread": 0,
+                "result": "pass",
+                "gateFailed": false
+            }
+        ],
+        "worse": [
+            {
+                "key": "projection.large.open/json.stringify.chars",
+                "base": 182042,
+                "head": 182076,
+                "delta": 34,
+                "verdict": "worse",
+                "baseRuns": [182042, 181974, 182008],
+                "headRuns": [182076, 182008, 182042]
+            },
+            {
+                "key": "image.concurrent/json.stringify.chars",
+                "base": 1396,
+                "head": 1464,
+                "delta": 68,
+                "verdict": "worse",
+                "baseRuns": [1396, 1396, 1396],
+                "headRuns": [1464, 1430, 1464]
+            }
+        ],
+        "timingChanges": [
+            {
+                "key": "git.branches/ms",
+                "base": 64.3,
+                "head": 98.2,
+                "change": 0.527,
+                "verdict": "slower"
+            },
+            {
+                "key": "web.reopen/viewApplyMs",
+                "base": 0.3,
+                "head": 0.2,
+                "change": -0.333,
+                "verdict": "faster"
+            },
+            {
+                "key": "web.paced/scriptMs",
+                "base": 15.8,
+                "head": 23,
+                "change": 0.456,
+                "verdict": "slower"
+            },
+            {
+                "key": "web.paced/taskMs",
+                "base": 44.2,
+                "head": 55,
+                "change": 0.244,
+                "verdict": "slower"
+            },
+            {
+                "key": "web.send.poll/runAdmittedMs",
+                "base": 14.1,
+                "head": 9.2,
+                "change": -0.348,
+                "verdict": "faster"
+            },
+            {
+                "key": "turn.prepared/roomKernelProjectMs",
+                "base": 0.2,
+                "head": 0.1,
+                "change": -0.5,
+                "verdict": "faster"
+            }
+        ]
+    },
+    "confirmation": {
+        "base": "c379bb7cfb57",
+        "head": "c379bb7cfb57-dirty",
+        "load": {
+            "before": [5.890625, 6.5126953125, 5.80859375],
+            "after": [4.609375, 5.3017578125, 5.44873046875],
+            "cores": 8
+        },
+        "runs": 3,
+        "scenarios": 41,
+        "observations": 1758,
+        "unavailable": 0,
+        "gates": [
+            {
+                "key": "git.changes/subprocess.git",
+                "layer": "process",
+                "unit": "count",
+                "status": "gating",
+                "ceiling": 3,
+                "tolerance": 0,
+                "value": 3,
+                "min": 3,
+                "spread": 0,
+                "result": "pass",
+                "gateFailed": false
+            },
+            {
+                "key": "git.branches/subprocess.git",
+                "layer": "process",
+                "unit": "count",
+                "status": "gating",
+                "ceiling": 2,
+                "tolerance": 0,
+                "value": 2,
+                "min": 2,
+                "spread": 0,
+                "result": "pass",
+                "gateFailed": false
+            }
+        ],
+        "worse": [
+            {
+                "key": "web.send.poll/cdp.LayoutCount",
+                "base": 18,
+                "head": 19,
+                "delta": 1,
+                "verdict": "worse",
+                "baseRuns": [18, 18, 18],
+                "headRuns": [19, 18, 18]
+            }
+        ],
+        "timingChanges": [
+            {
+                "key": "git.branches/ms",
+                "base": 58.1,
+                "head": 70.2,
+                "change": 0.208,
+                "verdict": "slower"
+            },
+            {
+                "key": "web.open/eventParseMs",
+                "base": 0.3,
+                "head": 0.1,
+                "change": -0.667,
+                "verdict": "faster"
+            },
+            {
+                "key": "native.warm/nativeStartHelperMs",
+                "base": 0.7,
+                "head": 0.2,
+                "change": -0.714,
+                "verdict": "faster"
+            },
+            {
+                "key": "web.send.stream/submitSentMs",
+                "base": 3.2,
+                "head": 1.4,
+                "change": -0.562,
+                "verdict": "faster"
+            },
+            {
+                "key": "web.send.stream/userEchoedMs",
+                "base": 10.9,
+                "head": 5.3,
+                "change": -0.514,
+                "verdict": "faster"
+            },
+            {
+                "key": "web.send.stream/scriptMs",
+                "base": 44.8,
+                "head": 24.3,
+                "change": -0.458,
+                "verdict": "faster"
+            },
+            {
+                "key": "web.send.stream/taskMs",
+                "base": 157.5,
+                "head": 90.7,
+                "change": -0.424,
+                "verdict": "faster"
+            },
+            {
+                "key": "image.single/imageSendFinishMs",
+                "base": 2.8,
+                "head": 3.7,
+                "change": 0.321,
+                "verdict": "slower"
+            },
+            {
+                "key": "assets.first/ms",
+                "base": 59.8,
+                "head": 32.9,
+                "change": -0.45,
+                "verdict": "faster"
+            }
+        ]
+    },
+    "periodicStringifyDiagnostic": {
+        "base": {
+            "projection.large.open": {
+                "calls": 154,
+                "chars": 182008,
+                "headTimerCalls": 2,
+                "headTimerChars": 34,
+                "timerValues": ["{\"branch\":\"main\"}"]
+            },
+            "image.concurrent": {
+                "calls": 4,
+                "chars": 1396,
+                "headTimerCalls": 0,
+                "headTimerChars": 0,
+                "timerValues": []
+            }
+        },
+        "head": {
+            "projection.large.open": {
+                "calls": 158,
+                "chars": 182076,
+                "headTimerCalls": 6,
+                "headTimerChars": 102,
+                "timerValues": ["{\"branch\":\"main\"}"]
+            },
+            "image.concurrent": {
+                "calls": 8,
+                "chars": 1464,
+                "headTimerCalls": 4,
+                "headTimerChars": 68,
+                "timerValues": ["{\"branch\":\"main\"}"]
+            }
+        }
+    },
+    "reportHashes": {
+        "/tmp/execution-split-perf/base.json": "425bd45117ba5e7836094d809de19c9627bc6e5a470129c3f346f77107b6c1d2",
+        "/tmp/execution-split-perf/head.json": "0134ad9d6fe0b5cd69b29b5a702a50860ccd00ea4acd1fad8a12d4835210d0b1",
+        "/tmp/execution-split-perf-confirm/base.json": "28246c93038b408d375887361d5a99737e8a5b44b6d23a878876306d698486b4",
+        "/tmp/execution-split-perf-confirm/head.json": "560b5a34896bd9f600069e3d59ac3abfc87d2aa1f649fdcebc2e692bbd09e22c"
+    },
+    "validation": {
+        "targetedTests": 108,
+        "fullTests": 724,
+        "skipped": 0,
+        "structuralBodyComparisons": 37,
+        "nativeCommandLoopbackInferences": 19,
+        "teamKernelLoopbackRequests": 85,
+        "realAccounts": false,
+        "hookBypass": false,
+        "ledgerChanged": false
+    }
+}
