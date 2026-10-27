@@ -15,6 +15,7 @@ import { PocketApp } from "../src/server/app.ts";
 import { createHandler } from "../src/server/http.ts";
 import { type PerformanceRecord, startPerformanceJournal } from "../src/server/perf-journal.ts";
 import { cleanUp, owner, root, until, work } from "./helpers.ts";
+import { analyseSends } from "./perf/report.ts";
 
 const chromium = findBrowser();
 const real = { skip: chromium === undefined ? "Chromium not installed" : false };
@@ -188,10 +189,21 @@ test(
             // The native loopback records an explicit echoed composer row before the answer arrives.
             assert.ok(ms("send.echoed") <= ms("send.shown"), JSON.stringify(waits));
             assert.ok(ms("reply.arrived") <= ms("reply.first"), JSON.stringify(waits));
-            assert.doesNotMatch(
-                readFileSync(join(directory, "performance-0.jsonl"), "utf8"),
-                /private-words/,
-            );
+            const raw = readFileSync(join(directory, "performance-0.jsonl"), "utf8");
+            const records = raw
+                .trim()
+                .split("\n")
+                .map((line) => JSON.parse(line) as PerformanceRecord);
+            const paired = analyseSends(records);
+            const traced = waits.filter((wait) => wait.name.startsWith("send."));
+
+            assert.equal(paired.complete, 1, JSON.stringify(paired));
+            assert.equal(paired.total, 1, JSON.stringify(paired));
+            assert.equal(paired.phases.length, 8);
+            assert.ok(traced.every((wait) => /^[a-f0-9]{32}$/.test(wait.trace ?? "")));
+            assert.equal(new Set(traced.map((wait) => wait.trace)).size, 1);
+            assert.equal(records.filter((r) => r.observation.kind === "send-phase").length, 6);
+            assert.doesNotMatch(raw, /private-words|"requestId"|"requestKey"|"conversationId"/);
         } finally {
             await browsers.closeAll({ final: true });
             await journal.stop();

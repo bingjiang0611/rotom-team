@@ -91,6 +91,104 @@ const stats = (values: number[]): Stats => ({
 
 type Of<K extends PerformanceObservation["kind"]> = Extract<PerformanceObservation, { kind: K }>;
 
+/** Join only one-to-one sends inside a server session; missing reports and resends are not invented timelines. */
+export function analyseSends(records: PerformanceRecord[]) {
+    const groups = new Map<string, PerformanceObservation[]>();
+
+    for (const record of records) {
+        const item = record.observation;
+
+        if ((item.kind !== "web" && item.kind !== "send-phase") || !item.trace) {
+            continue;
+        }
+
+        const key = `${record.session}:${item.trace}`;
+        const group = groups.get(key) ?? [];
+
+        group.push(item);
+        groups.set(key, group);
+    }
+
+    const counts = { complete: 0, incomplete: 0, ambiguous: 0, hidden: 0, invalid: 0 };
+    const samples = new Map<string, number[]>();
+
+    for (const items of groups.values()) {
+        const server = new Map<string, number>();
+        const web = new Map<string, number>();
+        const transports = new Set<string>();
+        let duplicate = false;
+        let hidden = false;
+
+        for (const item of items) {
+            if (item.kind === "send-phase") {
+                duplicate ||= server.has(item.phase);
+                server.set(item.phase, item.atMs);
+            } else if (item.kind === "web") {
+                duplicate ||= web.has(item.name);
+                hidden ||= "unavailable" in item;
+                web.set(item.name, "ms" in item ? item.ms : NaN);
+                transports.add(item.transport);
+            }
+        }
+
+        if (duplicate || transports.size > 1) {
+            counts.ambiguous++;
+
+            continue;
+        }
+
+        if (hidden) {
+            counts.hidden++;
+
+            continue;
+        }
+
+        if (
+            ["entered", "admitted", "reserved", "dispatch", "mirrored", "returned"].some(
+                (phase) => !server.has(phase),
+            ) ||
+            ["send.answered", "send.arrived", "send.shown"].some((name) => !web.has(name))
+        ) {
+            counts.incomplete++;
+
+            continue;
+        }
+
+        const phases = {
+            "server.admit": server.get("admitted")! - server.get("entered")!,
+            "server.reserve": server.get("reserved")! - server.get("admitted")!,
+            "server.dispatch": server.get("dispatch")! - server.get("reserved")!,
+            "server.mirror": server.get("mirrored")! - server.get("dispatch")!,
+            "server.return": server.get("returned")! - server.get("entered")!,
+            "web.answer": web.get("send.answered")!,
+            "web.confirm": web.get("send.shown")!,
+            "web.paint": web.get("send.shown")! - web.get("send.arrived")!,
+        };
+
+        if (Object.values(phases).some((value) => !Number.isFinite(value) || value < 0)) {
+            counts.invalid++;
+
+            continue;
+        }
+
+        counts.complete++;
+
+        for (const [phase, value] of Object.entries(phases)) {
+            const key = `${phase} ${[...transports][0]}`;
+            const values = samples.get(key) ?? [];
+
+            values.push(Math.round(value * 10) / 10);
+            samples.set(key, values);
+        }
+    }
+
+    return {
+        total: groups.size,
+        ...counts,
+        phases: [...samples].map(([phase, values]) => ({ phase, ...stats(values) })),
+    };
+}
+
 export function analyse(records: PerformanceRecord[]) {
     const of = <K extends PerformanceObservation["kind"]>(kind: K) =>
         records
@@ -195,6 +293,7 @@ export function analyse(records: PerformanceRecord[]) {
         runs,
         prompts,
         web,
+        sends: analyseSends(records),
         transports,
         eventLoop: {
             samples: samples.length,
@@ -267,6 +366,12 @@ export function format(result: ReturnType<typeof analyse>, truncated: number): s
         ...result.web.map(
             (each) =>
                 `  ${each.wait.padEnd(26)}${String(each.count).padStart(6)} · p50 ${ms(each.p50)} · p95 ${ms(each.p95)} · max ${ms(each.max)} ms${each.hidden > 0 ? ` · ${each.hidden} hidden, unmeasured` : ""}${few(each)}`,
+        ),
+        "",
+        `Paired sends: ${result.sends.complete}/${result.sends.total} complete; ${result.sends.incomplete} incomplete, ${result.sends.ambiguous} ambiguous, ${result.sends.hidden} hidden, ${result.sends.invalid} invalid. Server intervals and browser intervals have separate clock origins:`,
+        ...result.sends.phases.map(
+            (each) =>
+                `  ${each.phase.padEnd(26)}${String(each.count).padStart(6)} · p50 ${ms(each.p50)} · p95 ${ms(each.p95)} ms${few(each)}`,
         ),
         "",
         "Browser transport transitions:",
