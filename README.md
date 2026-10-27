@@ -57,6 +57,10 @@ Durable 状态和原生 journal 保存在数据目录。模型凭据按成员保
 
 使用 [DEPLOYMENT.md](docs/DEPLOYMENT.md) 的离线备份工具，不复制运行中的 SQLite 主文件。备份含秘密，恢复排除模型和 MCP refresh grants，需独立重新登录；项目工作区另行备份。拒绝覆盖或跨路径恢复，不在存活任务中替换依赖或数据库。
 
+## 开发提交检查
+
+在仓库根目录运行 `npm run hooks:install`，启用暂存文件大小检查（20,000 字节上限）。新检出需手动安装，详见 [Git hook 使用说明](docs/git-hooks.md)。
+
 ## 验证
 
 ```sh
