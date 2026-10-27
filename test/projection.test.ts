@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { EntryRecord } from "@earendil-works/pi-durable";
 import { NATIVE_ENTRY } from "../src/server/entry-format.ts";
-import { slugify } from "../src/server/extensions/artifacts.ts";
+
 import {
     type ClientEntry,
     peekLines,
@@ -159,11 +159,6 @@ test("stats add cost and cache rate, and read context size from the newest answe
     assert.equal(stats.cost, 0.75);
     assert.equal(stats.cacheRate, 0.6);
     assert.equal(stats.contextTokens, 100);
-});
-
-test("artifact ids become kebab-case slugs", () => {
-    assert.equal(slugify("Neon Orbital Garden!"), "neon-orbital-garden");
-    assert.equal(slugify("  __x__ "), "x");
 });
 
 test("snippets drop markdown: emphasis, code ticks, links, headings, and list markers", () => {

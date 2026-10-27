@@ -41,7 +41,6 @@ import {
 } from "@earendil-works/pi-durable";
 import { NodeExecutionEnv } from "@earendil-works/pi-durable/env/node";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
-import { CodingTools } from "@earendil-works/pi-durable/tools";
 import { Alerts } from "./alerts.ts";
 import { Attribution, type Missing } from "./attribution.ts";
 import { Browsers } from "./browser.ts";
@@ -68,7 +67,7 @@ import {
 import { describe, HttpError } from "./errors.ts";
 import { Goals } from "./goals.ts";
 import { type ApprovalRequest, Approvals } from "./host.ts";
-import { type GuardStatus, LancetGuard } from "./lancet.ts";
+import { type GuardStatus } from "./lancet.ts";
 import { takeLock } from "./lock.ts";
 import { modelList } from "./models.ts";
 import { configureHttp } from "./net.ts";
@@ -81,7 +80,6 @@ import {
 } from "./prompts.ts";
 import { Providers } from "./providers.ts";
 import { PushStore } from "./push.ts";
-import { type ExtensionInfo, ExtensionLoader } from "./reload.ts";
 import { ResendTask } from "./resend.ts";
 import { type Client, Room, ROOM_DOCS } from "./room.ts";
 import { ARCHIVE_COPY, SUBSCRIPTION_COPY } from "./constants/copy.ts";
@@ -103,12 +101,6 @@ export type AccessInfo = {
     /** The address other devices should use, such as a tunnel's public https URL. */
     url?: string;
 };
-
-/** The extension module that runs Lancet Guard on tool calls. */
-const GUARD_FILE = "guard.ts";
-/** The extension module with the browser tool. While it is off, the Browser panel is off too. */
-const BROWSER_FILE = "browser.ts";
-const BROWSER_EXTENSION = "pocket-browser";
 
 /** The most peek tiles a tab gets live at once: the ones on its screen, which a tall screen fits a handful of. */
 export const MAX_PEEKS = 12;
@@ -138,7 +130,6 @@ export class PocketApp {
     /** Push subscriptions and their keys; undefined until the server opened. */
     pushStore: PushStore | undefined;
     readonly approvals = new Approvals((id) => this.attribution.requesterOf(id));
-    readonly guard = new LancetGuard();
     readonly dataDir: string;
     readonly defaultCwd: string;
     readonly supervised: boolean;
@@ -158,8 +149,8 @@ export class PocketApp {
     readonly projects: TeamProjects;
     readonly execution = new TeamExecution(this);
     settings!: SettingsManager;
-    /** Only the non-Team legacy runtime loads server extension modules. */
-    loader: ExtensionLoader | undefined;
+    /** Retained for callers that inspect the retired legacy loader; Team never provides one. */
+    readonly loader = undefined;
     readonly commands = new Commands(this);
     readonly collab = new Collab(this);
     readonly alerts = new Alerts(this);
@@ -364,8 +355,7 @@ export class PocketApp {
 
         const registry = createRegistry();
 
-        registry.install(CodingTools);
-        // Durable work of the app itself, whatever extension modules are on.
+        // Historical task identities remain registered for archive decoding; none execute in Team mode.
         registry.install(
             defineExtension({ name: "pocket-core", tasks: [ResendTask, this.shell.task] }),
         );
@@ -478,10 +468,6 @@ export class PocketApp {
                 () => {},
             );
         });
-
-        if (this.guardOn()) {
-            void this.guard.warm().catch(() => {});
-        }
 
         // Legacy Durable tasks are quarantined before Harness opens and are never resumed. Native journal recovery is
         // separate and remains below; it is the only execution recovery path in Team mode.
@@ -629,7 +615,6 @@ export class PocketApp {
                 this.alerts.runChanged(id, busy);
 
                 if (!busy) {
-                    this.spend.runEnded(id);
                     void this.recordRunFinished(id);
                 }
 
@@ -1299,23 +1284,6 @@ export class PocketApp {
         }
 
         await this.#sendSessionLists(this.#clients, true);
-
-        for (const id of this.busyConversations()) {
-            const owner = this.execution.owner(id);
-            const user = owner ? this.config.userById(owner) : undefined;
-
-            if (
-                user &&
-                (!this.canSee(user, id) ||
-                    !this.projects.allowed(
-                        user,
-                        this.sessionMeta(this.rootOf(id))?.projectId,
-                        "continue",
-                    ))
-            ) {
-                await (await this.conversation(id)).abort(context);
-            }
-        }
     }
 
     #noteChat(id: ConversationId, messages: readonly ChatMessage[] | undefined): boolean {
@@ -1403,7 +1371,7 @@ export class PocketApp {
                 startedAt: this.startedAt,
                 home: homedir(),
                 defaultCwd: this.defaultCwd,
-                extensions: this.loader?.extensionNames() ?? [],
+                extensions: [],
                 // Tells the web app this server has people chat and typing indicators.
                 chat: true,
                 kernel: this.kernel !== undefined,
@@ -2094,130 +2062,29 @@ export class PocketApp {
 
     // ─── Extensions ─────────────────────────────────────────────────────────
 
-    /** Server extension management is available only in the non-Team legacy runtime. */
-    #serviceExtensionLoader(): ExtensionLoader {
-        if (!this.loader) {
-            throw new HttpError(
-                404,
-                "Team supports Agent Extensions only. Configure team-agent or the project's .pi directory.",
-            );
-        }
-
-        return this.loader;
-    }
-
-    /** Whether Lancet Guard's module is on here; Pi's own setting may still turn the guard off. */
+    /** Legacy server extensions are unavailable; native Agent Extensions are the only supported path. */
     guardOn(): boolean {
-        return this.loader?.enabled(GUARD_FILE) ?? false;
+        return false;
     }
 
-    /** Lancet Guard as it applies here: Pi's own setting, unless the guard extension is off in Pi Pocket. */
     async guardStatus(): Promise<GuardStatus> {
-        const status = await this.guard.status();
-
-        if (this.guardOn()) {
-            return status;
-        }
-
         return {
-            available: status.available,
+            available: false,
             enabled: false,
-            detail: "Lancet Guard is off in Pi Pocket: bash, write, and edit calls run unchecked here.",
+            detail: ARCHIVE_COPY.guardUnavailable,
         };
     }
 
-    /** The extension modules, as this person may see them: where the server keeps files is for the owner only. */
-    async extensions(
-        user: User,
-    ): Promise<{ modules: ExtensionInfo[]; guard: GuardStatus; dropIns?: string }> {
-        const owner = user.role === "owner";
-        // A load error can name the server's folders too.
-        const modules = this.#serviceExtensionLoader()
-            .list()
-            .map(({ path, error, ...module }) =>
-                owner
-                    ? {
-                          ...module,
-                          ...(path === undefined ? {} : { path }),
-                          ...(error === undefined ? {} : { error }),
-                      }
-                    : {
-                          ...module,
-                          ...(error === undefined ? {} : { error: "It failed to load." }),
-                      },
-            );
-
-        // The guard row shows Pi's own setting, so the owner can tell "off here" from "off everywhere".
-        return {
-            modules,
-            guard: await this.guard.status(),
-            ...(owner ? { dropIns: join(this.dataDir, "extensions") } : {}),
-        };
+    async extensions(_user: User): Promise<never> {
+        throw new HttpError(404, ARCHIVE_COPY.extensionsUnavailable);
     }
 
-    /** Turn an extension module on or off for every session, now and after restarts. */
-    async setExtensionEnabled(user: User, file: string, enabled: boolean): Promise<void> {
-        const loader = this.#serviceExtensionLoader();
-        const module = loader.list().find((each) => each.file === file);
-
-        if (module === undefined) {
-            throw new HttpError(404, `There is no extension module ${file}`);
-        }
-
-        if (module.required && !enabled) {
-            throw new HttpError(400, `${module.title} is required and cannot be turned off`);
-        }
-
-        if (module.enabled === enabled) {
-            return;
-        }
-
-        this.config.setExtensionEnabled(file, enabled);
-
-        try {
-            await loader.apply(file);
-        } catch (error) {
-            throw new HttpError(
-                500,
-                `${module.title} is on but failed to load: ${describe(error)}`,
-            );
-        } finally {
-            await this.#refreshClients();
-        }
-
-        if (file === GUARD_FILE && enabled) {
-            void this.guard.warm().catch(() => {});
-        }
-
-        if (file === BROWSER_FILE && !enabled) {
-            await this.browsers.closeAll();
-        }
-
-        this.notice(
-            enabled ? "info" : "warning",
-            `${user.name} turned ${module.title} ${enabled ? "on" : "off"}.`,
-        );
+    async setExtensionEnabled(_user: User, _file: string, _enabled: boolean): Promise<never> {
+        throw new HttpError(404, ARCHIVE_COPY.extensionsUnavailable);
     }
 
-    async reloadExtension(file: string): Promise<void> {
-        const loader = this.#serviceExtensionLoader();
-        const module = loader.list().find((each) => each.file === file);
-
-        if (module === undefined) {
-            throw new HttpError(404, `There is no extension module ${file}`);
-        }
-
-        if (!module.enabled) {
-            throw new HttpError(409, `${module.title} is off`);
-        }
-
-        try {
-            await loader.reload(file);
-        } catch (error) {
-            throw new HttpError(500, `${module.title} failed to load: ${describe(error)}`);
-        } finally {
-            await this.#refreshClients();
-        }
+    async reloadExtension(_file: string): Promise<never> {
+        throw new HttpError(404, ARCHIVE_COPY.extensionsUnavailable);
     }
 
     /** The owner changes who may allow risky calls. */
@@ -2253,9 +2120,9 @@ export class PocketApp {
 
     // ─── Browser ────────────────────────────────────────────────────────────
 
-    /** The browser is on while its extension module is: the owner turns both off together in Extensions. */
+    /** Legacy browser extensions are not loaded in Team. */
     browserOn(): boolean {
-        return this.loader?.extensionNames().includes(BROWSER_EXTENSION) ?? false;
+        return false;
     }
 
     #browserEvent(conversationId: ConversationId, state: BrowserState) {
@@ -2273,7 +2140,6 @@ export class PocketApp {
             this.#unsubscribeCommits?.();
             this.#unsubscribeApprovals?.();
             this.#unsubscribeBrowsers?.();
-            this.loader?.close();
 
             for (const client of this.#clients) {
                 client.send("closing", {});

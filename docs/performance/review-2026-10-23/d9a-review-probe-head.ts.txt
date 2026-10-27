@@ -1,4 +1,4 @@
-// Usage: copy to test/zz-probe.ts, run: node test/zz-probe.ts <hist-out-dir> <sentinel-file> off|on|worker
+// Usage: copy to test/zz-probe.ts, run: node test/zz-probe.ts <hist-out-dir> <sentinel-file> off|on|worker. Set KEEP=<abs dir> to keep the data dir (e.g. reopen it later with older code for a rollback check).
 import assert from "node:assert/strict";
 import { cpSync, readFileSync, existsSync, rmSync, mkdtempSync, realpathSync, chmodSync } from "node:fs";
 import { join } from "node:path";
@@ -10,9 +10,10 @@ import { PocketApp } from "../src/server/app.ts";
 const [hist, sentinel, mode] = process.argv.slice(2);
 const kernel = mode !== "off";
 const storageWorker = mode === "worker";
-const dir = realpathSync(mkdtempSync(join(tmpdir(), "d9a-probe-")));
+const keep = process.env.KEEP;
+const dir = keep ?? realpathSync(mkdtempSync(join(tmpdir(), "d9a-probe-")));
 const data = join(dir, "data");
-cpSync(join(hist, "data"), data, { recursive: true }); chmodSync(data, 0o700);
+if (!existsSync(data)) { cpSync(join(hist, "data"), data, { recursive: true }); chmodSync(data, 0o700); }
 const work = mkdtempSync(join(tmpdir(), "d9a-work-"));
 const before = readFileSync(sentinel, "utf8");
 const id = 3 as never;
@@ -54,5 +55,5 @@ for (const round of [1, 2]) {
 }
 result.sentinelUnchanged = readFileSync(sentinel, "utf8") === before;
 console.log(JSON.stringify(result));
-rmSync(dir, { recursive: true, force: true });
+if (!keep) rmSync(dir, { recursive: true, force: true });
 process.exit(0);

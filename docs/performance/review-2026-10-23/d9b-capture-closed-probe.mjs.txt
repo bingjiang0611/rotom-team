@@ -1,0 +1,21 @@
+// Preserve only the synthetic data the unchanged reviewer probe is about to delete after closing both rounds.
+import fs from 'node:fs';
+import { basename, join } from 'node:path';
+import { syncBuiltinESMExports } from 'node:module';
+import { isMainThread } from 'node:worker_threads';
+if (isMainThread) {
+const destination = process.env.D9B_PROBE_CAPTURE;
+if (!destination || fs.existsSync(destination)) throw new Error('Supply a fresh D9B_PROBE_CAPTURE path');
+const remove = fs.rmSync;
+fs.rmSync = function (path, options) {
+    if (typeof path === 'string' && basename(path).startsWith('d9a-probe-')) {
+        for (const lock of ['harness.lock', 'kernel.lock']) {
+            if (fs.existsSync(join(path, 'data', lock))) throw new Error('Probe data is still leased');
+        }
+        fs.mkdirSync(destination, { mode: 0o700 });
+        fs.cpSync(join(path, 'data'), join(destination, 'data'), { recursive: true });
+    }
+    return remove(path, options);
+};
+syncBuiltinESMExports();
+}

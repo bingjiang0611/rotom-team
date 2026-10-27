@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import {
     existsSync,
     mkdirSync,
     mkdtempSync,
     readFileSync,
+    readdirSync,
     realpathSync,
     rmSync,
     writeFileSync,
@@ -34,7 +36,7 @@ import {
     ScheduleDoc,
 } from "../src/server/docs.ts";
 import { ARCHIVE_COPY } from "../src/server/constants/copy.ts";
-import { ConfigStore } from "../src/server/config.ts";
+import { APP_ROOT, ConfigStore } from "../src/server/config.ts";
 import { quarantineLegacyTasks } from "../src/server/legacy-archive.ts";
 import {
     pinnedLegacyEntries,
@@ -47,6 +49,40 @@ import {
 } from "./fixtures/legacy-baseline.ts";
 import { scriptedModel } from "./helpers.ts";
 import { seedLegacySession, type LegacyFixture } from "./fixtures/legacy-session.ts";
+
+test("CLI help explains removed service extensions without changing retained drop-ins", () => {
+    const data = realpathSync(mkdtempSync(join(tmpdir(), "rotom-archive-help-")));
+    const extensions = join(data, "extensions");
+    const source = 'throw new Error("Retired drop-in must not execute");\n';
+    const choices = JSON.stringify({
+        enabledExtensions: ["kept.ts"],
+        disabledExtensions: ["off.ts"],
+    });
+
+    try {
+        mkdirSync(extensions);
+        writeFileSync(join(extensions, "kept.ts"), source);
+        writeFileSync(join(extensions, "off.ts"), source);
+        writeFileSync(join(data, "config.json"), choices);
+        const help = execFileSync(
+            process.execPath,
+            [join(APP_ROOT, "bin", "rotom-team.js"), "--data", data, "--help"],
+            { encoding: "utf8" },
+        );
+
+        assert.ok(help.includes(ARCHIVE_COPY.cliMode));
+        assert.match(help, /read-only archives; it does not enable legacy execution/);
+        assert.match(help, /Legacy service extension modules are not shipped/);
+        assert.match(help, /source and enabled\/disabled records are preserved, not loaded/);
+        assert.equal(readFileSync(join(data, "config.json"), "utf8"), choices);
+        assert.equal(readFileSync(join(extensions, "kept.ts"), "utf8"), source);
+        assert.equal(readFileSync(join(extensions, "off.ts"), "utf8"), source);
+        assert.deepEqual(readdirSync(data).sort(), ["config.json", "extensions"]);
+        assert.deepEqual(readdirSync(extensions).sort(), ["kept.ts", "off.ts"]);
+    } finally {
+        rmSync(data, { recursive: true, force: true });
+    }
+});
 
 async function snapshotLegacyClosure(storage: Storage, fixture: LegacyFixture): Promise<string> {
     const conversations = [fixture.conversationId, fixture.childConversationId];

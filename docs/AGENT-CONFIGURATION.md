@@ -1,6 +1,6 @@
 # 配置 Agent Extension、Skill 和 MCP
 
-Team 只支持原生 Agent Extension。`src/server/extensions/` 和 `<data>/extensions/` 是非 Team 旧路径的服务模块；Team 不加载、不监听、不提供其管理 API。已有文件和开关记录保留，但不会生效。旧模块不能直接搬进 Agent Extension 目录，必须改成原生 `default (pi) => { … }` API。
+Team 只支持原生 Agent Extension。D9c 已删除仓库旧 `src/server/extensions/` 模块。用户 `<data>/extensions/` 源码和启用/停用记录仍保留，但不加载、不监听、不提供管理 API。旧模块不能直接搬进 Agent Extension 目录，必须改成原生 `default (pi) => { … }` API。
 
 ## 1. 选择全局或项目范围
 

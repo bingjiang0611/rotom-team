@@ -43,7 +43,7 @@
 | D6    | D    | 大文件纯移动拆分(C5)                        | 核验通过                      | `3768653`（测量）；实现见执行记录      |
 | D7    | D    | handoff 测量与异步化(C2)                    | 核验通过                      | `2af9690`（测量）；`859c283`（阈值）   |
 | D8    | D    | storage worker(C3)                          | D8a、D8b 核验通过             | `1b0da14`（实现）；测量/限制见执行记录 |
-| D9    | D    | 下线旧后端(C4,只读归档)                     | D9a 核验通过;D9b 待做         | `6c21763`（盘点）；`f162467`（实现）   |
+| D9    | D    | 下线旧后端(C4,只读归档)                     | 已推送待核验(D9c)             | `6f51f4e`（盘点）；`07d430e`（实现）   |
 
 状态取值：`待做` / `进行中` / `已推送待核验` / `核验通过` / `核验未通过` / `放弃（写明原因）`。
 
@@ -1499,6 +1499,66 @@ D8a 核验通过,执行方可以开始 D8b(storage worker 默认关闭)。
 - 第 15 轮的其余结论不变。「每次启动都扫描旧会话」那条仍是不阻塞的后续建议。
 
 **下一步**:D9b,删除旧 agent 执行分支和只被它用到的 loader/API。
+
+### D9b 交付 — 2026-10-26
+
+**状态:已推送待核验(D9b)。** 实现 `6bc5eea` 已推送并确认远端同哈希。先行盘点为 `a3d4d39`、澄清为 `f5bd709`。用户另行授权的图像测量修复先盘点 `da28f55`,再单独提交 `c59b1c7`;没有把测量修复混入运行时代码删除。
+
+- 删除盘点 B1–B9 内旧 Durable 执行体、服务 loader/成功 API、旧 shell/schedule/goal/resend 和预算/权限撤销 abort 分支。保留 native 生命周期、个人凭据路由、unknown 不重放、共享存储/归属及历史解码定义。
+- 不改 journal `user_version`、持久文档合同、历史 task 形状或 vendor。扩展目录、旧测试文件、用户 source/enabled/disabled 记录仍保留,不做 D9c。
+- check/lint/format 通过;默认测试 **723/723,零跳过**。native app/commands 的 worker off/on 四项通过。独立 head 探针及 D9a 重开 post-D9b 数据各三模式,合计 **12 次打开**:历史可导出、只读 409、仅一条归档说明、零旧任务/发送/重复执行、sentinel 不变。旧版本正对照确实改变 sentinel,不是空数据验证。
+- 最终锁内 main/head 三组性能配对通过 gating 和 ledger guard,highLoad=false。修复的是客户端已读完不等于服务端 finish 已被观察到的测量顺序缺口;等待发生在原窗口内。去掉等待的负对照失败,恢复后通过。原先三次自然失败的具体缺失字段未捕获,不声称逐次归因。
+- 最终 main 比较 74 个 worse;同一修正测量器重测的 D9a 比较 20 个 worse。必要 guard 文案每个 info 增 9 字节,其余采样差异逐项列出且未强行归因。额外 D9a 对照 highLoad=true,其耗时只作诊断,不作 L2 结论;未改 workload、ledger、容差或 quiet 规则。
+- 回退 D9a 可读取同一数据,但不会复活已归档任务。回退 pre-D9a 仍须匹配离线备份,外部 unknown 不能自动重放。
+
+证据:[D9b validation](d9b-validation.md)、[performance](d9b-performance.md)、[measurement validation](d9b-measurement-validation.md)、[probe results](d9b-probe-results.json)、[source hashes](d9b-source-files.json)、[删除后引用](d9b-references-after.txt)。
+
+**隔离交付:** 并发无关文档提交 `5bde0dd` 意外进入原本地分支。按用户明确选择,在 `/private/tmp/rotom-review-D9b/delivery` 的 `delivery/d9b` 分支只转移本任务提交,再快进推送到 `review/2026-10-23-perf-design-arch`;未 rebase、强推或合并 main,远端不包含该无关提交。394 个运行时/web/test 文件与已验证源逐字节一致,隔离工作区静态检查、kernel 身份及四项文档测试通过。原工作区及用户改动保留,后续请以远端/隔离交付工作区核验,不要将原混合历史直接推送。
+
+**下一步:** 审查方核验 D9b。执行方在此停止,不开始 D9c;不部署或重启线上。
+
+### 第 17 轮核验:D9b(HEAD `034fa8d`,2026-10-26)
+
+**结论:D9b 核验通过。** 可以进入 D9c。
+
+**分支**:远端从 `9562e79` 线性快进到 `034fa8d`,共 6 个提交(盘点 2 个、测量修复 2 个、实现 1 个、交接 1 个),没有混入执行方本地的无关提交。
+
+| 检查                                      | 结果                                                                                                                                  |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `check` / `lint` / `format:check`         | 通过                                                                                                                                  |
+| 默认 `npm test`                           | 723 项:718 通过 / 1 失败 / 4 跳过。唯一失败是本机环境导致的 snap 用例,同前几轮                                                        |
+| `test:kernel:app`,worker 关 / 开          | 均 `status: passed`                                                                                                                   |
+| `native-commands-proof.ts`,worker 关 / 开 | 均通过                                                                                                                                |
+| 审查方独立探针(`7478123` 旧数据)          | kernel 关、开、worker 三种模式,各打开两次,结果同第 15 轮,全部符合                                                                     |
+| 回滚到 D9a(`9562e79`)                     | 同一份数据先用 D9b(kernel 开)打开两次,再用 D9a 代码在 kernel 开、关下各打开两次:哨兵不变,归档提示仍只有 1 条,导出正常,提交 409,锁释放 |
+
+探针脚本 `d9a-review-probe-head.ts.txt` 已更新,加了 `KEEP` 环境变量,用来保留数据目录做回滚检查。
+
+**代码核对(抽查风险最高的删除)**
+
+- `TeamExecution.admit/authorize`:native 会话在 `requireArchiveWriteAllowed` 之前就已经被拒绝,旧会话在它那里被拒绝,所以删掉的准入/改绑/授权代码从 D9a 起就不可达;现在明确抛 `executionRetired`。compaction hook 直接 decline,和原来失败时的行为一致。
+- Lancet guard、浏览器开关:原来都依赖 loader,D9a 起 loader 不存在,两者恒为关;删除后返回明确的不可用状态,没有行为变化。
+- schedules/goals/shell/resend:保留了 task 定义和已存储的记录形状,执行阶段改为明确抛错;这些功能原本由扩展开关控制,D9a 起已不可达。
+- 持久化格式没有变化,和上面的回滚实测一致。
+
+**测量修复(`da28f55`、`c59b1c7`)**:由 owner 单独授权。图片探针原来只等客户端读完响应体,没有等服务端的 `finish` 事件,导致 base 运行偶发失败。现在在原测量窗口内等待服务端 finish/close;请求数、并发、断言、workload、ledger 都没改,并附有负控。我接受。
+
+**性能**:相对 D9a,20 个变差计数器、5 项计时变慢。其中 guard 状态文案多出 9 字节,已归因;其余标为「采样差异,未归因」,并列出了三次采样值。gating 和 ledger guard 都通过,我接受。
+
+**下一步**:D9c,删除确认无引用的 `src/server/extensions/` 代码和旧执行测试,更新文档和迁移/回滚说明。
+
+### D9c — 旧模块与专属测试删除交接（2026-10-27）
+
+**状态：已推送待核验(D9c)。** 盘点 `6f51f4e` 先提交，实现 `07d430e` 已从干净隔离工作区推送，远端哈希已确认。基线为第17轮批准后的 `2676e7f`；没有夹带无关提交。
+
+- 删除盘点中的九个 `src/server/extensions/` 模块、十二个专属测试和私有辅助闭包。共享 helpers、Approvals/Lancet/parser、历史定义/fixture、归档/导出/授权和 native gates 保留；用户 drop-in 源码与启停记录不加载但不删除。CLI 帮助及当前文档已更新，无持久化格式或 journal 版本变化。
+- 默认测试 **723 − 12 + 1 = 712/712**，零失败/跳过/取消；31 个保留测试体逐字节不变。新增 CLI 帮助/文件保留测试，恢复旧帮助文本的负控确实失败。check/lint/format、archive 10/10、四项 native app/commands worker 关/开证明均通过。
+- 原样旧 producer 的非空任务/队列及哨兵正控有效。原样 `KEEP` 探针三模式，各先用 D9c、再用 D9b `2676e7f`、再用 D9a `9562e79` 打开同一份数据，共 **18 次打开**：历史可导出，canonical 409，归档提示一条，无旧工作/哨兵变化，成功探针均释放 leases；源码和启停记录仍保留。
+- 三次锁内性能 CI 均通过 gating/ledger guard，未改测量/workload/ledger/容差/quiet 规则。main 65 个 worse，因 highLoad=true 不作 L2 结论。两次 D9b 配对分别 30/7 个 worse，交集为零，逐项列采样并标“采样差异，未归因”；不宣称加速。工具总时限中断、非 canonical KEEP 输入拒绝等失败尝试均保留，不算成功证据。
+- 证据：[盘点](d9c-inventory.md)、[验收及限制](d9c-validation.md)、[逐计数器性能](d9c-performance.md)、[源哈希](d9c-source-files.json)、[探针/测试结果](d9c-verification.json)。完整本地日志和合成数据在 `/tmp/rotom-review-D9c`，失败路径的 fence 未手动删除。
+- 原脏工作区、用户两份文档及并发任务未动。未 force-push/rebase/合并 main，未部署、重启线上或使用真实账号。
+
+**下一步：审查方独立核验 D9c。执行方在此停止，不启动其他阶段。**
 
 ## C 方案（执行方追加）
 

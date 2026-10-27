@@ -145,7 +145,7 @@ Uploads are limited to 50 MiB each and 10 files per message. Direct model images
 The fixtures do not establish image understanding on every real provider, image-specific interrupted-run recovery,
 or an OS sandbox between trusted members.
 
-## Legacy read-only archives (D9a)
+## Legacy read-only archives (D9a / D9b / D9c)
 
 See [LEGACY-ARCHIVE.md](LEGACY-ARCHIVE.md) for the product boundary, migration scope, 256 MiB atomic-operation limit and rollback procedure.
 
@@ -159,7 +159,12 @@ Historical read fixtures, native metadata-only fixtures and native loopback exec
 steer/follow-up/model/thinking refusal during a held native run, login refusal while that account is busy,
 and native compact USD-budget rejection without receipts or model calls.
 These are not inferred from Durable-path 409s. Run native application and command proofs with storage worker off and on.
-The exact migration map and final run evidence live under `docs/performance/review-2026-10-23/d9a-*`.
+The migration map and D9a evidence live under `docs/performance/review-2026-10-23/d9a-*`.
+D9c deletes nine repository extension modules and twelve exclusively coupled tests, not independent approvals,
+Lancet/parser, native, archive or user-source-preservation coverage. Its [inventory](performance/review-2026-10-23/d9c-inventory.md)
+lists every removed test and helper. The archive suite also runs the real CLI help against synthetic drop-in files
+and switch records, checking the removal/preservation guidance and unchanged files without application startup.
+D9c adds no migration; rollback probes reopen the same retained synthetic data with D9b rather than using a fresh copy.
 
 ## Shared agent resources and command inventory
 
