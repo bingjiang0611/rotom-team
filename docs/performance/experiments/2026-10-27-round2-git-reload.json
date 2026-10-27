@@ -1,0 +1,438 @@
+{
+    "schema": 1,
+    "baseline": "c379bb7cfb57",
+    "split": "710b0d367b2c",
+    "node": "v24.18.0",
+    "platform": "darwin-arm64",
+    "phaseProbe": {
+        "runs": [
+            {
+                "order": 1,
+                "side": "old",
+                "ms": 59.08720900000117,
+                "counts": {
+                    "json.stringify.calls": 1,
+                    "json.stringify.chars": 208,
+                    "subprocess.total": 2,
+                    "subprocess.git": 2,
+                    "http.requests": 1,
+                    "http.body.bytes": 208
+                },
+                "phases": {
+                    "probeHttpArrivalMs": 0.6928329999973357,
+                    "probeHttpServerMs": 57.873084000002564,
+                    "probeAfterGitServerMs": 0.3297500000007858,
+                    "probeHttpReadbackMs": 0.5414160000000265,
+                    "probeRefsStartMs": 1.3890829999982088,
+                    "probeRefsSpawnCallMs": 1.0235419999989972,
+                    "probeRefsToSpawnMs": 2.1084589999991294,
+                    "probeRefsSpawnToExitMs": 42.976041000001715,
+                    "probeRefsExitToCallbackMs": 0.03454200000123819,
+                    "probeRefsTotalMs": 45.11904200000208,
+                    "probeStatusStartMs": 2.5476249999992433,
+                    "probeStatusSpawnCallMs": 0.8807919999999285,
+                    "probeStatusToSpawnMs": 0.9644579999985581,
+                    "probeStatusSpawnToExitMs": 54.67475000000195,
+                    "probeStatusExitToCallbackMs": 0.04933399999936228,
+                    "probeStatusTotalMs": 55.68854199999987
+                },
+                "scenarios": 41,
+                "unavailable": 0
+            },
+            {
+                "order": 2,
+                "side": "split",
+                "ms": 75.90579200000138,
+                "counts": {
+                    "json.stringify.calls": 1,
+                    "json.stringify.chars": 208,
+                    "subprocess.total": 2,
+                    "subprocess.git": 2,
+                    "http.requests": 1,
+                    "http.body.bytes": 208
+                },
+                "phases": {
+                    "probeHttpArrivalMs": 0.8626670000012382,
+                    "probeHttpServerMs": 74.43783299999996,
+                    "probeAfterGitServerMs": 0.34724999999889405,
+                    "probeHttpReadbackMs": 0.6013749999983702,
+                    "probeRefsStartMs": 1.7810830000016722,
+                    "probeRefsSpawnCallMs": 1.5458340000004682,
+                    "probeRefsToSpawnMs": 3.009041999997862,
+                    "probeRefsSpawnToExitMs": 56.83070800000132,
+                    "probeRefsExitToCallbackMs": 0.040541999998822575,
+                    "probeRefsTotalMs": 59.88029199999801,
+                    "probeStatusStartMs": 3.5489999999990687,
+                    "probeStatusSpawnCallMs": 1.162625000000844,
+                    "probeStatusToSpawnMs": 1.2612080000035348,
+                    "probeStatusSpawnToExitMs": 70.1294999999991,
+                    "probeStatusExitToCallbackMs": 0.013542000000597909,
+                    "probeStatusTotalMs": 71.40425000000323
+                },
+                "scenarios": 41,
+                "unavailable": 0
+            },
+            {
+                "order": 3,
+                "side": "split",
+                "ms": 65.46837500000038,
+                "counts": {
+                    "json.stringify.calls": 3,
+                    "json.stringify.chars": 242,
+                    "subprocess.total": 2,
+                    "subprocess.git": 2,
+                    "http.requests": 1,
+                    "http.body.bytes": 208
+                },
+                "phases": {
+                    "probeHttpArrivalMs": 0.578125,
+                    "probeHttpServerMs": 64.42000000000007,
+                    "probeAfterGitServerMs": 0.33924999999908323,
+                    "probeHttpReadbackMs": 0.5155830000003334,
+                    "probeRefsStartMs": 1.199625000001106,
+                    "probeRefsSpawnCallMs": 1.3517919999994774,
+                    "probeRefsToSpawnMs": 2.1473750000004657,
+                    "probeRefsSpawnToExitMs": 48.36687499999971,
+                    "probeRefsExitToCallbackMs": 0.03299999999944703,
+                    "probeRefsTotalMs": 50.54724999999962,
+                    "probeStatusStartMs": 2.660667000000103,
+                    "probeStatusSpawnCallMs": 0.637166000000434,
+                    "probeStatusToSpawnMs": 0.6965410000011616,
+                    "probeStatusSpawnToExitMs": 61.288542000000234,
+                    "probeStatusExitToCallbackMs": 0.013124999999490683,
+                    "probeStatusTotalMs": 61.998208000000886
+                },
+                "scenarios": 41,
+                "unavailable": 0
+            },
+            {
+                "order": 4,
+                "side": "old",
+                "ms": 53.459249999999884,
+                "counts": {
+                    "json.stringify.calls": 1,
+                    "json.stringify.chars": 208,
+                    "subprocess.total": 2,
+                    "subprocess.git": 2,
+                    "http.requests": 1,
+                    "http.body.bytes": 208
+                },
+                "phases": {
+                    "probeHttpArrivalMs": 1.188333000000057,
+                    "probeHttpServerMs": 51.59412499999962,
+                    "probeAfterGitServerMs": 0.3199160000003758,
+                    "probeHttpReadbackMs": 0.5895419999997102,
+                    "probeRefsStartMs": 2.6520829999990383,
+                    "probeRefsSpawnCallMs": 2.070417000000816,
+                    "probeRefsToSpawnMs": 3.8093340000013995,
+                    "probeRefsSpawnToExitMs": 38.00037499999962,
+                    "probeRefsExitToCallbackMs": 0.03245799999967858,
+                    "probeRefsTotalMs": 41.8421670000007,
+                    "probeStatusStartMs": 4.992249999999331,
+                    "probeStatusSpawnCallMs": 1.3924580000002607,
+                    "probeStatusToSpawnMs": 1.4849580000009155,
+                    "probeStatusSpawnToExitMs": 45.94949999999881,
+                    "probeStatusExitToCallbackMs": 0.035834000000249944,
+                    "probeStatusTotalMs": 47.47029199999997
+                },
+                "scenarios": 41,
+                "unavailable": 0
+            },
+            {
+                "order": 5,
+                "side": "old",
+                "ms": 76.9299170000013,
+                "counts": {
+                    "json.stringify.calls": 1,
+                    "json.stringify.chars": 208,
+                    "subprocess.total": 2,
+                    "subprocess.git": 2,
+                    "http.requests": 1,
+                    "http.body.bytes": 208
+                },
+                "phases": {
+                    "probeHttpArrivalMs": 0.5025420000001759,
+                    "probeHttpServerMs": 75.87054199999875,
+                    "probeAfterGitServerMs": 0.3430840000000899,
+                    "probeHttpReadbackMs": 0.5979580000002898,
+                    "probeRefsStartMs": 1.0612089999995078,
+                    "probeRefsSpawnCallMs": 1.5604999999995925,
+                    "probeRefsToSpawnMs": 4.139541000000463,
+                    "probeRefsSpawnToExitMs": 53.96512499999881,
+                    "probeRefsExitToCallbackMs": 0.08804200000122364,
+                    "probeRefsTotalMs": 58.19270800000049,
+                    "probeStatusStartMs": 2.7385419999991427,
+                    "probeStatusSpawnCallMs": 2.319375000000946,
+                    "probeStatusToSpawnMs": 2.4930420000000595,
+                    "probeStatusSpawnToExitMs": 70.77045800000087,
+                    "probeStatusExitToCallbackMs": 0.027957999998761807,
+                    "probeStatusTotalMs": 73.2914579999997
+                },
+                "scenarios": 41,
+                "unavailable": 0
+            },
+            {
+                "order": 6,
+                "side": "split",
+                "ms": 71.13129200000185,
+                "counts": {
+                    "json.stringify.calls": 1,
+                    "json.stringify.chars": 208,
+                    "subprocess.total": 2,
+                    "subprocess.git": 2,
+                    "http.requests": 1,
+                    "http.body.bytes": 208
+                },
+                "phases": {
+                    "probeHttpArrivalMs": 0.633417000000918,
+                    "probeHttpServerMs": 69.99766699999964,
+                    "probeAfterGitServerMs": 0.3085419999988517,
+                    "probeHttpReadbackMs": 0.49662499999976717,
+                    "probeRefsStartMs": 1.9931250000008731,
+                    "probeRefsSpawnCallMs": 2.162499999998545,
+                    "probeRefsToSpawnMs": 4.109583999997994,
+                    "probeRefsSpawnToExitMs": 43.688750000001164,
+                    "probeRefsExitToCallbackMs": 0.02958299999954761,
+                    "probeRefsTotalMs": 47.827916999998706,
+                    "probeStatusStartMs": 4.2763340000019525,
+                    "probeStatusSpawnCallMs": 1.6909579999992275,
+                    "probeStatusToSpawnMs": 1.847290999998222,
+                    "probeStatusSpawnToExitMs": 64.17329199999949,
+                    "probeStatusExitToCallbackMs": 0.025625000002037268,
+                    "probeStatusTotalMs": 66.04620799999975
+                },
+                "scenarios": 41,
+                "unavailable": 0
+            }
+        ],
+        "medians": {
+            "old": {
+                "ms": 59.08720900000117,
+                "statusMs": 55.68854199999987,
+                "refsMs": 45.11904200000208,
+                "httpAfterGitMs": 0.3297500000007858,
+                "arrivalMs": 0.6928329999973357
+            },
+            "split": {
+                "ms": 71.13129200000185,
+                "statusMs": 66.04620799999975,
+                "refsMs": 50.54724999999962,
+                "httpAfterGitMs": 0.33924999999908323,
+                "arrivalMs": 0.633417000000918
+            }
+        },
+        "timingWrapper": {
+            "label": "round2-git-diagnostic",
+            "command": ["node", "/tmp/round2-git-diagnostic-run.mjs"],
+            "exit": 0,
+            "signal": null,
+            "wallMs": 716788,
+            "cores": 8,
+            "loadBefore": 3.31,
+            "loadAfter": 7.93,
+            "highLoad": false
+        }
+    },
+    "nativeTrace": {
+        "schema": 1,
+        "node": "v24.18.0",
+        "git": "git version 2.50.1 (Apple Git-155)",
+        "changedFiles": 20,
+        "direct": "/Library/Developer/CommandLineTools/usr/bin/git",
+        "runs": [
+            {
+                "label": "shim",
+                "executable": "git",
+                "totalMs": 51.574374999999975,
+                "calls": [
+                    {
+                        "command": "for-each-ref",
+                        "wallMs": 37.64883299999997,
+                        "spawnToExitMs": 34.89216699999997,
+                        "spawnCallMs": 1.7598749999999654,
+                        "nativeMs": 3.925,
+                        "outsideNativeMs": 33.72383299999997,
+                        "events": 6,
+                        "trace": "/tmp/round2-git-native-1.jsonl"
+                    },
+                    {
+                        "command": "status",
+                        "wallMs": 49.011833000000024,
+                        "spawnToExitMs": 48.281833000000006,
+                        "spawnCallMs": 0.6223749999999768,
+                        "nativeMs": 4.335999999999999,
+                        "outsideNativeMs": 44.675833000000026,
+                        "events": 40,
+                        "trace": "/tmp/round2-git-native-2.jsonl"
+                    }
+                ]
+            },
+            {
+                "label": "developer",
+                "executable": "/Library/Developer/CommandLineTools/usr/bin/git",
+                "totalMs": 86.07695799999999,
+                "calls": [
+                    {
+                        "command": "for-each-ref",
+                        "wallMs": 46.67283299999997,
+                        "spawnToExitMs": 45.669250000000034,
+                        "spawnCallMs": 0.5886659999999893,
+                        "nativeMs": 4.059,
+                        "outsideNativeMs": 42.61383299999997,
+                        "events": 6,
+                        "trace": "/tmp/round2-git-native-3.jsonl"
+                    },
+                    {
+                        "command": "status",
+                        "wallMs": 85.16395799999998,
+                        "spawnToExitMs": 84.83308300000004,
+                        "spawnCallMs": 0.29716700000000174,
+                        "nativeMs": 4.702999999999999,
+                        "outsideNativeMs": 80.46095799999998,
+                        "events": 40,
+                        "trace": "/tmp/round2-git-native-4.jsonl"
+                    }
+                ]
+            },
+            {
+                "label": "developer",
+                "executable": "/Library/Developer/CommandLineTools/usr/bin/git",
+                "totalMs": 59.45858300000003,
+                "calls": [
+                    {
+                        "command": "for-each-ref",
+                        "wallMs": 32.975874999999974,
+                        "spawnToExitMs": 32.039417000000014,
+                        "spawnCallMs": 0.5381249999999795,
+                        "nativeMs": 3.832,
+                        "outsideNativeMs": 29.143874999999973,
+                        "events": 6,
+                        "trace": "/tmp/round2-git-native-5.jsonl"
+                    },
+                    {
+                        "command": "status",
+                        "wallMs": 58.63695800000005,
+                        "spawnToExitMs": 58.295124999999985,
+                        "spawnCallMs": 0.27691700000002584,
+                        "nativeMs": 4.709,
+                        "outsideNativeMs": 53.92795800000005,
+                        "events": 40,
+                        "trace": "/tmp/round2-git-native-6.jsonl"
+                    }
+                ]
+            },
+            {
+                "label": "shim",
+                "executable": "git",
+                "totalMs": 29.687125000000037,
+                "calls": [
+                    {
+                        "command": "for-each-ref",
+                        "wallMs": 25.72158300000001,
+                        "spawnToExitMs": 24.430374999999913,
+                        "spawnCallMs": 0.639583000000016,
+                        "nativeMs": 5.263,
+                        "outsideNativeMs": 20.45858300000001,
+                        "events": 6,
+                        "trace": "/tmp/round2-git-native-7.jsonl"
+                    },
+                    {
+                        "command": "status",
+                        "wallMs": 28.734792000000084,
+                        "spawnToExitMs": 28.152832999999987,
+                        "spawnCallMs": 0.5331670000000486,
+                        "nativeMs": 5.014,
+                        "outsideNativeMs": 23.720792000000085,
+                        "events": 40,
+                        "trace": "/tmp/round2-git-native-8.jsonl"
+                    }
+                ]
+            },
+            {
+                "label": "shim",
+                "executable": "git",
+                "totalMs": 28.28379199999995,
+                "calls": [
+                    {
+                        "command": "for-each-ref",
+                        "wallMs": 24.84004200000004,
+                        "spawnToExitMs": 23.463499999999954,
+                        "spawnCallMs": 0.6602920000000267,
+                        "nativeMs": 4.483,
+                        "outsideNativeMs": 20.35704200000004,
+                        "events": 6,
+                        "trace": "/tmp/round2-git-native-9.jsonl"
+                    },
+                    {
+                        "command": "status",
+                        "wallMs": 27.26887499999998,
+                        "spawnToExitMs": 26.65954099999999,
+                        "spawnCallMs": 0.5666250000000446,
+                        "nativeMs": 4.351,
+                        "outsideNativeMs": 22.91787499999998,
+                        "events": 40,
+                        "trace": "/tmp/round2-git-native-10.jsonl"
+                    }
+                ]
+            },
+            {
+                "label": "developer",
+                "executable": "/Library/Developer/CommandLineTools/usr/bin/git",
+                "totalMs": 63.82337499999994,
+                "calls": [
+                    {
+                        "command": "for-each-ref",
+                        "wallMs": 37.213167,
+                        "spawnToExitMs": 36.30695800000001,
+                        "spawnCallMs": 0.5643340000000308,
+                        "nativeMs": 4.564,
+                        "outsideNativeMs": 32.649167,
+                        "events": 6,
+                        "trace": "/tmp/round2-git-native-11.jsonl"
+                    },
+                    {
+                        "command": "status",
+                        "wallMs": 62.97908300000006,
+                        "spawnToExitMs": 62.70608299999992,
+                        "spawnCallMs": 0.245708000000036,
+                        "nativeMs": 4.508,
+                        "outsideNativeMs": 58.47108300000006,
+                        "events": 40,
+                        "trace": "/tmp/round2-git-native-12.jsonl"
+                    }
+                ]
+            }
+        ],
+        "timingWrapper": {
+            "label": "round2-git-native-trace",
+            "command": ["node", "/tmp/round2-git-native-trace.mjs"],
+            "exit": 0,
+            "signal": null,
+            "wallMs": 1078,
+            "cores": 8,
+            "loadBefore": 6.05,
+            "loadAfter": 6.05,
+            "highLoad": false
+        }
+    },
+    "instrumentHashes": {
+        "/tmp/round2-git-phases.mjs": "46afb4905ffd402d1492c0b063aef7ca4aedeffc66e06e07d9899a4d0e8f832a",
+        "/tmp/round2-git-diagnostic-run.mjs": "8cf27dd4a5b8e1fce74a87024299991c256834d9d1c3e8484d431843568bb8f2",
+        "/tmp/round2-git-native-trace.mjs": "322eb5464ac434c57c1c0a0b1308b2d8bc1f70b67ab9ceda0c042fa85ece28eb"
+    },
+    "callChainHashes": {
+        "src/server/git.ts": "6b7994a95ee8135cc416dbf733b1ebe2b362a987167ed8b89847cb57a4ade6c1",
+        "src/server/branches.ts": "b5e54fcf27068de311166edae6f6aaee376d9b9f2f381b43d63bd5c007a253cc",
+        "src/server/workspace.ts": "87c232d72ccc5602d62cda71f9eadacf00fccdc7bef430c73bab80399493e993",
+        "src/server/http/conversation-routes.ts": "7724cb986cd53efb657e88a08a968f16250953e68f2669dfcb21d35c85c7f65a"
+    },
+    "sourceChange": false,
+    "ledgerChange": false,
+    "realAccounts": false,
+    "serviceAccess": false,
+    "limits": [
+        "Diagnostic phases are not an official perf:ci speed claim.",
+        "Git Trace2 excludes time before its initialization and after its exit event; outsideNativeMs is not an OS scheduler profile.",
+        "Source inspection found a stale auxiliary model capture; runtime stale-capture regression was not exercised in this round."
+    ]
+}
