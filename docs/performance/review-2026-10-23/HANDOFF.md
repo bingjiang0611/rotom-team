@@ -45,6 +45,8 @@
 | D8    | D    | storage worker(C3)                          | D8a、D8b 核验通过             | `1b0da14`（实现）；测量/限制见执行记录 |
 | D9    | D    | 下线旧后端(C4,只读归档)                     | D9a、D9b、D9c 核验通过        | `6f51f4e`（盘点）；`07d430e`（实现）   |
 
+owner 2026-10-27 决定先合并;main 的 20KB 文件预算下,本分支改动中有 63 个文件超限(main 上原本已有 77 个),拆分作为后续单独任务。
+
 状态取值：`待做` / `进行中` / `已推送待核验` / `核验通过` / `核验未通过` / `放弃（写明原因）`。
 
 ---
@@ -1585,6 +1587,29 @@ D8a 核验通过,执行方可以开始 D8b(storage worker 默认关闭)。
 **小问题(不阻塞,可以顺手改)**:有两处注释还指向已删除的文件:`src/server/changes.ts:67`(`extensions/codemode.ts`)和 `web/transcript.js:49`(`src/server/extensions/goals.ts`)。
 
 **合并前需要 owner 处理**:`main` 上有一个本分支还没有的提交 `e649d9d`(pre-commit 文件大小检查)。合并前需要先把 `main` 同步进来并重跑验收;是否合并、怎么合并由 owner 决定。C1(进程淘汰)仍按 owner 要求不做。
+
+### main 合并后验收（执行方记录，2026-10-27）
+
+owner 批准先同步 main，再自行开 PR 和合并；本次不拆文件、不重跑 `perf:ci`。原指定基线是 `def13ad`，实际 pull 时远端已经推进到 `1098d85`，包含 room-append 性能提交及先前另行交付的历史。执行方先暂停说明差异；owner 明确选择“以最新远端继续”后，才继续合并。
+
+**合并提交：`d4d13e0e8462d7bd9ca791b8cb03f53a42fbc711`。** 两个父提交分别为 `1098d85a823d7b631cee3b4214e536af4e52c03d` 和 `e649d9d8a0ff8d56d241d9a4c54b1a6ca81a7a92`。执行 `git fetch origin main` 后，以 `git merge --no-ff origin/main` 普通合并；README 自动合并，无冲突。没有 rebase、force-push、钩子配置修改或 `--no-verify`。
+
+验收环境：Node 24.18.0、darwin-arm64；测试仅使用合成数据与 loopback 模型。以下检查均针对合并后的代码，未复用 D9c 合并前的结果：
+
+| 检查                                                  | 结果                                                 | 日志                      |
+| ----------------------------------------------------- | ---------------------------------------------------- | ------------------------- |
+| `npm run check`                                       | 通过，6 秒                                           | `check.log`               |
+| `npm run lint`                                        | 通过，5 秒                                           | `lint.log`                |
+| `npm run format:check`                                | 通过，11 秒                                          | `format-check.log`        |
+| 默认 `npm test`                                       | **724/724**，2 个 suite；0 失败/跳过/取消，235978 ms | `test.log`                |
+| `npm run test:kernel:app`                             | `status: passed`，85 次 loopback 请求，107 秒        | `native-app-off.log`      |
+| `npm run test:kernel:app -- --storage-worker`         | `status: passed`，86 次 loopback 请求，111 秒        | `native-app-on.log`       |
+| `node test/native-commands-proof.ts`                  | `passed: true`，19 次合成推理，42 秒                 | `native-commands-off.log` |
+| `node test/native-commands-proof.ts --storage-worker` | `passed: true`，19 次合成推理，44 秒                 | `native-commands-on.log`  |
+
+完整日志在 `/tmp/rotom-main-merge-20261027.pr59vu/`。默认测试确实包含 main 新增的 `test/check-staged-file-size.test.ts`：`staged file budget` 7 项、`hook installation and real commits` 3 项均通过，包括 20000/20001 字节边界、部分暂存、真实提交阻拦和既有全局钩子保留；不是只运行旧测试集合。Native 报告分别明确 `realProvider: false` / `realAccounts: false`。
+
+本次只合并 main 和记录验收，不拆超限文件、不改预算、不部署、不重启线上、不使用真实账号。只向 `review/2026-10-23-perf-design-arch` 推送；**PR 由 owner 自己开、自己合，执行方推送后停止。**
 
 ## C 方案（执行方追加）
 
