@@ -86,7 +86,7 @@
             "tolerance": 1,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 527
+                "darwin-arm64": 512
             }
         },
         "startup.restart/json.parse.chars": {
@@ -100,7 +100,7 @@
             "tolerance": 20,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 200940
+                "darwin-arm64": 70447
             }
         },
         "startup.restart/json.stringify.chars": {
@@ -226,7 +226,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 45
+                "darwin-arm64": 43
             }
         },
         "session.open/sql.rows": {
@@ -240,7 +240,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 94
+                "darwin-arm64": 92
             }
         },
         "session.open/subprocess.total": {
@@ -674,7 +674,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 244
+                "darwin-arm64": 234
             }
         },
         "turn.paced/sql.rows": {
@@ -688,7 +688,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 249
+                "darwin-arm64": 202
             }
         },
         "turn.paced/subprocess.total": {
@@ -716,7 +716,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 244
+                "darwin-arm64": 196
             }
         },
         "turn.paced/json.parse.chars": {
@@ -730,7 +730,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 700528
+                "darwin-arm64": 382526
             }
         },
         "turn.paced/json.stringify.chars": {
@@ -1234,7 +1234,7 @@
             "tolerance": 2,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 9
+                "darwin-arm64": 8
             }
         },
         "web.open/cdp.RecalcStyleCount": {
@@ -1976,7 +1976,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 98
+                "darwin-arm64": 83
             }
         },
         "projection.large.open/sql.rows": {
@@ -1990,7 +1990,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 799
+                "darwin-arm64": 391
             }
         },
         "projection.large.open/subprocess.total": {
@@ -2018,7 +2018,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 699
+                "darwin-arm64": 303
             }
         },
         "projection.large.open/json.parse.chars": {
@@ -2032,7 +2032,7 @@
             "tolerance": 105,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 498640
+                "darwin-arm64": 217483
             }
         },
         "projection.large.open/json.stringify.chars": {
@@ -2046,7 +2046,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 199740
+                "darwin-arm64": 181938
             }
         },
         "projection.large.open/view.entry.visits": {
@@ -2130,7 +2130,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 512
+                "darwin-arm64": 490
             }
         },
         "projection.large.paced/sql.rows": {
@@ -2144,7 +2144,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 1567
+                "darwin-arm64": 674
             }
         },
         "projection.large.paced/subprocess.total": {
@@ -2172,7 +2172,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 1577
+                "darwin-arm64": 634
             }
         },
         "projection.large.paced/json.parse.chars": {
@@ -2186,7 +2186,7 @@
             "tolerance": 266,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 1202211
+                "darwin-arm64": 539040
             }
         },
         "projection.large.paced/json.stringify.chars": {
@@ -2200,7 +2200,7 @@
             "tolerance": 41,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 476326
+                "darwin-arm64": 430044
             }
         },
         "projection.large.paced/subprocess.git": {
@@ -2578,7 +2578,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 120
+                "darwin-arm64": 52
             }
         },
         "projection.large.open/view.fields.stringify.chars": {
@@ -2592,7 +2592,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 29520
+                "darwin-arm64": 11824
             }
         },
         "projection.large.paced/view.fields.stringify.calls": {
@@ -2606,7 +2606,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 432
+                "darwin-arm64": 143
             }
         },
         "projection.large.paced/view.fields.stringify.chars": {
@@ -2620,7 +2620,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 107892
+                "darwin-arm64": 32966
             }
         },
         "session.open/view.live.project.calls": {
@@ -2900,7 +2900,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 295
+                "darwin-arm64": 263
             }
         },
         "web.paced/sql.rows": {
@@ -2914,7 +2914,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 520
+                "darwin-arm64": 274
             }
         },
         "web.paced/subprocess.total": {
@@ -3068,7 +3068,7 @@
             "tolerance": 1600,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 31430
+                "darwin-arm64": 31185
             }
         },
         "web.paced/push.view.count": {
@@ -3096,7 +3096,7 @@
             "tolerance": 1600,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 29092
+                "darwin-arm64": 28847
             }
         },
         "web.paced/http.requests": {
@@ -3138,7 +3138,7 @@
             "tolerance": 10,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 51
+                "darwin-arm64": 48
             }
         },
         "web.paced/cdp.Nodes": {
@@ -3180,7 +3180,7 @@
             "tolerance": 1600,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 29961
+                "darwin-arm64": 29716
             }
         },
         "web.paced/web.view.apply.calls": {
@@ -3488,7 +3488,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 23
+                "darwin-arm64": 22
             }
         },
         "turn.paced/view.kernel.json.parse.chars": {
@@ -3502,7 +3502,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 12443
+                "darwin-arm64": 11902
             }
         },
         "web.open/view.kernel.sql.statements": {
@@ -3572,7 +3572,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 49
+                "darwin-arm64": 48
             }
         },
         "web.paced/view.kernel.sql.rows": {
@@ -3600,7 +3600,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 29
+                "darwin-arm64": 24
             }
         },
         "web.paced/view.kernel.json.parse.chars": {
@@ -3614,7 +3614,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 15689
+                "darwin-arm64": 12984
             }
         },
         "projection.large.open/view.kernel.sql.statements": {
@@ -3712,7 +3712,7 @@
             "tolerance": 16,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 104
+                "darwin-arm64": 88
             }
         },
         "projection.large.paced/view.kernel.json.parse.chars": {
@@ -3726,7 +3726,7 @@
             "tolerance": 8656,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 56264
+                "darwin-arm64": 47608
             }
         },
         "session.open/view.kernel.sql.heads": {
@@ -3922,7 +3922,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 15
+                "darwin-arm64": 11
             }
         },
         "turn.paced/view.kernel.sql.resume": {
@@ -4062,7 +4062,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 19
+                "darwin-arm64": 12
             }
         },
         "web.paced/view.kernel.sql.resume": {
@@ -4202,7 +4202,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 68
+                "darwin-arm64": 44
             }
         },
         "projection.large.paced/view.kernel.sql.resume": {
@@ -4286,7 +4286,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 56
+                "darwin-arm64": 0
             }
         },
         "startup.restart/json.parse.journalHistory.chars": {
@@ -4300,7 +4300,7 @@
             "tolerance": 1,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 135546
+                "darwin-arm64": 0
             }
         },
         "startup.restart/json.parse.journalThinking.calls": {
@@ -4664,7 +4664,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 114
+                "darwin-arm64": 83
             }
         },
         "session.open/json.parse.durableStorage.calls": {
@@ -5098,7 +5098,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 2
+                "darwin-arm64": 1
             }
         },
         "turn.cold/json.parse.other.chars": {
@@ -5112,7 +5112,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 92
+                "darwin-arm64": 2
             }
         },
         "turn.warm/json.parse.durableStorage.calls": {
@@ -5322,7 +5322,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 1
+                "darwin-arm64": 0
             }
         },
         "turn.warm/json.parse.other.chars": {
@@ -5336,7 +5336,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 90
+                "darwin-arm64": 0
             }
         },
         "turn.paced/json.parse.durableStorage.calls": {
@@ -5462,7 +5462,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 73
+                "darwin-arm64": 19
             }
         },
         "turn.paced/json.parse.journalSegments.chars": {
@@ -5476,7 +5476,7 @@
             "tolerance": 18,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 435835
+                "darwin-arm64": 113831
             }
         },
         "turn.paced/json.parse.nativeReadback.calls": {
@@ -5546,7 +5546,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 1
+                "darwin-arm64": 0
             }
         },
         "turn.paced/json.parse.other.chars": {
@@ -5560,7 +5560,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 90
+                "darwin-arm64": 0
             }
         },
         "git.changes/json.parse.durableStorage.calls": {
@@ -6666,7 +6666,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 2
+                "darwin-arm64": 1
             }
         },
         "commands.discover.cold/json.parse.other.chars": {
@@ -6680,7 +6680,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 92
+                "darwin-arm64": 2
             }
         },
         "commands.discover.warm/json.parse.durableStorage.calls": {
@@ -6890,7 +6890,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 1
+                "darwin-arm64": 0
             }
         },
         "commands.discover.warm/json.parse.other.chars": {
@@ -6904,7 +6904,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 90
+                "darwin-arm64": 0
             }
         },
         "turn.prepared/json.parse.durableStorage.calls": {
@@ -7114,7 +7114,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 1
+                "darwin-arm64": 0
             }
         },
         "turn.prepared/json.parse.other.chars": {
@@ -7128,7 +7128,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 90
+                "darwin-arm64": 0
             }
         },
         "projection.large.open/json.parse.durableStorage.calls": {
@@ -7254,7 +7254,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 528
+                "darwin-arm64": 132
             }
         },
         "projection.large.open/json.parse.journalSegments.chars": {
@@ -7268,7 +7268,7 @@
             "tolerance": 112,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 374860
+                "darwin-arm64": 93709
             }
         },
         "projection.large.open/json.parse.nativeReadback.calls": {
@@ -7394,7 +7394,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 152
+                "darwin-arm64": 141
             }
         },
         "projection.large.paced/json.parse.journal.chars": {
@@ -7408,7 +7408,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 87858
+                "darwin-arm64": 81907
             }
         },
         "projection.large.paced/json.parse.journalHistory.calls": {
@@ -7478,7 +7478,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 1198
+                "darwin-arm64": 267
             }
         },
         "projection.large.paced/json.parse.journalSegments.chars": {
@@ -7492,7 +7492,7 @@
             "tolerance": 288,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 851770
+                "darwin-arm64": 194335
             }
         },
         "projection.large.paced/json.parse.nativeReadback.calls": {
@@ -7562,7 +7562,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 1
+                "darwin-arm64": 0
             }
         },
         "projection.large.paced/json.parse.other.chars": {
@@ -7576,7 +7576,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 90
+                "darwin-arm64": 0
             }
         },
         "startup.restart/json.parse.nativeRpc.calls": {
@@ -8808,7 +8808,7 @@
             "tolerance": 26,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 100636
+                "darwin-arm64": 100635
             }
         },
         "projection.large.paced/json.parse.nativeGate.calls": {
@@ -10068,7 +10068,7 @@
             "tolerance": 12,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 100636
+                "darwin-arm64": 100635
             }
         },
         "projection.large.paced/json.parse.nativeJsonlSnapshot.calls": {
@@ -15374,7 +15374,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 114
+                "darwin-arm64": 83
             }
         },
         "image.original.again/json.parse.durableStorage.calls": {
@@ -15682,7 +15682,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 114
+                "darwin-arm64": 83
             }
         },
         "image.original.again/json.parse.nativeRpc.calls": {
@@ -15892,7 +15892,7 @@
             "tolerance": 34,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 114
+                "darwin-arm64": 83
             }
         },
         "image.original.again/http.requests": {
@@ -18062,7 +18062,7 @@
             "tolerance": 5,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 14
+                "darwin-arm64": 10
             }
         },
         "session.reclaim/sql.rows": {
@@ -18076,7 +18076,7 @@
             "tolerance": 19,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 57
+                "darwin-arm64": 24
             }
         },
         "session.reclaim/subprocess.total": {
@@ -18104,7 +18104,7 @@
             "tolerance": 2,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 35
+                "darwin-arm64": 5
             }
         },
         "session.reclaim/json.parse.chars": {
@@ -18118,7 +18118,7 @@
             "tolerance": 1087,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 129808
+                "darwin-arm64": 2705
             }
         },
         "session.reclaim/json.parse.durableStorage.calls": {
@@ -18244,7 +18244,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 30
+                "darwin-arm64": 0
             }
         },
         "session.reclaim/json.parse.journalSegments.chars": {
@@ -18258,7 +18258,7 @@
             "tolerance": 5,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 127103
+                "darwin-arm64": 0
             }
         },
         "session.reclaim/json.parse.nativeReadback.calls": {
@@ -18958,7 +18958,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 74
+                "darwin-arm64": 45
             }
         },
         "web.reopen/subprocess.total": {
@@ -19294,7 +19294,7 @@
             "tolerance": 5,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 9
+                "darwin-arm64": 7
             }
         },
         "web.reopen/cdp.RecalcStyleCount": {
@@ -19308,7 +19308,7 @@
             "tolerance": 5,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 17
+                "darwin-arm64": 15
             }
         },
         "web.reopen/cdp.Nodes": {
@@ -19476,7 +19476,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 16
+                "darwin-arm64": 13
             }
         },
         "session.open.long/sql.rows": {
@@ -19490,7 +19490,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 47
+                "darwin-arm64": 45
             }
         },
         "session.open.long/subprocess.total": {
@@ -21030,7 +21030,7 @@
             "tolerance": 18,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 57
+                "darwin-arm64": 56
             }
         },
         "web.open.long/subprocess.total": {
@@ -21366,7 +21366,7 @@
             "tolerance": 2,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 11
+                "darwin-arm64": 8
             }
         },
         "web.open.long/cdp.RecalcStyleCount": {
@@ -21380,7 +21380,7 @@
             "tolerance": 3,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 21
+                "darwin-arm64": 18
             }
         },
         "web.open.long/cdp.Nodes": {
@@ -22542,7 +22542,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 1
+                "darwin-arm64": 0
             }
         },
         "turn.prewarmed/json.parse.other.chars": {
@@ -22556,7 +22556,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 90
+                "darwin-arm64": 0
             }
         },
         "turn.prewarmed/json.parse.nativeRpc.calls": {
@@ -23480,7 +23480,7 @@
             "tolerance": 34,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 651
+                "darwin-arm64": 68
             }
         },
         "web.send.poll/sql.statements": {
@@ -23494,7 +23494,7 @@
             "tolerance": 19,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 354
+                "darwin-arm64": 324
             }
         },
         "web.send.poll/sql.rows": {
@@ -23508,7 +23508,7 @@
             "tolerance": 46,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 595
+                "darwin-arm64": 330
             }
         },
         "web.send.poll/subprocess.total": {
@@ -23592,7 +23592,7 @@
             "tolerance": 24,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 240
+                "darwin-arm64": 156
             }
         },
         "web.send.poll/view.fields.stringify.chars": {
@@ -23606,7 +23606,7 @@
             "tolerance": 1382,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 13820
+                "darwin-arm64": 8294
             }
         },
         "web.send.poll/view.live.project.calls": {
@@ -23662,7 +23662,7 @@
             "tolerance": 10,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 98
+                "darwin-arm64": 96
             }
         },
         "web.send.poll/view.kernel.sql.heads": {
@@ -23718,7 +23718,7 @@
             "tolerance": 4,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 38
+                "darwin-arm64": 24
             }
         },
         "web.send.poll/view.kernel.sql.resume": {
@@ -23760,7 +23760,7 @@
             "tolerance": 6,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 58
+                "darwin-arm64": 48
             }
         },
         "web.send.poll/view.kernel.json.parse.chars": {
@@ -23774,7 +23774,7 @@
             "tolerance": 3246,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 31378
+                "darwin-arm64": 25968
             }
         },
         "web.send.poll/push.events": {
@@ -24012,7 +24012,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 563
+                "darwin-arm64": 341
             }
         },
         "web.send.stream/subprocess.total": {
@@ -24096,7 +24096,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 216
+                "darwin-arm64": 169
             }
         },
         "web.send.stream/view.fields.stringify.chars": {
@@ -24110,7 +24110,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 13266
+                "darwin-arm64": 9587
             }
         },
         "web.send.stream/view.live.project.calls": {
@@ -24222,7 +24222,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 34
+                "darwin-arm64": 26
             }
         },
         "web.send.stream/view.kernel.sql.resume": {
@@ -24306,7 +24306,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 93633
+                "darwin-arm64": 93567
             }
         },
         "web.send.stream/push.view.count": {
@@ -24334,7 +24334,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 79839
+                "darwin-arm64": 79749
             }
         },
         "web.send.stream/http.requests": {
@@ -24530,7 +24530,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 3
+                "darwin-arm64": 0
             }
         },
         "session.open.native-long/json.parse.journalSegments.calls": {
@@ -24544,7 +24544,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 1800
+                "darwin-arm64": 0
             }
         },
         "session.open.native-long/json.parse.journalSegments.chars": {
@@ -24558,7 +24558,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 2370165
+                "darwin-arm64": 0
             }
         },
         "assets.first/http.requests": {
@@ -24586,7 +24586,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 1142870
+                "darwin-arm64": 408479
             }
         },
         "assets.validated/http.requests": {
@@ -24614,7 +24614,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 1142870
+                "darwin-arm64": 0
             }
         },
         "model.switch.cold/native.rpc.notify.records": {
@@ -24642,7 +24642,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 1073
+                "darwin-arm64": 45
             }
         },
         "model.switch.cold/fs.read.bytes": {
@@ -24656,7 +24656,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 4397326
+                "darwin-arm64": 297234
             }
         },
         "model.switch.cold/sql.statements": {
@@ -24712,7 +24712,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 103
+                "darwin-arm64": 102
             }
         },
         "model.switch.cold/json.parse.chars": {
@@ -24726,7 +24726,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 323101
+                "darwin-arm64": 319460
             }
         },
         "model.switch.cold/json.parse.durableStorage.calls": {
@@ -25020,7 +25020,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 3
+                "darwin-arm64": 2
             }
         },
         "model.switch.cold/json.parse.other.chars": {
@@ -25034,7 +25034,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 4164
+                "darwin-arm64": 217
             }
         },
         "model.switch.cold/json.parse.nativeRpc.calls": {
@@ -25286,7 +25286,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 48
+                "darwin-arm64": 23
             }
         },
         "model.switch.warm/fs.read.bytes": {
@@ -25300,7 +25300,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 298056
+                "darwin-arm64": 148720
             }
         },
         "model.switch.warm/sql.statements": {
@@ -25314,7 +25314,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 70
+                "darwin-arm64": 67
             }
         },
         "model.switch.warm/sql.rows": {
@@ -25328,7 +25328,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 39
+                "darwin-arm64": 36
             }
         },
         "model.switch.warm/subprocess.total": {
@@ -25342,7 +25342,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 1
+                "darwin-arm64": 0
             }
         },
         "model.switch.warm/json.parse.calls": {
@@ -25356,7 +25356,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 107
+                "darwin-arm64": 59
             }
         },
         "model.switch.warm/json.parse.chars": {
@@ -25370,7 +25370,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 320301
+                "darwin-arm64": 125255
             }
         },
         "model.switch.warm/json.parse.durableStorage.calls": {
@@ -25468,7 +25468,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 1
+                "darwin-arm64": 0
             }
         },
         "model.switch.warm/json.parse.journalThinking.chars": {
@@ -25482,7 +25482,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 533
+                "darwin-arm64": 0
             }
         },
         "model.switch.warm/json.parse.journalSegments.calls": {
@@ -25524,7 +25524,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 19
+                "darwin-arm64": 12
             }
         },
         "model.switch.warm/json.parse.nativeReadback.chars": {
@@ -25538,7 +25538,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 13169
+                "darwin-arm64": 11363
             }
         },
         "model.switch.warm/json.parse.nativePin.calls": {
@@ -25552,7 +25552,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 18
+                "darwin-arm64": 9
             }
         },
         "model.switch.warm/json.parse.nativePin.chars": {
@@ -25566,7 +25566,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 38010
+                "darwin-arm64": 19005
             }
         },
         "model.switch.warm/json.parse.nativeResolver.calls": {
@@ -25580,7 +25580,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 39
+                "darwin-arm64": 13
             }
         },
         "model.switch.warm/json.parse.nativeResolver.chars": {
@@ -25594,7 +25594,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 252027
+                "darwin-arm64": 84009
             }
         },
         "model.switch.warm/json.parse.nativeSettings.calls": {
@@ -25608,7 +25608,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 6
+                "darwin-arm64": 2
             }
         },
         "model.switch.warm/json.parse.nativeSettings.chars": {
@@ -25622,7 +25622,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 5862
+                "darwin-arm64": 180
             }
         },
         "model.switch.warm/json.parse.http.calls": {
@@ -25664,7 +25664,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 2
+                "darwin-arm64": 1
             }
         },
         "model.switch.warm/json.parse.other.chars": {
@@ -25678,7 +25678,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 217
+                "darwin-arm64": 215
             }
         },
         "model.switch.warm/json.parse.nativeRpc.calls": {
@@ -25692,7 +25692,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 19
+                "darwin-arm64": 12
             }
         },
         "model.switch.warm/json.parse.nativeRpc.chars": {
@@ -25706,7 +25706,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 13169
+                "darwin-arm64": 11363
             }
         },
         "model.switch.warm/json.parse.nativeRpcRecord.calls": {
@@ -25720,7 +25720,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 17
+                "darwin-arm64": 10
             }
         },
         "model.switch.warm/json.parse.nativeRpcRecord.chars": {
@@ -25734,7 +25734,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 12987
+                "darwin-arm64": 11183
             }
         },
         "model.switch.warm/json.parse.nativeRpcNotify.calls": {
@@ -25762,7 +25762,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 182
+                "darwin-arm64": 180
             }
         },
         "model.switch.warm/json.parse.nativeJsonl.calls": {
@@ -25888,7 +25888,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 11866
+                "darwin-arm64": 10931
             }
         },
         "model.switch.warm/subprocess.rotom": {
@@ -25902,7 +25902,7 @@
             "tolerance": 0,
             "ceiling": null,
             "baselines": {
-                "darwin-arm64": 1
+                "darwin-arm64": 0
             }
         },
         "model.switch.next-operation/native.rpc.notify.records": {

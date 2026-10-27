@@ -1,5 +1,8 @@
 # Same-account native model switching
 
+Follow-up: [2026-10-27 full verification](2026-10-27-model-switch-verification.md) closes the image-fixture and ledger
+blockers recorded below. It also adds native browser verification; this file preserves the original measurements.
+
 ## Question and authority
 
 The model picker waits seconds for `POST configure`. Can an already-ready, idle native session switch in under
