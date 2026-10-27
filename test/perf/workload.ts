@@ -44,6 +44,9 @@ export const WORKLOAD = {
  */
 export const SPLIT_FIRST_OUTPUT_MS = 1000;
 
+/** Chromium response latency and per-direction throughput for new send-network scenarios, not a physical RTT. */
+export const SEND_NETWORK = { latencyMs: 150, bytesPerSecond: 500_000 } as const;
+
 const seeded = `kernel mode; a session of ${WORKLOAD.seededTurns} turns, ${WORKLOAD.answerChars}-char answers streamed in ${WORKLOAD.streamChunks} chunks`;
 const imageHistory = `kernel mode; separate Durable mirror of ${WORKLOAD.imageEntries} native user messages, each with ${WORKLOAD.answerChars} text chars and one distinct ${WORKLOAD.imageWidth}x${WORKLOAD.imageHeight} RGB PNG (level-zero deflate); appended after all established scenarios; authenticated loopback GETs, exact binary readback, no browser cache, no native inference`;
 
@@ -91,6 +94,8 @@ export const SCENARIOS: Record<string, string> = {
     "journal.large": `after all other scenarios, a separate RotomJournal with ${WORKLOAD.journalConversations} conversations × ${WORKLOAD.journalAttempts} attempts × ${WORKLOAD.journalEntriesPerAttempt} entries of about ${WORKLOAD.journalEntryChars} characters; measure an entries suffix, segmentEntries and credits`,
     "assets.first": `${WORKLOAD.staticAssetBundle}; request each asset with Accept-Encoding: gzip and retain its decoded body digest and ETag; raw node:http body bytes and completed request count are transport observations`,
     "assets.validated": `${WORKLOAD.staticAssetBundle}; request each asset again with If-None-Match when the first response supplied an ETag; accept matching empty 304 or decoded-equal full 200; raw node:http body bytes and completed request count are transport observations`,
+    "web.send.poll.network": `${seeded}; after every established scenario, the same phased send from Chromium on a non-loopback name to the History session (now ${WORKLOAD.seededTurns + 3} turns), using long polling; CDP-emulated ${SEND_NETWORK.latencyMs} ms response latency and ${SEND_NETWORK.bytesPerSecond} bytes/s each direction applied before navigation; a paired no-store HTTP control must add at least 80% of the configured latency before the unmeasured warm/ready setup; ${SPLIT_FIRST_OUTPUT_MS} ms model first-output pause and paced answer unchanged; one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not physical RTT or per-SSE-chunk propagation latency`,
+    "web.send.stream.network": `${seeded}; after web.send.poll.network, the same phased send to that history (now ${WORKLOAD.seededTurns + 4} turns) with a fresh Chromium event-stream connection, the same CDP profile and paired HTTP control, and one unthrottled Node stream watcher; count Enter through settled and quiet; synthetic profile, not production network`,
 };
 
 export type Layer = "storage" | "process" | "cpu" | "push" | "http" | "web";
@@ -454,6 +459,26 @@ const imageCounters = [
     "image.decode.bytes",
 ];
 
+const sendCounters = [
+    "sql.statements",
+    "sql.rows",
+    "subprocess.total",
+    "subprocess.rotom",
+    ...projection,
+    ...pushes,
+    "http.requests",
+    "cdp.LayoutCount",
+    "cdp.RecalcStyleCount",
+    "cdp.Nodes",
+    "web.event.parse.calls",
+    "web.event.parse.chars",
+    "web.view.apply.calls",
+    "web.view.base.entry.copies",
+    "web.view.delta.entries",
+    "web.view.prune.checks",
+    "web.view.order.ids",
+];
+
 /** The counters each scenario reports. */
 export const REPORTED: Record<string, string[]> = {
     "startup.restart": [...common],
@@ -578,44 +603,10 @@ export const REPORTED: Record<string, string[]> = {
         "web.view.order.ids",
     ],
     // As web.paced, and no native start: the send goes to the process the focused message box warmed.
-    "web.send.poll": [
-        "sql.statements",
-        "sql.rows",
-        "subprocess.total",
-        "subprocess.rotom",
-        ...projection,
-        ...pushes,
-        "http.requests",
-        "cdp.LayoutCount",
-        "cdp.RecalcStyleCount",
-        "cdp.Nodes",
-        "web.event.parse.calls",
-        "web.event.parse.chars",
-        "web.view.apply.calls",
-        "web.view.base.entry.copies",
-        "web.view.delta.entries",
-        "web.view.prune.checks",
-        "web.view.order.ids",
-    ],
-    "web.send.stream": [
-        "sql.statements",
-        "sql.rows",
-        "subprocess.total",
-        "subprocess.rotom",
-        ...projection,
-        ...pushes,
-        "http.requests",
-        "cdp.LayoutCount",
-        "cdp.RecalcStyleCount",
-        "cdp.Nodes",
-        "web.event.parse.calls",
-        "web.event.parse.chars",
-        "web.view.apply.calls",
-        "web.view.base.entry.copies",
-        "web.view.delta.entries",
-        "web.view.prune.checks",
-        "web.view.order.ids",
-    ],
+    "web.send.poll": sendCounters,
+    "web.send.stream": sendCounters,
+    "web.send.poll.network": sendCounters,
+    "web.send.stream.network": sendCounters,
     "journal.large": ["sql.statements", "sql.rows"],
     "session.open.native-long": [
         "roomInfo.segmentEntries.calls",

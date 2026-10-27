@@ -23,6 +23,7 @@ import {
     type WebTimingSignal,
 } from "../../src/server/perf-channels.ts";
 import { raw, since, snapshot, type Counts } from "./counters.ts";
+import { SEND_NETWORK } from "./workload.ts";
 
 /** Resolved to loopback inside Chromium only. Not `localhost` or `127.x`, which the app treats as local. */
 const REMOTE_HOST = "perf-remote.test";
@@ -295,6 +296,8 @@ export async function measureSend(options: {
     done: string;
     quiet: () => Promise<void>;
     profile: string;
+    /** New network scenarios only; established workloads keep their original transport conditions. */
+    network?: boolean;
 }): Promise<
     { ms: number; counts: Counts; extra: Record<string, number> } | { unavailable: string }
 > {
@@ -306,8 +309,9 @@ export async function measureSend(options: {
 
     const port = new URL(options.base).port;
     const origin = `http://${REMOTE_HOST}:${port}`;
-    const user = `SPLIT-USER-${options.transport}`;
-    const reply = `SPLIT-REPLY-${options.transport}`;
+    const marker = `${options.transport}${options.network ? "network" : ""}`;
+    const user = `SPLIT-USER-${marker}`;
+    const reply = `SPLIT-REPLY-${marker}`;
 
     mkdirSync(options.profile, { recursive: true });
     const chromium = await Chromium.launch(executable, options.profile, [
@@ -378,6 +382,49 @@ export async function measureSend(options: {
         const tab = await page();
 
         await cdp.send("Performance.enable", {}, tab.sessionId);
+        let networkControl:
+            { networkUnthrottledMs: number; networkThrottledMs: number } | undefined;
+
+        if (options.network) {
+            await cdp.send("Network.enable", {}, tab.sessionId);
+            // Calibrate outside the send window, before opening either transport. This does not claim a physical RTT.
+            await tab.navigate(`${origin}/api/theme`);
+            const probe = async () =>
+                Number(
+                    await evaluate(
+                        `(async () => {
+                            const started = performance.now();
+                            const response = await fetch("/api/theme", {cache: "no-store"});
+                            if (response.status !== 200) {
+                                throw new Error("network control refused");
+                            }
+                            await response.arrayBuffer();
+                            return performance.now() - started;
+                        })()`,
+                        tab.sessionId,
+                    ),
+                );
+            const networkUnthrottledMs = await probe();
+
+            await cdp.send(
+                "Network.emulateNetworkConditions",
+                {
+                    offline: false,
+                    latency: SEND_NETWORK.latencyMs,
+                    downloadThroughput: SEND_NETWORK.bytesPerSecond,
+                    uploadThroughput: SEND_NETWORK.bytesPerSecond,
+                },
+                tab.sessionId,
+            );
+            const networkThrottledMs = await probe();
+
+            assert.ok(
+                networkThrottledMs - networkUnthrottledMs >= SEND_NETWORK.latencyMs * 0.8,
+                `network control must observe the injected response delay: ${networkUnthrottledMs} → ${networkThrottledMs} ms`,
+            );
+            networkControl = { networkUnthrottledMs, networkThrottledMs };
+        }
+
         await cdp.send(
             "Page.addScriptToEvaluateOnNewDocument",
             { source: pageScript(options.transport) },
@@ -528,6 +575,7 @@ export async function measureSend(options: {
         const admitted = run.at - run.ms;
         const dispatched = admitted + run.prompt.dispatchMs;
         const extra = {
+            ...networkControl,
             submitSentMs: fromKey(phases.submitSent),
             submitAnsweredMs: fromKey(phases.submitAnswered),
             runAdmittedMs: server(admitted),

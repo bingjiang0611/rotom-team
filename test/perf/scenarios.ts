@@ -1180,6 +1180,29 @@ const staticAssets = createStaticAssetsProbe(base);
 await scenario("assets.first", () => staticAssets.first());
 await scenario("assets.validated", () => staticAssets.validated());
 
+// New network profiles come last so they cannot alter any established scenario's history or counters.
+for (const [index, transport] of (["poll", "stream"] as const).entries()) {
+    const turn = WORKLOAD.seededTurns + 4 + index;
+    const sent = await measureSend({
+        base,
+        ownerToken: app.config.ownerToken,
+        token,
+        sessionId: history,
+        transport,
+        network: true,
+        ready: `END-OF-ANSWER-${turn - 1}`,
+        done: `END-OF-ANSWER-${turn}`,
+        quiet,
+        profile: join(root, `perf-browser-send-${transport}-network`),
+    });
+
+    results.push(
+        "unavailable" in sent
+            ? { scenario: `web.send.${transport}.network`, unavailable: sent.unavailable }
+            : { scenario: `web.send.${transport}.network`, ...sent },
+    );
+}
+
 writeFileSync(out, raw.stringify({ workload: WORKLOAD, results }, null, 2));
 server.closeAllConnections();
 server.close();
