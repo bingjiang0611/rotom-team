@@ -1,0 +1,536 @@
+/** One non-replayable execution: admission, observation, settlement and unknown-safe closure. */
+import { createServer } from "node:http";
+import { randomUUID } from "node:crypto";
+import { existsSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import type { ImageContent } from "@earendil-works/pi-ai";
+import { TeamResourcePolicyError } from "../rotom-resource-policy.ts";
+import {
+    memberConfigurationSnapshot,
+    memberConfigurationChanges,
+    teamResourceRevision,
+} from "../rotom-resources.ts";
+import {
+    KernelRequestConflict,
+    type KernelEntry,
+    type KernelReceipt,
+    type KernelFailure,
+    type KernelRebind,
+} from "../rotom-journal.ts";
+import { verifyRotomKernel, nativeBuiltinCommands } from "../rotom-kernel.ts";
+import { RpcFailure, type RotomRpc, type RpcRecord } from "../rotom-rpc.ts";
+import { NativeTail, readNativeEntries, readNativeSnapshot } from "./native-tail.ts";
+import type { Running, RunHooks, PersistentKernel, ActiveAttempt, Owned } from "./contracts.ts";
+import type { NativeProcesses } from "./processes.ts";
+import {
+    nativePromptIdentity,
+    isTeamPrompt,
+    nativeCommandName,
+    isKnownNativeCommand,
+    nativeCommandArgs,
+    timePromptEvent,
+    assertNotStopped,
+} from "./native-prompt.ts";
+import { dispatchNative, finishNativeGoal } from "./dispatch.ts";
+
+export async function execute(
+    processes: NativeProcesses,
+    sessionId: string,
+    requestId: string,
+    prompt: string,
+    operation: "prompt" | "compact" | "discover" | "command",
+    running: Running,
+    hooks: RunHooks = {},
+    images: ImageContent[] = [],
+    rebind?: KernelRebind,
+): Promise<KernelReceipt> {
+    const identity = nativePromptIdentity(prompt, images);
+    const admitted = await processes.journal.session(sessionId);
+    const binding = Object.freeze(rebind?.binding ?? admitted.binding);
+
+    // Old receipts are returned, never fed to a new subprocess. Even unknown is a durable result of admission.
+    await processes.authorize(binding, "admission", sessionId);
+    const previous = await processes.journal.existing(sessionId, requestId, identity, operation);
+
+    if (previous) {
+        return previous;
+    }
+
+    assertNotStopped(running);
+
+    if (["prompt", "command"].includes(operation) && !isTeamPrompt(prompt)) {
+        throw new Error(
+            "Kernel execution requires ordinary prompt text; product commands are not team submissions",
+        );
+    }
+
+    // Authorization awaited user/account state. A concurrent completed handoff must not
+    // reserve the new payer while launching this previously admitted binding.
+    if (
+        (await processes.journal.session(sessionId)).segmentId !== admitted.segmentId ||
+        (rebind && rebind.expectedHead !== admitted.segmentId)
+    ) {
+        throw new KernelRequestConflict("Conversation head changed during admission");
+    }
+
+    if (verifyRotomKernel().version !== binding.kernelVersion) {
+        throw new Error("Kernel version differs from the immutable session binding");
+    }
+
+    const prepared = processes.prepare?.(binding, sessionId);
+
+    if (rebind) {
+        // The retained process is gated to the previous model; the same session file restarts on the new one.
+        await processes.retire(admitted.segmentId);
+    }
+
+    const receipt = await processes.journal.reserve(
+        sessionId,
+        requestId,
+        identity,
+        operation,
+        rebind,
+        admitted.segmentId,
+        admitted.binding,
+    );
+
+    running.attemptId = receipt.id;
+
+    await hooks.onReserved?.(receipt);
+    // Admission is asynchronous: an earlier request may have created the native file while it was pending.
+    const session = await processes.journal.session(sessionId);
+
+    const revision = teamResourceRevision(join(processes.data, "team-agent"), binding.workspace);
+
+    // One process per session: a warm start on its way is waited for, not started twice.
+    const warming = processes.warming.get(admitted.segmentId);
+
+    if (warming) {
+        await warming.done;
+    }
+
+    let persistent = processes.kernels.get(admitted.segmentId);
+
+    if (running.timing) {
+        running.timing.process = persistent ? "reused" : "started";
+    }
+
+    let kernel: RotomRpc | undefined = persistent?.kernel;
+    let gate: ReturnType<typeof createServer> | undefined = persistent?.gate;
+    let gateFile: string | undefined = persistent?.gateFile;
+    let contextFile: string | undefined = persistent?.contextFile;
+    let closed = false;
+    let failureStatus: "unknown" | "rejected" = "unknown";
+    let progressFailure: unknown;
+    let progressQueue = Promise.resolve();
+    let hookQueue = Promise.resolve();
+    let detachHook: (() => void) | undefined;
+    let detachProgress: (() => void) | undefined;
+
+    const observeHook = (result: void | Promise<unknown>) => {
+        hookQueue = Promise.all([hookQueue, result])
+            .then(() => undefined)
+            .catch((error) => {
+                progressFailure = error;
+            });
+    };
+
+    const activeAttempt: ActiveAttempt = {
+        receipt,
+        operation,
+        running,
+        inferenceAdmitted: false,
+        usageWrites: Promise.resolve(),
+    };
+
+    const gateState = persistent?.gateState ?? { active: activeAttempt };
+
+    gateState.active = activeAttempt;
+
+    let state: PersistentKernel["state"] | undefined = persistent?.state;
+
+    try {
+        if (persistent) {
+            // Started before (by an earlier request, or warmed for this member): no longer waiting unused.
+            processes.used(admitted.segmentId);
+        } else {
+            const owned: Owned = {};
+
+            try {
+                persistent = await processes.launch(
+                    binding,
+                    sessionId,
+                    session.sessionFile,
+                    prepared,
+                    gateState,
+                    receipt.id,
+                    revision,
+                    owned,
+                    {
+                        beforeStart: () => assertNotStopped(running),
+                        started: (started) => (running.kernel = started),
+                    },
+                );
+            } finally {
+                ({ kernel, gate, gateFile, contextFile } = owned);
+            }
+
+            state = persistent.state;
+            processes.kernels.set(admitted.segmentId, persistent);
+        }
+
+        if (!persistent || !state || !kernel) {
+            throw new Error("Native process did not initialize");
+        }
+
+        const nativeState = state;
+
+        running.kernel = kernel;
+        await processes.journal.attach(receipt.id, state.sessionFile, state.sessionId, kernel.pid);
+        // Recheck after startup/catalog work, immediately before sending the user request.
+        await processes.authorize(binding, "admission", sessionId);
+
+        const tail = new NativeTail(state.sessionFile, state.sessionId, binding.workspace);
+
+        running.snapshot = () => readNativeSnapshot(kernel!, state!, binding.workspace, tail);
+
+        let extensionError: RpcRecord | undefined;
+        const detachExtensionErrors = kernel.onEvent((event) => {
+            if (event.type === "extension_error") {
+                extensionError = event;
+            }
+        });
+
+        const timing = running.timing;
+
+        if (timing) {
+            // Detached when the run ends (`#track`), even when it throws: the process may serve the next run.
+            timing.detach = kernel.onEvent((event) => timePromptEvent(timing, event));
+        }
+
+        if (hooks.onEvent) {
+            detachHook = kernel.onEvent((event) => observeHook(hooks.onEvent!(event)));
+            // Someone watches this run, so its dialogs (ask_user_question, permissions) can reach a person.
+            kernel.forwardDialogs();
+        }
+
+        // Message-level durability: each persisted message is journaled as it lands, so a restart loses at most
+        // the message in flight. The final snapshot below remains the authority for the outcome.
+        detachProgress = kernel.onEvent((event) => {
+            if (event.type === "thinking_level_changed") {
+                nativeState.thinkingLevel = String(event.level);
+                observeHook(hooks.onProgress?.());
+            }
+
+            if (
+                event.type !== "message_end" ||
+                !["prompt", "command"].includes(operation) ||
+                progressFailure !== undefined ||
+                !existsSync(nativeState.sessionFile)
+            ) {
+                return;
+            }
+
+            // Admit the whole write now, before a later tool event can enqueue a journal read.
+            const writing = processes.journal.progress(receipt.id, tail.read());
+
+            progressQueue = Promise.all([progressQueue, writing])
+                .then(async ([, count]) => {
+                    if (count > 0) {
+                        await hooks.onProgress?.();
+                    }
+                })
+                .catch((error) => {
+                    progressFailure = error;
+                });
+        });
+
+        if (running.aborted) {
+            throw new RpcFailure("rejected", "Stopped before prompt dispatch");
+        }
+
+        if (persistent.revision !== revision && nativeCommandName(prompt) !== "reload") {
+            // Shared settings edits used to apply on every startup. Reload the same process
+            // under the new receipt instead of silently retaining the old settings.
+            await kernel.command("/team-kernel-reload");
+            await kernel.barrier();
+
+            if (extensionError) {
+                throw new RpcFailure("unknown", "Native resource reload failed");
+            }
+        }
+
+        const catalog = (await kernel.request({ type: "get_commands" })) as {
+            commands?: Array<Record<string, unknown> & { name?: unknown }>;
+        };
+
+        await hooks.onCommands?.(catalog.commands ?? []);
+
+        const builtins = await nativeBuiltinCommands();
+
+        if (operation === "command") {
+            const name = nativeCommandName(prompt);
+            const dynamic = catalog.commands ?? [];
+
+            if (!isKnownNativeCommand(prompt, [...dynamic, ...builtins])) {
+                throw new RpcFailure("rejected", `Unknown native command: /${name ?? ""}`);
+            }
+
+            if (!builtins.some((command) => command.name === name)) {
+                const source = dynamic.find((command) => command.name === name)?.source;
+
+                if (source === "prompt" || source === "skill") {
+                    await processes.journal.classifyPromptExpansion(receipt.id);
+                    operation = "prompt";
+                    activeAttempt.operation = operation;
+                }
+
+                await hooks.onCommandAdmitted?.({
+                    name: name!,
+                    source,
+                    args: nativeCommandArgs(prompt),
+                });
+            }
+        }
+
+        const sessionName = hooks.sessionName?.();
+
+        if (
+            operation !== "discover" &&
+            sessionName &&
+            state.sessionName !== sessionName &&
+            nativeCommandName(prompt) !== "name"
+        ) {
+            await kernel.setSessionName(sessionName);
+        }
+
+        const resourceSnapshot = memberConfigurationSnapshot(
+            binding.home,
+            join(processes.data, "team-agent"),
+        );
+        const disposition = await dispatchNative({
+            journal: processes.journal,
+            receipt,
+            binding,
+            kernel,
+            operation,
+            prompt,
+            running,
+            hooks,
+            images,
+            rebind,
+            builtins,
+            getExtensionError: () => extensionError,
+        });
+
+        if (!running.aborted) {
+            await processes.journal.setPhase(receipt.id, "finalization");
+        }
+
+        await finishNativeGoal({
+            journal: processes.journal,
+            receipt,
+            operation,
+            running,
+            kernel,
+            hooks,
+            getExtensionError: () => extensionError,
+        });
+
+        if (operation === "command" && nativeCommandName(prompt) !== "reload") {
+            const changed = memberConfigurationChanges(
+                binding.home,
+                join(processes.data, "team-agent"),
+                resourceSnapshot,
+            );
+
+            if (changed.length) {
+                const message =
+                    "Team did not accept a change to member configuration. Edit the owner-managed shared profile instead. This attempt is unknown; do not replay it.";
+
+                await hooks.onEvent?.({
+                    type: "extension_ui_request",
+                    id: randomUUID(),
+                    method: "notify",
+                    message,
+                    notifyType: "warning",
+                });
+                await hooks.onNativeResult?.({
+                    configurationError: message,
+                    changedDerivedFiles: changed,
+                });
+
+                throw new Error(message);
+            }
+        }
+
+        // Finalization must not outrun a live thinking write or hide its unknown outcome.
+        await running.thinkingChange;
+
+        const finalState = (await kernel.request({ type: "get_state" })) as {
+            sessionId?: unknown;
+            sessionFile?: unknown;
+            sessionName?: unknown;
+            thinkingLevel: string;
+        };
+
+        if (
+            finalState.sessionId !== state.sessionId ||
+            finalState.sessionFile !== state.sessionFile
+        ) {
+            throw new RpcFailure(
+                "unknown",
+                "An extension changed native session identity outside the Team session adapter",
+            );
+        }
+
+        state.sessionName =
+            typeof finalState.sessionName === "string" ? finalState.sessionName : undefined;
+        state.thinkingLevel = finalState.thinkingLevel;
+
+        // Native delays JSONL creation until the first conversation. Preserve confirmed /name readback now,
+        // then restore it through set_session_name when the next native process starts.
+        if (nativeCommandName(prompt) === "name" && typeof finalState.sessionName === "string") {
+            await hooks.onSessionName?.(finalState.sessionName);
+        }
+
+        if (running.aborted) {
+            // Stop is sticky in the native transport. Never reuse a stopped process.
+            await processes.retire(admitted.segmentId);
+        }
+
+        detachExtensionErrors();
+        detachProgress();
+        detachHook?.();
+
+        await Promise.all([progressQueue, hookQueue]);
+
+        if (progressFailure !== undefined) {
+            throw progressFailure;
+        }
+
+        let entries: KernelEntry[];
+
+        if (disposition === "handled") {
+            // An extension-handled prompt may never create JSONL; its snapshot decides whether a binding exists.
+            entries =
+                !session.sessionFile && !existsSync(state.sessionFile)
+                    ? []
+                    : readNativeEntries(state.sessionFile, state.sessionId, binding.workspace);
+        } else {
+            entries = tail.read();
+
+            if (!tail.complete) {
+                throw new Error("Incomplete native session tail");
+            }
+        }
+
+        // Close gate admission, then drain every admitted usage ACK before settling the attempt.
+        gateState.active = undefined;
+        await activeAttempt.usageWrites;
+        const finished = await processes.journal.finish(receipt.id, disposition, entries);
+
+        persistent.revision = revision;
+        gateState.active = undefined;
+        closed = true;
+
+        await hooks.onProgress?.();
+
+        return finished;
+    } catch (error) {
+        // Team policy may reject before native startup. After startup only an explicit native rejection is known.
+        if (
+            error instanceof TeamResourcePolicyError &&
+            !kernel &&
+            !activeAttempt.inferenceAdmitted
+        ) {
+            await hooks.onEvent?.({
+                type: "extension_ui_request",
+                id: randomUUID(),
+                method: "notify",
+                notifyType: "error",
+                message:
+                    "Team blocked member agent customization. Use the shared profile or trusted project configuration.",
+            });
+            await hooks.onNativeResult?.({ resourcePolicyError: error.message });
+        }
+
+        failureStatus =
+            ((error instanceof TeamResourcePolicyError && !kernel) ||
+                (error instanceof RpcFailure && error.outcome === "rejected") ||
+                error instanceof KernelRequestConflict) &&
+            !activeAttempt.inferenceAdmitted
+                ? "rejected"
+                : "unknown";
+
+        if (failureStatus === "unknown") {
+            const message = error instanceof RpcFailure ? error.message : "";
+            let failure: KernelFailure = "native-error";
+
+            if (/^RPC record exceeds \d+ MiB$/.test(message)) {
+                failure = "rpc-record-limit";
+            } else if (message === "RPC acknowledgement deadline exceeded") {
+                failure = "rpc-timeout";
+            } else if (message === "kernel disconnected") {
+                failure = "rpc-disconnected";
+            }
+
+            await processes.journal.recordFailure(receipt.id, failure);
+        }
+    } finally {
+        gateState.active = undefined;
+        detachHook?.();
+        detachProgress?.();
+        await Promise.all([progressQueue, hookQueue]);
+
+        try {
+            await activeAttempt.usageWrites;
+        } catch {
+            failureStatus = "unknown";
+        }
+
+        if (progressFailure !== undefined) {
+            failureStatus = "unknown";
+        }
+
+        if (!closed) {
+            processes.kernels.delete(admitted.segmentId);
+            gate?.closeAllConnections();
+            await new Promise<void>((resolve) => gate?.close(() => resolve()) ?? resolve());
+
+            // Keep the active lease and account reservation until child close is observed. A close failure must not release the writer lock.
+            if (kernel) {
+                try {
+                    await kernel.close();
+                } catch (error) {
+                    running.closureUnknown = true;
+                    await processes.journal.fail(receipt.id, "unknown");
+
+                    throw error;
+                }
+            }
+
+            if (gateFile) {
+                rmSync(gateFile, { force: true });
+            }
+
+            if (contextFile) {
+                rmSync(contextFile, { force: true });
+            }
+        }
+    }
+
+    const attached = (await processes.journal.session(sessionId)).sessionFile;
+    const unmaterialized =
+        failureStatus === "rejected" &&
+        !session.sessionFile &&
+        attached !== undefined &&
+        !existsSync(attached);
+
+    return await processes.journal.fail(
+        receipt.id,
+        failureStatus,
+        unmaterialized,
+        rebind ? admitted.binding : undefined,
+    );
+}
