@@ -1,6 +1,6 @@
-// Phone notifications: this device subscribes to the server's pushes, and each person picks what they hear about.
-import { useEffect, useState } from "preact/hooks";
-import { api, attempt, closeSheet, notify, sessionUnread } from "./store.js";
+// Browser attention: tab status, home-screen badges, and each member's push notifications.
+import { useEffect, useMemo, useState } from "preact/hooks";
+import { api, attempt, closeSheet, notify, sessionFinishedUnread, sessionUnread } from "./store.js";
 import { html, Loader, Sheet, Switch } from "./ui.js";
 
 const supported =
@@ -53,6 +53,101 @@ export function updateBadge(state) {
 
     badged = count;
     (count === 0 ? navigator.clearAppBadge() : navigator.setAppBadge(count)).catch(() => {});
+}
+
+/** The tab summarizes unarchived sessions: answers first, then work, then unseen results. */
+const TAB_ICONS = {
+    idle: "/icon.svg",
+    answer: "/icon-answer.svg",
+    running: "/icon-running.svg",
+    finished: "/icon-finished.svg",
+};
+const TAB_ICON_BLINK_MS = 800;
+
+/** Keep the browser tab's attention marker in sync with this member's sessions. */
+export function useTabIcon(state) {
+    const tabStatus = useMemo(() => {
+        let running = false;
+        let finished = false;
+
+        for (const session of state.sessions) {
+            if (session.archived) {
+                continue;
+            }
+
+            // The open session's full view is fresher than its sidebar summary, including after an answer.
+            const current =
+                session.id === state.conversationId &&
+                state.view.conversation?.id === session.id &&
+                !state.view.checking;
+            const needsAnswer = current
+                ? state.view.kernel?.yours && state.view.kernel.dialogs?.length > 0
+                : session.needsAnswer;
+            const busy = current ? state.view.live?.busy : session.busy;
+
+            if (needsAnswer || session.waiting) {
+                return "answer";
+            }
+
+            running ||= Boolean(busy);
+            finished ||= !busy && sessionFinishedUnread(session);
+        }
+
+        return running ? "running" : finished ? "finished" : "idle";
+    }, [
+        state.sessions,
+        state.conversationId,
+        state.view.conversation?.id,
+        state.view.checking,
+        state.view.live?.busy,
+        state.view.kernel?.yours,
+        state.view.kernel?.dialogs,
+    ]);
+
+    // Browsers do not animate SVG favicons. Swap icons only for running work; attention stays still.
+    useEffect(() => {
+        const link = document.querySelector('link[rel="icon"]');
+
+        if (!link) {
+            return;
+        }
+
+        link.href = TAB_ICONS[tabStatus];
+
+        if (tabStatus !== "running") {
+            return;
+        }
+
+        const reduced = matchMedia("(prefers-reduced-motion: reduce)");
+        let timer;
+
+        const update = () => {
+            clearInterval(timer);
+            link.href = TAB_ICONS.running;
+
+            if (
+                state.appearance.motion === "reduced" ||
+                (state.appearance.motion === "auto" && reduced.matches)
+            ) {
+                return;
+            }
+
+            let dotted = true;
+
+            timer = setInterval(() => {
+                dotted = !dotted;
+                link.href = dotted ? TAB_ICONS.running : TAB_ICONS.idle;
+            }, TAB_ICON_BLINK_MS);
+        };
+
+        update();
+        reduced.addEventListener("change", update);
+
+        return () => {
+            clearInterval(timer);
+            reduced.removeEventListener("change", update);
+        };
+    }, [tabStatus, state.appearance.motion]);
 }
 
 function keyBytes(base64url) {
