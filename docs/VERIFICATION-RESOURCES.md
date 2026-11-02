@@ -91,8 +91,14 @@ and role settings. `npm run test:kernel` uses the actual pinned subagent tool ag
 list contains all five native roles on rotom 0.1.26 (`scout`, `worker`, `reviewer`, `delegate`, `oracle`). Its separate
 no-redispatch fixture explicitly disables recovery in that fixture's shared profile, not in production code.
 `node test/rotom-native-defaults-proof.ts` verifies actual Agent retry, provider retry options, automatic compaction,
-same-payer gate checks and persisted summary usage with synthetic loopback requests. Journal unit tests preserve
-unknown summary usage and require a terminal assistant response independently of automatic compaction.
+same-payer gate checks and persisted summary usage with synthetic loopback requests. It also checks an HTTP 400
+without replay, metadata persistence in both native JSONL and the parent journal, preserved error text, and exclusion
+of diagnostics from the next model request. `node --test test/rotom-inference-diagnostics.test.ts` checks metadata
+allowlisting/bounds, exact UTF-8 body size/digest, unconsumed responses, network errors, failed diagnostic writes and
+the actual pinned Codex SSE adapter with a synthetic fetch. `test/openai-chatgpt.test.ts` also checks the extracted
+request-option assembly: authorized auth precedence, callback composition, caller fetch and SIWC transform order.
+Journal unit tests preserve unknown summary usage and require a terminal assistant response independently of automatic
+compaction.
 This does not use real accounts. Independent reader enforcement is covered by the resource proofs above, not inferred from
 the default-role test. Actual child inference/usage, fd-3 owner lifetime and Stop remain covered by the Team kernel proof.
 The same proof checks named-skill metadata plus an actual child read of its file, user-memory routing for two members,

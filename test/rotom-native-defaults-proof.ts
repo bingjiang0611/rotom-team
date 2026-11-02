@@ -1,13 +1,15 @@
 /** Actual pinned native recovery with synthetic loopback inference only; no real accounts or desktop actions. */
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { once } from "node:events";
-import { mkdtempSync, mkdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { RotomExecutions } from "../src/server/rotom-executions.ts";
 import { verifyRotomKernel } from "../src/server/rotom-kernel.ts";
 import type { RpcRecord } from "../src/server/rotom-rpc.ts";
+import { INFERENCE_HTTP_FAILURE_ENTRY } from "../src/server/rotom-inference-diagnostics.ts";
 
 process.umask(0o077);
 const root = realpathSync(mkdtempSync(join(tmpdir(), "rotom-native-recovery-")));
@@ -22,6 +24,7 @@ for (const path of [join(home, ".pi/agent"), workspace, shared]) {
 let phase = "agent-retry";
 const requests = new Map<string, number>();
 const gates = new Map<string, number>();
+let failureBody: { bytes: number; sha256: string };
 const server = createServer(async (request, response) => {
     let body = "";
 
@@ -34,6 +37,25 @@ const server = createServer(async (request, response) => {
 
     requests.set(phase, count);
     assert.equal(input.model, "native-fixture");
+
+    if (phase === "http-failure") {
+        failureBody = {
+            bytes: Buffer.byteLength(body),
+            sha256: createHash("sha256").update(body).digest("hex"),
+        };
+        response.writeHead(400, {
+            "Content-Type": "application/json",
+            "x-request-id": "diagnostic-fixture-request-400",
+            "set-cookie": "PRIVATE_COOKIE",
+        });
+        response.end('{"detail":"Bad Request"}');
+
+        return;
+    }
+
+    if (phase === "http-recovery") {
+        assert.doesNotMatch(body, /team-inference-http-failure-v1|diagnostic-fixture-request-400/);
+    }
 
     if (
         (phase === "agent-retry" && count === 1) ||
@@ -159,6 +181,39 @@ try {
     );
     assert.ok(!events.get(phase)!.some((event) => event.type === "auto_retry_start"));
 
+    await run("http-failure");
+    assert.equal(requests.get(phase), 1, "HTTP 400 is not retried by diagnostics");
+    assert.equal(gates.get(phase), 1);
+    const failures = (await executions.journal.entries(phase)).filter(
+        ({ entry }) => entry.customType === INFERENCE_HTTP_FAILURE_ENTRY,
+    );
+
+    assert.equal(failures.length, 1, "failure metadata reaches the parent journal");
+    assert.equal(failures[0]!.entry.type, "custom", "not a model-visible message");
+    assert.deepEqual(failures[0]!.entry.data, {
+        version: 1,
+        provider: model.provider,
+        model: model.id,
+        status: 400,
+        requestIds: { "x-request-id": "diagnostic-fixture-request-400" },
+        requestBody: failureBody!,
+    });
+    const session = await executions.journal.session(phase);
+    const disk = readFileSync(session.sessionFile!, "utf8")
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line));
+
+    assert.equal(
+        disk.filter((entry) => entry.customType === INFERENCE_HTTP_FAILURE_ENTRY).length,
+        1,
+    );
+    assert.ok(disk.some((entry) => entry.message?.errorMessage?.includes("Bad Request")));
+    phase = "http-recovery";
+    await executions.run("http-failure", "recover", "Continue the synthetic test.");
+    assert.equal(requests.get(phase), 1, "stored diagnostics stay out of the next model request");
+    assert.equal(gates.get(phase), 1);
+
     // Smaller token settings are fixture-only; production uses the native defaults and model metadata.
     const compact = await run("compaction", {
         compaction: { reserveTokens: 1024, keepRecentTokens: 1 },
@@ -199,6 +254,7 @@ try {
                 automaticCompactionUsage: usage[1]!.raw,
                 samePayer: true,
                 knownReceiptNoReplay: true,
+                httpFailureMetadata: { persisted: true, excludedFromContext: true, noReplay: true },
             },
             null,
             2,

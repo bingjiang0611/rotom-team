@@ -155,6 +155,21 @@ recursively hash dependency/resource trees; use `/reload` for deeper file change
 and reconnect MCP. Each execution stays on its admitted payer/model; only an explicit idle model-selection receipt
 can rotate the same-account process's model authorization. Neither project defaults nor child roles can change it.
 
+## Inference HTTP failure diagnostics
+
+For native OpenAI-compatible SSE requests, HTTP responses with status 400 or above append one private
+`team-inference-http-failure-v1` custom entry to the native session and execution journal. It records provider/model,
+HTTP status, bounded request IDs from only `x-request-id`, `request-id` and `cf-ray`, and the request-body byte count
+and SHA-256. IDs must contain only ASCII letters, digits, `.`, `_`, `:`, or `-`, with at most 128 characters.
+No URL, prompt, body text, credentials, other headers or response body is copied into the diagnostic entry.
+
+The body measurement covers the string or byte array actually passed to fetch, after payload transforms; Codex may
+send zstd-compressed bytes. It excludes headers/framing. Request objects and stream bodies are not consumed to measure
+them: their `requestBody` is `null` (unavailable). Entries stay out of model context and public-history copies.
+Successful HTTP responses, network exceptions without a response, HTTP-200 stream failures, Qoder and WebSocket
+requests are outside this diagnostic. Existing retry and authorization rules are unchanged; recording never dispatches
+a new request. A failed diagnostic write emits only a fixed warning and preserves the original provider response.
+
 ## Backup and restore of installed packages
 
 `node scripts/data.mjs backup` records `team-agent/npm/node_modules` in `excludedCaches`. This is an explicitly rebuildable

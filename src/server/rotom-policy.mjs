@@ -1,8 +1,9 @@
 /** Team-owned policy extension for the pinned product; observer-hook exceptions are not dispatch authorization. */
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { chatGPTPayload } from "./openai-chatgpt-payload.ts";
 import { qoderRequestProvider } from "./rotom-qoder.mjs";
+import { INFERENCE_HTTP_FAILURE_ENTRY } from "./rotom-inference-diagnostics.ts";
+import { inferenceRequestOptions } from "./rotom-inference-options.ts";
 import { bindSessionAccount } from "../../runtime/rotom/node_modules/@bingjiang0611/rotom/extensions/qoder/session-policy.mjs";
 import { CREDIT_ENTRY } from "../../runtime/rotom/node_modules/@bingjiang0611/rotom/extensions/qoder/credits.mjs";
 import { SnapshotBuilder } from "../../runtime/rotom/node_modules/@bingjiang0611/rotom/extensions/third-party/node_modules/pi-context-view/src/capture/builder.ts";
@@ -378,31 +379,19 @@ export default function (pi) {
                         }
 
                         const target = auth?.baseUrl ? { ...model, baseUrl: auth.baseUrl } : model;
-                        const siwc =
-                            target.provider === "openai" &&
-                            target.baseUrl === "https://api.openai.com/v1" &&
-                            auth?.apiKey &&
-                            !auth.apiKey.startsWith("sk-");
 
-                        return native[method](target, context, {
-                            ...options,
-                            ...(auth
-                                ? {
-                                      apiKey: auth.apiKey,
-                                      headers: { ...options.headers, ...auth.headers },
-                                  }
-                                : {}),
-                            ...(siwc
-                                ? {
-                                      onPayload: async (payload, model) =>
-                                          chatGPTPayload(
-                                              (await options.onPayload?.(payload, model)) ??
-                                                  payload,
-                                          ),
-                                  }
-                                : {}),
-                            transport: "sse",
-                        });
+                        return native[method](
+                            target,
+                            context,
+                            inferenceRequestOptions(target, auth, options, (failure) =>
+                                pi.appendEntry(INFERENCE_HTTP_FAILURE_ENTRY, {
+                                    version: 1,
+                                    provider: model.provider,
+                                    model: model.id,
+                                    ...failure,
+                                }),
+                            ),
+                        );
                     });
             const oauth = native.auth?.oauth;
 

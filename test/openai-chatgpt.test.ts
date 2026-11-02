@@ -6,6 +6,7 @@ import type {
     RefreshModelsContext,
 } from "@earendil-works/pi-ai";
 import { getSupportedThinkingLevels } from "@earendil-works/pi-ai";
+import { inferenceRequestOptions } from "../src/server/rotom-inference-options.ts";
 import {
     chatGPTPayload,
     chatGPTProvider,
@@ -151,4 +152,62 @@ test("SIWC groups native function tools without losing schemas and declines unsu
     assert.equal(merged.tools.length, 1);
     assert.equal(merged.tools[0]!.tools.length, 2);
     assert.throws(() => chatGPTPayload({ tools: [{ type: "tool_search" }] }), /does not support/);
+});
+
+test("authorized request options preserve auth precedence, callbacks and SIWC transform order", async () => {
+    const model = parseChatGPTCatalog({ models: [row("fixture")] })[0]!;
+    const payload = { tools: [{ type: "function", name: "before" }] };
+    const replacement = { tools: [{ type: "function", name: "after" }] };
+
+    const onResponse = async () => {};
+
+    let requests = 0;
+    const options = inferenceRequestOptions(
+        model,
+        { apiKey: "synthetic-oauth", headers: { Authorization: "fixed-payer" } },
+        {
+            apiKey: "caller-key",
+            headers: { Authorization: "caller", "x-caller": "preserved" },
+            maxRetries: 0,
+            onPayload: async (value) => {
+                assert.equal(value, payload);
+
+                return replacement;
+            },
+            onResponse,
+            fetch: async () => {
+                requests++;
+
+                return new Response("ok");
+            },
+        },
+        () => assert.fail("success must not record a failure"),
+    );
+
+    assert.equal(options.apiKey, "synthetic-oauth");
+    assert.deepEqual(options.headers, { Authorization: "fixed-payer", "x-caller": "preserved" });
+    assert.equal(options.onResponse, onResponse);
+    assert.equal(options.maxRetries, 0);
+    assert.equal(options.transport, "sse");
+    assert.deepEqual(await options.onPayload!(payload, model), chatGPTPayload(replacement));
+    assert.equal(await (await options.fetch!("https://provider.invalid")).text(), "ok");
+    assert.equal(requests, 1, "the caller's fetch is preserved");
+});
+
+test("API-key or absent request auth does not add a SIWC payload transform", () => {
+    const model = parseChatGPTCatalog({ models: [row("fixture")] })[0]!;
+    const onPayload = async () => undefined;
+
+    for (const auth of [undefined, { apiKey: "sk-synthetic" }]) {
+        const options = inferenceRequestOptions(
+            model,
+            auth,
+            { apiKey: "caller", onPayload },
+            () => {},
+        );
+
+        assert.equal(options.apiKey, auth?.apiKey ?? "caller");
+        assert.equal(options.onPayload, onPayload);
+        assert.equal(options.transport, "sse");
+    }
 });
