@@ -12,7 +12,7 @@ Legacy example tests parse source and verify preservation; they never execute re
 
 ```sh
 node --test test/rotom-resources.test.ts test/native-command-menu.test.ts test/team-resource-backup.test.ts
-node --test test/backup.test.ts test/data-streaming-backup.test.ts
+node --test test/backup.test.ts test/data-streaming-backup.test.ts test/qoder-log-backup.test.ts
 node --test test/agent-resource-list.test.ts
 node test/team-resources-proof.ts
 node test/native-command-inventory.ts <attested-terminal-inventory.json>
@@ -35,6 +35,11 @@ extension-local counter across two receipts, idle gate HTTP 403, native reload, 
 replay fencing. Member-private executable customization remains a negative control. Dedicated regressions cover two-member managed file retirement, credential aliases, linked-package fingerprints,
 dotted/non-ASCII command grammar, unknown discovery without a second POST, and real offline npm backup/restore/reinstall.
 The streaming backup regression round-trips a 512 MiB + 73-byte payload in a 64 MiB heap subprocess, rejects whole-file payload reads, caps read/write chunks at 1 MiB, and checks peak RSS below 192 MiB. It also verifies private/executable modes, non-restoration of refresh grants, digest rejection for large and omitted files, symlink refusal, and staging cleanup on failure. These synthetic files do not establish a production restore or valid provider credentials.
+
+`test/qoder-log-backup.test.ts` checks v2 log-pointer metadata without traversing the pointer, exact link/log round-trip,
+empty run directories, changed-link aborts, escaping/indirect/dangling/non-directory target refusal, arbitrary-symlink
+refusal, malformed/duplicate/conflicting metadata, v1 downgrade rejection and staging cleanup. Other backup tests
+continue to cover v1 archives, credentials and shared npm cache boundaries.
 The browser proof creates an actual abruptly-ended discovery and checks the native startup counter for same/new-request retries.
 The native command proof also executes a genuine effect-then-throw command during an ordinary active prompt. It checks the
 persisted effect, unknown owner with unchanged operation, duplicate refusal, absent recovery eligibility and no restart replay.

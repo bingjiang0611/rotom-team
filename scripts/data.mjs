@@ -10,11 +10,13 @@ import {
     mkdirSync,
     openSync,
     readFileSync,
+    readlinkSync,
     readSync,
     readdirSync,
     realpathSync,
     renameSync,
     rmSync,
+    symlinkSync,
     writeFileSync,
 } from "node:fs";
 import { basename, dirname, join, resolve, sep } from "node:path";
@@ -107,7 +109,25 @@ const safe = (name) =>
     !name.includes("\0") &&
     name.split("/").every((part) => part && part !== "." && part !== "..");
 
-function copy(source, destination, records = [], prefix = "", excludedCaches = []) {
+const isQoderLogLink = (path) =>
+    path.startsWith("kernel-homes/") &&
+    path.split("/").length === 5 &&
+    path.endsWith("/.qoder/logs/latest");
+
+function validateLogLink(path, target) {
+    if (
+        typeof path !== "string" ||
+        !safe(path) ||
+        !isQoderLogLink(path) ||
+        typeof target !== "string" ||
+        !safe(target) ||
+        !/^runs\/[^/]+$/.test(target)
+    ) {
+        throw new Error("Invalid backup log link.");
+    }
+}
+
+function copy(source, destination, records = [], prefix = "", excludedCaches = [], logLinks = []) {
     mkdirSync(destination, { recursive: true, mode: 0o700 });
 
     for (const name of readdirSync(source).sort()) {
@@ -120,6 +140,21 @@ function copy(source, destination, records = [], prefix = "", excludedCaches = [
         const input = join(source, name),
             output = join(destination, name),
             stat = lstatSync(input);
+
+        if (stat.isSymbolicLink() && isQoderLogLink(path)) {
+            const target = readlinkSync(input);
+
+            validateLogLink(path, target);
+            const directory = resolve(dirname(input), target);
+
+            if (realpathSync(directory) !== directory || !lstatSync(directory).isDirectory()) {
+                throw new Error("Qoder log link must name a real directory inside logs/runs.");
+            }
+
+            // Archive metadata only. The normal directory walk copies the actual logs once.
+            logLinks.push({ path, target });
+            continue;
+        }
 
         if (stat.isSymbolicLink() || (!stat.isDirectory() && !stat.isFile())) {
             throw new Error(`Backup refuses non-regular path: ${path}`);
@@ -167,7 +202,7 @@ function copy(source, destination, records = [], prefix = "", excludedCaches = [
         }
 
         if (stat.isDirectory()) {
-            copy(input, output, records, path, excludedCaches);
+            copy(input, output, records, path, excludedCaches, logLinks);
             continue;
         }
 
@@ -304,17 +339,25 @@ export function backup(data, destination) {
             );
         }
 
-        const excludedCaches = [];
-        const files = copy(source, join(staging, "data"), [], "", excludedCaches);
+        const excludedCaches = [],
+            logLinks = [];
+        const files = copy(source, join(staging, "data"), [], "", excludedCaches, logLinks);
+
+        for (const { path, target } of logLinks) {
+            if (readlinkSync(join(source, path)) !== target) {
+                throw new Error("Source log link changed during backup.");
+            }
+        }
 
         writeFileSync(
             join(staging, "manifest.json"),
             JSON.stringify({
-                format: "rotom-team-backup/v1",
+                format: logLinks.length ? "rotom-team-backup/v2" : "rotom-team-backup/v1",
                 source,
                 createdAt: Date.now(),
                 files,
                 excludedCaches,
+                ...(logLinks.length ? { logLinks } : {}),
             }),
             { mode: 0o600, flag: "wx" },
         );
@@ -334,7 +377,13 @@ export function restore(archive, destination) {
     const output = join(realpathSync(dirname(absolute)), basename(absolute));
     const manifest = JSON.parse(readFileSync(join(source, "manifest.json"), "utf8"));
 
-    if (manifest.format !== "rotom-team-backup/v1" || !Array.isArray(manifest.files)) {
+    const version2 = manifest.format === "rotom-team-backup/v2";
+
+    if (
+        (!version2 && manifest.format !== "rotom-team-backup/v1") ||
+        !Array.isArray(manifest.files) ||
+        (version2 ? !Array.isArray(manifest.logLinks) : manifest.logLinks !== undefined)
+    ) {
         throw new Error("Unsupported backup format.");
     }
 
@@ -388,6 +437,22 @@ export function restore(archive, destination) {
 
             mkdirSync(dirname(target), { recursive: true, mode: 0o700 });
             transferFile(file, target, record.mode === 0o700 ? 0o700 : 0o600, record);
+        }
+
+        // Files are restored before links, so no payload write can traverse a restored link.
+        for (const { path, target } of manifest.logLinks ?? []) {
+            validateLogLink(path, target);
+
+            if (seen.has(path)) {
+                throw new Error("Duplicate backup log link path.");
+            }
+
+            seen.add(path);
+            const link = join(staging, path);
+
+            // Preserve even an empty run directory, which has no regular-file manifest entry.
+            mkdirSync(resolve(dirname(link), target), { recursive: true, mode: 0o700 });
+            symlinkSync(target, link);
         }
 
         renameSync(staging, output);
