@@ -4,7 +4,7 @@ Detailed contract sections from [CONFIGURATION.md](CONFIGURATION.md).
 
 ## Native pin and subagent defaults
 
-The pin is rotom 0.1.26. Team does not override native retry, compaction or builtin role settings. An empty shared
+The pin is rotom 0.1.27. Team does not override native retry, compaction or builtin role settings. An empty shared
 profile uses native defaults: automatic retry enabled (3 retries, 2-second exponential base delay, 60-second maximum),
 automatic compaction enabled (16,384 reserve tokens and approximately 20,000 recent tokens retained), and all five builtin
 roles: scout, worker, reviewer, delegate and oracle (alias advisor for oracle). Compaction triggers when the
@@ -21,6 +21,10 @@ retry, compaction and reduction, still passes through the fixed payer/model gate
 credential refreshes are not replayed. Existing managed role/recovery overrides are replaced from the shared profile on
 the next startup; private/unclassified state is untouched. This is not an OS sandbox or a claim that a plugin cannot read
 project files.
+
+Rotom 0.1.27 also supplies its native `context-layers` extension. Team leaves the extension enabled and exposes its
+`context_status`, `context_compress` and `context_recall` tools to the model. These tools inspect, compress and recall
+the native session branch; they do not create a second Team history or bypass the fixed execution payer/model binding.
 
 Optional child named skills, user/project memory and existing project refinement overlays use native injection.
 User memory stays under the paying member's native agent directory and is never copied on handoff. Project memory is

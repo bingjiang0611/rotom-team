@@ -174,6 +174,7 @@ test("every session's bundled extensions are listed as the launcher passes them,
             ["rotom", "observability"],
             ["rotom", "browser"],
             ["rotom", "coding-policy"],
+            ["rotom", "context-layers"],
             ["rotom", "third-party"],
             ["rotom", "qoder"],
             ["team", "rotom-skills"],
@@ -185,6 +186,10 @@ test("every session's bundled extensions are listed as the launcher passes them,
         "Codemode comes from the product's third-party extension, not Pi's built-in",
     );
     assert.equal(extensions["browser"]!.path, join(product, "extensions/browser/index.ts"));
+    assert.equal(
+        extensions["context-layers"]!.path,
+        join(product, "extensions/context-layers/index.ts"),
+    );
     assert.equal(extensions["third-party"]!.path, join(product, "extensions/third-party"));
     assert.ok(extensions["third-party"]!.packages!.includes("pi-subagents"));
     assert.equal(extensions["rotom-skills"]!.path, teamSkillsExtension);

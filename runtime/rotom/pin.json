@@ -1,13 +1,13 @@
 {
-    "version": "0.1.26",
-    "integrity": "sha512-G9ucwUQg6wJYmHmN20J43It9cMAGx2vGOTVju58amzmwtZveKF/ie5YI7ycVzyn2JKh+IiM5ttSyJFp3Rsrw2Q==",
+    "version": "0.1.27",
+    "integrity": "sha512-R6JUnuolbGmc4WkgCXW5V7nX9r2UUa/zcBVnpYr5ED+isAQFz6CLWp6iGXXLOgccp2Opl4xYpNq7nWlKC/qV9g==",
     "sha256": {
-        "package.json": "bb3401d282646cf28bbc8a9d244a34948b727f8691817c9136cd1f5e89cca7c9",
+        "package.json": "b547ee376d15e24b2d2776e5dde7316dbd4dc55aee6814049548457f112966c5",
         "bin/rotom": "c9f1dd3df66d995540c006e8f8cd930ab7bb9a8f0741aaf71e44c1bd56f15e80",
-        "bin/rotom-launcher": "89c5d505468726df13ebc87232b56e3d506a5c1c1d2cd989bc122d7e0bcb8bcd",
-        "runtime/launch-runtime.mjs": "9056da7636b62747ecc5cb7c3a3e4b769d828a3ab1c0edb87a07efdf6493cb29",
-        "runtime/product-config.mjs": "b676c7a395e1e096a67ce7f59fa3aa372b8aaf7ae1656f237b1ed51215833413",
-        "runtime/resolve-installed-pi.mjs": "6ecf220e56194b39dedd024433e83b026256b2b64ad55f5aad2e2c8e718a05b5",
-        "runtime/verify-pi-runtime.mjs": "ca88084c0f6f7490bd49e651a57a04766436a083e7965dfc7f7a4aa3a8912870"
+        "bin/rotom-launcher": "23b0a67e84c1a90646a4e3a6907faeeb3af4129a06aa960c178f33b8316b4487",
+        "runtime/launch-runtime.mjs": "e337fa519b7b9d74c38f97c5157dca9195f76d09c75553ef7c2e26a0e17f93ec",
+        "runtime/product-config.mjs": "c339dcfaabc19ca5620de8c1da59f983ad5c0c702528761e50f7f04f2dc163a9",
+        "runtime/resolve-installed-pi.mjs": "f1d483c03cd5f0fc703b5a6b61675663d0338e50c03ac2ba1106191b4088649a",
+        "runtime/verify-pi-runtime.mjs": "c0756e3034515393f4e76e6d4f3835c27b889ed74354723404eec494b1fe4a38"
     }
 }
